@@ -22,15 +22,23 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              TF
-            </div>
-            <div>
-              <span className="text-lg font-bold tracking-tight text-white">TFHC Orderliness</span>
-              <span className="ml-2 text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-medium">
-                {isAdmin ? 'Admin Portal' : 'Member App'}
-              </span>
-            </div>
+            <Link href={isAdmin ? '/admin' : '/member'} className="flex items-center gap-3 group">
+              <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 p-1.5 flex items-center justify-center shadow-md group-hover:border-orange-500/50 transition-all text-white">
+                {/* High-Definition Transparent SVG Logo Mark */}
+                <img src="/logo-icon.svg" alt="The Father's House Logo" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold tracking-tight text-white group-hover:text-orange-400 transition-colors">THE FATHER'S HOUSE</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-400">Orderliness Tracker</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-medium">
+                    {isAdmin ? 'Admin Portal' : 'Member App'}
+                  </span>
+                </div>
+              </div>
+            </Link>
           </div>
 
           <nav className="hidden md:flex items-center space-x-1">

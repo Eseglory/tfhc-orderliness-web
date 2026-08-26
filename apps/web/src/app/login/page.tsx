@@ -40,11 +40,12 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-bold text-xl text-white mx-auto mb-3 shadow-lg shadow-indigo-500/30">
-            TF
+          {/* High-Definition Transparent SVG Logo */}
+          <div className="w-56 mx-auto mb-3 text-white">
+            <img src="/logo.svg" alt="The Father's House Logo" className="w-full h-auto object-contain filter drop-shadow-xl" />
           </div>
-          <h1 className="text-2xl font-bold text-white">TFHC Orderliness</h1>
-          <p className="text-sm text-slate-400 mt-1">Attendance & Participation Tracker</p>
+          <h1 className="text-xl font-bold text-white tracking-wide">Orderliness Tracker</h1>
+          <p className="text-xs text-slate-400 mt-1">Attendance &amp; Participation Platform</p>
         </div>
 
         {error && (

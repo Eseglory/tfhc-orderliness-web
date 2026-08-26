@@ -52,7 +52,7 @@ export class ScoringService {
 
     const streakData = records.map((r) => ({
       meetingDate: r.meeting.startTime,
-      status: r.status,
+      status: r.status as unknown as AttendanceStatus,
     }));
     const { currentAttendanceStreak, currentOnTimeStreak } = calculateAttendanceStreaks(streakData);
 
