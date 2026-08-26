@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  LEADER
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  SUSPENDED
+  EXEMPT
+  NEW_MEMBER
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  EARLY
+  ON_TIME
+  GRACE_PERIOD
+  LATE
+  ABSENT
+  EXCUSED
+  EXEMPT
+}
+
+enum AttendanceMethod {
+  SYSTEM_GEO_QR
+  SYSTEM_GEO
+  MANUAL
+  CORRECTION_APPROVED
+}
+
+enum ExcuseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(MEMBER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  member       Member?
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model SubTeam {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  members     Member[]
+
+  @@map("sub_teams")
+}
+
+model Member {
+  id                 String              @id @default(uuid())
+  userId             String?             @unique
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  memberCode         String              @unique
+  firstName          String
+  lastName           String
+  phoneNumber        String
+  gender             String?
+  subTeamId          String?
+  subTeam            SubTeam?            @relation(fields: [subTeamId], references: [id], onDelete: SetNull)
+  roleInUnit         String              @default("Member")
+  dateJoined         DateTime            @default(now())
+  status             MemberStatus        @default(ACTIVE)
+  attendanceRecords  AttendanceRecord[]
+  excuseRequests     AbsenceExcuse[]
+  correctionRequests CorrectionRequest[]
+  followUpFlags      FollowUpFlag[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@map("members")
+}
+
+model MeetingCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  basePoints  Float     @default(10)
+  pointWeight Float     @default(1.0)
+  meetings    Meeting[]
+
+  @@map("meeting_categories")
+}
+
+model Meeting {
+  id                   String              @id @default(uuid())
+  title                String
+  categoryId           String
+  category             MeetingCategory     @relation(fields: [categoryId], references: [id])
+  meetingDate          DateTime
+  startTime            DateTime
+  expectedArrivalTime  DateTime
+  attendanceOpenTime   DateTime
+  attendanceCloseTime  DateTime
+  endTime              DateTime?
+  locationName         String
+  latitude             Float
+  longitude            Float
+  geofenceRadiusMeters Float               @default(100.0)
+  status               MeetingStatus       @default(SCHEDULED)
+  isCompulsory         Boolean             @default(true)
+  pointWeight          Float               @default(1.0)
+  qrSecret             String?
+  attendanceRecords    AttendanceRecord[]
+  excuseRequests       AbsenceExcuse[]
+  correctionRequests   CorrectionRequest[]
+  meetingSummary       MeetingSummary?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@map("meetings")
+}
+
+model AttendanceRecord {
+  id                  String           @id @default(uuid())
+  memberId            String
+  member              Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId           String
+  meeting             Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  expectedArrivalTime DateTime
+  actualArrivalTime   DateTime?
+  status              AttendanceStatus
+  gpsLat              Float?
+  gpsLong             Float?
+  gpsAccuracy         Float?
+  distanceFromVenue   Float?
+  method              AttendanceMethod @default(SYSTEM_GEO_QR)
+  pointsEarned        Float            @default(0)
+  deviceInfo          String?
+  isModified          Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([memberId, meetingId])
+  @@map("attendance_records")
+}
+
+model AbsenceExcuse {
+  id         String       @id @default(uuid())
+  memberId   String
+  member     Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId  String
+  meeting    Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  reason     String
+  category   String
+  status     ExcuseStatus @default(PENDING)
+  reviewedBy String?
+  reviewNote String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([memberId, meetingId])
+  @@map("absence_excuses")
+}
+
+model CorrectionRequest {
+  id              String           @id @default(uuid())
+  memberId        String
+  member          Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId       String
+  meeting         Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  requestedStatus AttendanceStatus
+  reason          String
+  status          ExcuseStatus     @default(PENDING)
+  reviewedBy      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("correction_requests")
+}
+
+model FollowUpFlag {
+  id         String   @id @default(uuid())
+  memberId   String
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  flagLevel  Int
+  flagReason String
+  isResolved Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("follow_up_flags")
+}
+
+model MeetingSummary {
+  id               String   @id @default(uuid())
+  meetingId        String   @unique
+  meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  expectedCount    Int
+  presentCount     Int
+  absentCount      Int
+  earlyCount       Int
+  onTimeCount      Int
+  gracePeriodCount Int
+  lateCount        Int
+  excusedCount     Int
+  attendanceRate   Float
+  punctualityRate  Float
+  createdAt        DateTime @default(now())
+
+  @@map("meeting_summaries")
+}
+
+model SystemSetting {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String
+  actorUser   User     @relation(fields: [actorUserId], references: [id])
+  action      String
+  entity      String
+  entityId    String
+  previousData Json?
+  newData     Json?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
