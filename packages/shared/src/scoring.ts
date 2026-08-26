@@ -1,4 +1,4 @@
-import { AttendanceStatus } from './enums.js';
+import { AttendanceStatus } from './enums';
 
 export interface ScoringRubric {
   earlyPoints: number;      // Default 10

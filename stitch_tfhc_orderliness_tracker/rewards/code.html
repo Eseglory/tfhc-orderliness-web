@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Rewards &amp; Recognition</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "secondary-container": "#fe932c",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "outline": "#76777d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#000000",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000",
+                        "tertiary-container": "#002113",
+                        "secondary-fixed": "#ffdcc3",
+                        "on-background": "#0b1c30",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "outline-variant": "#c6c6cd",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary-container": "#663500",
+                        "on-tertiary-fixed": "#002113",
+                        "on-surface": "#0b1c30",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#dae2fd",
+                        "surface-tint": "#565e74",
+                        "on-tertiary-container": "#009668",
+                        "surface-bright": "#f8f9ff",
+                        "surface-dim": "#cbdbf5",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#904d00",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-secondary-fixed": "#2f1500",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#45464d",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#e5eeff",
+                        "on-primary-container": "#7c839b",
+                        "surface-variant": "#d3e4fe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "gutter": "12px",
+                        "section-gap": "32px",
+                        "edge-margin": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-24 md:pb-0 pt-16 md:pt-20">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-edge-margin h-16 bg-background flat no shadows transition-all duration-200 active:scale-95">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
+<img alt="User profile photo" class="w-full h-full object-cover" data-alt="A professional corporate headshot of a person, minimalist style, light background, soft lighting, conveying reliability and order in a modern workplace setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJhzZ-Cd-vkuqGsKWjyvdXzMWFfzIrtJP5Lp0PYBPK7tHsqFbaKtEflnX0GrK82aIm28lQ3qFZucFJEp2AaOmwsLKXo3S4feqxOXVGdL8CbRJNv1IjCKDrYogGggmE4sQQ5A5TQ_72-SSuQI-t6nbGr2wMK2k6gLkc42dOuKQTBrg9ClHgD59-h_yfWb0o4v-9QNhHPIGd3I0jhs2_l---_V23UH52R5dQOW5pvo620KHcArKWLtMa"/>
+</div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary">Rewards &amp; Milestones</h1>
+</div>
+<button class="text-primary hover:opacity-80 p-2 rounded-full hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="px-edge-margin max-w-4xl mx-auto space-y-section-gap pt-stack-md">
+<!-- Banner -->
+<section>
+<div class="relative w-full h-40 md:h-56 rounded-xl overflow-hidden shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
+<div class="absolute inset-0 bg-gradient-to-r from-primary to-surface-tint opacity-90 z-10"></div>
+<div class="absolute inset-0 bg-cover bg-center z-0" data-alt="Abstract minimalist geometric background featuring gold and deep navy elements, representing achievement and recognition, soft modern lighting, highly detailed and professional aesthetic." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDJPm2W3FGuB6DbUJq3wD5zbENYq65wvq87GER-N8W3tCBwp-MtHaoOtDtip9NyEwmSrZatF9utUvzpvueKTHcWTPzfQd_aq5B-g6uutgF9csRuw-alOGBiPzZQygaIRglI7VGGTyMxOTDzW2klFCCghHawP9hSE436pWpBbUG4r1u2WTgcHnHz_BJWePPAWxZFnd1sjg7utQu-FNWCVI1kj2svDo3HKg_D8Uj7jqoCfCjzZbvY1qkh')"></div>
+<div class="absolute inset-0 z-20 flex flex-col justify-center px-stack-lg">
+<span class="font-label-md text-label-md text-secondary-fixed-dim uppercase tracking-wider mb-2">Current Period</span>
+<h2 class="font-headline-lg text-headline-lg text-on-primary">August 2026 Recognition Cycle</h2>
+<p class="font-body-md text-body-md text-inverse-primary mt-2 max-w-md">Your steadfast commitment is noted. Continue your journey of excellence.</p>
+</div>
+</div>
+</section>
+<!-- Bento Grid: Milestones -->
+<section>
+<h3 class="font-headline-sm text-headline-sm text-primary mb-stack-md">Your Milestones</h3>
+<div class="bento-grid">
+<!-- Unlocked Gold Shield -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col justify-between aspect-square relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-16 h-16 bg-secondary-fixed opacity-20 rounded-bl-full transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500"></div>
+<div class="z-10">
+<span class="material-symbols-outlined text-secondary text-4xl mb-2" data-icon="shield" data-weight="fill" style="font-variation-settings: 'FILL' 1;">shield</span>
+<h4 class="font-label-md text-label-md text-on-surface">July Punctuality</h4>
+</div>
+<div class="mt-auto z-10">
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-on-tertiary-fixed-variant bg-tertiary-fixed-dim px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span> Unlocked
+                        </span>
+</div>
+</div>
+<!-- Unlocked Streak Master -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col justify-between aspect-square relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-16 h-16 bg-error-container opacity-20 rounded-bl-full transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500"></div>
+<div class="z-10">
+<span class="material-symbols-outlined text-error text-4xl mb-2" data-icon="local_fire_department" data-weight="fill" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<h4 class="font-label-md text-label-md text-on-surface">Streak Master</h4>
+</div>
+<div class="mt-auto z-10">
+<span class="inline-flex items-center gap-1 font-label-sm text-label-sm text-on-tertiary-fixed-variant bg-tertiary-fixed-dim px-2 py-1 rounded-full">
+<span class="material-symbols-outlined text-[14px]" data-icon="check_circle">check_circle</span> Unlocked
+                        </span>
+</div>
+</div>
+<!-- In Progress Consistency -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col justify-between aspect-square md:col-span-2">
+<div>
+<div class="flex justify-between items-start mb-2">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="update">update</span>
+<span class="font-label-md text-label-md text-outline">In Progress</span>
+</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface mb-1">Consistency</h4>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">Maintain perfect attendance for the quarter.</p>
+</div>
+<div class="mt-auto pt-4">
+<div class="flex justify-between font-label-sm text-label-sm mb-1">
+<span class="text-primary">88% Complete</span>
+<span class="text-outline">Goal: 100%</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-2">
+<div class="bg-primary h-2 rounded-full" style="width: 88%"></div>
+</div>
+</div>
+</div>
+<!-- Locked Early Bird -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col justify-between aspect-square opacity-70">
+<div>
+<span class="material-symbols-outlined text-outline text-4xl mb-2" data-icon="lock">lock</span>
+<h4 class="font-label-md text-label-md text-on-surface">Early Bird</h4>
+</div>
+<div class="mt-auto">
+<div class="text-center font-label-sm text-label-sm text-on-surface-variant bg-surface-container py-1 rounded-md">
+                            3/5 Logins
+                        </div>
+</div>
+</div>
+</div>
+</section>
+<!-- List: Monthly Recognized Members -->
+<section>
+<div class="flex justify-between items-end mb-stack-md">
+<h3 class="font-headline-sm text-headline-sm text-primary">Monthly Honorees</h3>
+<a class="font-label-md text-label-md text-secondary hover:underline" href="#">View All</a>
+</div>
+<div class="space-y-gutter">
+<!-- Member 1 -->
+<div class="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex items-center gap-4 hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-secondary">
+<img alt="Member photo" class="w-full h-full object-cover" data-alt="Portrait of a diverse professional individual, clean modern background, soft lighting, expressing dedication and leadership in a corporate or community setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcfWCCvojATLfUVg7LLCwjiS9UlB4vz4FlPLnwWQoYpyUDhX5VTcL_IBM4knK8Eogkz5FXvirBCUpmdsmRhJtcvlbKDpgnO0LOI7hIdKlUaWSnAYW7sjZ02AqZ5bpkesjMdsSGjZK0LH-lc8fCU3J10Fso9s6meiA64kCdf4AbObMWF1zbaBk4EEB3oEfyCjFiRuQEKQKi-VO9RPtNlojLIsa4NCETx4bptzqCP5pumpSuhqV7vmSf"/>
+</div>
+<div class="flex-grow">
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">Sarah Jenkins</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Exceptional Stewardship</p>
+</div>
+<div class="flex-shrink-0 text-secondary">
+<span class="material-symbols-outlined" data-icon="workspace_premium" data-weight="fill" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+</div>
+<!-- Member 2 -->
+<div class="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex items-center gap-4 hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary-fixed-dim">
+<img alt="Member photo" class="w-full h-full object-cover" data-alt="Portrait of a young professional individual, clean modern background, soft lighting, expressing dedication and focus in a corporate or community setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaBo6xWMN6ib_jX8USvLPrQeT6WxOIbt1M0HPORZBTh8paQ0DK4WrLkFViSsSdpMlqn_wKH20kAjkkRMFGXwvcSQhG_K9pAEjssWpBYzTmaDD9Q6DEqDVRkg4Auss8coT8MuI027X59CPICNum3v77Aj5r7rxqaOZCQibgEKSMJ4NUMyBmQEZ3_bzJUUo5ZFD3muhSOKve7tWaPAy3t5Kb-a_G_dBRIktbDv2toimKokv0RPi7tO7u"/>
+</div>
+<div class="flex-grow">
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">Marcus Chen</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Perfect Punctuality</p>
+</div>
+<div class="flex-shrink-0 text-primary-fixed-dim">
+<span class="material-symbols-outlined" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+<!-- Member 3 -->
+<div class="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex items-center gap-4 hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-primary-fixed-dim">
+<img alt="Member photo" class="w-full h-full object-cover" data-alt="Portrait of a mature professional individual, clean modern background, soft lighting, expressing wisdom and commitment in a corporate or community setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGScxRg8qF_f7fWFwvrEtv0fOxmsqgqFVfpSSXslw8QoOB9c8zN4_-f2Az3njnizNU94zF9C7QXUx9QmgLMNW7CUHG-fe5FFgmkWZTWgsJ6AYuPoFMmf2yDf0H6PQPvFxNcLaT-X662P5jYnHb10GrhOuoFTerVAfQxR4COpaseX9ZpH1QWoY9CYUJxGXwIhNvRnHa4MeWaOMa8kfHrfd81SzBE_-WxK7FNHN17YjtprTvn2-wEFhR"/>
+</div>
+<div class="flex-grow">
+<h4 class="font-body-lg text-body-lg text-on-surface font-semibold">Elena Rodriguez</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Community Pillar</p>
+</div>
+<div class="flex-shrink-0 text-primary-fixed-dim">
+<span class="material-symbols-outlined" data-icon="star" data-weight="fill" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 flex justify-around items-center px-2 pb-safe h-20 bg-surface-container-lowest shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] rounded-t-xl transition-transform duration-200 active:scale-90">
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform" data-icon="home">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md text-label-md mt-1">Meetings</span>
+</a>
+<div class="relative -top-4">
+<a class="flex flex-col items-center justify-center bg-secondary w-14 h-14 rounded-full shadow-[0px_4px_12px_rgba(144,77,0,0.3)] text-on-primary hover:scale-105 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner">qr_code_scanner</span>
+</a>
+</div>
+<a class="flex flex-col items-center justify-center text-primary font-semibold group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform" data-icon="emoji_events" data-weight="fill" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+<span class="font-label-md text-label-md mt-1">Rankings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline hover:text-primary transition-colors group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform" data-icon="person">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

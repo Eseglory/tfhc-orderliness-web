@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Request Attendance Correction</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "secondary-container": "#fe932c",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "outline": "#76777d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#000000",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000",
+                        "tertiary-container": "#002113",
+                        "secondary-fixed": "#ffdcc3",
+                        "on-background": "#0b1c30",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "outline-variant": "#c6c6cd",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary-container": "#663500",
+                        "on-tertiary-fixed": "#002113",
+                        "on-surface": "#0b1c30",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#dae2fd",
+                        "surface-tint": "#565e74",
+                        "on-tertiary-container": "#009668",
+                        "surface-bright": "#f8f9ff",
+                        "surface-dim": "#cbdbf5",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#904d00",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-secondary-fixed": "#2f1500",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#45464d",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#e5eeff",
+                        "on-primary-container": "#7c839b",
+                        "surface-variant": "#d3e4fe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "gutter": "12px",
+                        "section-gap": "32px",
+                        "edge-margin": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+        
+        /* Custom Radio Styling */
+        input[type="radio"]:checked + label .radio-circle {
+            border-color: theme('colors.primary');
+        }
+        input[type="radio"]:checked + label .radio-inner {
+            background-color: theme('colors.primary');
+            transform: scale(1);
+        }
+        .radio-inner {
+            transform: scale(0);
+            transition: transform 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md pt-safe pb-safe antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background flat no shadows flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40">
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:opacity-80 transition-all duration-200 active:scale-95 flex items-center justify-center p-2 -ml-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary">
+<span aria-hidden="true" class="material-symbols-outlined text-2xl" data-icon="arrow_back">arrow_back</span>
+<span class="sr-only">Go back</span>
+</button>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary dark:text-on-primary-fixed">Correction</h1>
+</div>
+<div>
+<!-- Trailing action intentionally left empty for clean transactional flow -->
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="px-edge-margin pt-stack-md pb-section-gap flex flex-col gap-stack-lg max-w-2xl mx-auto">
+<!-- Header Section -->
+<section class="flex flex-col gap-stack-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Request Attendance Correction</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Submit a formal request to adjust an attendance record. All requests are subject to leadership review.</p>
+</section>
+<!-- Form Section -->
+<form class="flex flex-col gap-section-gap" onsubmit="event.preventDefault(); alert('Form submission simulation');">
+<!-- Cards Container -->
+<div class="flex flex-col gap-stack-md">
+<!-- Meeting Selection Card -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-stack-sm border border-transparent focus-within:border-primary-fixed transition-colors">
+<label class="font-label-md text-label-md text-on-surface uppercase" for="meeting-select">Select Meeting</label>
+<div class="relative">
+<select class="w-full appearance-none bg-transparent border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow" id="meeting-select">
+<option disabled="" selected="" value="">Choose a recent meeting...</option>
+<option value="1">Sunday Service - Oct 29, 2023</option>
+<option value="2">Leadership Summit - Oct 25, 2023</option>
+<option value="3">Midweek Gathering - Oct 22, 2023</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-outline">
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Claimed Time Card -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-stack-sm border border-transparent focus-within:border-primary-fixed transition-colors">
+<label class="font-label-md text-label-md text-on-surface uppercase" for="claimed-time">Claimed Time of Arrival</label>
+<div class="relative">
+<div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+<span class="material-symbols-outlined text-outline" data-icon="schedule">schedule</span>
+</div>
+<input class="w-full bg-transparent border border-outline-variant rounded-lg pl-12 pr-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow" id="claimed-time" type="time" value="08:48"/>
+</div>
+</div>
+<!-- Reason Radio Group Card -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-stack-sm">
+<span class="font-label-md text-label-md text-on-surface uppercase">Reason for Correction</span>
+<div class="flex flex-col gap-3 mt-2">
+<!-- Option 1 -->
+<div class="relative flex items-start">
+<input checked="" class="sr-only" id="reason-gps" name="reason" type="radio"/>
+<label class="flex items-start cursor-pointer w-full group" for="reason-gps">
+<div class="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-outline-variant radio-circle flex items-center justify-center transition-colors">
+<div class="w-2.5 h-2.5 rounded-full radio-inner"></div>
+</div>
+<div class="ml-3 flex flex-col">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">GPS Error</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-normal">Location services failed to verify presence.</span>
+</div>
+</label>
+</div>
+<div class="h-px bg-surface-variant w-full my-1"></div>
+<!-- Option 2 -->
+<div class="relative flex items-start">
+<input class="sr-only" id="reason-scan" name="reason" type="radio"/>
+<label class="flex items-start cursor-pointer w-full group" for="reason-scan">
+<div class="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-outline-variant radio-circle flex items-center justify-center transition-colors">
+<div class="w-2.5 h-2.5 rounded-full radio-inner"></div>
+</div>
+<div class="ml-3 flex flex-col">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Arrived but couldn't scan</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-normal">Technical difficulty with QR code or device.</span>
+</div>
+</label>
+</div>
+<div class="h-px bg-surface-variant w-full my-1"></div>
+<!-- Option 3 -->
+<div class="relative flex items-start">
+<input class="sr-only" id="reason-late" name="reason" type="radio"/>
+<label class="flex items-start cursor-pointer w-full group" for="reason-late">
+<div class="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 border-outline-variant radio-circle flex items-center justify-center transition-colors">
+<div class="w-2.5 h-2.5 rounded-full radio-inner"></div>
+</div>
+<div class="ml-3 flex flex-col">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Recorded Late incorrectly</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-normal">System logged time inaccurately.</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Statement Box Card -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-stack-sm border border-transparent focus-within:border-primary-fixed transition-colors">
+<label class="font-label-md text-label-md text-on-surface uppercase flex justify-between items-center" for="statement">
+<span>Supporting Statement</span>
+<span class="text-on-surface-variant font-normal normal-case">Optional</span>
+</label>
+<textarea class="w-full bg-transparent border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow resize-none" id="statement" placeholder="Provide witness names or a brief explanation..." rows="3"></textarea>
+</div>
+<!-- Warning Banner -->
+<div class="bg-surface-container-low border border-primary-fixed-dim rounded-lg p-stack-sm flex gap-3 items-start mt-stack-sm">
+<span class="material-symbols-outlined text-on-surface-variant flex-shrink-0 mt-0.5" data-icon="info">info</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant leading-relaxed">
+<strong>Audited Logs:</strong> All correction requests are permanently logged and reviewed against system data and access points by leadership to maintain integrity.
+                    </p>
+</div>
+</div>
+<!-- Action Area -->
+<div class="flex flex-col gap-stack-sm mt-auto pt-section-gap">
+<button class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary" type="submit">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+                    Submit Correction Request
+                </button>
+<button class="w-full bg-transparent border border-outline-variant text-on-surface font-body-md text-body-md font-medium py-3 rounded-xl hover:bg-surface-container-low transition-colors focus:outline-none focus:ring-2 focus:ring-outline-variant" type="button">
+                    Cancel
+                </button>
+</div>
+</form>
+</main>
+<!-- Suppressed Nav Shells -->
+<!-- Top Nav trailing icon hidden; Bottom Nav completely hidden as this is a transactional flow with a back action. -->
+</body></html>

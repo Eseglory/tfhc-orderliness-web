@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Meetings Calendar &amp; Discovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "secondary-container": "#fe932c",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "outline": "#76777d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#000000",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000",
+                        "tertiary-container": "#002113",
+                        "secondary-fixed": "#ffdcc3",
+                        "on-background": "#0b1c30",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "outline-variant": "#c6c6cd",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary-container": "#663500",
+                        "on-tertiary-fixed": "#002113",
+                        "on-surface": "#0b1c30",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#dae2fd",
+                        "surface-tint": "#565e74",
+                        "on-tertiary-container": "#009668",
+                        "surface-bright": "#f8f9ff",
+                        "surface-dim": "#cbdbf5",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#904d00",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-secondary-fixed": "#2f1500",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#45464d",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#e5eeff",
+                        "on-primary-container": "#7c839b",
+                        "surface-variant": "#d3e4fe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "gutter": "12px",
+                        "section-gap": "32px",
+                        "edge-margin": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-safe">
+<!-- TopAppBar (Web & Mobile, adjusted for this screen's context) -->
+<header class="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40">
+<div class="flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A professional headshot of a person, minimalist style, bright lighting, conveying reliability and trustworthiness, set against a pristine white background. Deep navy and white minimalist-modern UI context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVTa6Qsgx6CxYk_q_6-IRLRRLMcB_ksB7PniJz8VpDv-DoqfNz0756IQwDEvL_gmoR5MiYLNvN6JsKezSaXCfjs61ZTIcq4bLeqfWceEA-fO3p6t3FMgBupi-cg2ntWVmLb0kpGE410ro4gkNxL2IKNoOPE9NUqijGTSuPAumewMZJHRaovpwq-nErOghdCLCZgO5VvijvrlY5MfRnG1qUGwnD-TpKcYz8zI-ngwRjJRAgI3ZIfoL5"/>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary">Meetings</h1>
+</div>
+<button class="text-on-surface-variant hover:opacity-80 transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<main class="px-edge-margin pb-32">
+<!-- Segmented Controls -->
+<div class="bg-surface-container-low p-1 rounded-lg flex mt-stack-md">
+<button class="flex-1 bg-surface-container-lowest text-primary shadow-[0px_2px_8px_rgba(0,0,0,0.05)] rounded font-label-md text-label-md py-2 text-center transition-all">Upcoming</button>
+<button class="flex-1 text-on-surface-variant hover:text-primary rounded font-label-md text-label-md py-2 text-center transition-all">Past</button>
+<button class="flex-1 text-on-surface-variant hover:text-primary rounded font-label-md text-label-md py-2 text-center transition-all">Mandatory</button>
+</div>
+<!-- Search & Filter -->
+<div class="mt-stack-md space-y-stack-sm">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-outline-variant" placeholder="Search meetings..." type="text"/>
+</div>
+<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+<button class="whitespace-nowrap px-4 py-1.5 bg-primary text-on-primary rounded-full font-label-sm text-label-sm">All</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface-container-lowest text-on-surface-variant border border-outline-variant rounded-full font-label-sm text-label-sm hover:border-primary transition-colors">Unit Meetings</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface-container-lowest text-on-surface-variant border border-outline-variant rounded-full font-label-sm text-label-sm hover:border-primary transition-colors">Services</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface-container-lowest text-on-surface-variant border border-outline-variant rounded-full font-label-sm text-label-sm hover:border-primary transition-colors">Rehearsals</button>
+<button class="whitespace-nowrap px-4 py-1.5 bg-surface-container-lowest text-on-surface-variant border border-outline-variant rounded-full font-label-sm text-label-sm hover:border-primary transition-colors">Trainings</button>
+</div>
+</div>
+<!-- Meeting List -->
+<div class="mt-section-gap space-y-gutter">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md">
+<div class="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
+<span class="font-headline-md text-headline-md text-primary">15</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-sm text-headline-sm text-primary">Sunday Service</h3>
+<span class="bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">Special Programme 2.0x</span>
+</div>
+<div class="mt-2 space-y-1">
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span>Expected: 8:45 AM | Starts: 9:00 AM</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[16px]">location_on</span>
+<span>Main Auditorium</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md opacity-70">
+<div class="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
+<span class="font-headline-md text-headline-md text-primary">12</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<h3 class="font-headline-sm text-headline-sm text-primary">Midweek Training</h3>
+</div>
+<div class="mt-2 space-y-1">
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+<span>Expected: 6:15 PM | Starts: 6:30 PM</span>
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-[16px]">location_on</span>
+<span>Hall B</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only as per fluid grid logic) -->
+<nav class="md:hidden bg-surface-container-lowest shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] fixed bottom-0 w-full z-50 rounded-t-xl flex justify-around items-center px-2 pb-safe h-20">
+<button class="flex flex-col items-center justify-center text-outline-variant font-label-md text-label-md hover:text-primary transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined mb-1">home</span>
+            Home
+        </button>
+<button class="flex flex-col items-center justify-center text-primary font-semibold font-label-md text-label-md transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+            Meetings
+        </button>
+<button class="flex flex-col items-center justify-center -translate-y-4">
+<div class="w-14 h-14 rounded-full bg-secondary-container text-on-secondary flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
+</div>
+<span class="text-outline-variant font-label-md text-label-md mt-1">Check-In</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline-variant font-label-md text-label-md hover:text-primary transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined mb-1">emoji_events</span>
+            Rankings
+        </button>
+<button class="flex flex-col items-center justify-center text-outline-variant font-label-md text-label-md hover:text-primary transition-transform duration-200 active:scale-90">
+<span class="material-symbols-outlined mb-1">person</span>
+            Profile
+        </button>
+</nav>
+</body></html>

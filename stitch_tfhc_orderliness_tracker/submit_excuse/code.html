@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Submit Absence Excuse</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary": "#ffffff",
+                      "on-secondary-fixed-variant": "#6e3900",
+                      "secondary-container": "#fe932c",
+                      "surface": "#f8f9ff",
+                      "on-primary-fixed": "#131b2e",
+                      "secondary-fixed-dim": "#ffb77d",
+                      "primary-fixed-dim": "#bec6e0",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "outline": "#76777d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "primary": "#000000",
+                      "on-error": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "inverse-primary": "#bec6e0",
+                      "tertiary": "#000000",
+                      "tertiary-container": "#002113",
+                      "secondary-fixed": "#ffdcc3",
+                      "on-background": "#0b1c30",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "outline-variant": "#c6c6cd",
+                      "surface-container-low": "#eff4ff",
+                      "on-secondary-container": "#663500",
+                      "on-tertiary-fixed": "#002113",
+                      "on-surface": "#0b1c30",
+                      "surface-container-high": "#dce9ff",
+                      "primary-fixed": "#dae2fd",
+                      "surface-tint": "#565e74",
+                      "on-tertiary-container": "#009668",
+                      "surface-bright": "#f8f9ff",
+                      "surface-dim": "#cbdbf5",
+                      "error": "#ba1a1a",
+                      "primary-container": "#131b2e",
+                      "surface-container-highest": "#d3e4fe",
+                      "secondary": "#904d00",
+                      "on-error-container": "#93000a",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "on-secondary-fixed": "#2f1500",
+                      "on-tertiary": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#45464d",
+                      "surface-container-lowest": "#ffffff",
+                      "inverse-surface": "#213145",
+                      "background": "#f8f9ff",
+                      "tertiary-fixed": "#6ffbbe",
+                      "surface-container": "#e5eeff",
+                      "on-primary-container": "#7c839b",
+                      "surface-variant": "#d3e4fe"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack-sm": "8px",
+                      "stack-lg": "24px",
+                      "stack-md": "16px",
+                      "gutter": "12px",
+                      "section-gap": "32px",
+                      "edge-margin": "16px"
+              },
+              "fontFamily": {
+                      "headline-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "body-md": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-sm": ["Inter"],
+                      "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md antialiased pb-safe">
+<!-- Top Navigation Area - Task Focused, NO Global Nav Shell (Back navigation only) -->
+<header class="flex items-center w-full px-edge-margin h-16 bg-background sticky top-0 z-40 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+<button aria-label="Go back" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors text-on-surface">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="flex-1 text-center font-headline-sm text-headline-sm font-bold text-primary mr-10">Submit Excuse</h1>
+</header>
+<main class="px-edge-margin py-stack-md max-w-2xl mx-auto space-y-section-gap">
+<!-- Context Header Card -->
+<section class="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low relative overflow-hidden">
+<!-- Subtle accent line -->
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary-container"></div>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-stack-sm">Absence Request</h2>
+<div class="flex items-start gap-stack-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-outline mt-0.5" data-icon="event" style="font-variation-settings: 'FILL' 1;">event</span>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-medium">Midweek Prayer &amp; Rehearsal</p>
+<p class="font-label-md text-label-md text-outline mt-1">Thursday, Aug 13, 2026 • 7:00 PM</p>
+</div>
+</div>
+</section>
+<!-- Form Area -->
+<form class="space-y-stack-lg" onsubmit="event.preventDefault(); alert('Excuse submitted for review.');">
+<!-- Reason Dropdown -->
+<div class="space-y-stack-sm">
+<label class="block font-label-md text-label-md text-on-surface" for="reason">Reason for Absence</label>
+<div class="relative">
+<select class="w-full appearance-none bg-surface-container-lowest border border-outline-variant text-on-surface font-body-md text-body-md rounded-lg pl-3 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all" id="reason" name="reason">
+<option disabled="" selected="" value="">Select a reason...</option>
+<option value="illness">Illness / Medical</option>
+<option value="travel">Travel out of town</option>
+<option value="work">Work scheduling conflict</option>
+<option value="family">Family emergency</option>
+<option value="other">Other</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-outline">
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Detailed Explanation Text Area -->
+<div class="space-y-stack-sm">
+<label class="block font-label-md text-label-md text-on-surface" for="details">Detailed Explanation</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant text-on-surface font-body-md text-body-md rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all resize-none placeholder-outline" id="details" name="details" placeholder="Please provide specific details regarding your absence..." rows="4"></textarea>
+<p class="font-label-sm text-label-sm text-outline-variant text-right">0/300 characters</p>
+</div>
+<!-- Document Upload -->
+<div class="space-y-stack-sm">
+<label class="block font-label-md text-label-md text-on-surface">Supporting Documentation (Optional)</label>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm mb-2">Upload medical notes, travel confirmations, etc.</p>
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-stack-lg flex flex-col items-center justify-center text-center bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer group">
+<div class="w-12 h-12 bg-primary-container rounded-full flex items-center justify-center mb-stack-sm group-hover:scale-105 transition-transform">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="upload_file">upload_file</span>
+</div>
+<p class="font-body-md text-body-md text-primary font-medium">Tap to upload file</p>
+<p class="font-label-sm text-label-sm text-outline mt-1">PDF, JPG, or PNG up to 5MB</p>
+<input class="hidden" id="file-upload" type="file"/>
+</div>
+</div>
+<!-- Notice & Action -->
+<div class="bg-surface-container-low rounded-lg p-stack-md flex gap-stack-sm border border-surface-variant">
+<span class="material-symbols-outlined text-secondary-container mt-0.5" data-icon="info">info</span>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                    All absence excuses are subject to review by leadership. You will be notified once a decision has been made.
+                </p>
+</div>
+<div class="pt-stack-md pb-stack-lg">
+<button class="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-on-background transition-colors shadow-sm active:scale-[0.98]" type="submit">
+<span>Submit Excuse for Review</span>
+<span class="material-symbols-outlined text-on-primary text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</form>
+</main>
+</body></html>

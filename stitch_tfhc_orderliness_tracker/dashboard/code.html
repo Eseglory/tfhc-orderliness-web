@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Member Home Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#6e3900",
+                    "secondary-container": "#fe932c",
+                    "surface": "#f8f9ff",
+                    "on-primary-fixed": "#131b2e",
+                    "secondary-fixed-dim": "#ffb77d",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "outline": "#76777d",
+                    "inverse-on-surface": "#eaf1ff",
+                    "primary": "#000000",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#bec6e0",
+                    "tertiary": "#000000",
+                    "tertiary-container": "#002113",
+                    "secondary-fixed": "#ffdcc3",
+                    "on-background": "#0b1c30",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "outline-variant": "#c6c6cd",
+                    "surface-container-low": "#eff4ff",
+                    "on-secondary-container": "#663500",
+                    "on-tertiary-fixed": "#002113",
+                    "on-surface": "#0b1c30",
+                    "surface-container-high": "#dce9ff",
+                    "primary-fixed": "#dae2fd",
+                    "surface-tint": "#565e74",
+                    "on-tertiary-container": "#009668",
+                    "surface-bright": "#f8f9ff",
+                    "surface-dim": "#cbdbf5",
+                    "error": "#ba1a1a",
+                    "primary-container": "#131b2e",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary": "#904d00",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "on-secondary-fixed": "#2f1500",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-surface-variant": "#45464d",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "background": "#f8f9ff",
+                    "tertiary-fixed": "#6ffbbe",
+                    "surface-container": "#e5eeff",
+                    "on-primary-container": "#7c839b",
+                    "surface-variant": "#d3e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "8px",
+                    "stack-lg": "24px",
+                    "stack-md": "16px",
+                    "gutter": "12px",
+                    "section-gap": "32px",
+                    "edge-margin": "16px",
+                    "safe": "env(safe-area-inset-bottom)"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "label-md": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 150, 104, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 150, 104, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 150, 104, 0); }
+        }
+        
+        /* Hide scrollbar for carousel */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant">
+<img alt="User profile photo" class="w-full h-full object-cover" data-alt="Professional headshot of a young adult male, smiling warmly, well-lit studio lighting, minimalist off-white background, shallow depth of field, high-resolution portrait photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJTu1InyCO-lITLuhQ1joBArZ4AbXUB-zx9RXOBSBCc5Uw0JEtJ6wUKFJ71DwSbU7N7HN7PR5_AeQE-ZXvuhRmPK2l2zPX_ksY_88hX4ZE72evSJIRv-e2AQlEFCaCMY6r3FbFYjzjdx_7Q-wf2eO2nRfYRwglznOT8TDAuV2y013Z_xkRpk-WhTCuFZBv0HnMWeVtNt1h4Wu91_H8Q4zDelKYw5xHp03hKjEaQv5-vftkjIzg1wd2"/>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Dashboard</span>
+<span class="font-headline-sm text-headline-sm font-bold text-primary dark:text-on-primary-fixed">Hello, Bro. Michael</span>
+</div>
+</div>
+<button class="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors group">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col gap-stack-lg px-edge-margin py-stack-md">
+<!-- Live Meeting Banner Widget -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 overflow-hidden relative">
+<div class="absolute top-0 left-0 w-1 h-full bg-tertiary-container"></div>
+<div class="p-4 flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-1">Saturday Unit Meeting <span class="font-label-sm text-label-sm text-error bg-error-container px-2 py-0.5 rounded-full ml-2 align-middle">Compulsory</span></h2>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span> Today, 9:00 AM • Auditorium
+                        </p>
+</div>
+</div>
+<div class="bg-surface-variant/50 rounded-lg p-3 flex items-center justify-between border border-surface-variant">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-on-tertiary-container pulse-dot"></div>
+<span class="font-label-md text-label-md text-on-surface">Attendance Window Open</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-1 rounded">Closes in 42 mins</span>
+</div>
+<button class="w-full bg-primary hover:opacity-90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98]">
+<span class="material-symbols-outlined" data-icon="qr_code_scanner" data-weight="fill">qr_code_scanner</span>
+                    Proceed to Check-In
+                </button>
+</div>
+</section>
+<!-- Quick Stats Carousel -->
+<section>
+<div class="flex justify-between items-end mb-3">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Performance Overview</h3>
+</div>
+<div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 snap-x">
+<!-- Stat Card 1 -->
+<div class="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
+<div class="flex justify-between items-start w-full">
+<span class="material-symbols-outlined text-outline">group_add</span>
+<span class="font-label-sm text-label-sm text-on-tertiary-container bg-tertiary-fixed-dim/20 px-1.5 rounded flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[12px]">trending_up</span> 2%
+                        </span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-primary">91.7%</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Attendance Rate</div>
+</div>
+</div>
+<!-- Stat Card 2 -->
+<div class="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
+<div class="flex justify-between items-start w-full">
+<span class="material-symbols-outlined text-outline">timer</span>
+<span class="font-label-sm text-label-sm text-error bg-error-container/50 px-1.5 rounded flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[12px]">trending_down</span> 1%
+                        </span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-primary">81.8%</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Punctuality</div>
+</div>
+</div>
+<!-- Stat Card 3 -->
+<div class="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px] relative overflow-hidden">
+<div class="absolute -right-4 -bottom-4 w-16 h-16 bg-secondary-container/20 rounded-full blur-xl"></div>
+<div class="flex justify-between items-start w-full relative z-10">
+<span class="material-symbols-outlined text-secondary">workspace_premium</span>
+<span class="font-label-sm text-label-sm font-bold text-secondary">#6</span>
+</div>
+<div class="relative z-10">
+<div class="font-headline-md text-headline-md text-primary">210</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Total Points</div>
+</div>
+</div>
+<!-- Stat Card 4 -->
+<div class="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
+<div class="flex justify-between items-start w-full">
+<span class="material-symbols-outlined text-outline">local_fire_department</span>
+</div>
+<div>
+<div class="font-headline-md text-headline-md text-primary">8</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Consecutive Streak</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Upcoming Schedule -->
+<section>
+<div class="flex justify-between items-end mb-3">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Upcoming Schedule</h3>
+<button class="font-label-sm text-label-sm text-primary hover:underline">View All</button>
+</div>
+<div class="flex flex-col gap-2">
+<!-- Schedule Item 1 -->
+<div class="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
+<span class="font-label-sm text-label-sm font-bold">14</span>
+<span class="font-[9px] uppercase leading-none">Nov</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-primary">Mid-Week Service</div>
+<div class="font-body-md text-[13px] text-on-surface-variant">Wed, 6:00 PM • Main Hall</div>
+</div>
+</div>
+<div class="font-label-sm text-label-sm bg-surface-variant text-on-surface-variant px-2 py-1 rounded">
+                        15 pts
+                    </div>
+</div>
+<!-- Schedule Item 2 -->
+<div class="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
+<span class="font-label-sm text-label-sm font-bold">17</span>
+<span class="font-[9px] uppercase leading-none">Nov</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-primary">Sunday Grand Service</div>
+<div class="font-body-md text-[13px] text-on-surface-variant">Sun, 8:00 AM • Cathedral</div>
+</div>
+</div>
+<div class="font-label-sm text-label-sm bg-surface-variant text-on-surface-variant px-2 py-1 rounded">
+                        30 pts
+                    </div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-surface-container-lowest fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] flex justify-around items-center px-2 pb-safe h-20 border-t border-outline-variant/10">
+<button class="flex flex-col items-center justify-center text-primary dark:text-on-primary-fixed font-semibold transition-transform duration-200 active:scale-90 w-16 gap-1">
+<span class="material-symbols-outlined" data-icon="home" data-weight="fill">home</span>
+<span class="font-label-sm text-[10px]">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 gap-1">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-sm text-[10px]">Meetings</span>
+</button>
+<button class="relative flex flex-col items-center justify-center w-16 transition-transform duration-200 active:scale-90 -mt-6">
+<div class="w-14 h-14 bg-secondary rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(144,77,0,0.3)] border-4 border-surface-container-lowest">
+<span class="material-symbols-outlined text-on-secondary" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<span class="font-label-sm text-[10px] mt-1 text-outline dark:text-outline-variant">Check-In</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 gap-1">
+<span class="material-symbols-outlined" data-icon="emoji_events">emoji_events</span>
+<span class="font-label-sm text-[10px]">Rankings</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 gap-1">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-[10px]">Profile</span>
+</button>
+</nav>
+</body></html>

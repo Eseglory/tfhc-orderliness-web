@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Member Performance &amp; Statistics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#6e3900",
+                    "secondary-container": "#fe932c",
+                    "surface": "#f8f9ff",
+                    "on-primary-fixed": "#131b2e",
+                    "secondary-fixed-dim": "#ffb77d",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "outline": "#76777d",
+                    "inverse-on-surface": "#eaf1ff",
+                    "primary": "#000000",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#bec6e0",
+                    "tertiary": "#000000",
+                    "tertiary-container": "#002113",
+                    "secondary-fixed": "#ffdcc3",
+                    "on-background": "#0b1c30",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "outline-variant": "#c6c6cd",
+                    "surface-container-low": "#eff4ff",
+                    "on-secondary-container": "#663500",
+                    "on-tertiary-fixed": "#002113",
+                    "on-surface": "#0b1c30",
+                    "surface-container-high": "#dce9ff",
+                    "primary-fixed": "#dae2fd",
+                    "surface-tint": "#565e74",
+                    "on-tertiary-container": "#009668",
+                    "surface-bright": "#f8f9ff",
+                    "surface-dim": "#cbdbf5",
+                    "error": "#ba1a1a",
+                    "primary-container": "#131b2e",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary": "#904d00",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "on-secondary-fixed": "#2f1500",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-surface-variant": "#45464d",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "background": "#f8f9ff",
+                    "tertiary-fixed": "#6ffbbe",
+                    "surface-container": "#e5eeff",
+                    "on-primary-container": "#7c839b",
+                    "surface-variant": "#d3e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "8px",
+                    "stack-lg": "24px",
+                    "stack-md": "16px",
+                    "gutter": "12px",
+                    "section-gap": "32px",
+                    "edge-margin": "16px",
+                    "safe": "env(safe-area-inset-bottom)"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "label-md": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .score-ring {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .score-circle-bg {
+            fill: none;
+            stroke: #e5eeff; /* surface-container */
+            stroke-width: 8;
+        }
+        .score-circle-navy {
+            fill: none;
+            stroke: #131b2e; /* primary-container */
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 283; /* 2 * pi * r (r=45) */
+            stroke-dashoffset: 23; /* 283 - (283 * 0.917) = ~23 */
+            animation: fillNavRing 1.5s ease-out forwards;
+        }
+        .score-circle-gold {
+            fill: none;
+            stroke: #fe932c; /* secondary-container */
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 220; /* 2 * pi * r (r=35) */
+            stroke-dashoffset: 40; /* 220 - (220 * 0.818) = ~40 */
+            animation: fillGoldRing 1.5s ease-out forwards;
+        }
+
+        @keyframes fillNavRing {
+            from { stroke-dashoffset: 283; }
+            to { stroke-dashoffset: 23; }
+        }
+        @keyframes fillGoldRing {
+            from { stroke-dashoffset: 220; }
+            to { stroke-dashoffset: 40; }
+        }
+        
+        .bento-card {
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen pb-24 selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background docked full-width top-0 flat no shadows flex justify-between items-center w-full px-edge-margin h-16 sticky z-40">
+<div class="flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, professional user avatar portrait of a community member, bright lighting, light mode aesthetic, clean background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGaqCf8hmRTGHA4aSaddRqdqB_RRUJw5VDE7dVk7xhgC_3pGSSv9GDuYKB3Vy-1D_GIxSlZEbli8R9rEcA7NHRU6YRpKwQ53skDlPTdTuI_NpiVHnvDjgFfAU3Hkm9lUYZTeKpl3XZQmG_E3VNigxBYrwK-Tg8TgEQhKGug-Dc9SAzTprCM7pbp6OIA3tCmylAoIdd9qESz0LNNuMeKavLpO-7rTHyv2fV9-IpHNnTlF33Tm6s1DsN"/>
+</div>
+<div class="font-headline-sm text-headline-sm-mobile font-bold text-primary dark:text-on-primary-fixed truncate px-2 text-center flex-1">
+            Dashboard
+        </div>
+<div class="flex items-center">
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:opacity-80 transition-all duration-200 active:scale-95 w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="px-edge-margin pt-4 flex flex-col gap-section-gap pb-8 max-w-3xl mx-auto w-full">
+<!-- Header Section -->
+<section class="flex flex-col gap-2">
+<h1 class="font-headline-lg text-headline-lg text-primary">My Performance Analytics</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Your current standing and attendance metrics.</p>
+</section>
+<!-- Score Ring & Streak -->
+<section class="flex flex-col md:flex-row gap-gutter">
+<!-- Score Ring Card -->
+<div class="bento-card flex-1 items-center relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-transparent to-surface-container-low opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-6 self-start w-full">Overall Health</h2>
+<div class="relative w-40 h-40 flex items-center justify-center">
+<svg class="score-ring w-full h-full" viewbox="0 0 100 100">
+<!-- Outer Track (Navy) -->
+<circle class="score-circle-bg" cx="50" cy="50" r="45"></circle>
+<circle class="score-circle-navy" cx="50" cy="50" r="45"></circle>
+<!-- Inner Track (Gold) -->
+<circle class="score-circle-bg" cx="50" cy="50" r="35"></circle>
+<circle class="score-circle-gold" cx="50" cy="50" r="35"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-headline-md text-headline-md text-primary">87<span class="text-label-md">%</span></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Score</span>
+</div>
+</div>
+<div class="flex justify-between w-full mt-6 px-2 gap-4">
+<div class="flex flex-col items-center">
+<div class="flex items-center gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-primary-container"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Attendance</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-primary mt-1">91.7%</span>
+</div>
+<div class="flex flex-col items-center">
+<div class="flex items-center gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-secondary-container"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Punctuality</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-primary mt-1">81.8%</span>
+</div>
+</div>
+</div>
+<!-- Streak Card -->
+<div class="bento-card md:w-64 flex flex-col items-center justify-center text-center relative overflow-hidden bg-primary-container text-on-primary">
+<!-- Decorative background elements -->
+<div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-5 mix-blend-overlay"></div>
+<div class="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 rounded-full bg-secondary-container opacity-20 mix-blend-overlay"></div>
+<span class="material-symbols-outlined text-4xl mb-4 text-secondary-container" data-icon="local_fire_department" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="font-label-sm text-label-sm uppercase tracking-widest text-primary-fixed-dim mb-2">Current Streak</span>
+<h3 class="font-headline-lg text-headline-lg mb-2">8 Meetings</h3>
+<p class="font-body-md text-body-md text-primary-fixed-dim">On-time consecutive attendance</p>
+</div>
+</section>
+<!-- Stats Grid (2x3) -->
+<section>
+<h2 class="font-headline-sm text-headline-sm text-primary mb-4">Detailed Breakdown</h2>
+<div class="grid grid-cols-2 md:grid-cols-3 gap-gutter">
+<div class="bento-card items-start">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center mb-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_month">calendar_month</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary mb-1">24</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Expected</span>
+</div>
+<div class="bento-card items-start border-b-2 border-primary-container">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center mb-3 text-primary-container">
+<span class="material-symbols-outlined text-sm" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary mb-1">22</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Attended</span>
+</div>
+<div class="bento-card items-start border-b-2 border-secondary-container">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center mb-3 text-secondary-container">
+<span class="material-symbols-outlined text-sm" data-icon="schedule" style="font-variation-settings: 'FILL' 1;">schedule</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary mb-1">18</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">On-Time</span>
+</div>
+<div class="bento-card items-start">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center mb-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="hourglass_empty">hourglass_empty</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary mb-1">4</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Grace/Late</span>
+</div>
+<div class="bento-card items-start bg-error-container text-on-error-container">
+<div class="w-8 h-8 rounded-full bg-white/50 flex items-center justify-center mb-3 text-error">
+<span class="material-symbols-outlined text-sm" data-icon="warning">warning</span>
+</div>
+<span class="font-headline-md text-headline-md text-error mb-1">2</span>
+<span class="font-label-sm text-label-sm uppercase">Unexcused</span>
+</div>
+<div class="bento-card items-start">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center mb-3 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="health_and_safety">health_and_safety</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary mb-1">1</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Excused</span>
+</div>
+</div>
+</section>
+<!-- Explainer Accordion -->
+<section class="mt-4">
+<div class="bento-card !p-0 overflow-hidden" id="explainer-accordion">
+<button class="w-full flex items-center justify-between p-4 bg-surface-container-lowest hover:bg-surface-container transition-colors duration-200" onclick="toggleAccordion('explainer-content', 'explainer-icon')">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="info">info</span>
+<span class="font-label-md text-label-md text-primary">How is this calculated?</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant transition-transform duration-300" data-icon="expand_more" id="explainer-icon">expand_more</span>
+</button>
+<div class="hidden px-4 pb-4 pt-2 border-t border-surface-variant" id="explainer-content">
+<p class="font-body-md text-body-md text-on-surface-variant mb-3">Your overall health score is a weighted average of your attendance and punctuality records.</p>
+<div class="bg-surface-container rounded-lg p-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-center font-label-md text-label-md text-primary">
+<span>(Attendance % × 60%)</span>
+<span class="material-symbols-outlined text-sm text-on-surface-variant hidden sm:block" data-icon="add">add</span>
+<span class="sm:hidden text-on-surface-variant">+</span>
+<span>(Punctuality % × 40%)</span>
+<span class="material-symbols-outlined text-sm text-on-surface-variant hidden sm:block" data-icon="drag_handle">drag_handle</span>
+<span class="sm:hidden text-on-surface-variant">=</span>
+<span class="text-secondary-container">Overall Score</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-surface-container-lowest shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] fixed bottom-0 w-full z-50 rounded-t-xl flex justify-around items-center px-2 pb-safe h-20 md:hidden">
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-md text-label-md text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md text-label-md text-[10px]">Meetings</span>
+</a>
+<!-- Check-In FAB / Center Action -->
+<a class="flex flex-col items-center justify-center -mt-6 transition-transform duration-200 active:scale-90 relative z-10 w-20" href="#">
+<div class="w-14 h-14 rounded-full bg-secondary-container text-on-secondary shadow-lg flex items-center justify-center mb-1 ring-4 ring-surface-container-lowest">
+<span class="material-symbols-outlined text-2xl" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<span class="font-label-md text-label-md text-[10px] text-outline">Check-In</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-on-primary-fixed font-semibold transition-transform duration-200 active:scale-90 w-16 h-full relative" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="emoji_events" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+<span class="font-label-md text-label-md text-[10px]">Rankings</span>
+<!-- Active Indicator Dot -->
+<div class="absolute top-2 right-4 w-1.5 h-1.5 bg-secondary-container rounded-full hidden"></div>
+</a>
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16 h-full" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-md text-label-md text-[10px]">Profile</span>
+</a>
+</nav>
+<script>
+        function toggleAccordion(contentId, iconId) {
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+    </script>
+</body></html>

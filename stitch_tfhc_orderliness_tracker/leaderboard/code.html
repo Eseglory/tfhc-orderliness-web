@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Unit Leaderboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#6e3900",
+                    "secondary-container": "#fe932c",
+                    "surface": "#f8f9ff",
+                    "on-primary-fixed": "#131b2e",
+                    "secondary-fixed-dim": "#ffb77d",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "outline": "#76777d",
+                    "inverse-on-surface": "#eaf1ff",
+                    "primary": "#000000",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "inverse-primary": "#bec6e0",
+                    "tertiary": "#000000",
+                    "tertiary-container": "#002113",
+                    "secondary-fixed": "#ffdcc3",
+                    "on-background": "#0b1c30",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "outline-variant": "#c6c6cd",
+                    "surface-container-low": "#eff4ff",
+                    "on-secondary-container": "#663500",
+                    "on-tertiary-fixed": "#002113",
+                    "on-surface": "#0b1c30",
+                    "surface-container-high": "#dce9ff",
+                    "primary-fixed": "#dae2fd",
+                    "surface-tint": "#565e74",
+                    "on-tertiary-container": "#009668",
+                    "surface-bright": "#f8f9ff",
+                    "surface-dim": "#cbdbf5",
+                    "error": "#ba1a1a",
+                    "primary-container": "#131b2e",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary": "#904d00",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#4edea3",
+                    "on-secondary-fixed": "#2f1500",
+                    "on-tertiary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-surface-variant": "#45464d",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "background": "#f8f9ff",
+                    "tertiary-fixed": "#6ffbbe",
+                    "surface-container": "#e5eeff",
+                    "on-primary-container": "#7c839b",
+                    "surface-variant": "#d3e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "stack-sm": "8px",
+                    "stack-lg": "24px",
+                    "stack-md": "16px",
+                    "gutter": "12px",
+                    "section-gap": "32px",
+                    "edge-margin": "16px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "label-md": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+            }
+          },
+        }
+      }
+    </script>
+<style>
+        body {
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom scrollbar for web view */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen pb-safe antialiased flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-background flex justify-between items-center w-full px-edge-margin h-16 docked full-width top-0 z-40 relative">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center">
+<img alt="User profile photo" class="object-cover w-full h-full" data-alt="A close-up portrait of a professional individual in a minimalist, modern light-mode setting. Soft, even studio lighting emphasizes a clean and polished appearance. The background is a stark, bright white to maintain a crisp aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBERJAQkfPliCbf6y5HYRZ4Aplxz7SP_LDzAvp2dbkKDn8ROe5eTJDM2lnter6Jpk1TU8X1D8Z0fTgbtbxavxeTARRNonmz2fk-Si_YGISIJspfvfW0GAfqIqR6q8WZSedlGJ00liorKVVH5VSf6TZiqeugBIPtlbBQi4qA3qp8gbnrUrdXdLyMna71KMJjWH4ZH6yuCvXCZtO5OQM3UqYKehHcdzhgAweNkd6spIbQ69w-1UyP4nFV"/>
+</div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary">Dashboard</h1>
+</div>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:opacity-80 transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<main class="flex-grow pb-32">
+<!-- Filters & Scope -->
+<section class="px-edge-margin py-stack-sm flex flex-col gap-stack-sm sticky top-0 bg-background/90 backdrop-blur-md z-30">
+<div class="flex justify-between items-center gap-gutter">
+<div class="flex bg-surface-container-low rounded-lg p-1 flex-1">
+<button class="flex-1 py-1.5 px-3 rounded text-on-surface bg-surface shadow-[0px_2px_8px_rgba(0,0,0,0.05)] font-label-md text-label-md transition-all">This Month</button>
+<button class="flex-1 py-1.5 px-3 rounded text-on-surface-variant font-label-md text-label-md transition-all hover:text-on-surface">Q3 2026</button>
+</div>
+<button class="flex items-center gap-1 bg-surface-container-low text-on-surface py-2 px-3 rounded-lg font-label-md text-label-md">
+                    All Unit Teams
+                    <span class="material-symbols-outlined text-lg" data-icon="arrow_drop_down">arrow_drop_down</span>
+</button>
+</div>
+</section>
+<!-- Podium (Top 3) -->
+<section class="px-edge-margin py-section-gap flex justify-center items-end gap-2 md:gap-4 h-64 mt-4">
+<!-- #2 Silver -->
+<div class="flex flex-col items-center animate-[slideUp_0.5s_ease-out_0.1s_both]">
+<div class="relative mb-2">
+<div class="w-16 h-16 rounded-full overflow-hidden border-4 border-[#C0C0C0] shadow-md z-10 relative">
+<img alt="Second place" class="object-cover w-full h-full" data-alt="A professional headshot of a smiling team member in a bright, modern office space. The lighting is soft and flattering, highlighting a clean, light-mode aesthetic with a pristine white background. The subject exudes confidence and reliability." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQJSdTaoj1Q0i-sWkusEjhagH1YMSyK3bS9kIfZrjcz5zDz-tZSekAeI6AMi0gFbbmoIafzQfVUBSu9xWTJtEtwVSwbuV61Tk7xe3B3tIL45zHGyv5jD_FZLww6JAzY_HluQm1JLVpPtx5KJ-ppGipw_XKER31CeCsYIQZe4vwUT1oi84wjas8TlSY3C_FHNyn-IEozYiKPyor7ilKO4uVW4KWRR0ojvSgv7sh6m1CGOXAouN4EM_O"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-[#C0C0C0] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">2</div>
+</div>
+<p class="font-label-md text-label-md text-on-surface truncate w-20 text-center">Sarah M.</p>
+<div class="bg-surface-container w-20 h-24 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-3 border-t-2 border-[#C0C0C0] shadow-inner relative overflow-hidden group">
+<div class="absolute bottom-0 w-full bg-[#C0C0C0]/20 h-full origin-bottom transform transition-transform group-hover:scale-y-110 duration-500"></div>
+<span class="font-headline-sm text-headline-sm text-primary relative z-10">96%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant relative z-10">450 pts</span>
+</div>
+</div>
+<!-- #1 Gold -->
+<div class="flex flex-col items-center z-10 animate-[slideUp_0.6s_ease-out_both]">
+<div class="relative mb-2">
+<span class="material-symbols-outlined text-[#FFD700] absolute -top-6 left-1/2 -translate-x-1/2 text-3xl drop-shadow-md z-20" data-icon="crown" data-weight="fill" style="font-variation-settings: 'FILL' 1;">crown</span>
+<div class="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FFD700] shadow-lg z-10 relative">
+<img alt="First place" class="object-cover w-full h-full" data-alt="A vibrant, professional headshot of a top-performing team member in a well-lit, contemporary workspace. High-key lighting dominates, creating a stark, modern light-mode feel with clean lines and a pure white background. The subject looks triumphant yet approachable." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRG4XTgADQ1uFP69H5br9RhTrO0iRHx_VHLo7ZjhuJN6U9z9tWI0jb9-RoWjwG05V_HU5Shqb_QPQbD2BmdqRvpOW3UMXGhVFXFSwvJqaSXXCBRoB4dj6Nn7ZL5fs_BKkwglVg6EWZ04u7w7osoLWlr0DZQwBDXcFu3Zgcvr1Iexl-iIdsupXpRUuBngkd0eynoE-cxQEE6o1fwsV8B9xS609Lnjxt-g6qkw9-CZZ-_wvi1xtq-va5"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-[#FFD700] text-tertiary-container w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm border-2 border-surface z-20">1</div>
+</div>
+<p class="font-label-md text-label-md text-on-surface font-bold truncate w-24 text-center mt-1">David K.</p>
+<div class="bg-[#FFD700]/10 w-24 h-32 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-4 border-t-4 border-[#FFD700] shadow-[0px_-4px_12px_rgba(255,215,0,0.15)] relative overflow-hidden">
+<div class="absolute bottom-0 w-full bg-gradient-to-t from-[#FFD700]/30 to-transparent h-full"></div>
+<span class="font-headline-md text-headline-md text-primary font-bold relative z-10">99%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant relative z-10 font-bold">520 pts</span>
+</div>
+</div>
+<!-- #3 Bronze -->
+<div class="flex flex-col items-center animate-[slideUp_0.5s_ease-out_0.2s_both]">
+<div class="relative mb-2">
+<div class="w-16 h-16 rounded-full overflow-hidden border-4 border-[#CD7F32] shadow-md z-10 relative">
+<img alt="Third place" class="object-cover w-full h-full" data-alt="A clean, bright headshot of a team member in a minimalist setting. The environment utilizes light-mode design principles with a plain white backdrop and soft, diffuse lighting that ensures a clear, high-contrast image. The subject is calm and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCeCuSsgSlegqfDUGDTH3E8ciQE2hEMPzWL8EEdHlHaw80YZWHHQk0Qrk30tB_D7FfFcNVTuY6zxVqeiUtCqanItJpdLgjgG89FaJFJODxlUEjHiFRPrb5zsuRB_cpPpmhXMXZ-EqLkzM0LnpeuzK4xAKm82196lp79-0nKgXVUTqGhOn7HJd1RDV854rB5gUHEoZncAARXHyVT1oakbyOjI9P-5FoFQ8tqN08MEogmalvm1fKYSrQy"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-[#CD7F32] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">3</div>
+</div>
+<p class="font-label-md text-label-md text-on-surface truncate w-20 text-center">Elena R.</p>
+<div class="bg-surface-container w-20 h-20 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-2 border-t-2 border-[#CD7F32] shadow-inner relative overflow-hidden">
+<div class="absolute bottom-0 w-full bg-[#CD7F32]/10 h-full"></div>
+<span class="font-headline-sm text-headline-sm text-primary relative z-10">94%</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant relative z-10">410 pts</span>
+</div>
+</div>
+</section>
+<!-- Ranked Table (4-20) -->
+<section class="px-edge-margin pb-stack-lg">
+<div class="bg-surface rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
+<!-- Header -->
+<div class="flex items-center px-4 py-3 bg-surface-container-low border-b border-surface-variant text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+<div class="w-8 text-center">Rk</div>
+<div class="flex-1 pl-2">Name</div>
+<div class="w-16 text-right">Att%</div>
+<div class="w-16 text-right hidden sm:block">Punct%</div>
+<div class="w-16 text-right">Pts</div>
+</div>
+<!-- List Items -->
+<div class="flex flex-col">
+<!-- Rank 4 -->
+<div class="flex items-center px-4 py-3 border-b border-surface-variant last:border-0 hover:bg-surface-container-lowest transition-colors">
+<div class="w-8 text-center font-label-md text-label-md text-on-surface-variant">4</div>
+<div class="flex-1 pl-2 flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0">
+<img alt="User avatar" class="object-cover w-full h-full" data-alt="A small circular avatar portrait of a professional against a pure white background. Minimalist light-mode styling." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAe_fjwGQWz8C8UZDLBSZyVkictGZMwcW2GTSLiZtIfbYNBwPU2YPTveYGrisZYRhbf4V_Z7deYvv4JTFmzYqlqmJ1YLk3qatmdozr8L39JNHlTnxFIz9Pw7hoFwALc4Hq_N5bBU5LXNyNp3VMwdprPGhfYWps_gm2RNGF0-EFCcct9B1sjO2SkHy3ph_Nzqwx3zuUIaAxr_KKlefDxTGO-Fkz-nNQHskVUYr6kAwSNe9q6sdV5KVIj"/>
+</div>
+<span class="font-body-md text-body-md text-on-surface truncate">Marcus T.</span>
+</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface">92.5%</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">88.0%</div>
+<div class="w-16 text-right font-label-md text-label-md text-primary">380</div>
+</div>
+<!-- Rank 5 -->
+<div class="flex items-center px-4 py-3 border-b border-surface-variant last:border-0 hover:bg-surface-container-lowest transition-colors">
+<div class="w-8 text-center font-label-md text-label-md text-on-surface-variant">5</div>
+<div class="flex-1 pl-2 flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0">
+<img alt="User avatar" class="object-cover w-full h-full" data-alt="A small circular avatar portrait of a professional against a pure white background. Minimalist light-mode styling." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAa6J0UiynaptHtKBseSQ8_S3NC2CPoH3bU8f4pxMdqQUysgqWn68Vigx9wSAG7TE26wqNVtE3_AkufVsd__kjP21r17X_X3_eQ0idRNpPhOAb7GNrH4qBzpD5RHU0hjFeuv8AITmsd44EEG09xZOsVishkONCpDo1mqaOfK_D7fthhc40lvHKQlP2kzLuA-ySdNXh_UNgDSkXCwGLmKwKyX9c6Kd7zbeukggxnuRyKWi7qQ0I34K12"/>
+</div>
+<span class="font-body-md text-body-md text-on-surface truncate">Jessica W.</span>
+</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface">92.0%</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">85.5%</div>
+<div class="w-16 text-right font-label-md text-label-md text-primary">310</div>
+</div>
+<!-- Rank 7-10 (Skipping 6 as it's sticky below) -->
+<div class="flex items-center px-4 py-3 border-b border-surface-variant last:border-0 hover:bg-surface-container-lowest transition-colors">
+<div class="w-8 text-center font-label-md text-label-md text-on-surface-variant">7</div>
+<div class="flex-1 pl-2 flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 text-center leading-8 font-label-md text-primary-fixed-dim">
+                                AT
+                             </div>
+<span class="font-body-md text-body-md text-on-surface truncate">Alex T.</span>
+</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface">90.1%</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">80.0%</div>
+<div class="w-16 text-right font-label-md text-label-md text-primary">195</div>
+</div>
+<div class="flex items-center px-4 py-3 border-b border-surface-variant last:border-0 hover:bg-surface-container-lowest transition-colors">
+<div class="w-8 text-center font-label-md text-label-md text-on-surface-variant">8</div>
+<div class="flex-1 pl-2 flex items-center gap-2">
+<div class="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 text-center leading-8 font-label-md text-primary-fixed-dim">
+                                BJ
+                             </div>
+<span class="font-body-md text-body-md text-on-surface truncate">Brian J.</span>
+</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface">88.5%</div>
+<div class="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">78.5%</div>
+<div class="w-16 text-right font-label-md text-label-md text-primary">180</div>
+</div>
+</div>
+<div class="p-3 text-center">
+<button class="text-secondary font-label-md text-label-md hover:underline">Load More (12)</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Sticky User Bar (Gold) -->
+<div class="fixed bottom-20 w-full px-edge-margin z-40 mb-2 pointer-events-none">
+<div class="bg-gradient-to-r from-secondary-container to-[#ffb347] text-on-secondary-container rounded-xl shadow-lg p-3 flex items-center justify-between pointer-events-auto border border-secondary-fixed shadow-[0px_4px_12px_rgba(254,147,44,0.3)]">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface flex items-center justify-center font-bold text-secondary-container text-lg shadow-sm border-2 border-surface">
+                    6
+                </div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm font-bold leading-tight">You</span>
+<div class="flex items-center gap-1 font-label-sm text-label-sm opacity-90">
+<span>91.7% Att</span>
+<span class="w-1 h-1 rounded-full bg-on-secondary-container"></span>
+<span>81.8% Punct</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-headline-sm text-headline-sm font-bold">210</span>
+<span class="font-label-sm text-label-sm uppercase opacity-90">pts</span>
+</div>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container-lowest fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] flex justify-around items-center px-2 pb-safe h-20 transition-transform duration-200 active:scale-90 md:hidden">
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary transition-all group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="home">home</span>
+<span class="font-label-md text-label-md text-[10px]">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary transition-all group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md text-label-md text-[10px]">Meetings</span>
+</button>
+<button class="flex flex-col items-center justify-center -mt-6 relative">
+<div class="w-14 h-14 rounded-full bg-secondary-container flex items-center justify-center shadow-[0px_4px_12px_rgba(254,147,44,0.4)] border-4 border-surface-container-lowest">
+<span class="material-symbols-outlined text-on-secondary-container text-3xl" data-icon="qr_code_scanner">qr_code_scanner</span>
+</div>
+<span class="font-label-md text-label-md text-[10px] mt-1 text-outline">Check-In</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary font-semibold transition-all">
+<span class="material-symbols-outlined mb-1" data-icon="emoji_events" data-weight="fill" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+<span class="font-label-md text-label-md text-[10px]">Rankings</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary transition-all group">
+<span class="material-symbols-outlined mb-1 group-hover:scale-110 transition-transform" data-icon="person">person</span>
+<span class="font-label-md text-label-md text-[10px]">Profile</span>
+</button>
+</nav>
+<style>
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</body></html>

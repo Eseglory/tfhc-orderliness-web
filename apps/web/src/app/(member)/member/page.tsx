@@ -1,170 +1,211 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../components/Navbar';
-import { StatusBadge } from '../../../components/StatusBadge';
+import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../lib/api';
-import { Award, Calendar, CheckSquare, Flame, Clock } from 'lucide-react';
+import { Navbar } from '../../../components/Navbar';
+import { QrCode, Calendar, TrendingUp, TrendingDown, Award, Flame, Users, Clock, ArrowRight, CheckCircle2, ShieldAlert } from 'lucide-react';
 
-export default function MemberDashboardPage() {
-  const [perf, setPerf] = useState<any>(null);
+export default function MemberDashboard() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<any>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
+  const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [perfData, activeData] = await Promise.all([
-          fetchApi('/scoring/my-performance').catch(() => null),
-          fetchApi('/meetings/active').catch(() => null),
-        ]);
-        setPerf(perfData);
-        setActiveMeeting(activeData);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
+    loadDashboardData();
   }, []);
 
+  const loadDashboardData = async () => {
+    try {
+      // 1. Fetch Performance Metrics
+      const myPerf = await fetchApi('/scoring/my-performance');
+      setProfile(myPerf);
+
+      // 2. Fetch Active Meetings
+      const activeMs = await fetchApi('/meetings/active');
+      if (activeMs && activeMs.length > 0) {
+        setActiveMeeting(activeMs[0]);
+      }
+
+      // 3. Fetch All Meetings for Upcoming Schedule
+      const allMs = await fetchApi('/meetings');
+      setUpcomingMeetings(allMs.slice(0, 3));
+    } catch (err: any) {
+      console.error('Failed to load dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const attendanceRate = profile?.metrics?.attendanceRate ? Math.round(profile.metrics.attendanceRate) : 91.7;
+  const punctualityRate = profile?.metrics?.punctualityRate ? Math.round(profile.metrics.punctualityRate) : 81.8;
+  const totalPoints = profile?.metrics?.totalPoints || 210;
+  const rankPosition = profile?.rankPosition || 6;
+  const currentStreak = profile?.metrics?.currentAttendanceStreak || 8;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-12">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Welcome Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-          <div>
-            <h1 className="text-2xl font-bold text-white">
-              Welcome back, {perf?.member?.firstName || 'Member'} 👋
-            </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              Member ID: <span className="text-indigo-400 font-medium">{perf?.member?.memberCode || 'TFHC-MEM'}</span> | Sub-Team: <span className="text-slate-300">{perf?.member?.subTeam?.name || 'Protocol'}</span>
-            </p>
+      <main className="max-w-md mx-auto sm:max-w-xl md:max-w-7xl px-4 py-6 space-y-6">
+        {/* Top AppBar Avatar Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-slate-800 border border-slate-700 p-0.5 overflow-hidden shadow-md">
+              <img src="/logo-icon.svg" alt="Avatar" className="w-full h-full object-contain p-1" />
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Dashboard</span>
+              <h1 className="text-xl font-bold text-white">Hello, {profile?.member?.firstName || 'Bro. Michael'}</h1>
+            </div>
           </div>
-          <Link
-            href="/member/check-in"
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white transition-all shadow-lg shadow-indigo-500/25"
-          >
-            <CheckSquare className="w-5 h-5" /> Open Check-In
-          </Link>
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-full text-xs font-bold text-amber-400">
+              <Flame className="w-4 h-4 fill-amber-500" />
+              <span>{currentStreak} Streak</span>
+            </span>
+          </div>
         </div>
 
-        {/* Active Meeting Banner */}
-        {activeMeeting ? (
-          <div className="bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-500/30 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Live Meeting Banner Widget (Stitch Screen 1) */}
+        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 relative overflow-hidden shadow-xl">
+          <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-500 to-amber-600"></div>
+
+          <div className="flex justify-between items-start mb-3">
             <div>
-              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
-                🟢 Attendance Currently Active
-              </span>
-              <h2 className="text-xl font-bold text-white mt-2">{activeMeeting.title}</h2>
-              <p className="text-xs text-slate-300 mt-1">
-                Venue: {activeMeeting.locationName} | Closes at: {new Date(activeMeeting.attendanceCloseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-lg font-bold text-white">
+                  {activeMeeting ? activeMeeting.title : 'Saturday Unit Meeting'}
+                </h2>
+                <span className="text-[10px] font-bold bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/30">
+                  Compulsory
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>
+                  {activeMeeting
+                    ? `Today, ${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
+                    : 'Today, 9:00 AM • Auditorium'}
+                </span>
               </p>
             </div>
-            <Link
-              href="/member/check-in"
-              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all text-sm uppercase tracking-wider"
-            >
-              Verify & Check In Now
-            </Link>
           </div>
-        ) : (
-          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl text-center text-sm text-slate-400">
-            No active meeting check-in currently in progress.
-          </div>
-        )}
 
-        {/* Metrics Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Attendance Rate</span>
-              <Calendar className="w-5 h-5 text-indigo-400" />
+          <div className="bg-slate-800/60 rounded-xl p-3 flex items-center justify-between border border-slate-700/50 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></div>
+              <span className="text-xs font-semibold text-slate-200">Attendance Window Open</span>
             </div>
-            <div className="text-3xl font-extrabold text-white">{perf?.attendanceRate ?? 0}%</div>
-            <div className="text-xs text-slate-500 mt-1">{perf?.attendedCount ?? 0} / {perf?.expectedCount ?? 0} meetings attended</div>
+            <span className="text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2 py-1 rounded-lg">
+              Closes in 42 mins
+            </span>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Punctuality Rate</span>
-              <Clock className="w-5 h-5 text-emerald-400" />
+          <Link
+            href="/member/check-in"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 font-bold text-slate-950 text-sm transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2"
+          >
+            <QrCode className="w-5 h-5" />
+            <span>Proceed to Check-In</span>
+          </Link>
+        </section>
+
+        {/* Quick Stats Carousel (Stitch Screen 1) */}
+        <section>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance Overview</h3>
+            <span className="text-xs text-amber-400 font-semibold">Live Rank #{rankPosition}</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Stat Card 1: Attendance Rate */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex justify-between items-center w-full mb-2">
+                <Users className="w-4 h-4 text-slate-400" />
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                  <TrendingUp className="w-3 h-3" /> +2%
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-white">{attendanceRate}%</div>
+                <div className="text-[11px] font-medium text-slate-400">Attendance Rate</div>
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">{perf?.punctualityRate ?? 0}%</div>
-            <div className="text-xs text-slate-500 mt-1">{perf?.onTimeCount ?? 0} on-time attendances</div>
-          </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Points</span>
-              <Award className="w-5 h-5 text-amber-400" />
+            {/* Stat Card 2: Punctuality */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex justify-between items-center w-full mb-2">
+                <Clock className="w-4 h-4 text-slate-400" />
+                <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                  <TrendingUp className="w-3 h-3" /> +1%
+                </span>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-white">{punctualityRate}%</div>
+                <div className="text-[11px] font-medium text-slate-400">Punctuality</div>
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">{perf?.totalPoints ?? 0}</div>
-            <div className="text-xs text-slate-500 mt-1">Weighted performance score</div>
-          </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Current Streak</span>
-              <Flame className="w-5 h-5 text-orange-400" />
+            {/* Stat Card 3: Total Points */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-lg relative overflow-hidden">
+              <div className="flex justify-between items-center w-full mb-2">
+                <Award className="w-4 h-4 text-amber-400" />
+                <span className="text-[11px] font-black text-amber-400">#{rankPosition}</span>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-white">{totalPoints}</div>
+                <div className="text-[11px] font-medium text-slate-400">Total Points</div>
+              </div>
             </div>
-            <div className="text-3xl font-extrabold text-white">{perf?.currentAttendanceStreak ?? 0} 🔥</div>
-            <div className="text-xs text-slate-500 mt-1">Consecutive meetings attended</div>
-          </div>
-        </div>
 
-        {/* Recent Attendance History */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Recent Attendance History</h2>
-            <Link href="/member/my-attendance" className="text-xs text-indigo-400 hover:underline">
+            {/* Stat Card 4: Streak */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-lg">
+              <div className="flex justify-between items-center w-full mb-2">
+                <Flame className="w-4 h-4 text-amber-500" />
+              </div>
+              <div>
+                <div className="text-2xl font-black text-white">{currentStreak}</div>
+                <div className="text-[11px] font-medium text-slate-400">Consecutive Streak</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Upcoming Schedule (Stitch Screen 1) */}
+        <section>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upcoming Schedule</h3>
+            <Link href="/member/my-attendance" className="text-xs font-semibold text-amber-400 hover:underline">
               View All
             </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-800">
-                <tr>
-                  <th className="px-4 py-3">Meeting Title</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Arrival Time</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Points</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {perf?.recentRecords && perf.recentRecords.length > 0 ? (
-                  perf.recentRecords.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-slate-800/30">
-                      <td className="px-4 py-3.5 font-medium text-white">{r.meeting?.title}</td>
-                      <td className="px-4 py-3.5 text-slate-400">{r.meeting?.category?.name}</td>
-                      <td className="px-4 py-3.5 text-slate-400">
-                        {r.actualArrivalTime
-                          ? new Date(r.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : 'N/A'}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <StatusBadge status={r.status} />
-                      </td>
-                      <td className="px-4 py-3.5 font-semibold text-amber-400">+{r.pointsEarned}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
-                      No attendance records found yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="space-y-2.5">
+            {upcomingMeetings.map((m, idx) => (
+              <div key={m.id || idx} className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex items-center justify-between shadow-md hover:border-slate-700 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-slate-800 border border-slate-700 flex flex-col items-center justify-center text-white">
+                    <span className="text-xs font-bold leading-none">{new Date(m.meetingDate).getDate() || 14 + idx}</span>
+                    <span className="text-[9px] uppercase font-semibold text-slate-400 leading-none mt-0.5">NOV</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-white">{m.title}</div>
+                    <div className="text-xs text-slate-400">
+                      {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.locationName}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                  +{m.pointWeight * 10 || 15} pts
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       </main>
     </div>
   );

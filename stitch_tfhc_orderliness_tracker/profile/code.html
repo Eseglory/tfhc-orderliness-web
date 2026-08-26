@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-width=1.0" name="viewport"/>
+<title>Member Profile &amp; Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#6e3900",
+                        "secondary-container": "#fe932c",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary-fixed-dim": "#ffb77d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "outline": "#76777d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#000000",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000",
+                        "tertiary-container": "#002113",
+                        "secondary-fixed": "#ffdcc3",
+                        "on-background": "#0b1c30",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "outline-variant": "#c6c6cd",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary-container": "#663500",
+                        "on-tertiary-fixed": "#002113",
+                        "on-surface": "#0b1c30",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#dae2fd",
+                        "surface-tint": "#565e74",
+                        "on-tertiary-container": "#009668",
+                        "surface-bright": "#f8f9ff",
+                        "surface-dim": "#cbdbf5",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#904d00",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-secondary-fixed": "#2f1500",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#45464d",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed": "#6ffbbe",
+                        "surface-container": "#e5eeff",
+                        "on-primary-container": "#7c839b",
+                        "surface-variant": "#d3e4fe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-sm": "8px",
+                        "stack-lg": "24px",
+                        "stack-md": "16px",
+                        "gutter": "12px",
+                        "section-gap": "32px",
+                        "edge-margin": "16px",
+                        "safe": "env(safe-area-inset-bottom)"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg": ["30px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-[90px]">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center w-full px-edge-margin h-16 bg-background dark:bg-background flat no shadows docked full-width top-0 z-40 sticky">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of an African man in his late 20s wearing a crisp white shirt, neutral background, studio lighting, modern high-key aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCH0YXpWMu_DhgRwJEiDxqGrxstL10haJva9rBNYsSALDwToJwkQaJ8QsENxSKz2hVdK8OwL--vqpA1B53t3rr_Y8n6QvdmaTiRcH28CNBILwHd6uHLVHEDRp2VHPZIRgXNi33ecs1O0HeSaJhq3-9Iu2VAFVu0za5SM3OEMuH0pVyLuHqwTTJ6caYrna58Hviv6G4Doq9SBHWHWYBszorDTIrR3LSUt0XmJ10LhThKUbQM_m1gMhBw"/>
+</div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-primary dark:text-on-primary-fixed tracking-tight">Dashboard</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors text-primary dark:text-on-primary-fixed hover:opacity-80 transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<main class="flex-1 px-edge-margin py-stack-md flex flex-col gap-section-gap w-full max-w-3xl mx-auto">
+<!-- Profile Header Section -->
+<section class="flex flex-col items-center pt-stack-md pb-stack-lg gap-stack-md">
+<div class="relative group">
+<div class="w-24 h-24 rounded-full overflow-hidden border-4 border-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)] bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of an African man in his late 20s wearing a crisp white shirt, neutral background, studio lighting, modern high-key aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAua-LDMIqlkcNEEwFWEPgHzbZL3nwhGo0W_ES2S_LpHCVC-cMAY3-M5RancFJUtUBbYS1m0FLG-bLc4NTYAR5FfTvpqf8FkXS9yplm4wSOPtdsHCTLHKQYmpKfmJOYmLmHNGetJI8kS9_YaFhtFZDAwzHluWtFJSUTufM2_qcSR9mdegBfkTj9FyYVlUKz8V3LoF9--9wLj4jQ0UpfS98J_dkKyG1qqrYE8Qx06GH_r-TcyXSB-C5y"/>
+</div>
+<button class="absolute bottom-0 right-0 w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-md hover:bg-on-primary-fixed-variant transition-colors border-2 border-surface-container-lowest">
+<span class="material-symbols-outlined text-[16px]" data-weight="fill" style="font-variation-settings: 'FILL' 1;">edit</span>
+</button>
+</div>
+<div class="text-center flex flex-col gap-1">
+<h2 class="font-headline-sm text-headline-sm text-primary">Bro. Michael Adeleke</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Orderliness Protocol Sub-Team A</p>
+<div class="flex items-center justify-center gap-2 mt-2">
+<span class="font-label-sm text-label-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant">ID: TFHC-1042</span>
+<span class="font-label-sm text-label-sm bg-[#e6f4ea] text-[#137333] px-2 py-1 rounded font-semibold flex items-center gap-1 border border-[#ceead6]">
+<span class="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Active
+                    </span>
+</div>
+</div>
+</section>
+<!-- Personal Information Section -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">Personal Information</h3>
+<div class="flex flex-col">
+<div class="flex items-center justify-between p-4 border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">phone</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Phone</span>
+<span class="font-body-md text-body-md text-primary">+234 801 234 5678</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between p-4 border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">mail</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Email</span>
+<span class="font-body-md text-body-md text-primary">m.adeleke@example.com</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between p-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">event</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Joined Date</span>
+<span class="font-body-md text-body-md text-primary">October 12, 2021</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Settings Section -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">Settings &amp; Preferences</h3>
+<div class="flex flex-col">
+<!-- Push Toggle -->
+<div class="flex items-center justify-between p-4 border-b border-outline-variant/30">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">notifications_active</span>
+</div>
+<span class="font-body-md text-body-md text-primary font-medium">Push Notifications</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<!-- Location Status -->
+<div class="flex items-center justify-between p-4 border-b border-outline-variant/30 cursor-pointer hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-primary font-medium">Location Status</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Always Allowed</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+<!-- Device Registration -->
+<div class="flex items-center justify-between p-4 border-b border-outline-variant/30 cursor-pointer hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">smartphone</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-primary font-medium">Device Registration</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">iPhone 15 Pro</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+<!-- Change Password -->
+<div class="flex items-center justify-between p-4 cursor-pointer hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+</div>
+<span class="font-body-md text-body-md text-primary font-medium">Change Password</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+</div>
+</section>
+<!-- Logout Action -->
+<section class="pb-stack-lg">
+<button class="w-full bg-surface-container-lowest border border-error/30 text-error font-body-md text-body-md font-medium py-3 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] hover:bg-error-container/20 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]">logout</span>
+                Log Out
+            </button>
+</section>
+</main>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-2 pb-safe h-20 bg-surface-container-lowest dark:bg-surface-container-lowest shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] rounded-t-xl md:hidden">
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-label-sm text-label-sm">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16" href="#">
+<span class="material-symbols-outlined mb-1">calendar_today</span>
+<span class="font-label-sm text-label-sm">Meetings</span>
+</a>
+<!-- Check-In FAB in Nav -->
+<a class="flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-20 -mt-6" href="#">
+<div class="w-14 h-14 bg-secondary-container rounded-full flex items-center justify-center shadow-lg border-4 border-surface-container-lowest text-on-secondary-container">
+<span class="material-symbols-outlined" data-weight="fill" style="font-variation-settings: 'FILL' 1;">qr_code_scanner</span>
+</div>
+<span class="font-label-sm text-label-sm text-outline dark:text-outline-variant mt-1">Check-In</span>
+</a>
+<a class="flex flex-col items-center justify-center text-outline dark:text-outline-variant hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16" href="#">
+<span class="material-symbols-outlined mb-1">emoji_events</span>
+<span class="font-label-sm text-label-sm">Rankings</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-on-primary-fixed font-semibold hover:text-primary dark:hover:text-on-primary-fixed transition-transform duration-200 active:scale-90 w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-weight="fill" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-sm text-label-sm">Profile</span>
+</a>
+</nav>
+</body></html>
