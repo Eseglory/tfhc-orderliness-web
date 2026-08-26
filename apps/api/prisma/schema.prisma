@@ -95,6 +95,9 @@ model Member {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
+  @@index([status])
+  @@index([subTeamId])
+  @@index([status, subTeamId])
   @@map("members")
 }
 
@@ -135,6 +138,9 @@ model Meeting {
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
+  @@index([status])
+  @@index([startTime])
+  @@index([status, attendanceOpenTime, attendanceCloseTime])
   @@map("meetings")
 }
 
@@ -159,6 +165,11 @@ model AttendanceRecord {
   updatedAt           DateTime         @updatedAt
 
   @@unique([memberId, meetingId])
+  @@index([memberId])
+  @@index([meetingId])
+  @@index([status])
+  @@index([memberId, status])
+  @@index([actualArrivalTime])
   @@map("attendance_records")
 }
 
@@ -177,6 +188,7 @@ model AbsenceExcuse {
   updatedAt  DateTime     @updatedAt
 
   @@unique([memberId, meetingId])
+  @@index([status])
   @@map("absence_excuses")
 }
 
@@ -193,6 +205,7 @@ model CorrectionRequest {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
+  @@index([status])
   @@map("correction_requests")
 }
 
@@ -207,6 +220,8 @@ model FollowUpFlag {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  @@index([isResolved])
+  @@index([isResolved, flagLevel])
   @@map("follow_up_flags")
 }
 
@@ -250,5 +265,7 @@ model AuditLog {
   reason      String?
   createdAt   DateTime @default(now())
 
+  @@index([actorUserId])
+  @@index([createdAt])
   @@map("audit_logs")
 }
