@@ -2,19 +2,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   1. Professional Senior UI/UX Color Token System (Light & Dark Mode)
+   ========================================================================== */
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 15, 23, 42;
-  --background-end-rgb: 30, 41, 59;
+  /* Light Mode (Default) */
+  --bg-canvas: #F8FAFC;          /* Slate 50 */
+  --bg-surface: #FFFFFF;         /* Pure White */
+  --bg-surface-elevated: #F1F5F9;/* Slate 100 */
+  --border-subtle: #E2E8F0;      /* Slate 200 */
+  --brand-primary: #0F172A;      /* Deep Navy */
+  --brand-accent: #D97706;       /* Regal Amber/Gold */
+  --text-primary: #0F172A;       /* Slate 900 */
+  --text-secondary: #475569;     /* Slate 600 */
+  --text-muted: #94A3B8;         /* Slate 400 */
+  --status-success: #059669;     /* Emerald 600 */
+  --status-warning: #D97706;     /* Amber 600 */
+  --status-danger: #DC2626;      /* Red 600 */
+  --status-info: #2563EB;        /* Blue 600 */
+}
+
+/* Dark Mode (OLED Optimized) */
+.dark, [data-theme='dark'] {
+  --bg-canvas: #0B0F17;          /* Deep Obsidian */
+  --bg-surface: #151D2A;         /* Rich Navy Slate */
+  --bg-surface-elevated: #1E293B;/* Slate 800 */
+  --border-subtle: #243247;      /* Navy Border */
+  --brand-primary: #38BDF8;      /* Sky Blue Accent */
+  --brand-accent: #F59E0B;       /* Luminous Amber Gold */
+  --text-primary: #F8FAFC;       /* Slate 50 */
+  --text-secondary: #94A3B8;     /* Slate 400 */
+  --text-muted: #64748B;         /* Slate 500 */
+  --status-success: #10B981;     /* Emerald 400 */
+  --status-warning: #FBBF24;     /* Amber 300 */
+  --status-danger: #F87171;      /* Red 400 */
+  --status-info: #60A5FA;        /* Blue 400 */
+}
+
+/* Auto System Preference Fallback */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg-canvas: #0B0F17;
+    --bg-surface: #151D2A;
+    --bg-surface-elevated: #1E293B;
+    --border-subtle: #243247;
+    --brand-primary: #38BDF8;
+    --brand-accent: #F59E0B;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --status-success: #10B981;
+    --status-warning: #FBBF24;
+    --status-danger: #F87171;
+    --status-info: #60A5FA;
+  }
+}
+
+/* ==========================================================================
+   2. Adaptive Responsiveness & Fluid Typography
+   ========================================================================== */
+html {
+  font-size: clamp(14px, 0.9rem + 0.3vw, 18px);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  scroll-behavior: smooth;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Camera QR Scan Animation Keyframe */
+@keyframes scan {
+  0% { top: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scan {
+  animation: scan 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Hide scrollbar for carousel */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

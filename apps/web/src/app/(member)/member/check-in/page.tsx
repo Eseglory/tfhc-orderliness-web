@@ -27,6 +27,13 @@ export default function CheckInPage() {
   useEffect(() => {
     loadActiveMeeting();
     requestLocation();
+
+    // Camera Stream Hardware Lifecycle Cleanup on unmount
+    return () => {
+      if ((window as any)._cameraStreamTrack) {
+        (window as any)._cameraStreamTrack.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+      }
+    };
   }, []);
 
   const loadActiveMeeting = async () => {
@@ -42,6 +49,12 @@ export default function CheckInPage() {
 
   const requestLocation = () => {
     setLocationError('');
+
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      setLocationError('Offline mode detected. Geofence scanner requires an active internet connection.');
+      return;
+    }
+
     if (!navigator.geolocation) {
       setLocationError('Geolocation is not supported by your browser');
       return;
@@ -49,6 +62,12 @@ export default function CheckInPage() {
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        // Mock location anti-spoofing detection
+        if ((pos.coords as any).mocked) {
+          setLocationError('Spoofed or mock GPS coordinates detected. Check-in rejected.');
+          return;
+        }
+
         const coords = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -67,7 +86,7 @@ export default function CheckInPage() {
       (err) => {
         setLocationError(err.message || 'Unable to retrieve location permission');
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 7000, maximumAge: 0 }
     );
   };
 

@@ -1,0 +1,19 @@
+{
+  "short_name": "TFHC Tracker",
+  "name": "TFHC Orderliness Attendance & Participation Tracker",
+  "description": "Event-based attendance, punctuality tracking, geofencing, dynamic QR verification, and participation leaderboard platform.",
+  "icons": [
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/member",
+  "background_color": "#0B0F17",
+  "theme_color": "#0F172A",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/"
+}
