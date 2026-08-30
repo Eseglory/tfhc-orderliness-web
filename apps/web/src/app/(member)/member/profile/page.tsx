@@ -1,127 +1,167 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi, removeAuthToken } from '../../../../lib/api';
-import { Navbar } from '../../../../components/Navbar';
-import { User, Award, Flame, Calendar, Clock, ShieldCheck, LogOut, CheckCircle2, FileText, AlertCircle } from 'lucide-react';
 
 export default function MemberProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadProfile();
+    fetchApi('/scoring/my-performance')
+      .then((data) => setProfile(data))
+      .catch((err) => console.error(err));
   }, []);
-
-  const loadProfile = async () => {
-    try {
-      const data = await fetchApi('/scoring/my-performance');
-      setProfile(data);
-    } catch (err: any) {
-      console.error('Failed to load member profile:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     removeAuthToken();
     router.push('/login');
   };
 
-  const m = profile?.metrics || {};
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24">
-      <Navbar />
-
-      <main className="max-w-md mx-auto sm:max-w-xl md:max-w-7xl px-4 py-6 space-y-6">
-        {/* Profile Avatar Card */}
-        <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center relative shadow-xl overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600"></div>
-
-          <div className="w-20 h-20 rounded-full bg-slate-800 border-2 border-amber-500 p-1 mx-auto mb-3 shadow-lg shadow-amber-500/20">
-            <img src="/logo-icon.svg" alt="Avatar" className="w-full h-full object-contain p-1" />
+    <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-[90px]">
+      {/* Top App Bar matching Stitch Screen 12 */}
+      <header className="flex justify-between items-center w-full px-edge-margin h-16 bg-background flat no shadows docked full-width top-0 z-40 sticky border-b border-outline-variant/10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant flex-shrink-0">
+            <img className="w-full h-full object-cover" src="/logo-icon.svg" alt="User profile" />
           </div>
+          <h1 className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight">Dashboard</h1>
+        </div>
+        <Link href="/member/notifications" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors text-primary">
+          <span className="material-symbols-outlined">notifications</span>
+        </Link>
+      </header>
 
-          <h1 className="text-xl font-bold text-white mb-0.5">
-            {profile?.member ? `${profile.member.firstName} ${profile.member.lastName}` : 'Bro. Michael'}
-          </h1>
-          <p className="text-xs text-amber-400 font-medium mb-3">
-            {profile?.member?.roleInUnit || 'Protocol Unit Member'} • {profile?.member?.subTeam?.name || 'Protocol Sub-Team'}
-          </p>
-
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ID: {profile?.member?.memberCode || 'TFHC-MEM-001'}</span>
+      <main className="flex-1 px-edge-margin py-stack-md flex flex-col gap-section-gap w-full max-w-3xl mx-auto">
+        {/* Profile Header Section matching Stitch Screen 12 */}
+        <section className="flex flex-col items-center pt-stack-md pb-stack-lg gap-stack-md">
+          <div className="relative group">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)] bg-surface-container p-1 flex items-center justify-center">
+              <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="Profile avatar" />
+            </div>
+            <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-md hover:bg-on-primary-fixed-variant transition-colors border-2 border-surface-container-lowest">
+              <span className="material-symbols-outlined text-[16px]">edit</span>
+            </button>
           </div>
-        </section>
-
-        {/* Formula & Performance Analytics Metrics */}
-        <section className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
-          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Performance Analytics</h2>
-
-          <div className="grid grid-cols-2 gap-3">
-            {/* Attendance Rate Card */}
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-black text-emerald-400 mb-1">
-                {m.attendanceRate ? Math.round(m.attendanceRate) : 91.7}%
-              </div>
-              <div className="text-xs font-semibold text-slate-300">Attendance Rate</div>
-              <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                ({m.totalPresent || 11}/{m.totalExpected || 12} Attended)
-              </div>
-            </div>
-
-            {/* Punctuality Rate Card */}
-            <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 text-center">
-              <div className="text-2xl font-black text-amber-400 mb-1">
-                {m.punctualityRate ? Math.round(m.punctualityRate) : 81.8}%
-              </div>
-              <div className="text-xs font-semibold text-slate-300">Punctuality Rate</div>
-              <div className="text-[10px] text-slate-500 mt-1 font-mono">
-                ({m.totalOnTime || 9}/{m.totalPresent || 11} On Time)
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-800/40 border border-slate-700/30 rounded-2xl p-4 space-y-2 text-xs">
-            <div className="flex justify-between items-center text-slate-300">
-              <span className="flex items-center gap-1.5"><Flame className="w-4 h-4 text-amber-500" /> Current Attendance Streak:</span>
-              <span className="font-bold text-white">{m.currentAttendanceStreak || 8} Meetings</span>
-            </div>
-            <div className="flex justify-between items-center text-slate-300">
-              <span className="flex items-center gap-1.5"><Award className="w-4 h-4 text-amber-400" /> Leaderboard Rank:</span>
-              <span className="font-bold text-amber-400">#{profile?.rankPosition || 6} in Unit</span>
+          <div className="text-center flex flex-col gap-1">
+            <h2 className="font-headline-sm text-headline-sm text-primary">
+              {profile?.member ? `${profile.member.firstName} ${profile.member.lastName}` : 'Bro. Michael Adeleke'}
+            </h2>
+            <p className="font-body-md text-body-md text-on-surface-variant">
+              {profile?.member?.subTeam?.name || 'Orderliness Protocol Sub-Team A'}
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span className="font-label-sm text-label-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant">
+                ID: {profile?.member?.memberCode || 'TFHC-1042'}
+              </span>
+              <span className="font-label-sm text-label-sm bg-[#e6f4ea] text-[#137333] px-2 py-1 rounded font-semibold flex items-center gap-1 border border-[#ceead6]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#137333]"></span> Active
+              </span>
             </div>
           </div>
         </section>
 
-        {/* Account Actions */}
-        <section className="space-y-3">
-          <button
-            onClick={() => router.push('/member/my-attendance')}
-            className="w-full bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 flex items-center justify-between transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-bold text-white">Attendance History &amp; Excuses</div>
-                <div className="text-xs text-slate-400">View past records or submit absence excuses</div>
+        {/* Personal Information Section */}
+        <section className="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
+          <h3 className="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">
+            Personal Information
+          </h3>
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">phone</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-label-sm text-label-sm text-on-surface-variant">Phone</span>
+                  <span className="font-body-md text-body-md text-primary">
+                    {profile?.member?.phoneNumber || '+234 801 234 5678'}
+                  </span>
+                </div>
               </div>
             </div>
-          </button>
+            <div className="flex items-center justify-between p-4 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">mail</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-label-sm text-label-sm text-on-surface-variant">Email</span>
+                  <span className="font-body-md text-body-md text-primary">
+                    {profile?.member?.user?.email || 'm.adeleke@example.com'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">event</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-label-sm text-label-sm text-on-surface-variant">Joined Date</span>
+                  <span className="font-body-md text-body-md text-primary">
+                    {profile?.member?.dateJoined ? new Date(profile.member.dateJoined).toLocaleDateString() : 'October 12, 2021'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
+        {/* Settings Section */}
+        <section className="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
+          <h3 className="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">
+            Settings &amp; Preferences
+          </h3>
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-outline-variant/30">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                </div>
+                <span className="font-body-md text-body-md text-primary font-medium">Push Notifications</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" defaultChecked className="sr-only peer" />
+                <div className="w-11 h-6 bg-outline-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+            <div className="flex items-center justify-between p-4 border-b border-outline-variant/30 cursor-pointer hover:bg-surface-container-low transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">location_on</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-body-md text-body-md text-primary font-medium">Location Status</span>
+                  <span className="font-label-sm text-label-sm text-on-surface-variant">Always Allowed</span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+            </div>
+            <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-surface-container-low transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                </div>
+                <span className="font-body-md text-body-md text-primary font-medium font-semibold">Change Password</span>
+              </div>
+              <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Logout Action Section */}
+        <section className="pb-stack-lg">
           <button
             onClick={handleLogout}
-            className="w-full bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 rounded-2xl p-4 flex items-center justify-center gap-2 text-rose-400 font-bold text-sm transition-all"
+            className="w-full bg-surface-container-lowest border border-error/30 text-error font-body-md text-body-md font-medium py-3 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] hover:bg-error-container/20 transition-colors flex items-center justify-center gap-2"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
+            <span className="material-symbols-outlined text-[20px]">logout</span>
+            Log Out
           </button>
         </section>
       </main>

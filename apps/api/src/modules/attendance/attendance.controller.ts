@@ -14,7 +14,9 @@ export class AttendanceController {
   @Post('check-in')
   async checkIn(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.attendanceService.checkInMember({
-      memberId: body.memberId || memberId,
+      // A member identity always comes from the signed JWT; accepting it from
+      // the request body would let one authenticated user check in as another.
+      memberId,
       meetingId: body.meetingId,
       latitude: Number(body.latitude),
       longitude: Number(body.longitude),
@@ -37,11 +39,18 @@ export class AttendanceController {
   }
 
   @Get('meeting/:meetingId')
+  @Roles(Role.ADMIN, Role.LEADER)
   async getMeetingAttendance(@Param('meetingId') meetingId: string) {
     return this.attendanceService.getMeetingAttendance(meetingId);
   }
 
+  @Get('my-history')
+  async getMyAttendanceHistory(@CurrentUser('memberId') memberId: string) {
+    return this.attendanceService.getMemberAttendance(memberId);
+  }
+
   @Get('member/:memberId')
+  @Roles(Role.ADMIN, Role.LEADER)
   async getMemberAttendance(@Param('memberId') memberId: string) {
     return this.attendanceService.getMemberAttendance(memberId);
   }

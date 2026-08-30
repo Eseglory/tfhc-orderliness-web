@@ -84,6 +84,7 @@ export class MeetingsService {
     startTime: Date | string;
     expectedArrivalTime: Date | string;
     attendanceOpenTime: Date | string;
+    gracePeriodMinutes?: number;
     attendanceCloseTime: Date | string;
     endTime?: Date | string;
     locationName: string;
@@ -94,16 +95,28 @@ export class MeetingsService {
     pointWeight?: number;
   }) {
     const qrSecret = crypto.randomBytes(16).toString('hex');
+    const attendanceOpenTime = new Date(dto.attendanceOpenTime);
+    const startTime = new Date(dto.startTime);
+    const attendanceCloseTime = new Date(dto.attendanceCloseTime);
+    const gracePeriodMinutes = dto.gracePeriodMinutes ?? 10;
+
+    if (!Number.isInteger(gracePeriodMinutes) || gracePeriodMinutes < 0) {
+      throw new BadRequestException('Grace period must be a non-negative whole number of minutes');
+    }
+    if (attendanceOpenTime > startTime || startTime > attendanceCloseTime) {
+      throw new BadRequestException('Meeting times must satisfy attendance open ≤ start ≤ attendance close');
+    }
 
     return this.prisma.meeting.create({
       data: {
         title: dto.title,
         categoryId: dto.categoryId,
         meetingDate: new Date(dto.meetingDate),
-        startTime: new Date(dto.startTime),
+        startTime,
         expectedArrivalTime: new Date(dto.expectedArrivalTime),
-        attendanceOpenTime: new Date(dto.attendanceOpenTime),
-        attendanceCloseTime: new Date(dto.attendanceCloseTime),
+        attendanceOpenTime,
+        gracePeriodMinutes,
+        attendanceCloseTime,
         endTime: dto.endTime ? new Date(dto.endTime) : null,
         locationName: dto.locationName,
         latitude: dto.latitude,
@@ -163,7 +176,8 @@ export class MeetingsService {
     occurrencesCount: number;
     startTimeOfDay: string; // HH:mm format, e.g. "09:00"
     expectedArrivalOffsetMinutes: number; // e.g. -15 (8:45)
-    attendanceOpenOffsetMinutes: number; // e.g. -45 (8:15)
+      attendanceOpenOffsetMinutes: number; // e.g. -45 (8:15)
+    gracePeriodMinutes?: number;
     attendanceCloseOffsetMinutes: number; // e.g. 60 (10:00)
     locationName: string;
     latitude: number;
@@ -206,6 +220,7 @@ export class MeetingsService {
         startTime,
         expectedArrivalTime,
         attendanceOpenTime,
+        gracePeriodMinutes: dto.gracePeriodMinutes,
         attendanceCloseTime,
         locationName: dto.locationName,
         latitude: dto.latitude,

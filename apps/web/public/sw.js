@@ -1,12 +1,5 @@
-const CACHE_NAME = 'tfhc-tracker-cache-v1';
+const CACHE_NAME = 'tfhc-tracker-cache-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/member',
-  '/member/my-attendance',
-  '/member/check-in',
-  '/member/leaderboard',
-  '/member/profile',
-  '/login',
   '/logo.svg',
   '/logo-icon.svg',
   '/manifest.json'
@@ -54,7 +47,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static Assets: Cache-First
+  // Never cache rendered application routes or Next.js build assets. Their
+  // content hashes change between releases; serving an old route document
+  // with a new build causes an unstyled page when its CSS no longer exists.
+  if (url.pathname.startsWith('/_next/') || event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Static assets such as logos can safely use Cache-First.
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {

@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
   reactStrictMode: true,
+  ...(process.env.DOCKER_BUILD === 'true' ? { output: 'standalone' } : {}),
 };
 
 module.exports = nextConfig;

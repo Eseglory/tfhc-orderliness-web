@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { WifiOff } from 'lucide-react';
 
 export const OfflineBanner: React.FC = () => {
   const [isOffline, setIsOffline] = useState(false);
@@ -25,8 +24,8 @@ export const OfflineBanner: React.FC = () => {
   if (!isOffline) return null;
 
   return (
-    <div className="bg-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-lg sticky top-0 z-50 animate-bounce">
-      <WifiOff className="w-4 h-4" />
+    <div className="bg-secondary-container text-on-secondary-container px-4 py-2 font-label-md text-label-md font-bold flex items-center justify-center gap-2 shadow-sm sticky top-0 z-50">
+      <span className="material-symbols-outlined text-[18px]">wifi_off</span>
       <span>Offline Mode Active • Displaying cached records. Network check-in is disabled.</span>
     </div>
   );

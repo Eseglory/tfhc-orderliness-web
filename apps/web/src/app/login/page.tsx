@@ -8,6 +8,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('admin@tfhc.org');
   const [password, setPassword] = useState('Admin@123456');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -30,72 +31,116 @@ export default function LoginPage() {
         router.push('/member');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Sign in failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-slate-950">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-        <div className="text-center mb-8">
-          {/* High-Definition Transparent SVG Logo */}
-          <div className="w-56 mx-auto mb-3 text-white">
-            <img src="/logo.svg" alt="The Father's House Logo" className="w-full h-auto object-contain filter drop-shadow-xl" />
+    <div className="bg-background text-on-background min-h-screen flex flex-col items-center justify-center p-edge-margin font-body-md antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
+      {/* Main Authentication Container matching Stitch Screen 2 */}
+      <main className="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] p-stack-lg border border-outline-variant/30 flex flex-col gap-stack-lg relative overflow-hidden">
+        {/* Subtle decorative top accent */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary"></div>
+
+        {/* Header / Brand Section */}
+        <header className="flex flex-col items-center text-center gap-stack-sm pt-stack-sm">
+          <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-2 shadow-sm border border-outline-variant/20 text-primary relative p-2">
+            <img src="/logo-icon.svg" alt="TFHC Logo" className="w-full h-full object-contain" />
+            <div className="absolute bottom-0 right-0 w-4 h-4 bg-secondary rounded-full border-2 border-surface-container-lowest"></div>
           </div>
-          <h1 className="text-xl font-bold text-white tracking-wide">Orderliness Tracker</h1>
-          <p className="text-xs text-slate-400 mt-1">Attendance &amp; Participation Platform</p>
-        </div>
+          <h1 className="font-headline-lg text-headline-lg text-on-surface">TFHC Orderliness</h1>
+          <p className="font-body-md text-body-md text-on-surface-variant">Attendance &amp; Participation Tracker</p>
+        </header>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm">
+          <div className="p-3 rounded-lg bg-error-container text-on-error-container font-body-md text-sm border border-error/20 text-center">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Email Address
+        {/* Form Section */}
+        <form className="flex flex-col gap-stack-md mt-4" onSubmit={handleLogin}>
+          {/* Member ID / Email Input */}
+          <div className="flex flex-col gap-1">
+            <label className="font-label-sm text-label-sm text-on-surface-variant ml-1" htmlFor="memberId">
+              Member ID / Email
             </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="user@tfhc.org"
-            />
+            <div className="relative flex items-center">
+              <div className="absolute left-3 text-outline flex items-center pointer-events-none">
+                <span className="material-symbols-outlined text-xl">badge</span>
+              </div>
+              <input
+                id="memberId"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-surface h-12 pl-10 pr-4 rounded-lg border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-on-surface font-body-md placeholder-outline-variant"
+                placeholder="admin@tfhc.org"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          {/* Password Input */}
+          <div className="flex flex-col gap-1">
+            <label className="font-label-sm text-label-sm text-on-surface-variant ml-1" htmlFor="password">
               Password
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 transition-colors"
-              placeholder="••••••••"
-            />
+            <div className="relative flex items-center">
+              <div className="absolute left-3 text-outline flex items-center pointer-events-none">
+                <span className="material-symbols-outlined text-xl">lock</span>
+              </div>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-surface h-12 pl-10 pr-12 rounded-lg border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-on-surface font-body-md placeholder-outline-variant"
+                placeholder="Enter your password"
+              />
+              <button
+                type="button"
+                aria-label="Toggle password visibility"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 text-outline hover:text-on-surface transition-colors flex items-center justify-center p-1 rounded-full focus:outline-none"
+              >
+                <span className="material-symbols-outlined text-xl">
+                  {showPassword ? 'visibility' : 'visibility_off'}
+                </span>
+              </button>
+            </div>
           </div>
 
+          {/* Remember Me & Demo Info */}
+          <div className="flex items-center justify-between mt-2">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-outline-variant bg-surface" />
+              <span className="font-label-sm text-label-sm text-on-surface-variant group-hover:text-on-surface transition-colors">Remember Me</span>
+            </label>
+            <span className="font-label-sm text-label-sm text-secondary font-medium">Demo: admin@tfhc.org</span>
+          </div>
+
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white transition-all shadow-lg shadow-indigo-500/25 disabled:opacity-50"
+            className="w-full h-12 bg-primary text-on-primary font-label-md text-label-md rounded-lg mt-stack-sm hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
           >
-            {loading ? 'Authenticating...' : 'Sign In'}
+            <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </form>
+      </main>
 
-        <div className="mt-6 text-center text-xs text-slate-500">
-          Demo Admin: <code className="text-indigo-400">admin@tfhc.org</code> | Password: <code className="text-indigo-400">Admin@123456</code>
-        </div>
-      </div>
-    </main>
+      <footer className="mt-stack-lg text-center">
+        <a className="font-body-md text-body-md text-outline hover:text-on-surface transition-colors flex items-center justify-center gap-2" href="#">
+          <span className="material-symbols-outlined text-[18px]">help</span>
+          Need help? Contact Unit Administrator
+        </a>
+      </footer>
+    </div>
   );
 }

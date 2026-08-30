@@ -29,6 +29,16 @@ export class AttendanceService {
   }) {
     const serverTimestamp = new Date();
 
+    if (!Number.isFinite(dto.latitude) || !Number.isFinite(dto.longitude)) {
+      throw new BadRequestException('A valid device location is required to check in');
+    }
+    if (
+      dto.latitude < -90 || dto.latitude > 90 ||
+      dto.longitude < -180 || dto.longitude > 180
+    ) {
+      throw new BadRequestException('Device location coordinates are outside the valid range');
+    }
+
     // 1. Verify Member
     const member = await this.prisma.member.findUnique({
       where: { id: dto.memberId },
@@ -81,8 +91,11 @@ export class AttendanceService {
       throw new BadRequestException(geofenceResult.message);
     }
 
-    // 5. Dynamic QR Verification (Option B) if QR secret is set
-    if (meeting.qrSecret && dto.qrPayload) {
+    // 5. Dynamic QR Verification (Option B) is mandatory for meetings configured with a QR secret.
+    if (meeting.qrSecret) {
+      if (!dto.qrPayload) {
+        throw new BadRequestException('A current meeting QR code is required to check in');
+      }
       try {
         const parsed = JSON.parse(dto.qrPayload);
         const expectedSignature = crypto
@@ -94,9 +107,9 @@ export class AttendanceService {
           throw new BadRequestException('Invalid or forged QR code scanned');
         }
 
-        // Expire QR after 5 minutes
+        // QR payloads are short-lived and may not be issued in the future.
         const ageSeconds = (Date.now() - parsed.timestamp) / 1000;
-        if (ageSeconds > 300) {
+        if (!Number.isFinite(ageSeconds) || ageSeconds < -5 || ageSeconds > 60) {
           throw new BadRequestException('Scanned QR code has expired. Please rescan current screen.');
         }
       } catch (err) {
@@ -106,16 +119,11 @@ export class AttendanceService {
     }
 
     // 6. Time-based Attendance Classification
-    const gracePeriodMinutes =
-      Math.round(
-        (meeting.attendanceCloseTime.getTime() - meeting.startTime.getTime()) / (60 * 1000)
-      ) || 10;
-
     const status = classifyAttendanceStatus(serverTimestamp, {
       attendanceOpenTime: meeting.attendanceOpenTime,
       expectedArrivalTime: meeting.expectedArrivalTime,
       startTime: meeting.startTime,
-      gracePeriodMinutes: 10, // Default 10 mins grace period
+      gracePeriodMinutes: meeting.gracePeriodMinutes,
       attendanceCloseTime: meeting.attendanceCloseTime,
     });
 

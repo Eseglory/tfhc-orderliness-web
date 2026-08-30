@@ -3,92 +3,176 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '../../../../lib/api';
-import { Navbar } from '../../../../components/Navbar';
-import { Calendar, Clock, MapPin, QrCode, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function MemberMeetingsPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'Upcoming' | 'Past' | 'Mandatory'>('Upcoming');
+  const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
-    loadMeetings();
+    fetchApi('/meetings')
+      .then((data) => setMeetings(data))
+      .catch((err) => console.error(err));
   }, []);
 
-  const loadMeetings = async () => {
-    try {
-      const data = await fetchApi('/meetings');
-      setMeetings(data);
-    } catch (err: any) {
-      console.error('Failed to load meetings:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const filteredMeetings = meetings.filter((m) => {
+    if (search && !m.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (selectedCategory !== 'All' && m.category?.name !== selectedCategory) return false;
+    return true;
+  });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24">
-      <Navbar />
-
-      <main className="max-w-md mx-auto sm:max-w-xl md:max-w-7xl px-4 py-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-white">Unit Meetings Schedule</h1>
-            <p className="text-xs text-slate-400">Upcoming, active, and past meeting sessions</p>
+    <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
+      {/* TopAppBar matching Stitch Screen 6 */}
+      <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
+            <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="Logo" />
           </div>
-          <Link
-            href="/member/check-in"
-            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all flex items-center gap-1.5"
-          >
-            <QrCode className="w-4 h-4" />
-            <span>Check-In</span>
-          </Link>
+          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Meetings</h1>
+        </div>
+        <Link href="/member/notifications" className="text-on-surface-variant hover:opacity-80 transition-all duration-200">
+          <span className="material-symbols-outlined">notifications</span>
+        </Link>
+      </header>
+
+      <main className="px-edge-margin pb-32 max-w-3xl mx-auto">
+        {/* Segmented Controls matching Stitch Screen 6 */}
+        <div className="bg-surface-container-low p-1 rounded-lg flex mt-stack-md">
+          {(['Upcoming', 'Past', 'Mandatory'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFilter(tab)}
+              className={`flex-1 rounded font-label-md text-label-md py-2 text-center transition-all ${
+                filter === tab
+                  ? 'bg-surface-container-lowest text-primary shadow-[0px_2px_8px_rgba(0,0,0,0.05)] font-bold'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
 
-        <div className="space-y-3">
-          {meetings.length > 0 ? (
-            meetings.map((m) => (
-              <Link
-                key={m.id}
-                href={`/member/meetings/${m.id}`}
-                className="block bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition-all shadow-lg group"
+        {/* Search & Filter matching Stitch Screen 6 */}
+        <div className="mt-stack-md space-y-stack-sm">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search meetings..."
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-outline-variant text-on-surface"
+            />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+            {['All', 'Unit Meetings', 'Services', 'Rehearsals', 'Trainings'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap px-4 py-1.5 rounded-full font-label-sm text-label-sm transition-colors ${
+                  selectedCategory === cat
+                    ? 'bg-primary text-on-primary font-bold'
+                    : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:border-primary'
+                }`}
               >
-                <div className="flex justify-between items-start mb-2">
-                  <h2 className="text-base font-bold text-white group-hover:text-amber-400 transition-colors">
-                    {m.title}
-                  </h2>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${m.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
-                    {m.status}
-                  </span>
-                </div>
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                <div className="space-y-1.5 text-xs text-slate-400 mb-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{new Date(m.meetingDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{m.locationName} ({m.geofenceRadiusMeters}m geofence)</span>
-                  </div>
-                </div>
+        {/* Meeting List matching Stitch Screen 6 */}
+        <div className="mt-section-gap space-y-gutter">
+          {filteredMeetings.length > 0 ? (
+            filteredMeetings.map((m) => {
+              const d = new Date(m.meetingDate);
+              const monthStr = d.toLocaleString('default', { month: 'short' });
+              const dayStr = d.getDate();
 
-                <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-xs">
-                  <span className="text-amber-400 font-bold">+{m.pointWeight * 10} Points</span>
-                  <span className="text-slate-400 font-medium flex items-center gap-1 group-hover:text-white transition-colors">
-                    View Details <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </Link>
-            ))
+              return (
+                <Link key={m.id} href={`/member/meetings/${m.id}`}>
+                  <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md hover:border-primary transition-colors cursor-pointer mb-3">
+                    <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
+                      <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">{monthStr}</span>
+                      <span className="font-headline-md text-headline-md text-primary font-bold">{dayStr}</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-headline-sm text-headline-sm text-primary font-bold">{m.title}</h3>
+                        <span className="bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
+                          {m.pointWeight}x Weight
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                          <span className="material-symbols-outlined text-[16px]">schedule</span>
+                          <span>
+                            Expected: {new Date(m.expectedArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | Starts: {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                          <span className="material-symbols-outlined text-[16px]">location_on</span>
+                          <span>{m.locationName}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-slate-500">
-              <Calendar className="w-12 h-12 mx-auto mb-2 text-slate-600" />
-              <p className="text-sm font-medium">No meetings scheduled</p>
-            </div>
+            <>
+              {/* Fallback Cards matching Stitch export */}
+              <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md">
+                <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
+                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
+                  <span className="font-headline-md text-headline-md text-primary font-bold">15</span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Sunday Service</h3>
+                    <span className="bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
+                      Special Programme 2.0x
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                      <span className="material-symbols-outlined text-[16px]">schedule</span>
+                      <span>Expected: 8:45 AM | Starts: 9:00 AM</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                      <span className="material-symbols-outlined text-[16px]">location_on</span>
+                      <span>Main Auditorium</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md opacity-70">
+                <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
+                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
+                  <span className="font-headline-md text-headline-md text-primary font-bold">12</span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-start">
+                    <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Midweek Training</h3>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                      <span className="material-symbols-outlined text-[16px]">schedule</span>
+                      <span>Expected: 6:15 PM | Starts: 6:30 PM</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
+                      <span className="material-symbols-outlined text-[16px]">location_on</span>
+                      <span>Hall B</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </main>

@@ -2,6 +2,7 @@
   "name": "tfhc-orderliness-monorepo",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev:api": "pnpm --filter @tfhc/api dev",
     "dev:web": "pnpm --filter @tfhc/web dev",

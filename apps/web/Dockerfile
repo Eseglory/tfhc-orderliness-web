@@ -3,20 +3,17 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Keep the image's package manager compatible with Node 20 and the lockfile.
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# Copy root workspace configs
+# Copy workspace configuration and source before installing so pnpm can create
+# valid workspace links for both the shared package and web package.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/web/package.json ./apps/web/
+COPY packages/shared ./packages/shared
+COPY apps/web ./apps/web
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
-
-# Copy source code
-COPY packages/shared ./packages/shared
-COPY apps/web ./apps/web
 
 # Build Next.js standalone application
 ENV NEXT_TELEMETRY_DISABLED=1

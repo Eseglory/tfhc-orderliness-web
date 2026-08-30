@@ -52,15 +52,50 @@ enum ExcuseStatus {
   REJECTED
 }
 
+enum ApprovedMemberStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+enum CommunicationChannel {
+  PUSH
+  EMAIL
+  SMS
+}
+
+enum CommunicationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum WeeklyAvailabilityState {
+  OPEN
+  FINALIZED
+  CANCELLED
+}
+
+enum ServiceCommitmentStatus {
+  COMMITTED
+  NOT_COMMITTED
+}
+
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
   passwordHash String
+  googleSubject String? @unique
   role         Role       @default(MEMBER)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   member       Member?
   auditLogs    AuditLog[]
+  pushDevices  PushDevice[]
 
   @@map("users")
 }
@@ -80,8 +115,14 @@ model Member {
   user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   memberCode         String              @unique
   firstName          String
+  middleName         String?
   lastName           String
+  preferredName      String?
+  profilePhotoUrl    String?
   phoneNumber        String
+  alternatePhoneNumber String?
+  address            String?
+  dateOfBirth        DateTime?            @db.Date
   gender             String?
   subTeamId          String?
   subTeam            SubTeam?            @relation(fields: [subTeamId], references: [id], onDelete: SetNull)
@@ -92,6 +133,12 @@ model Member {
   excuseRequests     AbsenceExcuse[]
   correctionRequests CorrectionRequest[]
   followUpFlags      FollowUpFlag[]
+  approvedMember     ApprovedMember?
+  notifications      MemberNotification[]
+  messages           MemberMessage[]
+  celebrations       MemberCelebrationDate[]
+  serviceCommitments MemberServiceCommitment[]
+  availabilityResponses WeeklyAvailabilityResponse[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -99,6 +146,23 @@ model Member {
   @@index([subTeamId])
   @@index([status, subTeamId])
   @@map("members")
+}
+
+model ApprovedMember {
+  id              String               @id @default(uuid())
+  email           String
+  normalizedEmail String               @unique
+  status          ApprovedMemberStatus @default(ACTIVE)
+  source          String               @default("MANUAL")
+  importedAt      DateTime?
+  importedBy      String?
+  memberId        String?              @unique
+  member          Member?              @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status])
+  @@map("approved_members")
 }
 
 model MeetingCategory {
@@ -121,6 +185,7 @@ model Meeting {
   startTime            DateTime
   expectedArrivalTime  DateTime
   attendanceOpenTime   DateTime
+  gracePeriodMinutes   Int                 @default(10)
   attendanceCloseTime  DateTime
   endTime              DateTime?
   locationName         String
@@ -135,6 +200,7 @@ model Meeting {
   excuseRequests       AbsenceExcuse[]
   correctionRequests   CorrectionRequest[]
   meetingSummary       MeetingSummary?
+  serviceCommitments   MemberServiceCommitment[]
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -142,6 +208,53 @@ model Meeting {
   @@index([startTime])
   @@index([status, attendanceOpenTime, attendanceCloseTime])
   @@map("meetings")
+}
+
+model WeeklyAvailabilityCycle {
+  id          String                  @id @default(uuid())
+  weekStart   DateTime                @unique @db.Date
+  opensAt     DateTime
+  closesAt    DateTime
+  state       WeeklyAvailabilityState @default(OPEN)
+  finalizedAt DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  commitments MemberServiceCommitment[]
+  responses   WeeklyAvailabilityResponse[]
+
+  @@index([state, closesAt])
+  @@map("weekly_availability_cycles")
+}
+
+model MemberServiceCommitment {
+  id        String                  @id @default(uuid())
+  cycleId   String
+  cycle     WeeklyAvailabilityCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member                  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId String
+  meeting   Meeting                  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  status    ServiceCommitmentStatus
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  @@unique([cycleId, memberId, meetingId])
+  @@index([cycleId, meetingId, status])
+  @@map("member_service_commitments")
+}
+
+model WeeklyAvailabilityResponse {
+  id        String                  @id @default(uuid())
+  cycleId   String
+  cycle     WeeklyAvailabilityCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    Member                  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  submittedAt DateTime              @default(now())
+  updatedAt DateTime                @updatedAt
+
+  @@unique([cycleId, memberId])
+  @@index([cycleId])
+  @@map("weekly_availability_responses")
 }
 
 model AttendanceRecord {
@@ -251,6 +364,90 @@ model SystemSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("system_settings")
+}
+
+model PushDevice {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  deviceIdentifier String?
+  appVersion String?
+  lastSeenAt DateTime @default(now())
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_devices")
+}
+
+model MemberCelebrationDate {
+  id          String   @id @default(uuid())
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  type        String
+  label       String?
+  date        DateTime @db.Date
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([memberId, type])
+  @@index([type, isActive])
+  @@map("member_celebration_dates")
+}
+
+model MemberNotification {
+  id        String             @id @default(uuid())
+  memberId  String
+  member    Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  data      Json?
+  status    NotificationStatus @default(UNREAD)
+  readAt    DateTime?
+  expiresAt DateTime?
+  createdAt DateTime           @default(now())
+  deliveries CommunicationDelivery[]
+
+  @@index([memberId, status, createdAt])
+  @@map("member_notifications")
+}
+
+model MemberMessage {
+  id        String   @id @default(uuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  subject   String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([memberId, readAt, createdAt])
+  @@map("member_messages")
+}
+
+model CommunicationDelivery {
+  id             String                      @id @default(uuid())
+  notificationId String?
+  notification   MemberNotification?         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel        CommunicationChannel
+  recipient      String
+  templateKey    String?
+  idempotencyKey String                      @unique
+  status         CommunicationDeliveryStatus @default(PENDING)
+  provider       String?
+  providerRef    String?
+  failureReason  String?
+  attemptedAt    DateTime?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+
+  @@index([channel, status])
+  @@map("communication_deliveries")
 }
 
 model AuditLog {

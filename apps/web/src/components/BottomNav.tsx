@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, QrCode, Award, User } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
@@ -14,60 +13,60 @@ export const BottomNav: React.FC = () => {
   }
 
   return (
-    <nav className="bg-slate-900 border-t border-slate-800 fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl shadow-2xl flex justify-around items-center px-2 pb-safe h-20 max-w-md mx-auto sm:max-w-xl md:max-w-7xl">
+    <nav className="bg-surface-container-lowest fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0px_-2px_8px_rgba(0,0,0,0.05)] flex justify-around items-center px-2 pb-safe h-20 border-t border-outline-variant/10">
       {/* 1. Home */}
       <Link
         href="/member"
-        className={`flex flex-col items-center justify-center w-16 gap-1 transition-all ${
-          pathname === '/member' ? 'text-amber-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+        className={`flex flex-col items-center justify-center font-semibold transition-transform duration-200 active:scale-90 w-16 gap-1 ${
+          pathname === '/member' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <Home className="w-5 h-5" />
-        <span className="text-[10px] font-medium tracking-tight">Home</span>
+        <span className="material-symbols-outlined" data-icon="home">home</span>
+        <span className="font-label-sm text-[10px]">Home</span>
       </Link>
 
       {/* 2. Meetings */}
       <Link
-        href="/member/my-attendance"
-        className={`flex flex-col items-center justify-center w-16 gap-1 transition-all ${
-          pathname === '/member/my-attendance' ? 'text-amber-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+        href="/member/meetings"
+        className={`flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
+          pathname === '/member/meetings' || pathname === '/member/my-attendance' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <Calendar className="w-5 h-5" />
-        <span className="text-[10px] font-medium tracking-tight">Meetings</span>
+        <span className="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+        <span className="font-label-sm text-[10px]">Meetings</span>
       </Link>
 
-      {/* 3. Floating Gold Check-In Scanner Button */}
+      {/* 3. Check-In (Scanner Floating Action Button) */}
       <Link
         href="/member/check-in"
-        className="relative flex flex-col items-center justify-center w-16 transition-transform active:scale-95 -mt-6 group"
+        className="relative flex flex-col items-center justify-center w-16 transition-transform duration-200 active:scale-90 -mt-6"
       >
-        <div className="w-14 h-14 bg-gradient-to-tr from-amber-600 via-amber-500 to-amber-400 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/30 border-4 border-slate-950 group-hover:scale-105 transition-transform">
-          <QrCode className="w-6 h-6 text-slate-950 font-bold" />
+        <div className="w-14 h-14 bg-secondary rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(144,77,0,0.3)] border-4 border-surface-container-lowest">
+          <span className="material-symbols-outlined text-on-secondary" data-icon="qr_code_scanner">qr_code_scanner</span>
         </div>
-        <span className="text-[10px] font-semibold mt-1 text-amber-500">Check-In</span>
+        <span className="font-label-sm text-[10px] mt-1 text-outline font-semibold">Check-In</span>
       </Link>
 
       {/* 4. Rankings */}
       <Link
         href="/member/leaderboard"
-        className={`flex flex-col items-center justify-center w-16 gap-1 transition-all ${
-          pathname === '/member/leaderboard' ? 'text-amber-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+        className={`flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
+          pathname === '/member/leaderboard' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <Award className="w-5 h-5" />
-        <span className="text-[10px] font-medium tracking-tight">Rankings</span>
+        <span className="material-symbols-outlined" data-icon="emoji_events">emoji_events</span>
+        <span className="font-label-sm text-[10px]">Rankings</span>
       </Link>
 
       {/* 5. Profile */}
       <Link
         href="/member/profile"
-        className={`flex flex-col items-center justify-center w-16 gap-1 transition-all ${
-          pathname === '/member/profile' ? 'text-amber-500 font-bold scale-105' : 'text-slate-400 hover:text-slate-200'
+        className={`flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
+          pathname === '/member/profile' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <User className="w-5 h-5" />
-        <span className="text-[10px] font-medium tracking-tight">Profile</span>
+        <span className="material-symbols-outlined" data-icon="person">person</span>
+        <span className="font-label-sm text-[10px]">Profile</span>
       </Link>
     </nav>
   );

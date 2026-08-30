@@ -2,5 +2,19 @@ node_modules
 .next
 dist
 *.log
+# Local configuration may contain API credentials. Keep the documented template.
 .env
+.env.*
+!.env.example
+
+# OAuth downloads and application-signing material must never be committed.
+apps/member-mobile/credentials/
+google-auth/
+stitch_tfhc_orderliness_tracker/
+TFHC_Project_Documents/
+client_secret_*.json
+client_*.apps.googleusercontent.com.plist
+*.keystore
+*.jks
+credentials.json
 .DS_Store

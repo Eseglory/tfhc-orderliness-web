@@ -1,0 +1,2 @@
+import { Tabs } from 'expo-router';
+export default function MemberLayout() { return <Tabs screenOptions={{ headerStyle:{ backgroundColor:'#f8f9ff' }, headerTitleStyle:{ color:'#0b1c30' }, tabBarActiveTintColor:'#904d00' }}><Tabs.Screen name="index" options={{ title:'Home' }} /><Tabs.Screen name="meetings" options={{ title:'Meetings' }} /><Tabs.Screen name="availability" options={{ title:'Availability' }} /><Tabs.Screen name="check-in" options={{ title:'Check in' }} /><Tabs.Screen name="profile" options={{ title:'Profile' }} /></Tabs>; }

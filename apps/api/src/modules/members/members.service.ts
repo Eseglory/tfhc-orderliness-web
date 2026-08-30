@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MemberStatus } from '@tfhc/shared';
 
@@ -46,6 +46,67 @@ export class MembersService {
     }
 
     return member;
+  }
+
+  async findProfile(id: string) {
+    const member = await this.prisma.member.findUnique({
+      where: { id },
+      include: { user: { select: { email: true } }, celebrations: { where: { isActive: true }, orderBy: { type: 'asc' } } },
+    });
+    if (!member) throw new NotFoundException('Member profile not found');
+    return member;
+  }
+
+  async updateSelfProfile(id: string, dto: Record<string, unknown>) {
+    const text = (value: unknown, max: number, field: string) => {
+      if (value === undefined) return undefined;
+      if (typeof value !== 'string' || value.trim().length > max) throw new BadRequestException(`Invalid ${field}`);
+      return value.trim() || null;
+    };
+    const date = (value: unknown, field: string) => {
+      if (value === undefined) return undefined;
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new BadRequestException(`Invalid ${field}`);
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      if (Number.isNaN(parsed.getTime()) || parsed > new Date()) throw new BadRequestException(`Invalid ${field}`);
+      return parsed;
+    };
+    const phone = text(dto.phoneNumber, 32, 'phone number');
+    if (phone !== undefined && !/^[+0-9 ()-]{7,32}$/.test(phone ?? '')) throw new BadRequestException('Invalid phone number');
+    const alternatePhone = text(dto.alternatePhoneNumber, 32, 'alternate phone number');
+    if (alternatePhone !== undefined && alternatePhone && !/^[+0-9 ()-]{7,32}$/.test(alternatePhone)) throw new BadRequestException('Invalid alternate phone number');
+    const celebrationDates = Array.isArray(dto.celebrations) ? dto.celebrations : undefined;
+    if (celebrationDates && celebrationDates.length > 8) throw new BadRequestException('Too many celebration dates');
+    const celebrations = celebrationDates?.map((item: any) => ({
+      type: text(item?.type, 50, 'celebration type')?.toUpperCase(),
+      label: text(item?.label, 120, 'celebration label'),
+      date: date(item?.date, 'celebration date'),
+    }));
+    if (celebrations?.some((item) => !item.type || !item.date) || new Set(celebrations?.map((item) => item.type)).size !== celebrations?.length) {
+      throw new BadRequestException('Celebration dates must have unique types and valid dates');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.member.update({
+        where: { id },
+        data: {
+          firstName: text(dto.firstName, 80, 'first name') ?? undefined,
+          middleName: text(dto.middleName, 80, 'middle name'),
+          lastName: text(dto.lastName, 80, 'last name') ?? undefined,
+          preferredName: text(dto.preferredName, 80, 'preferred name'),
+          phoneNumber: phone ?? undefined,
+          alternatePhoneNumber: alternatePhone,
+          address: text(dto.address, 300, 'address'),
+          dateOfBirth: date(dto.dateOfBirth, 'date of birth'),
+        },
+      });
+      if (celebrations) {
+        await tx.memberCelebrationDate.deleteMany({ where: { memberId: id } });
+        if (celebrations.length) await tx.memberCelebrationDate.createMany({ data: celebrations.map((item) => ({ memberId: id, type: item.type!, label: item.label, date: item.date! })) });
+      }
+      return tx.member.findUniqueOrThrow({
+        where: { id },
+        include: { user: { select: { email: true } }, celebrations: { where: { isActive: true }, orderBy: { type: 'asc' } } },
+      });
+    });
   }
 
   async createMember(dto: {

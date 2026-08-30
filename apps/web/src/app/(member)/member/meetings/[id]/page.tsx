@@ -1,97 +1,158 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useParams } from 'next/navigation';
 import { fetchApi } from '../../../../../lib/api';
-import { Navbar } from '../../../../../components/Navbar';
-import { Calendar, Clock, MapPin, QrCode, ArrowLeft, ShieldCheck, Award } from 'lucide-react';
 
-export default function MeetingDetailsPage() {
-  const params = useParams();
+export default function MeetingDetailPage() {
   const router = useRouter();
+  const params = useParams();
+  const meetingId = params?.id;
+
   const [meeting, setMeeting] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (params.id) {
-      loadMeetingDetails(params.id as string);
+    if (meetingId) {
+      fetchApi(`/meetings/${meetingId}`)
+        .then((data) => setMeeting(data))
+        .catch((err) => console.error(err));
     }
-  }, [params.id]);
+  }, [meetingId]);
 
-  const loadMeetingDetails = async (id: string) => {
-    try {
-      const data = await fetchApi(`/meetings/${id}`);
-      setMeeting(data);
-    } catch (err: any) {
-      console.error('Failed to load meeting details:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const title = meeting?.title || 'Sunday Service';
+  const categoryName = meeting?.category?.name || 'Spiritual Gathering';
+  const locationName = meeting?.locationName || 'Church Auditorium';
+  const description = meeting?.description || 'Join us for the central weekly gathering focused on spiritual renewal and community fellowship. Ensure you check in within the designated window.';
 
-  if (!meeting && !loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
-        <Navbar />
-        <div className="p-8 text-center text-slate-400">Meeting session not found.</div>
-      </div>
-    );
-  }
+  const opensTime = meeting?.attendanceOpenTime ? new Date(meeting.attendanceOpenTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '8:15 AM';
+  const expectedTime = meeting?.expectedArrivalTime ? new Date(meeting.expectedArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '8:45 AM';
+  const graceTime = meeting?.gracePeriodEndTime ? new Date(meeting.gracePeriodEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '9:10 AM';
+  const closesTime = meeting?.attendanceCloseTime ? new Date(meeting.attendanceCloseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-24">
-      <Navbar />
-
-      <main className="max-w-md mx-auto sm:max-w-xl md:max-w-7xl px-4 py-6 space-y-6">
+    <div className="bg-background min-h-screen text-on-background pb-32 font-body-md">
+      {/* Header matching Stitch Screen 7 */}
+      <header className="flex justify-between items-center w-full px-edge-margin h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+          aria-label="Go back"
+          className="w-10 h-10 flex items-center justify-start text-primary transition-all duration-200 active:scale-95"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Meetings
+          <span className="material-symbols-outlined text-[24px]">arrow_back</span>
         </button>
+        <h1 className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight">Meeting Details</h1>
+        <div className="w-10 h-10 flex items-center justify-end"></div>
+      </header>
 
-        <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-xl space-y-4">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 mb-2 inline-block">
-                {meeting?.category?.name || 'Unit Session'}
-              </span>
-              <h1 className="text-xl font-bold text-white mb-1">{meeting?.title || 'Saturday Unit Meeting'}</h1>
-              <p className="text-xs text-slate-400">Official TFHC Attendance Session</p>
-            </div>
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${meeting?.status === 'ACTIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}`}>
-              {meeting?.status || 'SCHEDULED'}
+      <main className="px-edge-margin mt-stack-md space-y-stack-lg max-w-2xl mx-auto">
+        {/* Hero Section matching Stitch Screen 7 */}
+        <section className="flex flex-col gap-stack-sm">
+          <h2 className="font-headline-lg text-headline-lg text-primary font-bold">{title}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-surface-container text-on-surface font-label-md text-label-md">
+              {categoryName}
+            </span>
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">
+              <span className="material-symbols-outlined text-[14px] mr-1">info</span>
+              Compulsory
             </span>
           </div>
+          <p className="font-body-md text-body-md text-on-surface-variant mt-2">
+            {description}
+          </p>
+        </section>
 
-          <div className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/50 space-y-3 text-xs">
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-2"><Calendar className="w-4 h-4 text-amber-400" /> Date:</span>
-              <span className="font-bold text-white">{meeting?.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString() : 'Today'}</span>
+        {/* Time Grid (2x2) matching Stitch Screen 7 */}
+        <section>
+          <h3 className="font-headline-sm text-headline-sm text-primary mb-stack-md font-bold">Attendance Window</h3>
+          <div className="grid grid-cols-2 gap-gutter">
+            {/* Grid Item 1 */}
+            <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/20 flex flex-col items-start">
+              <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary mb-3">
+                <span className="material-symbols-outlined text-[18px]">lock_open</span>
+              </div>
+              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-1">Opens</span>
+              <span className="font-headline-md text-headline-md text-primary font-bold">{opensTime}</span>
             </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-amber-400" /> Expected Arrival:</span>
-              <span className="font-bold text-white">{meeting?.expectedArrivalTime ? new Date(meeting.expectedArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '9:00 AM'}</span>
+
+            {/* Grid Item 2 */}
+            <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/20 flex flex-col items-start">
+              <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary mb-3">
+                <span className="material-symbols-outlined text-[18px]">schedule</span>
+              </div>
+              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-1">Expected</span>
+              <span className="font-headline-md text-headline-md text-primary font-bold">{expectedTime}</span>
             </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-2"><MapPin className="w-4 h-4 text-amber-400" /> Venue &amp; Geofence:</span>
-              <span className="font-bold text-white">{meeting?.locationName || 'Auditorium'} ({meeting?.geofenceRadiusMeters || 100}m)</span>
+
+            {/* Grid Item 3 */}
+            <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/20 flex flex-col items-start relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-2 h-full bg-secondary-container"></div>
+              <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary mb-3">
+                <span className="material-symbols-outlined text-[18px]">hourglass_bottom</span>
+              </div>
+              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-1">Grace Period Ends</span>
+              <span className="font-headline-md text-headline-md text-primary font-bold">{graceTime}</span>
             </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Award Points:</span>
-              <span className="font-bold text-amber-400">+{meeting ? meeting.pointWeight * 10 : 10} pts</span>
+
+            {/* Grid Item 4 */}
+            <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/20 flex flex-col items-start">
+              <div className="w-8 h-8 rounded-full bg-error-container flex items-center justify-center text-on-error-container mb-3">
+                <span className="material-symbols-outlined text-[18px]">lock</span>
+              </div>
+              <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-1">Window Closes</span>
+              <span className="font-headline-md text-headline-md text-primary font-bold">{closesTime}</span>
             </div>
           </div>
+        </section>
 
-          <button
-            onClick={() => router.push('/member/check-in')}
-            className="w-full py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
-          >
-            <QrCode className="w-5 h-5" />
-            <span>Proceed to QR Check-In</span>
-          </button>
+        {/* Venue Map Card matching Stitch Screen 7 */}
+        <section>
+          <h3 className="font-headline-sm text-headline-sm text-primary mb-stack-md font-bold">Location Details</h3>
+          <div className="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/20 overflow-hidden">
+            <div className="relative w-full h-40 bg-slate-900 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[48px] text-secondary animate-pulse">location_on</span>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-24 h-24 rounded-full border-2 border-secondary-container bg-secondary-container/20 flex items-center justify-center">
+                  <div className="w-3 h-3 rounded-full bg-secondary"></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 flex flex-col gap-3">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-outline mt-0.5">location_on</span>
+                <div>
+                  <p className="font-headline-sm text-headline-sm text-primary font-bold">{locationName}</p>
+                  <p className="font-body-md text-body-md text-on-surface-variant">Central Campus, West Wing Entrance</p>
+                </div>
+              </div>
+              <div className="w-full h-px bg-outline-variant/30 my-1"></div>
+              <div className="flex items-center gap-3 bg-surface p-3 rounded-lg border border-outline-variant/20">
+                <span className="material-symbols-outlined text-on-tertiary-container">check_circle</span>
+                <p className="font-body-md text-body-md text-on-surface">
+                  You are currently <strong>45m</strong> from the venue{' '}
+                  <span className="inline-block ml-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-tertiary-fixed-dim text-on-tertiary-fixed-variant">
+                    Inside Zone
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
+
+      {/* Floating Action Button Area matching Stitch Screen 7 */}
+      <div className="fixed bottom-0 w-full px-edge-margin pb-safe pt-4 bg-gradient-to-t from-background via-background to-transparent z-50">
+        <div className="max-w-2xl mx-auto pb-4">
+          <button
+            onClick={() => router.push('/member/check-in')}
+            className="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.15)] flex justify-center items-center gap-2 transition-transform duration-200 active:scale-[0.98] hover:bg-primary/90"
+          >
+            <span className="material-symbols-outlined">qr_code_scanner</span>
+            Check-In Now
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

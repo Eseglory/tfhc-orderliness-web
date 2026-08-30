@@ -14,7 +14,7 @@ export class ExcusesController {
   @Post()
   async submitExcuse(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.excusesService.submitExcuse({
-      memberId: body.memberId || memberId,
+      memberId,
       meetingId: body.meetingId,
       reason: body.reason,
       category: body.category,
@@ -45,7 +45,7 @@ export class ExcusesController {
   @Post('corrections')
   async submitCorrection(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.excusesService.submitCorrectionRequest({
-      memberId: body.memberId || memberId,
+      memberId,
       meetingId: body.meetingId,
       requestedStatus: body.requestedStatus,
       reason: body.reason,

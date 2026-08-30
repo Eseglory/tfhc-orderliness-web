@@ -3,97 +3,112 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   1. Professional Senior UI/UX Color Token System (Light & Dark Mode)
+   Google Stitch Custom CSS Styles
    ========================================================================== */
-:root {
-  /* Light Mode (Default) */
-  --bg-canvas: #F8FAFC;          /* Slate 50 */
-  --bg-surface: #FFFFFF;         /* Pure White */
-  --bg-surface-elevated: #F1F5F9;/* Slate 100 */
-  --border-subtle: #E2E8F0;      /* Slate 200 */
-  --brand-primary: #0F172A;      /* Deep Navy */
-  --brand-accent: #D97706;       /* Regal Amber/Gold */
-  --text-primary: #0F172A;       /* Slate 900 */
-  --text-secondary: #475569;     /* Slate 600 */
-  --text-muted: #94A3B8;         /* Slate 400 */
-  --status-success: #059669;     /* Emerald 600 */
-  --status-warning: #D97706;     /* Amber 600 */
-  --status-danger: #DC2626;      /* Red 600 */
-  --status-info: #2563EB;        /* Blue 600 */
+.pulse-dot {
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 150, 104, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 150, 104, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 150, 104, 0); }
 }
 
-/* Dark Mode (OLED Optimized) */
-.dark, [data-theme='dark'] {
-  --bg-canvas: #0B0F17;          /* Deep Obsidian */
-  --bg-surface: #151D2A;         /* Rich Navy Slate */
-  --bg-surface-elevated: #1E293B;/* Slate 800 */
-  --border-subtle: #243247;      /* Navy Border */
-  --brand-primary: #38BDF8;      /* Sky Blue Accent */
-  --brand-accent: #F59E0B;       /* Luminous Amber Gold */
-  --text-primary: #F8FAFC;       /* Slate 50 */
-  --text-secondary: #94A3B8;     /* Slate 400 */
-  --text-muted: #64748B;         /* Slate 500 */
-  --status-success: #10B981;     /* Emerald 400 */
-  --status-warning: #FBBF24;     /* Amber 300 */
-  --status-danger: #F87171;      /* Red 400 */
-  --status-info: #60A5FA;        /* Blue 400 */
-}
-
-/* Auto System Preference Fallback */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --bg-canvas: #0B0F17;
-    --bg-surface: #151D2A;
-    --bg-surface-elevated: #1E293B;
-    --border-subtle: #243247;
-    --brand-primary: #38BDF8;
-    --brand-accent: #F59E0B;
-    --text-primary: #F8FAFC;
-    --text-secondary: #94A3B8;
-    --text-muted: #64748B;
-    --status-success: #10B981;
-    --status-warning: #FBBF24;
-    --status-danger: #F87171;
-    --status-info: #60A5FA;
-  }
-}
-
-/* ==========================================================================
-   2. Adaptive Responsiveness & Fluid Typography
-   ========================================================================== */
-html {
-  font-size: clamp(14px, 0.9rem + 0.3vw, 18px);
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  scroll-behavior: smooth;
-}
-
-body {
-  background-color: var(--bg-canvas);
-  color: var(--text-primary);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Camera QR Scan Animation Keyframe */
-@keyframes scan {
-  0% { top: 0%; opacity: 0; }
-  15% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
-.animate-scan {
-  animation: scan 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-/* Hide scrollbar for carousel */
 .no-scrollbar::-webkit-scrollbar {
-  display: none;
+    display: none;
 }
 .no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
+
+/* Performance analytics — Google Stitch score ring */
+.score-ring {
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+}
+.score-circle-bg {
+    fill: none;
+    stroke: #e5eeff;
+    stroke-width: 8;
+}
+.score-circle-navy {
+    fill: none;
+    stroke: #131b2e;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 283;
+    stroke-dashoffset: 23;
+    animation: fillNavRing 1.5s ease-out forwards;
+}
+.score-circle-gold {
+    fill: none;
+    stroke: #fe932c;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 220;
+    stroke-dashoffset: 40;
+    animation: fillGoldRing 1.5s ease-out forwards;
+}
+@keyframes fillNavRing {
+    from { stroke-dashoffset: 283; }
+    to { stroke-dashoffset: 23; }
+}
+@keyframes fillGoldRing {
+    from { stroke-dashoffset: 220; }
+    to { stroke-dashoffset: 40; }
+}
+
+.scanner-frame {
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+}
+.corner {
+    width: 40px;
+    height: 40px;
+    position: absolute;
+    border-color: #fe932c;
+    border-width: 4px;
+}
+.corner-tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 12px; }
+.corner-tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 12px; }
+.corner-bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 12px; }
+.corner-br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 12px; }
+
+.scan-line {
+    width: 100%;
+    height: 2px;
+    background: #fe932c;
+    position: absolute;
+    top: 0;
+    box-shadow: 0 0 10px 2px rgba(254, 147, 44, 0.5);
+    animation: scan 2s infinite linear;
+}
+
+@keyframes scan {
+    0% { top: 0%; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+}
+
+.confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 16px;
+    background-color: #ffdcc3;
+    opacity: 0;
+    animation: confetti-fall 2s ease-in-out infinite;
+}
+@keyframes confetti-fall {
+    0% { opacity: 1; transform: translateY(-100%) rotate(0deg); }
+    100% { opacity: 0; transform: translateY(200px) rotate(360deg); }
+}
+.confetti-piece:nth-child(1) { left: 10%; animation-delay: 0s; background-color: #dae2fd; }
+.confetti-piece:nth-child(2) { left: 30%; animation-delay: 0.5s; background-color: #6ffbbe; }
+.confetti-piece:nth-child(3) { left: 50%; animation-delay: 0.2s; background-color: #ffdcc3; }
+.confetti-piece:nth-child(4) { left: 70%; animation-delay: 0.7s; background-color: #dae2fd; }
+.confetti-piece:nth-child(5) { left: 90%; animation-delay: 0.4s; background-color: #6ffbbe; }
+.confetti-piece:nth-child(6) { left: 20%; animation-delay: 0.8s; background-color: #ffdcc3; }
+.confetti-piece:nth-child(7) { left: 40%; animation-delay: 0.1s; background-color: #dae2fd; }
+.confetti-piece:nth-child(8) { left: 60%; animation-delay: 0.9s; background-color: #6ffbbe; }
+.confetti-piece:nth-child(9) { left: 80%; animation-delay: 0.3s; background-color: #ffdcc3; }

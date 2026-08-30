@@ -10,7 +10,10 @@ import { ScoringModule } from './modules/scoring/scoring.module';
 import { ExcusesModule } from './modules/excuses/excuses.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { DevicesModule } from './modules/devices/devices.module';
+import { AvailabilityModule } from './modules/availability/availability.module';
 import { AbsenceProcessingJob } from './jobs/absence-processing.job';
+import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
 
 @Module({
   imports: [
@@ -25,7 +28,9 @@ import { AbsenceProcessingJob } from './jobs/absence-processing.job';
     ExcusesModule,
     AlertsModule,
     ReportsModule,
+    DevicesModule,
+    AvailabilityModule,
   ],
-  providers: [AbsenceProcessingJob],
+  providers: [AbsenceProcessingJob, WeeklyAvailabilityJob],
 })
 export class AppModule {}
