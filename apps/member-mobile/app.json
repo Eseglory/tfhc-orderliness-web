@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "org.tfhc.orderliness.member",
+      "bundleIdentifier": "com.eglobalicthub.tfhcorderliness",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Your location is used only when you check in to verify that you are at the meeting venue."

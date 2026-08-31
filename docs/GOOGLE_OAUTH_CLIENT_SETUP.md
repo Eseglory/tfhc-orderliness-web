@@ -10,7 +10,7 @@ This document records non-secret configuration values for the TFHC Orderliness M
 | Expo slug | `tfhc-orderliness-member` |
 | Expo URL scheme | `tfhc-orderliness` |
 | Android package name | `org.tfhc.orderliness.member` |
-| iOS bundle identifier | `org.tfhc.orderliness.member` |
+| iOS bundle identifier | `com.eglobalicthub.tfhcorderliness` |
 
 ## Android development OAuth client
 
@@ -52,7 +52,7 @@ That Play App Signing SHA-1 is the value for the separate Android Production OAu
 | --- | --- |
 | Application type | iOS |
 | Client name | `TFHC Orderliness — iOS` |
-| Bundle ID | `org.tfhc.orderliness.member` |
+| Bundle ID | `com.eglobalicthub.tfhcorderliness` |
 | App URL scheme | `tfhc-orderliness` |
 
 The Apple Team ID and App Store ID are not yet available because the application has not been registered in the TFHC Apple Developer account.

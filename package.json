@@ -2,16 +2,20 @@
   "name": "tfhc-orderliness-monorepo",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@9.15.4",
+  "packageManager": "yarn@4.5.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev:api": "pnpm --filter @tfhc/api dev",
-    "dev:web": "pnpm --filter @tfhc/web dev",
-    "build:shared": "pnpm --filter @tfhc/shared build",
-    "build:api": "pnpm --filter @tfhc/api build",
-    "build:web": "pnpm --filter @tfhc/web build",
-    "test": "pnpm -r test",
-    "db:migrate": "pnpm --filter @tfhc/api prisma:migrate",
-    "db:seed": "pnpm --filter @tfhc/api prisma:seed"
+    "dev:api": "yarn workspace @tfhc/api dev",
+    "dev:web": "yarn workspace @tfhc/web dev",
+    "build:shared": "yarn workspace @tfhc/shared build",
+    "build:api": "yarn workspace @tfhc/api build",
+    "build:web": "yarn workspace @tfhc/web build",
+    "test": "yarn workspaces foreach -A run test",
+    "db:migrate": "yarn workspace @tfhc/api prisma:migrate",
+    "db:seed": "yarn workspace @tfhc/api prisma:seed"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

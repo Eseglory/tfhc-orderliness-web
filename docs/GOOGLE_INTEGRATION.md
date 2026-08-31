@@ -11,7 +11,7 @@ The app never uses a Google token as its TFHC session. The TFHC JWT is held in `
 Create OAuth client IDs in the TFHC-owned Google Cloud project:
 
 1. Android OAuth client using application ID `org.tfhc.orderliness.member` and the relevant release/development SHA-1/SHA-256 signing fingerprints.
-2. iOS OAuth client using bundle identifier `org.tfhc.orderliness.member` and configured redirect URL scheme `tfhc-orderliness`.
+2. iOS OAuth client using bundle identifier `com.eglobalicthub.tfhcorderliness` and configured redirect URL scheme `tfhc-orderliness`.
 3. Web OAuth client only if the web redirect flow is enabled.
 4. Put the three public client IDs into the corresponding `EXPO_PUBLIC_GOOGLE_*_CLIENT_ID` values supplied to EAS build environments.
 5. Set `GOOGLE_OAUTH_CLIENT_IDS` on the API as a comma-separated allowlist of every mobile client ID which may mint a TFHC identity token. The older singular `GOOGLE_OAUTH_CLIENT_ID` remains a compatibility fallback.
