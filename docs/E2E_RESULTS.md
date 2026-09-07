@@ -29,8 +29,8 @@ and re-verified the full stack.
 | Web ESLint (`next lint`) | 0 errors, 0 warnings |
 | API production build (`nest build`) | Passed |
 | Web production build (`next build`, 23 routes) | Passed |
-| API production Docker image (build → boot → `/health`) | **Not completed** — see Limits |
-| Web production Docker image | Not re-verified this pass (last verified in Pass 1, before the Dockerfile edit below) |
+| API production Docker image (build → boot → `/health`) | Passed (after 3 network-timeout retries — see Limits) |
+| Web production Docker image (build → boot → manifest/icons/sw.js/font served) | Passed |
 
 Two full-suite flakes were investigated, not shrugged off: one integration
 test that self-resolved (documented in Pass 1) and one browser test
@@ -217,23 +217,18 @@ ESLint setup for both apps are all still in place from Pass 1 — see below.
 
 ### Limits
 
-- **The API Docker image was not rebuilt after the Dockerfile edit that
-  removed the member-mobile `COPY` line.** Three attempts (the last a full
-  25 minutes) all failed with `ETIMEDOUT` fetching packages from inside
-  Docker's build network — a sandbox network limitation, not a code problem:
-  the edit itself just deletes one `COPY` line for a path that no longer
-  exists, and this exact Dockerfile mechanism (multi-stage build, `yarn
-  workspaces focus`, Prisma generate) was independently verified working —
-  built, booted, and `/health`-checked against real Postgres — earlier the
-  same day, before this edit. This is a real gap between "verified" and
-  "should work," reported as such rather than assumed passing. Recommended
-  before deploying: `docker build -f apps/api/Dockerfile -t tfhc-api . &&
-  docker run --rm -p 4000:4000 -e DATABASE_URL=... -e JWT_SECRET=... tfhc-api`
-  and confirm `curl localhost:4000/health`.
-- The web Docker image was not rebuilt this pass either, for the same reason
-  (shared build-network flakiness) — its own Dockerfile edit is equally
-  mechanical (same `COPY` line removal) and was equally verified working
-  pre-edit.
+- The API and web Docker images required 3 network-timeout retries between
+  them (`ETIMEDOUT` fetching packages inside Docker's build network — a
+  sandbox network limitation, not a code problem) before succeeding, once
+  concurrent load from the full Playwright run finished. Both were then
+  fully verified — built, booted, and confirmed serving correctly against
+  real dependencies (API: `/health` returns `{"status":"ok"}` against real
+  Postgres; web: manifest/icons/`sw.js`/self-hosted font all return 200 with
+  the security headers applied) — after the Google sign-in and font-related
+  changes, which came after the member-mobile Dockerfile edits. If a
+  deployment build ever hits the same timeout, it's worth a retry rather
+  than treating it as a real failure; this environment's Docker build
+  network is measurably flaky, independent of anything in this repo.
 - Two stray Docker artifacts unrelated to this app were left untouched, per
   explicit instruction not to spend time on unrelated Docker cleanup and
   because this session's permission policy denies stopping/removing
