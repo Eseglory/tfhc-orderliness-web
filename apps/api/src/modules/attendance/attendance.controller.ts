@@ -18,9 +18,9 @@ export class AttendanceController {
       // the request body would let one authenticated user check in as another.
       memberId,
       meetingId: body.meetingId,
-      latitude: Number(body.latitude),
-      longitude: Number(body.longitude),
-      gpsAccuracy: body.gpsAccuracy ? Number(body.gpsAccuracy) : undefined,
+      latitude: typeof body.latitude === 'number' ? body.latitude : NaN,
+      longitude: typeof body.longitude === 'number' ? body.longitude : NaN,
+      gpsAccuracy: body.gpsAccuracy,
       qrPayload: body.qrPayload,
       deviceInfo: body.deviceInfo,
     });

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { MemberStatus, AttendanceStatus } from '@tfhc/shared';
+import { MemberStatus } from '@tfhc/shared';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()

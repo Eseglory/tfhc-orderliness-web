@@ -1,4 +1,11 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 export async function fetchApi<T = any>(
   endpoint: string,
@@ -28,9 +35,10 @@ export async function fetchApi<T = any>(
     } catch (e) {
       // JSON parse error fallback
     }
-    throw new Error(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage);
+    throw new ApiError(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage, response.status);
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 

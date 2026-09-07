@@ -1,49 +1,31 @@
-# Build Stage
-FROM node:20-alpine AS builder
-
+FROM node:22-alpine AS builder
 WORKDIR /app
-
-# Keep the image's package manager compatible with Node 20 and the lockfile.
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
-
-# Copy workspace configuration and source before installing so pnpm can create
-# valid workspace links for both the shared package and web package.
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+RUN corepack enable && corepack prepare yarn@4.5.3 --activate
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+RUN yarn workspaces focus @tfhc/web
 COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Build Next.js standalone application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm --filter @tfhc/shared build
-RUN pnpm --filter @tfhc/web build
+ENV DOCKER_BUILD=true
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID=""
+ENV NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID
+RUN yarn build:shared && yarn build:web
 
-# Production Runner Stage
-FROM node:20-alpine AS runner
-
+FROM node:22-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
-
-# Security: Create and use unprivileged user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy Next.js standalone output
-COPY --from=builder /app/apps/web/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
-
-USER nextjs
-
+COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+USER node
 EXPOSE 3000
-
-# Container Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
-
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/login || exit 1
 CMD ["node", "apps/web/server.js"]

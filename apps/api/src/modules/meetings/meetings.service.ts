@@ -1,3 +1,4 @@
+import { AbsenceProcessingJob } from '../../jobs/absence-processing.job';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeetingStatus } from '@tfhc/shared';
@@ -5,7 +6,7 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class MeetingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private absenceProcessing: AbsenceProcessingJob) {}
 
   async getCategories() {
     return this.prisma.meetingCategory.findMany({
@@ -99,6 +100,10 @@ export class MeetingsService {
     const startTime = new Date(dto.startTime);
     const attendanceCloseTime = new Date(dto.attendanceCloseTime);
     const gracePeriodMinutes = dto.gracePeriodMinutes ?? 10;
+    const dates = [dto.meetingDate, dto.expectedArrivalTime, dto.attendanceOpenTime, dto.startTime, dto.attendanceCloseTime, ...(dto.endTime ? [dto.endTime] : [])];
+    if (dates.some(value => !Number.isFinite(new Date(value).getTime()))) throw new BadRequestException('Valid meeting dates are required');
+    if (!Number.isFinite(dto.latitude) || Math.abs(dto.latitude) > 90 || !Number.isFinite(dto.longitude) || Math.abs(dto.longitude) > 180) throw new BadRequestException('Valid venue coordinates are required');
+    if (dto.geofenceRadiusMeters !== undefined && (!Number.isFinite(dto.geofenceRadiusMeters) || dto.geofenceRadiusMeters <= 0)) throw new BadRequestException('Geofence radius must be positive');
 
     if (!Number.isInteger(gracePeriodMinutes) || gracePeriodMinutes < 0) {
       throw new BadRequestException('Grace period must be a non-negative whole number of minutes');
@@ -132,7 +137,14 @@ export class MeetingsService {
   }
 
   async updateStatus(id: string, status: MeetingStatus) {
-    await this.findOne(id);
+    if (!Object.values(MeetingStatus).includes(status)) throw new BadRequestException('Invalid meeting status');
+    const meeting = await this.findOne(id);
+    if (meeting.status === MeetingStatus.CLOSED && status !== MeetingStatus.CLOSED) throw new BadRequestException('Closed meetings cannot be reopened');
+    if (status === MeetingStatus.CLOSED) {
+      if (meeting.status !== MeetingStatus.ACTIVE && meeting.status !== MeetingStatus.CLOSED) throw new BadRequestException('Only active meetings can be closed');
+      await this.absenceProcessing.closeMeetingAndProcessAbsences(id);
+      return this.findOne(id);
+    }
     return this.prisma.meeting.update({
       where: { id },
       data: { status },

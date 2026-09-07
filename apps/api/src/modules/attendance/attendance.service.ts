@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client';
 import {
   Injectable,
+  ForbiddenException,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -27,6 +29,8 @@ export class AttendanceService {
     qrPayload?: string;
     deviceInfo?: string;
   }) {
+    if (!dto.memberId) throw new ForbiddenException('A member profile is required');
+    if (dto.gpsAccuracy !== undefined && (!Number.isFinite(dto.gpsAccuracy) || dto.gpsAccuracy < 0)) throw new BadRequestException('GPS accuracy must be a non-negative number');
     const serverTimestamp = new Date();
 
     if (!Number.isFinite(dto.latitude) || !Number.isFinite(dto.longitude)) {
@@ -64,6 +68,10 @@ export class AttendanceService {
       throw new BadRequestException('Attendance check-in is not currently open for this meeting');
     }
 
+    if (serverTimestamp < meeting.attendanceOpenTime || serverTimestamp > meeting.attendanceCloseTime) {
+      throw new BadRequestException('Attendance check-in is outside the allowed time window');
+    }
+
     // 3. Check for Duplicate Check-in
     const existingRecord = await this.prisma.attendanceRecord.findUnique({
       where: {
@@ -75,7 +83,7 @@ export class AttendanceService {
     });
     if (existingRecord) {
       throw new ConflictException(
-        `You have already checked in for this meeting at ${existingRecord.actualArrivalTime.toISOString()}`
+        'Attendance has already been recorded for this meeting'
       );
     }
 
@@ -133,8 +141,15 @@ export class AttendanceService {
       meeting.pointWeight * meeting.category.pointWeight
     );
 
-    // 8. Atomic Database Creation
-    return this.prisma.attendanceRecord.create({
+    // Serialize check-in against meeting close-out, which updates this same row.
+    // The unique attendance key also protects against duplicate requests.
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM meetings WHERE id = ${meeting.id} FOR UPDATE`;
+      const current = await tx.meeting.findUnique({ where: { id: meeting.id } });
+      if (!current || current.status !== 'ACTIVE' || new Date() > current.attendanceCloseTime) {
+        throw new BadRequestException('Attendance check-in is no longer open for this meeting');
+      }
+      return tx.attendanceRecord.create({
       data: {
         memberId: dto.memberId,
         meetingId: dto.meetingId,
@@ -153,6 +168,12 @@ export class AttendanceService {
         meeting: { include: { category: true } },
         member: true,
       },
+      });
+    }).catch((error) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('Attendance has already been recorded for this meeting');
+      }
+      throw error;
     });
   }
 
@@ -163,6 +184,8 @@ export class AttendanceService {
     status: AttendanceStatus;
     reason: string;
   }) {
+    if (!Object.values(AttendanceStatus).includes(dto.status)) throw new BadRequestException('Invalid attendance status');
+    if (typeof dto.reason !== 'string' || !dto.reason.trim()) throw new BadRequestException('An audit reason is required');
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: dto.meetingId },
       include: { category: true },
@@ -230,6 +253,7 @@ export class AttendanceService {
   }
 
   async getMemberAttendance(memberId: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.prisma.attendanceRecord.findMany({
       where: { memberId },
       include: { meeting: { include: { category: true } } },

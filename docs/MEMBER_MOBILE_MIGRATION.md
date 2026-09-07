@@ -1,4 +1,25 @@
-# Member Mobile Migration
+# Member Mobile Migration (retired 7 September 2026)
+
+> **Status: superseded and removed.** The strategy below — member-only on
+> mobile, admin-only on web — was superseded shortly after this document was
+> written: `apps/web` was built out with full 1:1 Member routes alongside
+> Admin, and now ships as an installable mobile-first PWA covering both. The
+> product direction reverted to web-first, and `apps/member-mobile` has been
+> removed from the working tree.
+>
+> Before removal, its functionality was audited against `apps/web` feature
+> by feature. Everything matched except one real gap — weekly service
+> availability (`GET`/`PUT /availability/current`) — which was ported to
+> `apps/web` at `/member/availability` (linked from Profile → Settings) with
+> new E2E coverage, before the mobile app was removed. The one thing
+> intentionally *not* ported was Expo push-token registration
+> (`POST /devices/push-token`): it only ever registered tokens, nothing in
+> the backend ever sent a push through them, and Expo push tokens don't mean
+> anything without an Expo client, so there was no working functionality
+> there to preserve. That API module is now unused.
+>
+> The removed source is fully recoverable from git history:
+> `git log --all -- apps/member-mobile`.
 
 ## Architecture boundary
 

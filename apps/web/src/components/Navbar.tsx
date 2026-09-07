@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { removeAuthToken } from '../lib/api';
+import { LogoIcon } from './LogoIcon';
 
 export const Navbar: React.FC = () => {
   const pathname = usePathname();
@@ -23,7 +24,7 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-3">
             <Link href={isAdmin ? '/admin' : '/member'} className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl bg-surface-container border border-outline-variant/30 p-1 flex items-center justify-center shadow-sm">
-                <img src="/logo-icon.svg" alt="The Father's House Logo" className="w-full h-full object-contain" />
+                <LogoIcon alt="The Father's House Logo" className="w-full h-full object-contain" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -48,7 +49,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">dashboard</span> Dashboard
+                  <span className="material-symbols-outlined text-[18px]">dashboard</span> <span className="hidden lg:inline">Dashboard</span>
                 </Link>
                 <Link
                   href="/admin/meetings"
@@ -56,7 +57,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin/meetings' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> Meetings
+                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> <span className="hidden lg:inline">Meetings</span>
                 </Link>
                 <Link
                   href="/admin/members"
@@ -64,7 +65,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin/members' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">group</span> Members
+                  <span className="material-symbols-outlined text-[18px]">group</span> <span className="hidden lg:inline">Members</span>
                 </Link>
                 <Link
                   href="/admin/leaderboard"
@@ -72,7 +73,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin/leaderboard' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> Leaderboard
+                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> <span className="hidden lg:inline">Leaderboard</span>
                 </Link>
                 <Link
                   href="/admin/follow-up"
@@ -80,7 +81,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin/follow-up' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">warning</span> Follow-Up
+                  <span className="material-symbols-outlined text-[18px]">warning</span> <span className="hidden lg:inline">Follow-Up</span>
                 </Link>
                 <Link
                   href="/admin/reports"
@@ -88,7 +89,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/admin/reports' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">description</span> Reports
+                  <span className="material-symbols-outlined text-[18px]">description</span> <span className="hidden lg:inline">Reports</span>
                 </Link>
               </>
             ) : (
@@ -99,7 +100,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/member' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">home</span> Home
+                  <span className="material-symbols-outlined text-[18px]">home</span> <span className="hidden lg:inline">Home</span>
                 </Link>
                 <Link
                   href="/member/check-in"
@@ -107,7 +108,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/member/check-in' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span> Check In
+                  <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span> <span className="hidden lg:inline">Check In</span>
                 </Link>
                 <Link
                   href="/member/my-attendance"
@@ -115,7 +116,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/member/my-attendance' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> My Attendance
+                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> <span className="hidden lg:inline">My Attendance</span>
                 </Link>
                 <Link
                   href="/member/leaderboard"
@@ -123,7 +124,7 @@ export const Navbar: React.FC = () => {
                     pathname === '/member/leaderboard' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> Leaderboard
+                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> <span className="hidden lg:inline">Leaderboard</span>
                 </Link>
               </>
             )}
@@ -134,7 +135,8 @@ export const Navbar: React.FC = () => {
               onClick={() => router.push(isAdmin ? '/member' : '/admin')}
               className="text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors font-semibold border border-outline-variant/30"
             >
-              Switch to {isAdmin ? 'Member App' : 'Admin Portal'}
+              <span className="hidden lg:inline">Switch to {isAdmin ? 'Member App' : 'Admin Portal'}</span>
+              <span className="lg:hidden">{isAdmin ? 'Member App' : 'Admin'}</span>
             </button>
             <button
               onClick={handleLogout}

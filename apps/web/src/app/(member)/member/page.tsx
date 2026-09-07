@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../lib/api';
+import { LogoIcon } from '../../../components/LogoIcon';
 
 export default function MemberDashboard() {
   const router = useRouter();
@@ -27,11 +28,11 @@ export default function MemberDashboard() {
       .catch((err) => console.error(err));
   }, []);
 
-  const attendanceRate = profile?.metrics?.attendanceRate ? profile.metrics.attendanceRate.toFixed(1) : '91.7';
-  const punctualityRate = profile?.metrics?.punctualityRate ? profile.metrics.punctualityRate.toFixed(1) : '81.8';
-  const totalPoints = profile?.metrics?.totalPoints || 210;
-  const rankPosition = profile?.rankPosition || 6;
-  const currentStreak = profile?.metrics?.currentAttendanceStreak || 8;
+  const attendanceRate = (profile?.attendanceRate ?? 0).toFixed(1);
+  const punctualityRate = (profile?.punctualityRate ?? 0).toFixed(1);
+  const totalPoints = profile?.totalPoints ?? 0;
+  const rankPosition = profile?.rankPosition ?? '—';
+  const currentStreak = profile?.currentAttendanceStreak ?? 0;
 
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
@@ -39,11 +40,7 @@ export default function MemberDashboard() {
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-outline-variant bg-surface-container flex items-center justify-center p-1">
-            <img
-              alt="User profile photo"
-              className="w-full h-full object-contain"
-              src="/logo-icon.svg"
-            />
+            <LogoIcon alt="User profile photo" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col">
             <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Dashboard</span>

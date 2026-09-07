@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from '../../../../components/Navbar';
 import { fetchApi } from '../../../../lib/api';
 import { Trophy, Medal, Award } from 'lucide-react';
@@ -11,7 +11,7 @@ export default function AdminLeaderboardPage() {
   const [selectedSubTeam, setSelectedSubTeam] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
       const url = selectedSubTeam
@@ -28,11 +28,11 @@ export default function AdminLeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedSubTeam]);
 
   useEffect(() => {
     loadLeaderboard();
-  }, [selectedSubTeam]);
+  }, [loadLeaderboard]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-12">

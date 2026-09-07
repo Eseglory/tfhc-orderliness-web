@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   calculateAttendancePercentage,
@@ -13,7 +13,12 @@ import {
 export class ScoringService {
   constructor(private prisma: PrismaService) {}
 
-  async getMemberPerformance(memberId: string) {
+  async getMemberPerformance(memberId: string, query?: { startDate?: string; endDate?: string }) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    const start = query?.startDate ? new Date(query.startDate) : undefined;
+    const end = query?.endDate ? new Date(query.endDate) : undefined;
+    if ((start && !Number.isFinite(start.getTime())) || (end && !Number.isFinite(end.getTime())) || (start && end && start > end)) throw new BadRequestException('Invalid date range');
+    if (end && /^\d{4}-\d{2}-\d{2}$/.test(query.endDate)) end.setUTCHours(23, 59, 59, 999);
     const member = await this.prisma.member.findUnique({
       where: { id: memberId },
       include: { subTeam: true },
@@ -21,7 +26,7 @@ export class ScoringService {
     if (!member) throw new NotFoundException('Member not found');
 
     const records = await this.prisma.attendanceRecord.findMany({
-      where: { memberId },
+      where: { memberId, ...(start || end ? { meeting: { startTime: { gte: start, lte: end } } } : {}) },
       include: { meeting: { include: { category: true } } },
       orderBy: { meeting: { startTime: 'desc' } },
     });
@@ -80,6 +85,7 @@ export class ScoringService {
     endDate?: string;
     limit?: number;
   }) {
+    if (query?.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 1000)) throw new BadRequestException('Limit must be between 1 and 1000');
     const activeMembers = await this.prisma.member.findMany({
       where: {
         status: MemberStatus.ACTIVE,
@@ -90,7 +96,7 @@ export class ScoringService {
 
     const leaderboardItems = await Promise.all(
       activeMembers.map(async (member) => {
-        const perf = await this.getMemberPerformance(member.id);
+        const perf = await this.getMemberPerformance(member.id, query);
         return {
           memberId: member.id,
           memberCode: member.memberCode,

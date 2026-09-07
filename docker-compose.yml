@@ -44,13 +44,17 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://tfhc_user:tfhc_secure_password_2026@db:5432/tfhc_orderliness_db?schema=public&connection_limit=20
       JWT_SECRET: tfhc-prod-secret-jwt-key-2026
+      # Set to enable member Google sign-in locally; must include the same
+      # value as GOOGLE_OAUTH_WEB_CLIENT_ID below (the web service's build
+      # arg only takes one client ID, this API accepts a comma-separated list).
+      GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_WEB_CLIENT_ID:-}
     ports:
       - "4000:4000"
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/ || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -62,6 +66,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at build time —
+      # setting them under `environment:` below has no effect on the built
+      # app; they must be passed as build args.
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${GOOGLE_OAUTH_WEB_CLIENT_ID:-}
     container_name: tfhc_frontend_web
     restart: always
     environment:
@@ -74,7 +84,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/login || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

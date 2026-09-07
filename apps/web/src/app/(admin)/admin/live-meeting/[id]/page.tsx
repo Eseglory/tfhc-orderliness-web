@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Navbar } from '../../../../../components/Navbar';
 import { StatusBadge } from '../../../../../components/StatusBadge';
@@ -25,7 +25,7 @@ export default function AdminLiveMeetingPage() {
   const [manualReason, setManualReason] = useState('Dead phone battery / No smartphone');
   const [submittingManual, setSubmittingManual] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!meetingId) return;
     try {
       const [mtgData, attData] = await Promise.all([
@@ -39,9 +39,9 @@ export default function AdminLiveMeetingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [meetingId]);
 
-  const fetchQrToken = async () => {
+  const fetchQrToken = useCallback(async () => {
     if (!meetingId) return;
     try {
       const data = await fetchApi(`/meetings/${meetingId}/qr-code`);
@@ -49,7 +49,7 @@ export default function AdminLiveMeetingPage() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [meetingId]);
 
   const loadMembers = async () => {
     try {
@@ -73,7 +73,8 @@ export default function AdminLiveMeetingPage() {
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [meetingId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMembers runs once on mount by design
+  }, [meetingId, loadData, fetchQrToken]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -33,6 +33,18 @@ export class MembersController {
     return this.membersService.createSubTeam(body);
   }
 
+  @Get('me/notifications')
+  async notifications(@CurrentUser('memberId') memberId?: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    return this.membersService.notifications(memberId);
+  }
+
+  @Put('me/notifications/read')
+  async readNotifications(@CurrentUser('memberId') memberId?: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    return this.membersService.readNotifications(memberId);
+  }
+
   @Get('me/profile')
   async getMyProfile(@CurrentUser('memberId') memberId?: string) {
     if (!memberId) throw new ForbiddenException('A member profile is required');

@@ -37,7 +37,7 @@ async function main() {
 
   // 3. Create Admin User
   const adminPasswordHash = await argon2.hash('Admin@123456');
-  const adminUser = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'admin@tfhc.org' },
     update: {},
     create: {

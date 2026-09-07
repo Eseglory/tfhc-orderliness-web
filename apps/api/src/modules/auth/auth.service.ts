@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, ConflictException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as argon2 from 'argon2';
@@ -73,6 +73,9 @@ export class AuthService {
   }
 
   async loginUser(dto: { email: string; password: string }) {
+    if (typeof dto.email !== 'string' || !dto.email.trim() || typeof dto.password !== 'string' || !dto.password) {
+      throw new BadRequestException('Email and password are required');
+    }
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: { member: true },
@@ -112,14 +115,15 @@ export class AuthService {
   async loginMemberWithGoogle(idToken: string) {
     const audienceValues = (process.env.GOOGLE_OAUTH_CLIENT_IDS || process.env.GOOGLE_OAUTH_CLIENT_ID || '').split(',').map((value) => value.trim()).filter((value) => Boolean(value) && !value.startsWith('REPLACE_'));
     if (!audienceValues.length) throw new ServiceUnavailableException({ code: 'GOOGLE_AUTH_NOT_CONFIGURED', message: 'Google sign-in is not configured.' });
-    if (!idToken || idToken.length > 10000) throw new UnauthorizedException('Invalid Google identity token');
+    if (typeof idToken !== 'string' || !idToken || idToken.length > 10000) throw new UnauthorizedException('Invalid Google identity token');
 
     const google = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
     if (!google?.ok) throw new UnauthorizedException('Google identity token could not be verified');
-    const claims = await google.json() as { aud?: string; iss?: string; sub?: string; email?: string; email_verified?: string | boolean; exp?: string };
+    const claims = await google.json().catch(() => null) as { aud?: string; iss?: string; sub?: string; email?: string; email_verified?: string | boolean; exp?: string } | null;
+    if (!claims || typeof claims !== 'object') throw new UnauthorizedException('Google identity token is invalid');
     const verified = claims.email_verified === true || claims.email_verified === 'true';
     const expiresAt = Number(claims.exp ?? 0) * 1000;
-    if (!claims.aud || !audienceValues.includes(claims.aud) || !['accounts.google.com', 'https://accounts.google.com'].includes(claims.iss ?? '') || !claims.sub || !claims.email || !verified || expiresAt <= Date.now()) {
+    if (typeof claims.aud !== 'string' || !audienceValues.includes(claims.aud) || !['accounts.google.com', 'https://accounts.google.com'].includes(claims.iss ?? '') || typeof claims.sub !== 'string' || !claims.sub || typeof claims.email !== 'string' || !claims.email.trim() || !verified || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new UnauthorizedException('Google identity token is invalid');
     }
 
@@ -128,6 +132,9 @@ export class AuthService {
     if (!approved || approved.status !== 'ACTIVE') throw new ForbiddenException({ code: 'MEMBER_NOT_AUTHORIZED', message: 'This account is not currently authorized to access TFHC Orderliness.' });
     if (!approved.member) throw new ForbiddenException({ code: 'MEMBER_ACCOUNT_NOT_LINKED', message: 'Your approved account is awaiting member record linking.' });
     if (approved.member.status !== 'ACTIVE') throw new ForbiddenException({ code: 'MEMBER_ACCOUNT_INACTIVE', message: 'This member account is not currently active.' });
+
+    if (approved.member.user && approved.member.user.role !== Role.MEMBER) throw new ForbiddenException('This sign-in method is only available to member accounts');
+    if (approved.member.user?.googleSubject && approved.member.user.googleSubject !== claims.sub) throw new ForbiddenException('This account is linked to a different Google identity');
 
     const existingSubject = await this.prisma.user.findUnique({ where: { googleSubject: claims.sub } });
     if (existingSubject && existingSubject.id !== approved.member.userId) throw new ForbiddenException({ code: 'GOOGLE_IDENTITY_ALREADY_LINKED', message: 'This Google identity is linked to a different account.' });

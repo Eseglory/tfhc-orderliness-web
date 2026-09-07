@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Navbar } from '../../../../components/Navbar';
-import { fetchApi } from '../../../../lib/api';
+import { API_BASE_URL } from '../../../../lib/api';
 import { FileText, Download, Table, Calendar } from 'lucide-react';
 
 export default function AdminReportsPage() {
@@ -12,7 +12,7 @@ export default function AdminReportsPage() {
     setDownloading(true);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('tfhc_token') : '';
-      const response = await fetch('http://localhost:4000/reports/export/excel', {
+      const response = await fetch(`${API_BASE_URL}/reports/export/excel`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -28,6 +28,7 @@ export default function AdminReportsPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(err.message || 'Export failed');
     } finally {

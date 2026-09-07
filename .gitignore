@@ -19,3 +19,9 @@ client_*.apps.googleusercontent.com.plist
 *.jks
 credentials.json
 .DS_Store
+
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+.next-e2e/

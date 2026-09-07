@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi, saveAuthToken } from '../../lib/api';
+import { LogoIcon } from '../../components/LogoIcon';
+import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,6 +39,23 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleCredential = async (idToken: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchApi('/auth/google/member', {
+        method: 'POST',
+        body: JSON.stringify({ idToken }),
+      });
+      saveAuthToken(data.accessToken);
+      router.push('/member');
+    } catch (err: any) {
+      setError(err.message || 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col items-center justify-center p-edge-margin font-body-md antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
       {/* Main Authentication Container matching Stitch Screen 2 */}
@@ -47,7 +66,7 @@ export default function LoginPage() {
         {/* Header / Brand Section */}
         <header className="flex flex-col items-center text-center gap-stack-sm pt-stack-sm">
           <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-2 shadow-sm border border-outline-variant/20 text-primary relative p-2">
-            <img src="/logo-icon.svg" alt="TFHC Logo" className="w-full h-full object-contain" />
+            <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
             <div className="absolute bottom-0 right-0 w-4 h-4 bg-secondary rounded-full border-2 border-surface-container-lowest"></div>
           </div>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">TFHC Orderliness</h1>
@@ -133,6 +152,14 @@ export default function LoginPage() {
             <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
           </button>
         </form>
+
+        {/* Members authenticate with Google, not a password (see /auth/login) */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-outline-variant" />
+          <span className="font-label-sm text-label-sm text-on-surface-variant">Members sign in with Google</span>
+          <div className="flex-1 h-px bg-outline-variant" />
+        </div>
+        <GoogleSignInButton onCredential={handleGoogleCredential} />
       </main>
 
       <footer className="mt-stack-lg text-center">

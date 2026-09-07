@@ -20,7 +20,7 @@ export class MembersService {
 
     return this.prisma.member.findMany({
       where,
-      include: { subTeam: true, user: true },
+      include: { subTeam: true, user: { select: { id: true, email: true, role: true } } },
       orderBy: { lastName: 'asc' },
     });
   }
@@ -30,7 +30,7 @@ export class MembersService {
       where: { id },
       include: {
         subTeam: true,
-        user: true,
+        user: { select: { id: true, email: true, role: true } },
         attendanceRecords: {
           include: { meeting: { include: { category: true } } },
           orderBy: { createdAt: 'desc' },
@@ -46,6 +46,14 @@ export class MembersService {
     }
 
     return member;
+  }
+
+  async notifications(memberId: string) {
+    return this.prisma.memberNotification.findMany({ where: { memberId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, orderBy: { createdAt: 'desc' }, take: 100 });
+  }
+
+  async readNotifications(memberId: string) {
+    return this.prisma.memberNotification.updateMany({ where: { memberId, status: 'UNREAD' }, data: { status: 'READ', readAt: new Date() } });
   }
 
   async findProfile(id: string) {
@@ -81,7 +89,7 @@ export class MembersService {
       label: text(item?.label, 120, 'celebration label'),
       date: date(item?.date, 'celebration date'),
     }));
-    if (celebrations?.some((item) => !item.type || !item.date) || new Set(celebrations?.map((item) => item.type)).size !== celebrations?.length) {
+    if (celebrations && (celebrations.some((item) => !item.type || !item.date) || new Set(celebrations.map((item) => item.type)).size !== celebrations.length)) {
       throw new BadRequestException('Celebration dates must have unique types and valid dates');
     }
     return this.prisma.$transaction(async (tx) => {

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ExcuseStatus, AttendanceStatus, AttendanceMethod } from '@tfhc/shared';
+import { ExcuseStatus, AttendanceStatus, AttendanceMethod, calculateAttendancePoints } from '@tfhc/shared';
 
 @Injectable()
 export class ExcusesService {
@@ -170,10 +170,15 @@ export class ExcusesService {
             where: { id: existingRecord.id },
             data: {
               status: correction.requestedStatus,
+              pointsEarned: calculateAttendancePoints(correction.requestedStatus as AttendanceStatus, correction.meeting.pointWeight * correction.meeting.category.pointWeight),
               method: AttendanceMethod.CORRECTION_APPROVED,
               isModified: true,
             },
           });
+        }
+
+        if (!existingRecord) {
+          record = await tx.attendanceRecord.create({ data: { memberId: correction.memberId, meetingId: correction.meetingId, expectedArrivalTime: correction.meeting.expectedArrivalTime, status: correction.requestedStatus, method: AttendanceMethod.CORRECTION_APPROVED, isModified: true, pointsEarned: calculateAttendancePoints(correction.requestedStatus as AttendanceStatus, correction.meeting.pointWeight * correction.meeting.category.pointWeight) } });
         }
 
         await tx.auditLog.create({

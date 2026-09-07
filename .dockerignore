@@ -9,3 +9,13 @@ dist
 *.log
 coverage
 **/coverage
+
+**/.env
+**/.env.*
+playwright-report
+test-results
+google-auth
+stitch_tfhc_orderliness_tracker
+TFHC_Project_Documents
+
+**/.next-e2e

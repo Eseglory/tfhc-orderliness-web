@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi, removeAuthToken } from '../../../../lib/api';
+import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberProfilePage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function MemberProfilePage() {
       <header className="flex justify-between items-center w-full px-edge-margin h-16 bg-background flat no shadows docked full-width top-0 z-40 sticky border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant flex-shrink-0">
-            <img className="w-full h-full object-cover" src="/logo-icon.svg" alt="User profile" />
+            <LogoIcon alt="User profile" className="w-full h-full object-cover" />
           </div>
           <h1 className="font-headline-sm text-headline-sm font-bold text-primary tracking-tight">Dashboard</h1>
         </div>
@@ -40,7 +41,7 @@ export default function MemberProfilePage() {
         <section className="flex flex-col items-center pt-stack-md pb-stack-lg gap-stack-md">
           <div className="relative group">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)] bg-surface-container p-1 flex items-center justify-center">
-              <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="Profile avatar" />
+              <LogoIcon alt="Profile avatar" className="w-full h-full object-contain" />
             </div>
             <button className="absolute bottom-0 right-0 w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-md hover:bg-on-primary-fixed-variant transition-colors border-2 border-surface-container-lowest">
               <span className="material-symbols-outlined text-[16px]">edit</span>
@@ -118,6 +119,18 @@ export default function MemberProfilePage() {
             Settings &amp; Preferences
           </h3>
           <div className="flex flex-col">
+            <Link
+              href="/member/availability"
+              className="flex items-center justify-between p-4 border-b border-outline-variant/30 hover:bg-surface-container-low transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px]">event_available</span>
+                </div>
+                <span className="font-body-md text-body-md text-primary font-medium">Weekly Availability</span>
+              </div>
+              <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+            </Link>
             <div className="flex items-center justify-between p-4 border-b border-outline-variant/30">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">

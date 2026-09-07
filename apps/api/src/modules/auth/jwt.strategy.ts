@@ -27,11 +27,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { member: true },
+      include: { member: { include: { approvedMember: true } } },
     });
 
     if (!user) {
       throw new UnauthorizedException('User account no longer exists');
+    }
+
+    if (user.role === 'MEMBER' && (!user.member || user.member.status !== 'ACTIVE')) {
+      throw new UnauthorizedException('Member account is not active');
+    }
+    if (user.role === 'MEMBER' && user.googleSubject &&
+        (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) {
+      throw new UnauthorizedException('Member access has been revoked');
     }
 
     return {

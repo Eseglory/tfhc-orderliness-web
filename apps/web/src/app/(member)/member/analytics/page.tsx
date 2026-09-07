@@ -15,9 +15,9 @@ export default function PerformanceAnalyticsPage() {
       .catch((err) => console.error(err));
   }, []);
 
-  const attRate = profile?.metrics?.attendanceRate ? profile.metrics.attendanceRate.toFixed(1) : '91.7';
-  const punctRate = profile?.metrics?.punctualityRate ? profile.metrics.punctualityRate.toFixed(1) : '81.8';
-  const compositeScore = profile?.compositeScore ? profile.compositeScore.toFixed(1) : '94.2';
+  const attRate = (profile?.attendanceRate ?? 0).toFixed(1);
+  const punctRate = (profile?.punctualityRate ?? 0).toFixed(1);
+  const compositeScore = (profile?.compositeScore ?? 0).toFixed(1);
 
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-[90px]">
@@ -67,15 +67,15 @@ export default function PerformanceAnalyticsPage() {
           <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col justify-between">
             <span className="material-symbols-outlined text-secondary text-3xl">local_fire_department</span>
             <div className="mt-4">
-              <div className="font-headline-lg text-headline-lg font-bold text-primary">8</div>
+              <div className="font-headline-lg text-headline-lg font-bold text-primary">{profile?.currentAttendanceStreak ?? 0}</div>
               <div className="font-label-sm text-label-sm text-on-surface-variant">Consecutive Streak</div>
             </div>
           </div>
           <div className="bg-surface-container-lowest p-4 rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col justify-between">
             <span className="material-symbols-outlined text-primary text-3xl">workspace_premium</span>
             <div className="mt-4">
-              <div className="font-headline-lg text-headline-lg font-bold text-primary">210</div>
-              <div className="font-label-sm text-label-sm text-on-surface-variant">Total Points (Rank #6)</div>
+              <div className="font-headline-lg text-headline-lg font-bold text-primary">{profile?.totalPoints ?? 0}</div>
+              <div className="font-label-sm text-label-sm text-on-surface-variant">Total Points</div>
             </div>
           </div>
         </section>
@@ -86,16 +86,13 @@ export default function PerformanceAnalyticsPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center p-2 rounded bg-surface-container-low">
               <span className="font-body-md text-body-md text-on-surface">Base Attendance</span>
-              <span className="font-label-md text-label-md font-bold text-primary">+60 pts</span>
+              <span className="font-label-md text-label-md font-bold text-primary">{((profile?.attendanceRate ?? 0) * 0.6).toFixed(1)} pts</span>
             </div>
             <div className="flex justify-between items-center p-2 rounded bg-surface-container-low">
               <span className="font-body-md text-body-md text-on-surface">Punctuality Bonus</span>
-              <span className="font-label-md text-label-md font-bold text-secondary">+25 pts</span>
+              <span className="font-label-md text-label-md font-bold text-secondary">{((profile?.punctualityRate ?? 0) * 0.4).toFixed(1)} pts</span>
             </div>
-            <div className="flex justify-between items-center p-2 rounded bg-surface-container-low">
-              <span className="font-body-md text-body-md text-on-surface">Streak Modifier</span>
-              <span className="font-label-md text-label-md font-bold text-tertiary-container">+15 pts</span>
-            </div>
+
           </div>
         </section>
       </main>

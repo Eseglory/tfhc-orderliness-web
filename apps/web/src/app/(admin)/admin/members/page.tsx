@@ -58,7 +58,7 @@ export default function AdminMembersPage() {
           lastName,
           phoneNumber,
           gender,
-          subTeamId,
+          subTeamId: subTeamId || undefined,
           roleInUnit,
         }),
       });
@@ -211,21 +211,21 @@ export default function AdminMembersPage() {
               <form onSubmit={handleCreateMember} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">First Name</label>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="firstName">First Name</label>
                     <input
                       type="text"
                       required
-                      value={firstName}
+                      id="firstName" value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Last Name</label>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="lastName">Last Name</label>
                     <input
                       type="text"
                       required
-                      value={lastName}
+                      id="lastName" value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                     />
@@ -233,11 +233,11 @@ export default function AdminMembersPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Phone Number</label>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="phoneNumber">Phone Number</label>
                   <input
                     type="text"
                     required
-                    value={phoneNumber}
+                    id="phoneNumber" value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+234..."
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
@@ -260,10 +260,10 @@ export default function AdminMembersPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Role in Unit</label>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="roleInUnit">Role in Unit</label>
                     <input
                       type="text"
-                      value={roleInUnit}
+                      id="roleInUnit" value={roleInUnit}
                       onChange={(e) => setRoleInUnit(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                     />

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
+import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MyAttendancePage() {
   const router = useRouter();
@@ -78,8 +79,8 @@ export default function MyAttendancePage() {
     }
   };
 
-  const attendedCount = history.filter((h) => h.status !== 'ABSENT').length || 22;
-  const totalCount = history.length || 24;
+  const attendedCount = history.filter((h) => ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(h.status)).length;
+  const totalCount = history.length;
   const attendanceRate = ((attendedCount / (totalCount || 1)) * 100).toFixed(1);
 
   return (
@@ -97,7 +98,7 @@ export default function MyAttendancePage() {
         </div>
         <div>
           <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
-            <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="User avatar" />
+            <LogoIcon alt="User avatar" className="w-full h-full object-contain" />
           </div>
         </div>
       </header>
@@ -222,79 +223,7 @@ export default function MyAttendancePage() {
               );
             })
           ) : (
-            <>
-              {/* Fallback Items matching Stitch Screen 8 */}
-              <div className="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex items-start gap-4 transition-transform duration-200 active:scale-[0.98]">
-                <div className="w-12 h-12 rounded-full bg-tertiary-container/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-tertiary-container">check_circle</span>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-center h-12">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-headline-sm text-headline-sm text-primary truncate leading-tight font-bold">Saturday Unit Meeting</h3>
-                    <span className="font-label-md text-label-md text-tertiary-container bg-tertiary-container/10 px-2 py-0.5 rounded-full shrink-0 ml-2 border border-tertiary-container/20 font-bold">On Time</span>
-                  </div>
-                  <div className="flex justify-between items-center w-full">
-                    <div className="flex items-center gap-1 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                      <span>Aug 08 • 8:51 AM</span>
-                    </div>
-                    <span className="font-label-md text-label-md text-primary font-bold">+10 pts</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex items-start gap-4 transition-transform duration-200 active:scale-[0.98]">
-                <div className="w-12 h-12 rounded-full bg-error-container flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-on-error-container">schedule</span>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col justify-center h-12">
-                  <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-headline-sm text-headline-sm text-primary truncate leading-tight font-bold">Sunday Service</h3>
-                    <span className="font-label-md text-label-md text-on-error-container bg-error-container px-2 py-0.5 rounded-full shrink-0 ml-2 border border-on-error-container/20 font-bold">Late</span>
-                  </div>
-                  <div className="flex justify-between items-center w-full">
-                    <div className="flex items-center gap-1 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                      <span>Aug 09 • 7:06 AM</span>
-                    </div>
-                    <span className="font-label-md text-label-md text-on-surface-variant font-semibold">+5 pts</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-3 transition-transform duration-200 active:scale-[0.98]">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-outline">cancel</span>
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col justify-center h-12">
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="font-headline-sm text-headline-sm text-outline truncate leading-tight font-bold">Midweek Rehearsal</h3>
-                      <span className="font-label-md text-label-md text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0 ml-2 border border-outline-variant font-bold">Absent</span>
-                    </div>
-                    <div className="flex justify-between items-center w-full">
-                      <div className="flex items-center gap-1 text-on-surface-variant font-body-md text-body-md">
-                        <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                        <span>Aug 13 • No check-in</span>
-                      </div>
-                      <span className="font-label-md text-label-md text-outline">0 pts</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="pl-16 w-full">
-                  <button
-                    onClick={() => {
-                      setSelectedRecord({ id: 'demo-1', meetingId: 'm-1' });
-                      setShowExcuseModal(true);
-                    }}
-                    className="w-full py-2 px-4 rounded-lg border border-outline-variant text-primary font-label-md text-label-md hover:bg-surface-container transition-colors flex items-center justify-center gap-2 font-semibold"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">edit_document</span>
-                    Submit Excuse
-                  </button>
-                </div>
-              </div>
-            </>
+            <p className="p-5 text-center">No attendance records yet.</p>
           )}
         </section>
       </main>

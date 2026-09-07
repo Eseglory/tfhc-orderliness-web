@@ -1,0 +1,65 @@
+databases:
+  - name: tfhc-orderliness-db
+    databaseName: tfhc_orderliness_db
+    user: tfhc_user
+    plan: starter
+    postgresMajorVersion: '16'
+
+services:
+  # NestJS API — Prisma/PostgreSQL backend consumed by the web PWA.
+  - type: web
+    name: tfhc-orderliness-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '4000'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tfhc-orderliness-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TFHC_TIMEZONE
+        value: Africa/Lagos
+      - key: GOOGLE_OAUTH_CLIENT_IDS
+        sync: false
+      # Update after first deploy if Render assigns a different subdomain
+      # than the `name:` above (e.g. on a name collision).
+      - key: CORS_ORIGIN
+        value: https://tfhc-orderliness-web.onrender.com
+
+  # Next.js mobile-first PWA — installable frontend for members and admins.
+  - type: web
+    name: tfhc-orderliness-web
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /login
+    dockerBuildArgs:
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at build time,
+      # so they cannot be read from envVars at container start — they must be
+      # build args. Update NEXT_PUBLIC_API_URL (and redeploy) if the API
+      # service above ends up on a different subdomain than predicted.
+      # NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: fill in after creating a "Web
+      # application" OAuth 2.0 client in Google Cloud Console (see
+      # docs/GOOGLE_OAUTH_CLIENT_SETUP.md) — member sign-in has no working
+      # client until this is set and GOOGLE_OAUTH_CLIENT_IDS on the API
+      # service includes the same value.
+      NEXT_PUBLIC_API_URL: https://tfhc-orderliness-api.onrender.com
+      NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: ""
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '3000'
+      - key: NEXT_PUBLIC_API_URL
+        value: https://tfhc-orderliness-api.onrender.com
+      - key: NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID
+        sync: false

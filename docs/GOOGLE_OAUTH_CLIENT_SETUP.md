@@ -1,83 +1,64 @@
 # TFHC Orderliness — Google OAuth client setup
 
-This document records non-secret configuration values for the TFHC Orderliness Member app. Do not add OAuth client secrets, API keys, private keystores, passwords, or service-account files here.
+This document records non-secret configuration values for TFHC Orderliness member sign-in. Do not add OAuth client secrets, API keys, or service-account files here.
 
-## Application identifiers
+> **Status:** the native Expo member app this document used to describe
+> (Android/iOS OAuth clients, keystore SHA fingerprints) has been retired —
+> see [MEMBER_MOBILE_MIGRATION.md](MEMBER_MOBILE_MIGRATION.md). Member
+> sign-in is now a **web** OAuth 2.0 client used by
+> [`GoogleSignInButton`](../apps/web/src/components/GoogleSignInButton.tsx)
+> on the login page, via [Google Identity
+> Services](https://developers.google.com/identity/gsi/web). The backend
+> (`AuthService.loginMemberWithGoogle`) didn't need to change: it verifies
+> any Google-issued ID token against `https://oauth2.googleapis.com/tokeninfo`
+> and checks the token's `aud` claim against `GOOGLE_OAUTH_CLIENT_IDS` —
+> it doesn't care which platform issued the token, only that a client ID it
+> trusts is on the audience list. Prior Android/iOS client IDs, if any exist
+> in that comma-separated list, can stay there harmlessly; this pass didn't
+> remove them, since nothing here confirms whether they're still wanted.
 
-| Platform | Value |
-| --- | --- |
-| Expo application name | `TFHC Orderliness` |
-| Expo slug | `tfhc-orderliness-member` |
-| Expo URL scheme | `tfhc-orderliness` |
-| Android package name | `org.tfhc.orderliness.member` |
-| iOS bundle identifier | `com.eglobalicthub.tfhcorderliness` |
+## Create the Web OAuth 2.0 client
 
-## Android development OAuth client
-
-Create this client in the TFHC-owned Google Cloud project:
-
-| Field | Value |
-| --- | --- |
-| Application type | Android |
-| Client name | `TFHC Orderliness — Android Development` |
-| Package name | `org.tfhc.orderliness.member` |
-| SHA-1 | `10:10:B7:02:A6:AC:99:C0:FF:2D:8D:10:83:47:E8:54:FE:E3:F4:ED` |
-| SHA-256 | `A4:4A:76:21:C1:86:E5:B3:5A:56:61:95:71:4C:31:38:CE:3C:4D:B0:F5:0B:35:BB:91:1B:D5:4B:4B:CE:A0:AA` |
-
-These fingerprints identify the local TFHC development signing certificate. The keystore is intentionally excluded from Git and its password is stored only in the local macOS Keychain.
-
-Create a separate production Android OAuth client after production signing is configured. Use the SHA-1 from EAS production credentials or Google Play Console App Signing—not the development fingerprint above.
-
-### Retrieve the correct Android fingerprint
-
-For the local TFHC development keystore, run:
-
-```sh
-keytool -keystore apps/member-mobile/credentials/tfhc-orderliness-development.keystore -list -v
-```
-
-The keystore password is stored in the local macOS Keychain and must not be committed or written to this document.
-
-For Google Play distribution, use the **App signing key certificate** fingerprint in Google Play Console:
-
-```text
-Protected with Play → Play Store protection → Manage Play app signing
-```
-
-That Play App Signing SHA-1 is the value for the separate Android Production OAuth client. Do not replace the development OAuth client fingerprint with it; both clients may be needed.
-
-## iOS OAuth client
+In the TFHC-owned Google Cloud project, under **APIs & Services → Credentials
+→ Create Credentials → OAuth client ID**:
 
 | Field | Value |
 | --- | --- |
-| Application type | iOS |
-| Client name | `TFHC Orderliness — iOS` |
-| Bundle ID | `com.eglobalicthub.tfhcorderliness` |
-| App URL scheme | `tfhc-orderliness` |
+| Application type | Web application |
+| Name | `TFHC Orderliness — Web` |
+| Authorized JavaScript origins | The deployed web app's origin(s), e.g. `https://tfhc-orderliness-web.onrender.com`, plus `http://localhost:3000` for local development |
+| Authorized redirect URIs | Not required — Google Identity Services' button flow uses a JS callback, not a redirect |
 
-The Apple Team ID and App Store ID are not yet available because the application has not been registered in the TFHC Apple Developer account.
+This is a "Web application" client, not "Android" or "iOS" — it needs no
+package name, bundle ID, or SHA fingerprint. Unlike a client secret, a Web
+OAuth client ID is meant to be public (it ships in the browser bundle); it's
+still not something to guess or fabricate here — copy the exact value Google
+Cloud Console shows after creating the client.
 
-## After client creation
+## Required configuration
 
-Store generated client IDs only in the relevant environment configuration:
-
-```text
-EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=<generated Android client ID>
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<generated iOS client ID>
-GOOGLE_OAUTH_CLIENT_IDS=<Android client ID>,<iOS client ID>
-```
-
-The first two variables belong in the Expo/EAS build environment. `GOOGLE_OAUTH_CLIENT_IDS` belongs only on the TFHC API server. OAuth client secrets are not used by the current native ID-token flow and must not be added to the mobile app.
-
-## Required configuration checklist
-
-| Location | Required setting | Value to enter |
+| Location | Variable | Value |
 | --- | --- | --- |
-| `apps/member-mobile/.env` | `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` | Generated Android OAuth client ID |
-| `apps/member-mobile/.env` | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | Generated iOS OAuth client ID |
-| `apps/member-mobile/.env` | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | Leave blank for the current native-only app |
-| `apps/api/.env` | `GOOGLE_OAUTH_CLIENT_IDS` | Android client ID, comma, iOS client ID |
-| `apps/member-mobile/app.json` | `android.package` | `org.tfhc.orderliness.member` — already configured |
-| `apps/member-mobile/app.json` | `ios.bundleIdentifier` | `org.tfhc.orderliness.member` — already configured |
+| `apps/web` build (Docker build arg, or `.env.local` for `next dev`) | `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` | The Web client ID above |
+| `apps/api/.env` | `GOOGLE_OAUTH_CLIENT_IDS` | The same Web client ID (comma-separate additional client IDs if ever needed) |
+| `render.yaml` | `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` (web service `dockerBuildArgs`) and `GOOGLE_OAUTH_CLIENT_IDS` (API service `envVars`, `sync: false`) | Same value, set in the Render dashboard after creating the client — not something to commit |
+| Local `docker-compose.yml` | `GOOGLE_OAUTH_WEB_CLIENT_ID` (shell env var before `docker compose up`) | Same value; flows into both services, see the comments in `docker-compose.yml` |
 
-The downloaded iOS `.plist` and Google `client_secret_*.json` files are **not runtime configuration files for this Expo AuthSession implementation**. Keep them out of source control. Do not copy a client secret into any `.env` file.
+Both `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_IDS` must
+carry the *same* client ID — the frontend requests a token issued for that
+audience, and the backend only accepts tokens whose audience is in its list.
+
+Without `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` set, the login page shows "Member
+Google sign-in is not configured for this deployment" instead of the button
+— the rest of the app (including admin password login) still works.
+
+## Verifying it end-to-end
+
+This was implemented and its wiring verified (button renders when a client ID
+is configured, submits the credential to `POST /auth/google/member`, handles
+both success and error responses) but a **real successful sign-in** requires
+an actual Google account and a real client ID — neither is available in an
+automated environment, so that specific path is configured, not verified by
+this repository's test suite. After setting the values above, sign in with a
+Google account whose email is in this deployment's `approved_members` table
+(status `ACTIVE`) and confirm it lands on `/member` with a working session.

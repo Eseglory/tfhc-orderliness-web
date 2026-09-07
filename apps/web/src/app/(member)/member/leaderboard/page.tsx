@@ -3,25 +3,22 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '../../../../lib/api';
+import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberLeaderboardPage() {
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
 
   useEffect(() => {
     fetchApi('/scoring/leaderboard')
-      .then((data) => setLeaderboardData(data))
+      .then((data) => setLeaderboardData(data.map((item: any) => ({ ...item, memberName: `${item.firstName} ${item.lastName}`, attendancePercentage: item.attendanceRate, punctualityPercentage: item.punctualityRate, rankPosition: item.rank }))))
       .catch((err) => console.error(err));
   }, []);
 
-  const top1 = leaderboardData[0] || { memberName: 'David K.', attendancePercentage: 99, totalPoints: 520 };
-  const top2 = leaderboardData[1] || { memberName: 'Sarah M.', attendancePercentage: 96, totalPoints: 450 };
-  const top3 = leaderboardData[2] || { memberName: 'Elena R.', attendancePercentage: 94, totalPoints: 410 };
-  const rest = leaderboardData.length > 3 ? leaderboardData.slice(3) : [
-    { rankPosition: 4, memberName: 'Marcus T.', attendancePercentage: 92.5, punctualityPercentage: 88.0, totalPoints: 380 },
-    { rankPosition: 5, memberName: 'Jessica W.', attendancePercentage: 92.0, punctualityPercentage: 85.5, totalPoints: 310 },
-    { rankPosition: 7, memberName: 'Alex T.', attendancePercentage: 90.1, punctualityPercentage: 80.0, totalPoints: 195 },
-    { rankPosition: 8, memberName: 'Brian J.', attendancePercentage: 88.5, punctualityPercentage: 78.5, totalPoints: 180 },
-  ];
+  const empty = { memberName: '—', attendancePercentage: 0, totalPoints: 0 };
+  const top1 = leaderboardData[0] || empty;
+  const top2 = leaderboardData[1] || empty;
+  const top3 = leaderboardData[2] || empty;
+  const rest = leaderboardData.slice(3);
 
   return (
     <div className="bg-background text-on-background min-h-screen pb-safe antialiased flex flex-col font-body-md">
@@ -29,7 +26,7 @@ export default function MemberLeaderboardPage() {
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 docked full-width top-0 z-40 relative border-b border-outline-variant/10">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center p-1">
-            <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="Logo" />
+            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Dashboard</h1>
         </div>
@@ -59,7 +56,7 @@ export default function MemberLeaderboardPage() {
           <div className="flex flex-col items-center">
             <div className="relative mb-2">
               <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#C0C0C0] shadow-md z-10 relative bg-surface-container flex items-center justify-center">
-                <img className="w-full h-full object-contain p-1" src="/logo-icon.svg" alt="Second place" />
+                <LogoIcon alt="Second place" className="w-full h-full object-contain p-1" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#C0C0C0] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">2</div>
             </div>
@@ -75,7 +72,7 @@ export default function MemberLeaderboardPage() {
             <div className="relative mb-2">
               <span className="material-symbols-outlined text-[#FFD700] absolute -top-6 left-1/2 -translate-x-1/2 text-3xl drop-shadow-md z-20">crown</span>
               <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FFD700] shadow-lg z-10 relative bg-surface-container flex items-center justify-center">
-                <img className="w-full h-full object-contain p-1" src="/logo-icon.svg" alt="First place" />
+                <LogoIcon alt="First place" className="w-full h-full object-contain p-1" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#FFD700] text-tertiary-container w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm border-2 border-surface z-20">1</div>
             </div>
@@ -90,7 +87,7 @@ export default function MemberLeaderboardPage() {
           <div className="flex flex-col items-center">
             <div className="relative mb-2">
               <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#CD7F32] shadow-md z-10 relative bg-surface-container flex items-center justify-center">
-                <img className="w-full h-full object-contain p-1" src="/logo-icon.svg" alt="Third place" />
+                <LogoIcon alt="Third place" className="w-full h-full object-contain p-1" />
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#CD7F32] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">3</div>
             </div>
@@ -126,7 +123,7 @@ export default function MemberLeaderboardPage() {
                     <span className="font-body-md text-body-md text-on-surface truncate font-semibold">{item.memberName}</span>
                   </div>
                   <div className="w-16 text-right font-body-md text-body-md text-on-surface font-semibold">{item.attendancePercentage}%</div>
-                  <div className="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">{item.punctualityPercentage || 85.0}%</div>
+                  <div className="w-16 text-right font-body-md text-body-md text-on-surface-variant hidden sm:block">{item.punctualityPercentage ?? 0}%</div>
                   <div className="w-16 text-right font-label-md text-label-md text-primary font-bold">{item.totalPoints}</div>
                 </div>
               ))}

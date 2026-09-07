@@ -1,0 +1,12 @@
+{
+  "rootDir": "..",
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "watchman": false,
+  "testMatch": [
+    "**/test/**/*.e2e-spec.ts"
+  ],
+  "moduleNameMapper": {
+    "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"
+  }
+}

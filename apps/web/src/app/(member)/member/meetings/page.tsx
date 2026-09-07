@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '../../../../lib/api';
+import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberMeetingsPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
@@ -28,7 +29,7 @@ export default function MemberMeetingsPage() {
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
-            <img className="w-full h-full object-contain" src="/logo-icon.svg" alt="Logo" />
+            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Meetings</h1>
         </div>
@@ -99,10 +100,10 @@ export default function MemberMeetingsPage() {
                       <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">{monthStr}</span>
                       <span className="font-headline-md text-headline-md text-primary font-bold">{dayStr}</span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h3 className="font-headline-sm text-headline-sm text-primary font-bold">{m.title}</h3>
-                        <span className="bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap justify-between items-start gap-2">
+                        <h3 className="font-headline-sm text-headline-sm text-primary font-bold break-words min-w-0">{m.title}</h3>
+                        <span className="shrink-0 whitespace-nowrap bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
                           {m.pointWeight}x Weight
                         </span>
                       </div>

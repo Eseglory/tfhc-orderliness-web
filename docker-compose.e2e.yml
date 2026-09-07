@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: tfhc_e2e_only
+      POSTGRES_DB: tfhc_e2e
+    ports:
+      - '127.0.0.1:55498:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d tfhc_e2e']
+      interval: 2s
+      timeout: 2s
+      retries: 20
