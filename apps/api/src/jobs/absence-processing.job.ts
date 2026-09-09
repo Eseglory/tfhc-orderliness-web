@@ -1,3 +1,4 @@
+import { canViewEvent } from '../common/event-visibility';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,12 +41,14 @@ export class AbsenceProcessingJob {
 
       if (updated.count === 0) return; // Already processed by another worker
 
-      const meeting = await tx.meeting.findUnique({ where: { id: meetingId } });
+      const meeting = await tx.meeting.findUnique({ where: { id: meetingId }, include: {audiences:true} });
 
       // Optional parallel services only expect committed members and actual attendees.
-      const activeMembers = await tx.member.findMany({
+      const candidates = await tx.member.findMany({
         where: { status: MemberStatus.ACTIVE, ...(meeting.isCompulsory ? {} : { OR: [{ eventResponses: { some: { meetingId, attending: true } } }, { AND: [{ eventResponses: { none: { meetingId } } }, { serviceCommitments: { some: { meetingId, status: 'COMMITTED' } } }] }, { attendanceRecords: { some: { meetingId } } }] }) },
       });
+
+      const activeMembers = candidates.filter(member => canViewEvent(meeting.visibility, meeting.audiences, {memberId:member.id,subTeamId:member.subTeamId,roleInUnit:member.roleInUnit}));
 
       // 3. Query members who already checked in or submitted an approved excuse
       const existingRecords = await tx.attendanceRecord.findMany({

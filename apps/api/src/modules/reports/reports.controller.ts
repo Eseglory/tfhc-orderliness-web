@@ -19,11 +19,19 @@ export class ReportsController {
   async updateSettings(@Body() body: any) { return this.reportsService.updateSettings(body); }
 
   @Get('analytics')
-  async analytics(@Query('days') days?: string) { return this.reportsService.getAnalytics(days === undefined ? 30 : Number(days)); }
+  async analytics(@Query('days') days?: string, @Query('from') from?: string, @Query('to') to?: string) { return this.reportsService.getAnalytics(days === undefined ? 30 : Number(days), from, to); }
 
   @Get('dashboard')
   async getDashboard() {
     return this.reportsService.getUnitDashboardStats();
+  }
+
+  @Get('export/csv')
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.reportsService.generateCsvReport();
+    res.setHeader('Content-Type','text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition','attachment; filename="TFHC_Attendance_Report.csv"');
+    res.send(csv);
   }
 
   @Get('export/excel')

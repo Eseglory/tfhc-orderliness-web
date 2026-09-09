@@ -12,7 +12,8 @@ export default function RewardsPage() {
       <section className="grid grid-cols-2 gap-4">
         {[['Total Points',performance.totalPoints],['Meetings Attended',performance.attendedCount],['Attendance Streak',performance.currentAttendanceStreak],['On-Time Streak',performance.currentOnTimeStreak]].map(([label,value])=><article key={label} className="p-5 bg-surface-container rounded-xl"><h2>{label}</h2><p className="text-3xl font-bold">{value}</p></article>)}
       </section>
-      <p>Milestones reflect your recorded attendance.</p><Link href="/member/leaderboard">View the leaderboard</Link>
+      <p>Milestones reflect your recorded attendance.</p>
+      <section className="rounded-xl p-5 bg-surface-container"><h2 className="font-bold">Recognition eligibility</h2><p>{performance.recognition?.eligible ? 'You meet the current recognition criteria.' : 'Keep attending to reach the recognition criteria.'}</p><p>Requires {performance.recognition?.minimumMeetings} expected meetings, {performance.recognition?.attendanceThreshold}% attendance and {performance.recognition?.punctualityThreshold}% punctuality.</p></section><Link href="/member/leaderboard">View the leaderboard</Link>
     </>}
   </main>;
 }

@@ -1,3 +1,4 @@
+import { canViewEvent } from '../../common/event-visibility';
 import { unitPolicy } from '../../common/unit-policy';
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -27,8 +28,9 @@ export class ExcusesService implements OnModuleInit {
     if (typeof dto.meetingId !== 'string' || !dto.meetingId || typeof dto.reason !== 'string' || !dto.reason.trim() || dto.reason.length > 2000 || typeof dto.category !== 'string' || !dto.category.trim()) throw new BadRequestException('A meeting and reason are required');
     const member = await this.prisma.member.findUnique({ where: { id: dto.memberId } });
     if (!member || member.status !== 'ACTIVE') throw new ForbiddenException('Only active members can request absence');
-    const meeting = await this.prisma.meeting.findUnique({ where: { id: dto.meetingId } });
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: dto.meetingId }, include: { audiences: true } });
     if (!meeting) throw new NotFoundException('Meeting not found');
+    if (!canViewEvent(meeting.visibility, meeting.audiences, { memberId: member.id, subTeamId: member.subTeamId, roleInUnit: member.roleInUnit })) throw new NotFoundException('Meeting not found');
     if (meeting.status === 'CANCELLED') throw new BadRequestException('This event has been cancelled');
 
     const existing = await this.prisma.absenceExcuse.findUnique({

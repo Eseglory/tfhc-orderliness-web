@@ -8,6 +8,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { LookupsModule } from './modules/lookups/lookups.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { WelfareModule } from './modules/welfare/welfare.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { RecurringServicesModule } from './modules/recurring-services/recurring-services.module';
 import { MailModule } from './modules/mail/mail.module';
 import { AppController } from './app.controller';
@@ -48,6 +49,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     AuditModule,
     LookupsModule,
     WelfareModule,
+    FinanceModule,
     MembersModule,
     MeetingsModule,
     AttendanceModule,

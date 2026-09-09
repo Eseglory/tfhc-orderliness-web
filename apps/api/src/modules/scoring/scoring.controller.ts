@@ -8,6 +8,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class ScoringController {
   constructor(private scoringService: ScoringService) {}
 
+  @Get('recognition')
+  async recognition(@CurrentUser('role') role: string) {
+    if (!['ADMIN','LEADER'].includes(role)) throw new ForbiddenException('Leadership access required');
+    return this.scoringService.recognition();
+  }
+
   @Get('sub-teams')
   async teams() { return this.scoringService.teams(); }
 

@@ -125,6 +125,7 @@ model User {
   auditLogs    AuditLog[]
   accessRoles  UserAccessRole[]  @relation("UserAccessRoleUser")
   rolesAssigned UserAccessRole[] @relation("UserAccessRoleAssignedBy")
+  expensesCreated Expense[]      @relation("ExpenseCreatedBy")
 
   @@index([isActive])
   @@map("users")
@@ -222,6 +223,8 @@ model Member {
   eventInvitations   EventInvitation[]
   approvalRequests   ApprovalRequest[]
   welfareRequests    WelfareRequest[]
+  duesAssignments    MemberDuesAssignment[]
+  payments           Payment[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -595,6 +598,7 @@ model ApprovalRequest {
   actions             ApprovalAction[]
   absenceExcuse       AbsenceExcuse?
   welfareRequest      WelfareRequest?
+  expense             Expense?            @relation("ExpenseApproval")
 
   @@index([status, requestType])
   @@index([entityType, entityId])
@@ -796,4 +800,178 @@ model EventResponse {
   @@unique([memberId, meetingId])
   @@index([meetingId, attending])
   @@map("event_responses")
+}
+
+// ---------------------------------------------------------------------------
+// Finance: expenses, monthly dues, payments, payment accounts
+// ---------------------------------------------------------------------------
+
+enum ExpenseStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+enum FinancePaymentMethod {
+  CASH
+  BANK_TRANSFER
+  POS
+  CHEQUE
+  ONLINE
+  OTHER
+}
+
+enum DuesPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+enum DuesAssignmentStatus {
+  OUTSTANDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  EXEMPT
+  WAIVED
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  REFUNDED
+}
+
+enum PaymentPurpose {
+  MONTHLY_DUES
+  OFFERING
+  PLEDGE
+  WELFARE_CONTRIBUTION
+  OTHER
+}
+
+model ExpenseCategory {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  name        String
+  description String?
+  active      Boolean   @default(true)
+  isSystem    Boolean   @default(false)
+  expenses    Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id                String           @id @default(uuid())
+  reference         String           @unique
+  title             String
+  description       String?
+  categoryId        String
+  category          ExpenseCategory  @relation(fields: [categoryId], references: [id])
+  amount            Float
+  incurredOn        DateTime         @db.Date
+  vendorName        String?
+  paymentMethod     FinancePaymentMethod?
+  paymentReference  String?
+  attachmentUrl     String?
+  status            ExpenseStatus    @default(DRAFT)
+  approvalRequestId String?          @unique
+  approvalRequest   ApprovalRequest? @relation("ExpenseApproval", fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  createdByUserId   String
+  createdByUser     User             @relation("ExpenseCreatedBy", fields: [createdByUserId], references: [id])
+  paidOn            DateTime?
+  paidByUserId      String?
+  rejectionReason   String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([status])
+  @@index([incurredOn])
+  @@index([categoryId])
+  @@map("expenses")
+}
+
+model PaymentAccount {
+  id            String   @id @default(uuid())
+  bankName      String
+  accountName   String
+  accountNumber String
+  instructions  String?
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(100)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("payment_accounts")
+}
+
+model DuesPeriod {
+  id              String                 @id @default(uuid())
+  year            Int
+  month           Int
+  label           String
+  defaultAmount   Float
+  dueDate         DateTime               @db.Date
+  status          DuesPeriodStatus       @default(OPEN)
+  createdByUserId String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  assignments     MemberDuesAssignment[]
+
+  @@unique([year, month])
+  @@index([status])
+  @@map("dues_periods")
+}
+
+model MemberDuesAssignment {
+  id           String               @id @default(uuid())
+  periodId     String
+  period       DuesPeriod           @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  amountDue    Float
+  amountPaid   Float                @default(0)
+  status       DuesAssignmentStatus @default(OUTSTANDING)
+  note         String?
+  adjustments  Json?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  payments     Payment[]
+
+  @@unique([periodId, memberId])
+  @@index([memberId, status])
+  @@index([status])
+  @@map("member_dues_assignments")
+}
+
+model Payment {
+  id                String                @id @default(uuid())
+  reference         String                @unique
+  memberId          String
+  member            Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  purpose           PaymentPurpose
+  amount            Float
+  method            FinancePaymentMethod
+  payerReference    String?
+  description       String?
+  paidOn            DateTime              @db.Date
+  status            PaymentStatus         @default(PENDING)
+  duesAssignmentId  String?
+  duesAssignment    MemberDuesAssignment? @relation(fields: [duesAssignmentId], references: [id], onDelete: SetNull)
+  recordedByUserId  String?
+  confirmedByUserId String?
+  confirmedAt       DateTime?
+  rejectionReason   String?
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([memberId, status])
+  @@index([status, purpose])
+  @@index([duesAssignmentId])
+  @@map("payments")
 }

@@ -1,3 +1,4 @@
+import { canViewEvent } from '../../common/event-visibility';
 import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
@@ -257,7 +258,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
     const meetings = await this.prisma.meeting.findMany({ where: {
       OR: [{ serviceScheduleId: null }, { serviceSchedule: { enabled: true } }], status: { in: ['SCHEDULED', 'ACTIVE'] },
       startTime: { gt: now, lte: new Date(now.getTime() + Math.max(...offsets) * 60000) },
-    } });
+    }, include: {audiences:true} });
     let sent = 0;
     for (const meeting of meetings) for (const minutes of offsets) {
       const due = meeting.startTime.getTime() - minutes * 60000;
@@ -265,8 +266,9 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       if (due > now.getTime() || due < now.getTime() - 15 * 60000) continue;
       const recipients = await this.prisma.approvedMember.findMany({ where: {
         status: 'ACTIVE', member: { status: 'ACTIVE', ...(config.recipients === 'committed' ? { OR: [{ eventResponses: { some: { meetingId: meeting.id, attending: true } } }, { AND: [{ eventResponses: { none: { meetingId: meeting.id } } }, { serviceCommitments: { some: { meetingId: meeting.id, status: 'COMMITTED' } } }] }] } : {}) },
-      }, include: { member: { select: { firstName: true } } } });
+      }, include: { member: { select: { firstName: true, subTeamId:true, roleInUnit:true } } } });
       for (const recipient of recipients) {
+        if (!canViewEvent(meeting.visibility, meeting.audiences, {memberId:recipient.memberId,subTeamId:recipient.member?.subTeamId,roleInUnit:recipient.member?.roleInUnit})) continue;
         const idempotencyKey = `service-reminder:${meeting.id}:${minutes}:${recipient.id}`;
         // Unique insert claims delivery across overlapping jobs and multiple API replicas.
         const claim = await this.prisma.communicationDelivery.createMany({ data: [{

@@ -9,11 +9,12 @@ import { FileText, Download, Table, Calendar } from 'lucide-react';
 export default function AdminReportsPage() {
   const [downloading, setDownloading] = useState(false);
 
+  const [format, setFormat] = useState('excel');
   const handleExportExcel = async () => {
     setDownloading(true);
     try {
       const token = getAuthToken();
-      const response = await fetch(`${API_BASE_URL}/reports/export/excel`, {
+      const response = await fetch(`${API_BASE_URL}/reports/export/${format}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -25,7 +26,7 @@ export default function AdminReportsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `TFHC_Attendance_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.download = `TFHC_Attendance_Report_${new Date().toISOString().split('T')[0]}.${format === 'csv' ? 'csv' : 'xlsx'}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -55,10 +56,11 @@ export default function AdminReportsPage() {
             disabled={downloading}
             className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-semibold text-xs text-slate-950 shadow-lg shadow-emerald-600/20 uppercase tracking-wider transition-all"
           >
-            <Download className="w-4 h-4" /> {downloading ? 'Generating Excel...' : 'Export Excel (.xlsx)'}
+            <Download className="w-4 h-4" /> {downloading ? 'Generating Excel...' : format === 'csv' ? 'Export CSV (.csv)' : 'Export Excel (.xlsx)'}
           </button>
         </div>
 
+        <label>Export format <select value={format} onChange={e=>setFormat(e.target.value)} className="bg-slate-800 rounded p-2"><option value="excel">Excel workbook</option><option value="csv">CSV attendance ledger</option></select></label>
         <AttendanceAnalytics />
 
         {/* Report Cards */}

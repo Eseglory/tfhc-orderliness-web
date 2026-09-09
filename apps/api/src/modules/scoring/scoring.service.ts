@@ -15,6 +15,12 @@ import {
 export class ScoringService {
   constructor(private prisma: PrismaService) {}
 
+  async recognition() {
+    const policy = await unitPolicy(this.prisma);
+    const ranked = await this.getLeaderboard({limit:1000});
+    return {criteria:{minimumMeetings:policy.minimumMeetings,attendance:policy.rewardAttendance,punctuality:policy.rewardPunctuality},members:ranked.filter(member=>member.expectedCount>=policy.minimumMeetings && member.attendanceRate>=policy.rewardAttendance && member.punctualityRate>=policy.rewardPunctuality)};
+  }
+
   async teams() { return this.prisma.subTeam.findMany({select:{id:true,name:true},orderBy:{name:'asc'}}); }
 
   async getMemberPerformance(memberId: string, query?: { startDate?: string; endDate?: string }) {
@@ -73,6 +79,7 @@ export class ScoringService {
       member,
       expectedCount,
       scoringWeights: { attendance: policy.attendanceWeight, punctuality: policy.punctualityWeight },
+      recognition: { eligible: expectedCount >= policy.minimumMeetings && attendanceRate >= policy.rewardAttendance && punctualityRate >= policy.rewardPunctuality, minimumMeetings: policy.minimumMeetings, attendanceThreshold: policy.rewardAttendance, punctualityThreshold: policy.rewardPunctuality },
       attendedCount,
       onTimeCount,
       lateCount,

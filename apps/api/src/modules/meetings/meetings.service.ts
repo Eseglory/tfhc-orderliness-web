@@ -230,7 +230,7 @@ export class MeetingsService {
       return meeting;
     }
 
-    const expectedCount = await this.prisma.member.count({
+    const expectedMembers = await this.prisma.member.findMany({
       where: {
         status: 'ACTIVE',
         ...(meeting.isCompulsory
@@ -249,6 +249,7 @@ export class MeetingsService {
             }),
       },
     });
+    const expectedCount = expectedMembers.filter(member => canViewEvent(meeting.visibility, meeting.audiences, {memberId:member.id,subTeamId:member.subTeamId,roleInUnit:member.roleInUnit})).length;
     return { ...meeting, expectedCount };
   }
 

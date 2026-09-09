@@ -11,10 +11,11 @@ export class ReportsService {
   async settings() { return unitPolicy(this.prisma); }
   async updateSettings(body: any) { const value = validateUnitPolicy(body); await this.prisma.systemSetting.upsert({where:{key:'unit_policy'},create:{key:'unit_policy',value:JSON.stringify(value)},update:{value:JSON.stringify(value)}}); return value; }
 
-  async getAnalytics(days: number) {
+  async getAnalytics(days: number, from?: string, to?: string) {
     if (![7, 30, 90, 365].includes(days)) throw new BadRequestException('Choose 7, 30, 90 or 365 days');
-    const now = new Date();
-    const since = new Date(now.getTime() - days * 86400000);
+    const now = to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999+01:00` : to) : new Date();
+    const since = from ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00+01:00` : from) : new Date(now.getTime() - days * 86400000);
+    if (!Number.isFinite(now.getTime()) || !Number.isFinite(since.getTime()) || since > now) throw new BadRequestException('Choose a valid reporting date range');
     const meetings = await this.prisma.meeting.findMany({
       where: { startTime: { gte: since, lte: now }, status: 'CLOSED' },
       select: { id: true, title: true, startTime: true, category: { select: { name: true } }, attendanceRecords: { select: { status: true } } },
@@ -54,12 +55,15 @@ export class ReportsService {
     const [totalActiveMembers, meetingsHeld, summaries, activeFlagsCount, pendingExcusesCount] = await Promise.all([
       this.prisma.member.count({ where: { status: MemberStatus.ACTIVE } }),
       this.prisma.meeting.count({ where: { status: 'CLOSED' } }),
-      this.prisma.meetingSummary.aggregate({ _avg: { attendanceRate: true, punctualityRate: true } }),
+      this.prisma.attendanceRecord.groupBy({by:['status'],where:{meeting:{status:'CLOSED'}},_count:{_all:true}}),
       this.prisma.followUpFlag.count({ where: { isResolved: false } }),
       this.prisma.absenceExcuse.count({ where: { status: 'PENDING' } }),
     ]);
-    const avgAttendance = Math.round((summaries._avg.attendanceRate ?? 0) * 10) / 10;
-    const avgPunctuality = Math.round((summaries._avg.punctualityRate ?? 0) * 10) / 10;
+    const count = (status: string) => summaries.find(row=>row.status===status)?._count._all ?? 0;
+    const present = count('EARLY')+count('ON_TIME')+count('GRACE_PERIOD')+count('LATE');
+    const expected = present+count('ABSENT');
+    const avgAttendance = expected ? Math.round(present/expected*1000)/10 : 0;
+    const avgPunctuality = present ? Math.round((count('EARLY')+count('ON_TIME'))/present*1000)/10 : 0;
 
     return {
       totalActiveMembers,
@@ -69,6 +73,21 @@ export class ReportsService {
       activeFlagsCount,
       pendingExcusesCount,
     };
+  }
+
+  async generateCsvReport() {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await this.generateExcelReport() as any);
+    const rows: string[] = [];
+    workbook.worksheets[0].eachRow(row => {
+      const values = (row.values as any[]).slice(1).map(value => {
+        let text = String(value ?? '');
+        if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+        return '"' + text.replace(/"/g, '""') + '"';
+      });
+      rows.push(values.join(','));
+    });
+    return '\uFEFF' + rows.join('\r\n');
   }
 
   async generateExcelReport(): Promise<Buffer> {

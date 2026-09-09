@@ -92,6 +92,23 @@ suite('Application HTTP integration (real PostgreSQL)', () => {
       else await db.systemSetting.deleteMany({where:{key:'unit_policy'}});
     }
   });
+  test('restricted event close-out excludes members outside its audience', async () => {
+    const restricted = await db.meeting.create({data:{title:'Restricted close-out',categoryId:category.id,meetingDate:time(-60),startTime:time(-30),expectedArrivalTime:time(-45),attendanceOpenTime:time(-60),attendanceCloseTime:time(-1),locationName:'Church',latitude:6.5,longitude:3.3,status:'ACTIVE',visibility:'RESTRICTED',isCompulsory:true,audiences:{create:{memberId}}}});
+    await app.get(AbsenceProcessingJob).closeMeetingAndProcessAbsences(restricted.id);
+    const records = await db.attendanceRecord.findMany({where:{meetingId:restricted.id}});
+    expect(records).toHaveLength(1); expect(records[0].memberId).toBe(memberId);
+  });
+  test('report date validation, CSV export and recognition access', async () => {
+    await request(app.getHttpServer()).get('/reports/analytics?from=invalid').set(auth(admin)).expect(400);
+    await request(app.getHttpServer()).get('/reports/analytics?from=2026-09-10&to=2026-09-01').set(auth(admin)).expect(400);
+    const csv = await request(app.getHttpServer()).get('/reports/export/csv').set(auth(admin)).expect(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(csv.text).toContain('Member Code');
+    await request(app.getHttpServer()).get('/scoring/recognition').set(auth(member)).expect(403);
+    const recognition = (await request(app.getHttpServer()).get('/scoring/recognition').set(auth(admin)).expect(200)).body;
+    expect(Array.isArray(recognition.members)).toBe(true);
+    expect(recognition.criteria.minimumMeetings).toBeGreaterThan(0);
+  });
   test('profile picture upload enforces content, size, ownership, persistence and removal', async () => {
     const image = await sharp({ create: { width: 24, height: 24, channels: 3, background: '#2563eb' } }).png().toBuffer();
     await request(app.getHttpServer()).post('/members/me/photo').attach('photo', image, 'avatar.png').expect(401);

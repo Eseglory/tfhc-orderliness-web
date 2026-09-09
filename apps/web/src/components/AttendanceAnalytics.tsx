@@ -10,6 +10,8 @@ function Bars({ rows }: { rows: {label: string; value: number}[] }) {
   </div>)}</div>;
 }
 export function AttendanceAnalytics() {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [days, setDays] = useState(30);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState('');
@@ -17,9 +19,9 @@ export function AttendanceAnalytics() {
   useEffect(() => {
     let current = true;
     setData(null); setError('');
-    fetchApi(`/reports/analytics?days=${days}`).then(result => {if(current) setData(result);}).catch(err => {if(current) setError(err.message);});
+    fetchApi(`/reports/analytics?${new URLSearchParams({days:String(days),...(from ? {from} : {}),...(to ? {to} : {})})}`).then(result => {if(current) setData(result);}).catch(err => {if(current) setError(err.message);});
     return () => {current = false;};
-  }, [days, version]);
+  }, [days, version, from, to]);
   const rate = (value: number | null) => value === null ? 'No data' : `${value}%`;
   return <section className="space-y-5" aria-label="Attendance analytics">
     <div className="flex flex-wrap gap-4 items-center justify-between">
@@ -27,6 +29,9 @@ export function AttendanceAnalytics() {
       <label>Reporting period <select className="bg-slate-800 rounded p-2" value={days} onChange={e => setDays(Number(e.target.value))}>
         {[7,30,90,365].map(n => <option key={n} value={n}>Last {n} days</option>)}
       </select></label>
+      <label>From<input type="date" className="block bg-slate-800 rounded p-2" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+      <label>To<input type="date" className="block bg-slate-800 rounded p-2" value={to} onChange={e=>setTo(e.target.value)}/></label>
+      <button className="underline" onClick={() => {setFrom('');setTo('');}}>Clear dates</button>
       <button className="underline" onClick={() => setVersion(v => v+1)}>Refresh analytics</button>
     </div>
     {error ? <p role="alert">{error}</p> : !data ? <p role="status">Loading analytics…</p> : <>
