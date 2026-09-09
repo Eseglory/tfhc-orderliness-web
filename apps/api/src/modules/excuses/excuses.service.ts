@@ -1,127 +1,153 @@
 import { unitPolicy } from '../../common/unit-policy';
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ExcuseStatus, AttendanceStatus, AttendanceMethod, calculateAttendancePoints } from '@tfhc/shared';
+import { ApprovalsService } from '../approvals/approvals.service';
+
+const EXCUSE_ENTITY = 'AbsenceExcuse';
 
 @Injectable()
-export class ExcusesService {
-  constructor(private prisma: PrismaService) {}
+export class ExcusesService implements OnModuleInit {
+  constructor(
+    private prisma: PrismaService,
+    private approvals: ApprovalsService,
+  ) {}
 
-  async submitExcuse(dto: {
-    memberId: string;
-    meetingId: string;
-    reason: string;
-    category: string;
-  }) {
+  onModuleInit() {
+    // When the (possibly multi-level) approval request for an excuse reaches a
+    // terminal state, apply the decision: excuse the attendance or record a
+    // rejection, and notify the member.
+    this.approvals.registerFinalizer(EXCUSE_ENTITY, async ({ entityId, approved, actorUserId, comment }) => {
+      await this.applyExcuseDecision(entityId, approved ? ExcuseStatus.APPROVED : ExcuseStatus.REJECTED, actorUserId, comment ?? undefined);
+    });
+  }
+
+  async submitExcuse(dto: { memberId: string; meetingId: string; reason: string; category: string }) {
     if (!dto.memberId) throw new ForbiddenException('A member profile is required');
     if (typeof dto.meetingId !== 'string' || !dto.meetingId || typeof dto.reason !== 'string' || !dto.reason.trim() || dto.reason.length > 2000 || typeof dto.category !== 'string' || !dto.category.trim()) throw new BadRequestException('A meeting and reason are required');
     const member = await this.prisma.member.findUnique({ where: { id: dto.memberId } });
     if (!member || member.status !== 'ACTIVE') throw new ForbiddenException('Only active members can request absence');
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id: dto.meetingId },
-    });
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: dto.meetingId } });
     if (!meeting) throw new NotFoundException('Meeting not found');
     if (meeting.status === 'CANCELLED') throw new BadRequestException('This event has been cancelled');
 
     const existing = await this.prisma.absenceExcuse.findUnique({
       where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
     });
-    if (existing) {
-      throw new BadRequestException('You have already submitted an excuse for this meeting');
-    }
+    if (existing) throw new BadRequestException('You have already submitted an excuse for this meeting');
 
-    return this.prisma.absenceExcuse.create({
-      data: {
-        memberId: dto.memberId,
-        meetingId: dto.meetingId,
-        reason: dto.reason,
-        category: dto.category,
-        status: ExcuseStatus.PENDING,
-      },
+    const excuse = await this.prisma.absenceExcuse.create({
+      data: { memberId: dto.memberId, meetingId: dto.meetingId, reason: dto.reason, category: dto.category, status: ExcuseStatus.PENDING },
       include: { meeting: true, member: true },
     });
+
+    const approval = await this.approvals.open({
+      requestType: 'ABSENCE',
+      entityType: EXCUSE_ENTITY,
+      entityId: excuse.id,
+      summary: `Absence: ${excuse.member.firstName} ${excuse.member.lastName} — ${excuse.meeting.title}`,
+      requestedByMemberId: dto.memberId,
+      requestedByUserId: member.userId,
+    });
+    if (approval) {
+      await this.prisma.absenceExcuse.update({ where: { id: excuse.id }, data: { approvalRequestId: approval.id } });
+    }
+    return excuse;
   }
 
-  async reviewExcuse(dto: {
-    excuseId: string;
-    adminUserId: string;
-    status: ExcuseStatus;
-    reviewNote?: string;
-  }) {
-    if (![ExcuseStatus.APPROVED, ExcuseStatus.REJECTED].includes(dto.status)) throw new BadRequestException('Approve or reject the request');
-    if (dto.reviewNote !== undefined && (typeof dto.reviewNote !== 'string' || dto.reviewNote.length > 2000)) throw new BadRequestException('Invalid review note');
-    const excuse = await this.prisma.absenceExcuse.findUnique({
-      where: { id: dto.excuseId },
-      include: { meeting: true },
-    });
+  /** Idempotently apply a terminal excuse decision. */
+  private async applyExcuseDecision(excuseId: string, status: ExcuseStatus, actorUserId: string, reviewNote?: string) {
+    const excuse = await this.prisma.absenceExcuse.findUnique({ where: { id: excuseId }, include: { meeting: true } });
     if (!excuse) throw new NotFoundException('Absence excuse request not found');
 
     return this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.absenceExcuse.updateMany({ where: { id: dto.excuseId, status: ExcuseStatus.PENDING }, data: { status: dto.status } });
-      if (!claimed.count) throw new BadRequestException('This request has already been reviewed');
+      const claimed = await tx.absenceExcuse.updateMany({ where: { id: excuseId, status: ExcuseStatus.PENDING }, data: { status } });
+      if (!claimed.count) return excuse;
       const updatedExcuse = await tx.absenceExcuse.update({
-        where: { id: dto.excuseId },
-        data: {
-          status: dto.status,
-          reviewedBy: dto.adminUserId,
-          reviewNote: dto.reviewNote,
-        },
+        where: { id: excuseId },
+        data: { status, reviewedBy: actorUserId, reviewNote: reviewNote ?? excuse.reviewNote },
       });
 
-      if (dto.status === ExcuseStatus.APPROVED) {
+      if (status === ExcuseStatus.APPROVED) {
         const existingRecord = await tx.attendanceRecord.findUnique({
-          where: {
-            memberId_meetingId: {
-              memberId: excuse.memberId,
-              meetingId: excuse.meetingId,
-            },
-          },
+          where: { memberId_meetingId: { memberId: excuse.memberId, meetingId: excuse.meetingId } },
         });
-
-        let record;
-        if (existingRecord) {
-          record = await tx.attendanceRecord.update({
-            where: { id: existingRecord.id },
-            data: {
-              status: AttendanceStatus.EXCUSED,
-              isModified: true,
-              pointsEarned: 0,
-            },
-          });
-        } else {
-          record = await tx.attendanceRecord.create({
-            data: {
-              memberId: excuse.memberId,
-              meetingId: excuse.meetingId,
-              expectedArrivalTime: excuse.meeting.expectedArrivalTime,
-              status: AttendanceStatus.EXCUSED,
-              isModified: true,
-              pointsEarned: 0,
-            },
-          });
-        }
-
+        const record = existingRecord
+          ? await tx.attendanceRecord.update({
+              where: { id: existingRecord.id },
+              data: { status: AttendanceStatus.EXCUSED, isModified: true, pointsEarned: 0 },
+            })
+          : await tx.attendanceRecord.create({
+              data: {
+                memberId: excuse.memberId,
+                meetingId: excuse.meetingId,
+                expectedArrivalTime: excuse.meeting.expectedArrivalTime,
+                status: AttendanceStatus.EXCUSED,
+                isModified: true,
+                pointsEarned: 0,
+              },
+            });
         await tx.auditLog.create({
           data: {
-            actorUserId: dto.adminUserId,
+            actorUserId,
             action: 'ABSENCE_EXCUSE_APPROVED',
             entity: 'AttendanceRecord',
             entityId: record.id,
-            previousData: existingRecord ? JSON.parse(JSON.stringify(existingRecord)) : null,
+            previousData: existingRecord ? JSON.parse(JSON.stringify(existingRecord)) : undefined,
             newData: JSON.parse(JSON.stringify(record)),
-            reason: `Excuse approved: ${dto.reviewNote || excuse.reason}`,
+            reason: `Excuse approved: ${reviewNote || excuse.reason}`,
           },
         });
       }
 
-      await tx.memberNotification.create({ data: {
-        memberId: excuse.memberId, type: 'ABSENCE_DECISION',
-        title: `Absence request ${dto.status === ExcuseStatus.APPROVED ? 'approved' : 'rejected'}`,
-        body: `${excuse.meeting.title}: your absence request was ${dto.status.toLowerCase()}.${dto.reviewNote ? ` Admin note: ${dto.reviewNote}` : ''}`,
-        data: { meetingId: excuse.meetingId, excuseId: excuse.id },
-      } });
+      await tx.memberNotification.create({
+        data: {
+          memberId: excuse.memberId,
+          type: 'ABSENCE_DECISION',
+          title: `Absence request ${status === ExcuseStatus.APPROVED ? 'approved' : 'rejected'}`,
+          body: `${excuse.meeting.title}: your absence request was ${status.toLowerCase()}.${reviewNote ? ` Note: ${reviewNote}` : ''}`,
+          data: { meetingId: excuse.meetingId, excuseId: excuse.id },
+        },
+      });
       return updatedExcuse;
     });
+  }
+
+  async reviewExcuse(dto: { excuseId: string; adminUserId: string; status: ExcuseStatus; reviewNote?: string }) {
+    if (![ExcuseStatus.APPROVED, ExcuseStatus.REJECTED].includes(dto.status)) throw new BadRequestException('Approve or reject the request');
+    if (dto.reviewNote !== undefined && (typeof dto.reviewNote !== 'string' || dto.reviewNote.length > 2000)) throw new BadRequestException('Invalid review note');
+    const excuse = await this.prisma.absenceExcuse.findUnique({ where: { id: dto.excuseId } });
+    if (!excuse) throw new NotFoundException('Absence excuse request not found');
+    if (excuse.status !== ExcuseStatus.PENDING) throw new BadRequestException('This request has already been reviewed');
+
+    // Routed through the approval engine when a workflow is attached; this
+    // endpoint then fast-tracks every step the caller is authorised for.
+    if (excuse.approvalRequestId) {
+      const requestId = excuse.approvalRequestId;
+      if (dto.status === ExcuseStatus.REJECTED) {
+        await this.approvals.act(requestId, dto.adminUserId, 'REJECTED', dto.reviewNote || 'Rejected');
+      } else {
+        for (let guard = 0; guard < 8; guard++) {
+          const current = await this.approvals.getById(requestId);
+          if (current.status !== 'PENDING') break;
+          try {
+            await this.approvals.act(requestId, dto.adminUserId, 'APPROVED', dto.reviewNote);
+          } catch (error) {
+            const code = (error as { status?: number }).status;
+            if (code === 403 || code === 409) break; // not an approver for the remaining step(s)
+            throw error;
+          }
+        }
+      }
+      const after = await this.approvals.getById(requestId);
+      if (after.status === 'PENDING') {
+        return this.prisma.absenceExcuse.findUnique({ where: { id: dto.excuseId } }); // advanced but not final
+      }
+      return this.prisma.absenceExcuse.findUnique({ where: { id: dto.excuseId } });
+    }
+
+    // Legacy single-level path (no workflow configured).
+    return this.applyExcuseDecision(dto.excuseId, dto.status, dto.adminUserId, dto.reviewNote);
   }
 
   async getMyExcuses(memberId?: string) {

@@ -289,3 +289,75 @@ series-wide edits, permission gating.
 
 Deferred: `EventInvitation` write path (schema + `event_responses` sync exist),
 week/day calendar views (month + agenda done), cover-image upload.
+
+---
+
+## Phase 3 — Multi-level approval engine + welfare fund (DONE 2026-09-09)
+
+### Design — one reusable engine, domain modules plug in
+
+- **Schema** (`20260909160000_approval_engine`): `approval_workflows`
+  (`requestType`, `active`, `isSystem`), `approval_steps` (`order`, `approverMode`
+  = ROLE | SPECIFIC_USER | ANY_WITH_PERMISSION, `roleKey`/`approverUserId`/`permission`),
+  `approval_requests` (`workflowId`, `entityType`+`entityId`, `requestedBy*`,
+  `status`, `currentStepOrder`, `amount`), `approval_actions`
+  (append-only, `@@unique(requestId, stepOrder, actorUserId)`), `welfare_requests`.
+  `absence_excuses`+`approvalRequestId`. Seeds two **system** two-level workflows
+  (`ABSENCE_DEFAULT`, `WELFARE_FUND_DEFAULT`): Administration → Super Admin.
+- **`ApprovalsService`** (`@Global`): `open()` (creates a request at step 1 for the
+  active workflow, else null), `act(requestId, actor, decision, comment)` —
+  row-locked, verifies the actor is an approver **for the current step**, records
+  the action, advances or terminates; **Level N cannot complete before N-1**.
+  On terminal state calls a **finalizer** registered by the owning module.
+  `pendingFor(user)` returns only requests the caller can act on now.
+  Approver resolution: role holders + Super Admins + legacy-enum-role fallback.
+- **`ApprovalWorkflowsService`**: CRUD; activating a workflow deactivates the
+  others for its type; system workflows undeletable; in-flight requests keep
+  their steps.
+- **Absence integration**: `submitExcuse` opens an ABSENCE approval and links it;
+  the finalizer applies the decision (EXCUSED attendance record + notification).
+  The legacy `PUT /excuses/:id/review` still works — it fast-tracks every step the
+  caller is authorised for (a Super Admin clears both in one call).
+- **Welfare module**: `POST /welfare-requests` (any active member), `mine`, and a
+  staff `GET /welfare-requests` (`welfare.read`); finalizer sets the request
+  status.
+
+### API
+
+| Route | Permission |
+|---|---|
+| `GET /approvals/pending?type=` | `approvals.act` (only requests you can act on) |
+| `GET /approvals/mine` | any member |
+| `GET /approvals/history?type=` | `approvals.read` |
+| `POST /approvals/:id/act` `{decision, comment}` | `approvals.act` |
+| `POST /approvals/:id/cancel` | requester or `approvals.act` |
+| `GET/POST/PATCH/DELETE /approval-workflows` | `approvals.read` / `approvals.configure` |
+| `POST /welfare-requests`, `GET /welfare-requests/mine`, `GET /:id` | member |
+| `GET /welfare-requests` | `welfare.read` |
+
+`excuses` controller migrated `@Roles` → `@RequirePermissions`.
+
+### Web
+- `components/ApprovalTimeline` (per-step status rail)
+- `/admin/approvals` — My queue (approve/reject with comment) · History · Workflows (activate/deactivate + step summary)
+- `/member/welfare` — submit + track welfare requests with the timeline
+- Navbar: admin **Approvals** item; member **Welfare** item
+
+### Verification (2026-09-09, local)
+| Check | Result |
+|---|---|
+| api build + lint | PASS |
+| api unit tests | 34/34 |
+| api integration tests | 97/97 (approvals.e2e +5) |
+| web build + lint | PASS |
+| Browser smoke (Playwright) | member submits welfare → admin approvals queue (approve L1, timeline) → workflows tab → history. 0 page errors. PASS |
+
+`approvals.e2e` covers: workflow CRUD + permission gating, single active workflow
+per type, **sequential enforcement** (L2 rejected before L1 acts; L1 can't do L2),
+reject-at-L1 is terminal, double-action → 409, pending queue scoping, absence
+excuses routed through the 2-level default.
+
+### Deferred
+- Visual workflow builder (create/edit steps in the UI — API supports it)
+- Welfare-manager role gating (currently any active member can request)
+- Correction requests not yet routed through the engine (still single-level)

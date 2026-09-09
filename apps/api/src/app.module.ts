@@ -6,6 +6,8 @@ import { AccessRolesModule } from './modules/access-roles/access-roles.module';
 import { AdminTeamModule } from './modules/admin-team/admin-team.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { LookupsModule } from './modules/lookups/lookups.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { WelfareModule } from './modules/welfare/welfare.module';
 import { RecurringServicesModule } from './modules/recurring-services/recurring-services.module';
 import { MailModule } from './modules/mail/mail.module';
 import { AppController } from './app.controller';
@@ -36,6 +38,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : 300 }]),
     PrismaModule,
     RbacModule,
+    ApprovalsModule,
     MailModule,
     RecurringServicesModule,
     AbsenceProcessingModule,
@@ -44,6 +47,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     AdminTeamModule,
     AuditModule,
     LookupsModule,
+    WelfareModule,
     MembersModule,
     MeetingsModule,
     AttendanceModule,

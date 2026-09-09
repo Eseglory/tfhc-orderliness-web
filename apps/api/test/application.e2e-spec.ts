@@ -36,6 +36,8 @@ suite('Application HTTP integration (real PostgreSQL)', () => {
     await app.get(AvailabilityService).openCurrentWeek();
     const passwordHash = await argon2.hash('E2ePassword!123');
     const a = await db.user.create({ data: { email: `admin-${run}@example.test`, passwordHash, role: 'ADMIN' } });
+    const superRole = await db.accessRole.findFirst({ where: { key: 'SUPER_ADMIN' } });
+    if (superRole) await db.userAccessRole.create({ data: { userId: a.id, roleId: superRole.id } });
     const m = await db.user.create({ data: { email: `member-${run}@example.test`, passwordHash, role: 'MEMBER', member: { create: { memberCode: `E2E-${run}`, firstName: 'Test', lastName: 'Member', phoneNumber: '08012345678' } } }, include: { member: true } });
     memberId = m.member.id;
     admin = app.get(AuthService).generateToken(a.id, a.email, a.role);

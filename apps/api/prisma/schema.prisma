@@ -220,6 +220,8 @@ model Member {
   availabilityResponses WeeklyAvailabilityResponse[]
   eventAudiences     EventAudience[]
   eventInvitations   EventInvitation[]
+  approvalRequests   ApprovalRequest[]
+  welfareRequests    WelfareRequest[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -488,22 +490,153 @@ model AttendanceRecord {
 }
 
 model AbsenceExcuse {
-  id         String       @id @default(uuid())
-  memberId   String
-  member     Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  meetingId  String
-  meeting    Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  reason     String
-  category   String
-  status     ExcuseStatus @default(PENDING)
-  reviewedBy String?
-  reviewNote String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id                String       @id @default(uuid())
+  memberId          String
+  member            Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId         String
+  meeting           Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  reason            String
+  category          String
+  status            ExcuseStatus @default(PENDING)
+  reviewedBy        String?
+  reviewNote        String?
+  approvalRequestId String?      @unique
+  approvalRequest   ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   @@unique([memberId, meetingId])
   @@index([status])
   @@map("absence_excuses")
+}
+
+// ---------------------------------------------------------------------------
+// Reusable multi-level approval engine
+// ---------------------------------------------------------------------------
+
+enum ApprovalRequestType {
+  ABSENCE
+  WELFARE_FUND
+  EXPENSE
+  DUES_ADJUSTMENT
+  GENERIC
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+enum ApproverMode {
+  ROLE
+  SPECIFIC_USER
+  ANY_WITH_PERMISSION
+}
+
+model ApprovalWorkflow {
+  id          String              @id @default(uuid())
+  key         String              @unique
+  name        String
+  description String?
+  requestType ApprovalRequestType
+  active      Boolean             @default(true)
+  isSystem    Boolean             @default(false)
+  createdById String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  steps       ApprovalStep[]
+  requests    ApprovalRequest[]
+
+  @@index([requestType, active])
+  @@map("approval_workflows")
+}
+
+model ApprovalStep {
+  id           String           @id @default(uuid())
+  workflowId   String
+  workflow     ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  order        Int
+  name         String
+  approverMode ApproverMode
+  roleKey      String?
+  approverUserId String?
+  permission   String?
+  createdAt    DateTime         @default(now())
+
+  @@unique([workflowId, order])
+  @@index([workflowId])
+  @@map("approval_steps")
+}
+
+model ApprovalRequest {
+  id                  String              @id @default(uuid())
+  workflowId          String
+  workflow            ApprovalWorkflow    @relation(fields: [workflowId], references: [id])
+  requestType         ApprovalRequestType
+  entityType          String
+  entityId            String
+  requestedByUserId   String?
+  requestedByMemberId String?
+  requestedByMember   Member?             @relation(fields: [requestedByMemberId], references: [id], onDelete: SetNull)
+  summary             String
+  amount              Float?
+  status              ApprovalStatus      @default(PENDING)
+  currentStepOrder    Int                 @default(1)
+  decidedAt           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  actions             ApprovalAction[]
+  absenceExcuse       AbsenceExcuse?
+  welfareRequest      WelfareRequest?
+
+  @@index([status, requestType])
+  @@index([entityType, entityId])
+  @@index([requestedByMemberId])
+  @@map("approval_requests")
+}
+
+model ApprovalAction {
+  id         String           @id @default(uuid())
+  requestId  String
+  request    ApprovalRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  stepOrder  Int
+  stepName   String
+  actorUserId String
+  decision   ApprovalDecision
+  comment    String?
+  createdAt  DateTime         @default(now())
+
+  @@unique([requestId, stepOrder, actorUserId])
+  @@index([requestId])
+  @@map("approval_actions")
+}
+
+model WelfareRequest {
+  id                 String          @id @default(uuid())
+  requestedByMemberId String
+  requestedByMember  Member          @relation(fields: [requestedByMemberId], references: [id], onDelete: Cascade)
+  beneficiaryName    String?
+  amount             Float
+  purpose            String
+  description        String?
+  supportingDocUrl   String?
+  status             ApprovalStatus  @default(PENDING)
+  approvalRequestId  String?         @unique
+  approvalRequest    ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
+  decidedAt          DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([status])
+  @@index([requestedByMemberId])
+  @@map("welfare_requests")
 }
 
 model CorrectionRequest {

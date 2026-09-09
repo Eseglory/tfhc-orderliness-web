@@ -22,6 +22,7 @@ const MEMBER_NAV: NavItem[] = [
   { href: '/member/check-in', label: 'Check In', icon: 'location_on' },
   { href: '/member/my-attendance', label: 'My Attendance', icon: 'calendar_today' },
   { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
+  { href: '/member/welfare', label: 'Welfare', icon: 'volunteer_activism' },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -40,8 +41,9 @@ const ADMIN_NAV: NavItem[] = [
     ],
   },
   { href: '/admin/members', label: 'Members', icon: 'group', anyOf: ['members.read'] },
+  { href: '/admin/approvals', label: 'Approvals', icon: 'fact_check', anyOf: ['approvals.act', 'approvals.read'] },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: 'emoji_events', anyOf: ['scoring.read'] },
-  { href: '/admin/follow-up', label: 'Follow-Up', icon: 'warning', anyOf: ['approvals.read', 'attendance.read'] },
+  { href: '/admin/follow-up', label: 'Follow-Up', icon: 'warning', anyOf: ['excuses.review', 'corrections.review', 'attendance.read'] },
   { href: '/admin/reports', label: 'Reports', icon: 'description', anyOf: ['reports.view'] },
   {
     href: '/admin/administration/team',
