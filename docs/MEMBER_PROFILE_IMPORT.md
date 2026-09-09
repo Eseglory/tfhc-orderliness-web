@@ -1,10 +1,48 @@
-# Member profile spreadsheet import
+# Member & dues spreadsheet import
 
 Personal details live on `Member`; authentication email remains on `User` and `ApprovedMember`. Profiles support names, phone numbers, address, gender, profession, an optional full date of birth, and a yearless birthday (`MM-DD`). A yearless birthday does not imply a birth year.
 
 Apply database migrations and regenerate Prisma before deploying the API and web changes. Members can edit their personal details at `/member/profile`; email, account roles, approval status, and membership assignments are not self-editable.
 
-To import user-provided details from a CSV exported from the approved spreadsheet:
+## Full sync — directory + monthly dues (`import:data`)
+
+Use this to load the real membership and dues history. It **creates** missing
+members (not just profile updates), links them to the Google allow-list by
+**normalised email**, and reconciles the monthly-dues matrix by matching **name →
+directory alias → email → member**.
+
+```sh
+# report only (dry run)
+DATABASE_URL=<target> yarn workspace @tfhc/api import:data
+# write
+DATABASE_URL=<target> yarn workspace @tfhc/api import:data --apply
+```
+
+Datasets: `apps/api/prisma/data/member-directory.json` and
+`apps/api/prisma/data/dues-matrix-2025.json` (transcribed from the source Google
+Sheets — see that folder's `README.md` for the fields to verify). The same shapes
+are accepted at `POST /members/import` (`members.create`) and
+`POST /finance/dues/import` (`dues.create`), and the admin UI exposes them via the
+**Import from spreadsheet** modal on `/admin/finance/dues`.
+
+Matching rules:
+- Directory rows link by lower-cased email; an existing `User` with that email is
+  attached, otherwise a new `Member` + `ApprovedMember` is created.
+- Dues rows resolve to a member via directory `aliases` (order-independent,
+  typo-tolerant); rows with no directory entry become members without a login
+  (`createUnmatchedMembers`). `newMember` rows are `NEW_MEMBER` with `waivedMonths`.
+- A month with a numeric cell → a **CONFIRMED historical `Payment`** at that
+  amount; the importer is idempotent (rebuilds a member's imported payments).
+- The reconciliation report lists matched / ambiguous / unmatched / created.
+
+Seeding a fresh local DB: `yarn workspace @tfhc/api prisma:seed` (roles, event
+types, categories, service schedules, one Super Admin — **no sample members**),
+then `import:data --apply`.
+
+## Profile-only update (`import-member-details.cjs`)
+
+Legacy script that **only refreshes profile fields** for members that already
+have a linked approved email — it never creates members or accounts.
 
 ```sh
 node scripts/import-member-details.cjs /path/to/members.csv
