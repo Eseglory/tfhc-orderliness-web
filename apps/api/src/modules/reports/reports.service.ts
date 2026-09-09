@@ -8,24 +8,27 @@ import * as ExcelJS from 'exceljs';
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
+  async filterOptions() { const [members,teams,categories] = await Promise.all([this.prisma.member.findMany({select:{id:true,firstName:true,lastName:true},orderBy:{firstName:'asc'}}),this.prisma.subTeam.findMany({select:{id:true,name:true}}),this.prisma.meetingCategory.findMany({select:{id:true,name:true}})]); return {members,teams,categories}; }
+
   async settings() { return unitPolicy(this.prisma); }
   async updateSettings(body: any) { const value = validateUnitPolicy(body); await this.prisma.systemSetting.upsert({where:{key:'unit_policy'},create:{key:'unit_policy',value:JSON.stringify(value)},update:{value:JSON.stringify(value)}}); return value; }
 
-  async getAnalytics(days: number, from?: string, to?: string) {
+  async getAnalytics(days: number, from?: string, to?: string, filters: {categoryId?:string;memberId?:string;subTeamId?:string} = {}) {
     if (![7, 30, 90, 365].includes(days)) throw new BadRequestException('Choose 7, 30, 90 or 365 days');
     const now = to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999+01:00` : to) : new Date();
     const since = from ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00+01:00` : from) : new Date(now.getTime() - days * 86400000);
     if (!Number.isFinite(now.getTime()) || !Number.isFinite(since.getTime()) || since > now) throw new BadRequestException('Choose a valid reporting date range');
+    const memberFilter = {...(filters.memberId ? {memberId:filters.memberId} : {}),...(filters.subTeamId ? {member:{subTeamId:filters.subTeamId}} : {})};
     const meetings = await this.prisma.meeting.findMany({
-      where: { startTime: { gte: since, lte: now }, status: 'CLOSED' },
-      select: { id: true, title: true, startTime: true, category: { select: { name: true } }, attendanceRecords: { select: { status: true } } },
+      where: { startTime: { gte: since, lte: now }, status: 'CLOSED', ...(filters.categoryId ? {categoryId:filters.categoryId} : {}) },
+      select: { id: true, title: true, startTime: true, category: { select: { name: true } }, attendanceRecords: { where:memberFilter, select: { status: true } } },
       orderBy: { startTime: 'asc' },
     });
-    const periodMeeting = { startTime: { gte: since, lte: now }, status: { not: 'CANCELLED' as const } };
+    const periodMeeting = { ...(filters.categoryId ? {categoryId:filters.categoryId} : {}), startTime: { gte: since, lte: now }, status: { not: 'CANCELLED' as const } };
     const [responses, excuses, members] = await Promise.all([
-      this.prisma.eventResponse.groupBy({ by: ['attending'], where: { meeting: periodMeeting }, _count: { _all: true } }),
-      this.prisma.absenceExcuse.groupBy({ by: ['status'], where: { meeting: periodMeeting }, _count: { _all: true } }),
-      this.prisma.member.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.eventResponse.groupBy({ by: ['attending'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
+      this.prisma.absenceExcuse.groupBy({ by: ['status'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
+      this.prisma.member.groupBy({ by: ['status'], where:{...(filters.memberId ? {id:filters.memberId}:{}),...(filters.subTeamId ? {subTeamId:filters.subTeamId}:{})}, _count: { _all: true } }),
     ]);
     const statuses: Record<string, number> = {};
     const categories: Record<string, { name: string; attended: number; absent: number; excused: number }> = {};

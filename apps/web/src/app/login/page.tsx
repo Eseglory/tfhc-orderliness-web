@@ -1,7 +1,7 @@
 'use client';
 import { AuthTransition } from '../../components/AuthTransition';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi, saveAuthToken } from '../../lib/api';
 import { LogoIcon } from '../../components/LogoIcon';
@@ -9,6 +9,8 @@ import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [leftVenue, setLeftVenue] = useState(false);
+  useEffect(() => { setLeftVenue(new URLSearchParams(window.location.search).get('reason') === 'left-venue'); }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -66,6 +68,7 @@ export default function LoginPage() {
         {/* Subtle decorative top accent */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary"></div>
 
+        {leftVenue && <p role="status" className="rounded-lg bg-secondary/10 p-3 text-sm">You were signed out after your location was confirmed outside the venue.</p>}
         {/* Header / Brand Section */}
         <header className="flex flex-col items-center text-center gap-stack-sm pt-stack-sm">
           <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-2 shadow-sm border border-outline-variant/20 text-primary relative p-2">

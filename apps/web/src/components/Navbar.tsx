@@ -22,6 +22,7 @@ const MEMBER_NAV: NavItem[] = [
   { href: '/member/check-in', label: 'Check In', icon: 'location_on' },
   { href: '/member/my-attendance', label: 'My Attendance', icon: 'calendar_today' },
   { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
+  { href: '/member/dues', label: 'Dues', icon: 'payments' },
   { href: '/member/welfare', label: 'Welfare', icon: 'volunteer_activism' },
 ];
 

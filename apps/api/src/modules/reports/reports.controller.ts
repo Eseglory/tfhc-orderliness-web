@@ -18,8 +18,11 @@ export class ReportsController {
   @Put('settings')
   async updateSettings(@Body() body: any) { return this.reportsService.updateSettings(body); }
 
+  @Get('filter-options')
+  async filterOptions() { return this.reportsService.filterOptions(); }
+
   @Get('analytics')
-  async analytics(@Query('days') days?: string, @Query('from') from?: string, @Query('to') to?: string) { return this.reportsService.getAnalytics(days === undefined ? 30 : Number(days), from, to); }
+  async analytics(@Query() query: {days?:string;from?:string;to?:string;categoryId?:string;memberId?:string;subTeamId?:string}) { return this.reportsService.getAnalytics(query.days === undefined ? 30 : Number(query.days), query.from, query.to, query); }
 
   @Get('dashboard')
   async getDashboard() {

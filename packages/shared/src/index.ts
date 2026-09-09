@@ -5,3 +5,4 @@ export * from './scoring';
 export * from './permissions';
 export * from './recurrence';
 export * from './event-types';
+export * from './name-match';

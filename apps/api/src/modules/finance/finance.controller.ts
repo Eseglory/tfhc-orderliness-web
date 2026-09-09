@@ -6,6 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ExpensesService } from './expenses.service';
 import { PaymentAccountsService } from './payment-accounts.service';
 import { DuesService } from './dues.service';
+import { DuesImportService } from './dues-import.service';
 import { PaymentsService } from './payments.service';
 import { FinanceService } from './finance.service';
 
@@ -17,8 +18,15 @@ export class FinanceController {
     private readonly expenses: ExpensesService,
     private readonly accounts: PaymentAccountsService,
     private readonly dues: DuesService,
+    private readonly duesImport: DuesImportService,
     private readonly payments: PaymentsService,
   ) {}
+
+  @Post('dues/import')
+  @RequirePermissions('dues.create')
+  importDuesMatrix(@Body() body: any, @CurrentUser('userId') userId: string) {
+    return this.duesImport.importMatrix(body, userId, body?.apply === true);
+  }
 
   // ---- Dashboard -----------------------------------------------------------
   @Get('dashboard')

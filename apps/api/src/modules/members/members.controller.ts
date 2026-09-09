@@ -2,16 +2,31 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateMemberDto, UpdateMemberDto, GoogleAccessDto } from './member.dto';
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ForbiddenException, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { MembersService } from './members.service';
+import { MemberImportService } from './member-import.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/rbac/permissions.guard';
+import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role, MemberStatus } from '@tfhc/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('members')
 export class MembersController {
-  constructor(private membersService: MembersService) {}
+  constructor(
+    private membersService: MembersService,
+    private memberImport: MemberImportService,
+  ) {}
+
+  @RequirePermissions('members.create')
+  @Post('import')
+  async importDirectory(
+    @Body() body: { rows: any[]; apply?: boolean },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.memberImport.importDirectory(body?.rows ?? [], userId, body?.apply === true);
+  }
 
   @Get()
   @Roles(Role.ADMIN, Role.LEADER)

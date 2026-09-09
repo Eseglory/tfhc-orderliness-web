@@ -486,3 +486,37 @@ test('sign-in displays the branded loading screen', async ({page}) => {
   release();
   await expect(page).toHaveURL(/admin$/);
 });
+
+test('admin saves scoring settings and downloads CSV', async ({page,request}) => {
+  await login(page);
+  const token = await page.evaluate(()=>localStorage.getItem('tfhc_token'));
+  const headers = {Authorization:`Bearer ${token}`};
+  const previous = await (await request.get(`${apiURL}/reports/settings`,{headers})).json();
+  try {
+    await page.goto('/admin/settings');
+    await page.getByLabel('Attendance weight (0–1)',{exact:true}).fill('0.7');
+    await page.getByLabel('Punctuality weight (0–1)',{exact:true}).fill('0.3');
+    await page.getByRole('button',{name:'Save settings',exact:true}).click();
+    await expect(page.getByRole('status')).toHaveText('Settings saved');
+    await expect(page.getByRole('heading',{name:'Members eligible for recognition'})).toBeVisible();
+    await page.goto('/admin/reports');
+    await page.getByLabel('Export format').selectOption('csv');
+    const download = page.waitForEvent('download');
+    await page.getByRole('button',{name:'Export CSV (.csv)',exact:true}).click();
+    expect((await download).suggestedFilename()).toMatch(/\.csv$/);
+  } finally { await request.put(`${apiURL}/reports/settings`,{headers,data:previous}); }
+});
+
+test('poor location accuracy does not sign a member out', async ({page}) => {
+  const token = await memberToken();
+  await page.addInitScript(t => {
+    if (!location.pathname.startsWith('/member')) return;
+    localStorage.setItem('tfhc_token',t);
+    localStorage.setItem('tfhc_venue_session',JSON.stringify({latitude:6.6697906,longitude:3.3581822,radius:100,checkedAt:Date.now()-601000}));
+    Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:(success:any)=>success({coords:{latitude:6.7,longitude:3.4,accuracy:500}})}});
+  },token);
+  await page.goto('/member',{waitUntil:'domcontentloaded'});
+  await expect(page.getByRole('link',{name:'View All',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>localStorage.getItem('tfhc_token'))).toBe(token);
+  await expect(page).toHaveURL(/member$/);
+});

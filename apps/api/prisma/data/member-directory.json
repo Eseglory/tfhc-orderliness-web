@@ -1,0 +1,205 @@
+{
+  "source": "Google Sheet 'Member directory' \u2014 transcribed 2026-09-09, verify against source",
+  "members": [
+    {
+      "firstName": "Chinenye",
+      "lastName": "Uchenna",
+      "email": "nenyeuchenna@gmail.com",
+      "phoneNumber": "08063961945",
+      "birthday": "12th November",
+      "profession": "Public Servant"
+    },
+    {
+      "firstName": "Glory",
+      "lastName": "Eseosa",
+      "email": "engreseglory@gmail.com",
+      "phoneNumber": "08034441916",
+      "birthday": "14th March",
+      "profession": "Software Engineer",
+      "aliases": [
+        "Efionayi Eseosa",
+        "Eseosa Glory"
+      ]
+    },
+    {
+      "firstName": "Nicole",
+      "lastName": "Okafor",
+      "email": "nicoleokafor0@gmail.com",
+      "phoneNumber": "08146339880",
+      "birthday": "21st September",
+      "profession": "Operations Associate"
+    },
+    {
+      "firstName": "Taiwo",
+      "lastName": "Matthew",
+      "email": "taiwomatthew577@gmail.com",
+      "phoneNumber": "07026727329",
+      "birthday": "26th December",
+      "profession": "Painting & Finishing Specialist"
+    },
+    {
+      "firstName": "Inumidun",
+      "lastName": "Ibiloye",
+      "email": "akalonuinumidun@gmail.com",
+      "phoneNumber": "08140692001",
+      "birthday": "7th September",
+      "profession": "Auditor",
+      "aliases": [
+        "Inumidun Akalonu",
+        "Akalonu Inumidun"
+      ]
+    },
+    {
+      "firstName": "Aanu",
+      "lastName": "Oyeniran",
+      "email": "aanuoyeniran@gmail.com",
+      "phoneNumber": "07066577767",
+      "birthday": "5th November",
+      "profession": "Business Strategist"
+    },
+    {
+      "firstName": "Mercy",
+      "lastName": "Ogbeide",
+      "email": "angelmercy4u@gmail.com",
+      "phoneNumber": "08052375418",
+      "birthday": "13th May",
+      "profession": "Nursing"
+    },
+    {
+      "firstName": "Victoria",
+      "lastName": "Olanrewaju",
+      "email": "olarenwajuvictoria@gmail.com",
+      "phoneNumber": "07039813929",
+      "birthday": "12th February",
+      "profession": "Corporate Relations",
+      "aliases": [
+        "Olanrewaju Victoria",
+        "Olanrenwaju Victoria"
+      ]
+    },
+    {
+      "firstName": "Comfort",
+      "lastName": "Stephen",
+      "email": "comfort.osariroya@gmail.com",
+      "phoneNumber": "08105472718",
+      "birthday": "24th March",
+      "profession": "Customer Service Representative",
+      "aliases": [
+        "Stephen Comfort"
+      ]
+    },
+    {
+      "firstName": "Patience",
+      "lastName": "Aliagwu",
+      "email": "ainabepatience@gmail.com",
+      "phoneNumber": "08166783179",
+      "birthday": "7th May",
+      "profession": "Customer Support Specialist"
+    },
+    {
+      "firstName": "Blessing",
+      "lastName": "Igbeke",
+      "email": "blessingemeterhire1015@gmail.com",
+      "phoneNumber": "07065198901",
+      "birthday": "15th October",
+      "profession": "Hospitality"
+    },
+    {
+      "firstName": "Loveth",
+      "lastName": "Ubabuike",
+      "email": "ngoziloveth41@gmail.com",
+      "phoneNumber": "08033165838",
+      "birthday": "3rd October",
+      "profession": "Teacher",
+      "aliases": [
+        "Ukabuike Loveth Ngozi",
+        "Loveth Ngozi"
+      ]
+    },
+    {
+      "firstName": "Vivian",
+      "lastName": "Amadi",
+      "email": "prudentvee@gmail.com",
+      "phoneNumber": "07032886939",
+      "birthday": "6th March",
+      "profession": "Business",
+      "aliases": [
+        "Vivian Ekwugha"
+      ]
+    },
+    {
+      "firstName": "Babajide",
+      "lastName": "Ogunsola",
+      "email": "babajyde007@gmail.com",
+      "phoneNumber": "07038564818",
+      "birthday": "7th March",
+      "profession": "Business"
+    },
+    {
+      "firstName": "Adedotun",
+      "lastName": "Akingbesote",
+      "email": "dotunakingbesote@gmail.com",
+      "phoneNumber": "08101395490",
+      "birthday": "29th November",
+      "profession": "Realtor",
+      "aliases": [
+        "Dotun Akingbesote"
+      ]
+    },
+    {
+      "firstName": "Oluwafemi",
+      "lastName": "Paseda",
+      "email": "fpaseda@yahoo.com",
+      "phoneNumber": "08062464035",
+      "birthday": "3rd March",
+      "profession": "OBC Engineer",
+      "aliases": [
+        "Paseda Oluwafemi"
+      ]
+    },
+    {
+      "firstName": "Oluwatobiloba",
+      "lastName": "Lahan",
+      "email": "lahanloba@gmail.com",
+      "phoneNumber": "07035411988",
+      "birthday": "13 September",
+      "profession": "M&E Project Engineer",
+      "aliases": [
+        "Lahan Oluwatobiloba"
+      ]
+    },
+    {
+      "firstName": "Jacob",
+      "lastName": "Onoja",
+      "email": "onojamonday123@gmail.com",
+      "phoneNumber": "08037216799",
+      "birthday": "23rd February",
+      "profession": "Travel Agent/Consultant",
+      "aliases": [
+        "Onoja Jacob"
+      ]
+    },
+    {
+      "firstName": "Daniel",
+      "lastName": "Oguamanam",
+      "email": "danoguamanam@gmail.com",
+      "phoneNumber": "09043878134",
+      "birthday": "26th November",
+      "profession": "Business"
+    },
+    {
+      "firstName": "Martha",
+      "lastName": "John-Williams",
+      "email": "mwills120@gmail.com",
+      "phoneNumber": "08060656526",
+      "birthday": "22nd April",
+      "profession": "Customer Service Executive / Realtor"
+    }
+  ],
+  "skipped": [
+    {
+      "firstName": "Somtochukwu",
+      "reason": "no email in the source sheet (cell held an =AI() placeholder)"
+    }
+  ]
+}

@@ -10,6 +10,9 @@ function Bars({ rows }: { rows: {label: string; value: number}[] }) {
   </div>)}</div>;
 }
 export function AttendanceAnalytics() {
+  const [filters,setFilters] = useState({memberId:'',subTeamId:'',categoryId:''});
+  const [options,setOptions] = useState<any>(null);
+  useEffect(()=>{fetchApi('/reports/filter-options').then(setOptions).catch(()=>{});},[]);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [days, setDays] = useState(30);
@@ -19,9 +22,9 @@ export function AttendanceAnalytics() {
   useEffect(() => {
     let current = true;
     setData(null); setError('');
-    fetchApi(`/reports/analytics?${new URLSearchParams({days:String(days),...(from ? {from} : {}),...(to ? {to} : {})})}`).then(result => {if(current) setData(result);}).catch(err => {if(current) setError(err.message);});
+    fetchApi(`/reports/analytics?${new URLSearchParams({days:String(days),...Object.fromEntries(Object.entries(filters).filter(([,v])=>v)),...(from ? {from} : {}),...(to ? {to} : {})})}`).then(result => {if(current) setData(result);}).catch(err => {if(current) setError(err.message);});
     return () => {current = false;};
-  }, [days, version, from, to]);
+  }, [days, version, from, to, filters]);
   const rate = (value: number | null) => value === null ? 'No data' : `${value}%`;
   return <section className="space-y-5" aria-label="Attendance analytics">
     <div className="flex flex-wrap gap-4 items-center justify-between">
@@ -29,6 +32,7 @@ export function AttendanceAnalytics() {
       <label>Reporting period <select className="bg-slate-800 rounded p-2" value={days} onChange={e => setDays(Number(e.target.value))}>
         {[7,30,90,365].map(n => <option key={n} value={n}>Last {n} days</option>)}
       </select></label>
+      {options && <>{(['categoryId','subTeamId','memberId'] as const).map(key => <label key={key}>{key==='categoryId'?'Category':key==='subTeamId'?'Sub-team':'Member'}<select value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})} className="block bg-slate-800 p-2 rounded"><option value="">All</option>{(key==='categoryId'?options.categories:key==='subTeamId'?options.teams:options.members).map((item:any)=><option key={item.id} value={item.id}>{item.name || `${item.firstName} ${item.lastName}`}</option>)}</select></label>)}</>}
       <label>From<input type="date" className="block bg-slate-800 rounded p-2" value={from} onChange={e=>setFrom(e.target.value)}/></label>
       <label>To<input type="date" className="block bg-slate-800 rounded p-2" value={to} onChange={e=>setTo(e.target.value)}/></label>
       <button className="underline" onClick={() => {setFrom('');setTo('');}}>Clear dates</button>

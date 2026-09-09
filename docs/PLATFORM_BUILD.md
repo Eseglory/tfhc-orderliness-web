@@ -361,3 +361,89 @@ excuses routed through the 2-level default.
 - Visual workflow builder (create/edit steps in the UI — API supports it)
 - Welfare-manager role gating (currently any active member can request)
 - Correction requests not yet routed through the engine (still single-level)
+
+---
+
+## Phase 4 — Finance
+
+### 4a — Finance backend (DONE 2026-09-09, `6b095f0`)
+
+`20260909170000_finance`: `expense_categories` (8 seeded), `expenses`
+(DRAFT→PENDING_APPROVAL→APPROVED→REJECTED / PAID / CANCELLED, links the approval
+engine — 2-level Finance→Super Admin), `payment_accounts`, `dues_periods`,
+`member_dues_assignments` (OUTSTANDING/PARTIALLY_PAID/PAID/OVERDUE/EXEMPT/WAIVED,
+adjustment audit trail), `payments` (PENDING→CONFIRMED / REJECTED). `finance`
+module: `ExpensesService`, `PaymentAccountsService`, `DuesService`
+(period + auto-assignment + summaries + exemption + audited adjustment +
+`applyPaymentDelta`), `PaymentsService` (member-declared or finance-recorded,
+nothing applied until CONFIRMED), `FinanceService.dashboard`. `/finance/*`
+(admin) + `/me/finance/*` (member).
+
+### 4b — Directory + dues spreadsheet import + finance UI (DONE 2026-09-09)
+
+**Spreadsheet sync** (the church's real data):
+- `packages/shared/src/name-match.ts` — order-independent fuzzy person-name
+  matching (`normalizeNameTokens`, `scoreNameMatch`, `bestNameMatch` with
+  ambiguity detection), `parseYearlessBirthday`. 6 unit tests.
+- `MemberImportService` (`/members/import`, `members.create`) — upserts
+  `Member` + `ApprovedMember` **linked by normalised email**; creates missing
+  members, links existing login accounts, never touches emails/roles; dry-run
+  + apply; idempotent.
+- `DuesImportService` (`/finance/dues/import`, `dues.create`) — matches each
+  dues-matrix row to a member **by name → directory alias → email**, ensures 12
+  `DuesPeriod`s for the year, writes per-member `amountDue`, and records a
+  **CONFIRMED historical `Payment`** for each paid month; `waivedMonths` for
+  mid-year joiners; `createUnmatchedMembers` for names absent from the directory;
+  full reconciliation report (matched / ambiguous / unmatched / created);
+  idempotent (clears a member's imported payments before rebuilding).
+- `apps/api/prisma/data/{member-directory,dues-matrix-2025}.json` — transcribed
+  from the source sheets (see that folder's README for fields to verify).
+- `yarn workspace @tfhc/api import:data [--apply]` — boots a headless Nest
+  context and runs both importers with a printed report.
+- Applied to the local dev DB: 19 directory members + 16 dues-only members,
+  12 periods, 420 assignments, 266 historical payments; ₦846k expected /
+  ₦590.5k collected. Name matching resolved e.g. *Efionayi Eseosa → Glory
+  Eseosa*, *Vivian Ekwugha → Vivian Amadi*, *Ukabuike Loveth Ngozi → Loveth
+  Ubabuike* via directory aliases.
+
+**Web**:
+- `/admin/finance` (dashboard: dues KPI + collection bar + trend + expense
+  categories), `/admin/finance/dues` (month tabs → per-member matrix with
+  Due/Paid/Balance/Status, exempt & adjust, **Import from spreadsheet** modal),
+  `/admin/finance/payments` (confirm / reject), `/admin/finance/expenses`
+  (create + submit + approve-via-queue + mark paid), `/admin/finance/accounts`
+  (payment account config)
+- `/member/dues` (own dues by month, payment-account details, "I've paid" →
+  declares a payment for finance to confirm), `/member/welfare` (Phase 3)
+- Navbar: **Finance** dropdown; member **Dues** + **Welfare** items
+
+**Verification (2026-09-09, local)**:
+| Check | Result |
+|---|---|
+| shared build + test | PASS · 33/33 (name-match +6) |
+| api build + lint | PASS |
+| api unit tests | 34/34 |
+| api integration tests | 106/106 (finance.e2e +5, import.e2e +2) |
+| web build + lint | PASS |
+| Browser smoke (Playwright) | finance dashboard + dues matrix (imported data) + overdue filter + payments + expenses + member dues. PASS |
+
+`import.e2e` covers: directory dry-run/apply/link-by-email/idempotency, dues
+name→member match (incl. reversed-name alias + fuzzy), historical payments,
+period-summary reflection, idempotency.
+
+**Concurrent work**: a parallel session was editing the same branch this session
+— it added CSV export + date-range analytics (`reports`), a recognition-eligibility
+engine (`scoring`), applied event-visibility to absence close-out + reminders,
+and rewrote `seed.ts` / removed `demo-seed.ts`. `seed.ts` was merged back to a
+working state (RBAC + event types + categories + service schedules + venue config
++ a bootstrap Super Admin; **no fake sample members** — real membership now comes
+from `import:data`). All folded in build- and test-green.
+
+### Remaining
+- Phase 5: real-time WebSocket chat (rooms, DMs, presence, attachments)
+- Phase 6: notification triggers + email templates + SMS/WhatsApp
+- Phase 7: Stitch-restyle the remaining dark-slate admin pages (members,
+  follow-up, reports, live-meeting, settings, absence-requests); analytics;
+  load + security acceptance pass
+- Verify the transcribed spreadsheet data against the live Google Sheet, then
+  run `import:data --apply` against production

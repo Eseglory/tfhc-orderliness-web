@@ -20,6 +20,7 @@ describe('Recurring service lifecycle with PostgreSQL', () => {
     process.env.DATABASE_URL = url; process.env.JWT_SECRET = 'e2e-local-only-secret';
     const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(MailService).useValue({ sendEmail }).compile();
     app = module.createNestApplication(); app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true })); await app.init();
+    await app.listen(0, '127.0.0.1');
     app.get(SchedulerRegistry).getCronJobs().forEach(job => job.stop());
     db = app.get(PrismaService);
     previousConfig = await db.systemSetting.findUnique({ where: { key: 'recurring_services_config' } });

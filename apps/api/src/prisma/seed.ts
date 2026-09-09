@@ -4,48 +4,58 @@ import { config } from 'dotenv';
 import { syncSystemRoles } from '../common/rbac/sync-system-roles';
 import { DEFAULT_EVENT_TYPES } from '@tfhc/shared';
 import { SERVICE_SCHEDULES } from '../modules/recurring-services/service-schedules';
-config();
 
+config();
 const prisma = new PrismaClient();
 
+/**
+ * Seeds real definitions and lookups only — RBAC roles, event types, meeting
+ * categories, the recurring service schedules + venue config, and a single
+ * bootstrap Super Admin. It does NOT create sample members or attendance;
+ * the real membership comes from `yarn workspace @tfhc/api import:data`.
+ */
 async function main() {
   const url = new URL(process.env.DATABASE_URL || 'postgresql://invalid');
   if (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1'].includes(url.hostname)) {
-    throw new Error('Demo seeding is restricted to local development databases. Use scripts/bootstrap-admin.cjs for production setup.');
+    throw new Error('Seeding is restricted to local databases. Use scripts/bootstrap-admin.cjs for production.');
   }
-  console.log('🌱 Seeding TFHC Orderliness database...');
 
-  // 1. Create Default Categories
+  await syncSystemRoles(prisma);
+
+  for (const [i, t] of DEFAULT_EVENT_TYPES.entries()) {
+    await prisma.eventType.upsert({
+      where: { key: t.key },
+      update: { isSystem: true },
+      create: {
+        key: t.key,
+        name: t.name,
+        description: t.description,
+        icon: t.icon,
+        color: t.color,
+        defaultCompulsory: t.defaultCompulsory,
+        isSystem: true,
+        sortOrder: (i + 1) * 10,
+      },
+    });
+  }
+
   const categories = [
-    { name: 'Unit Meeting', basePoints: 10, pointWeight: 1.0, description: 'Regular weekly TFHC orderliness unit meeting' },
-    { name: 'Sunday Service', basePoints: 5, pointWeight: 1.0, description: 'Sunday church worship service' },
-    { name: 'Midweek Service', basePoints: 5, pointWeight: 1.0, description: 'Wednesday midweek service' },
-    { name: 'Training', basePoints: 10, pointWeight: 1.5, description: 'Orderliness & protocol leadership training' },
-    { name: 'Special Programme', basePoints: 15, pointWeight: 2.0, description: 'Major church convention or special event' },
+    { name: 'Unit Meeting', basePoints: 10, pointWeight: 1.0, isSystem: true },
+    { name: 'Sunday Service', basePoints: 5, pointWeight: 1.0, isSystem: true },
+    { name: 'Midweek Service', basePoints: 5, pointWeight: 1.0, isSystem: true },
+    { name: 'Training', basePoints: 10, pointWeight: 1.5, isSystem: true },
+    { name: 'Special Programme', basePoints: 15, pointWeight: 2.0, isSystem: true },
   ];
-
-  for (const cat of categories) {
-    await prisma.meetingCategory.upsert({
-      where: { name: cat.name },
-      update: {},
-      create: cat,
-    });
+  for (const c of categories) {
+    await prisma.meetingCategory.upsert({ where: { name: c.name }, update: { isSystem: true }, create: c });
   }
 
-  // 2. Create Sub-Teams
-  const subTeams = ['Protocol', 'Media & IT', 'Choir', 'Ushering', 'Security'];
-  const createdSubTeams: Record<string, string> = {};
-  for (const name of subTeams) {
-    const st = await prisma.subTeam.upsert({
-      where: { name },
-      update: {},
-      create: { name, isSystem: true },
-    });
-    createdSubTeams[name] = st.id;
+  for (const name of ['Protocol', 'Media & IT', 'Choir', 'Ushering', 'Security']) {
+    await prisma.subTeam.upsert({ where: { name }, update: {}, create: { name, isSystem: true } });
   }
 
-  // 2b. Recurring service schedules + shared venue/reminder configuration so the
-  //     generator has something to produce on boot.
+  // Recurring service schedules + the shared venue/reminder config the generator
+  // needs to produce upcoming events on boot.
   await prisma.systemSetting.upsert({
     where: { key: 'recurring_services_config' },
     update: {},
@@ -82,30 +92,13 @@ async function main() {
     });
   }
 
-  // 3. Sync RBAC system roles (Super Admin / Administration / Finance) from the
-  //    shared catalogue so a freshly reset database is immediately usable.
-  await syncSystemRoles(prisma);
-  const superAdminRole = await prisma.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
-
-  for (const [i, t] of DEFAULT_EVENT_TYPES.entries()) {
-    await prisma.eventType.upsert({
-      where: { key: t.key },
-      update: { isSystem: true },
-      create: {
-        key: t.key, name: t.name, description: t.description, icon: t.icon, color: t.color,
-        defaultCompulsory: t.defaultCompulsory, isSystem: true, sortOrder: (i + 1) * 10,
-      },
-    });
-  }
-
-  // 4. Create Admin User and grant Super Admin.
-  const adminPasswordHash = await argon2.hash('Admin@123456');
+  // Bootstrap Super Admin (needed for sign-in and to attribute imports).
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@tfhc.org' },
     update: {},
     create: {
       email: 'admin@tfhc.org',
-      passwordHash: adminPasswordHash,
+      passwordHash: await argon2.hash('Admin@123456'),
       role: Role.ADMIN,
       member: {
         create: {
@@ -115,81 +108,24 @@ async function main() {
           phoneNumber: '+2348000000000',
           roleInUnit: 'Head of Unit',
           status: MemberStatus.ACTIVE,
-          subTeamId: createdSubTeams['Protocol'],
         },
       },
     },
   });
+  const superRole = await prisma.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
   await prisma.userAccessRole.upsert({
-    where: { userId_roleId: { userId: adminUser.id, roleId: superAdminRole.id } },
+    where: { userId_roleId: { userId: adminUser.id, roleId: superRole.id } },
     update: {},
-    create: { userId: adminUser.id, roleId: superAdminRole.id },
+    create: { userId: adminUser.id, roleId: superRole.id },
   });
 
-  // 4. Create Sample Members
-  const sampleMembers = [
-    { firstName: 'Emmanuel', lastName: 'Okonkwo', email: 'emmanuel@example.com', subTeam: 'Protocol' },
-    { firstName: 'Blessing', lastName: 'Adeyemi', email: 'blessing@example.com', subTeam: 'Media & IT' },
-    { firstName: 'David', lastName: 'Eze', email: 'david@example.com', subTeam: 'Choir' },
-    { firstName: 'Grace', lastName: 'Johnson', email: 'grace@example.com', subTeam: 'Ushering' },
-  ];
-
-  for (const [idx, m] of sampleMembers.entries()) {
-    const passwordHash = await argon2.hash('Member@123456');
-    await prisma.user.upsert({
-      where: { email: m.email },
-      update: {},
-      create: {
-        email: m.email,
-        passwordHash,
-        role: Role.MEMBER,
-        member: {
-          create: {
-            memberCode: `TFHC-100${idx + 1}`,
-            firstName: m.firstName,
-            lastName: m.lastName,
-            phoneNumber: `+234801111000${idx + 1}`,
-            roleInUnit: 'Member',
-            status: MemberStatus.ACTIVE,
-            subTeamId: createdSubTeams[m.subTeam],
-          },
-        },
-      },
-    });
-  }
-
-  // 5. Approve a real Google account for local member sign-in testing.
-  // Mirrors the admin flow (member record + approved email, no User row — the
-  // User is provisioned on first Google sign-in). Only usable once
-  // NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID / GOOGLE_OAUTH_CLIENT_IDS are configured.
-  const googleTestEmail = 'engreseglory@gmail.com';
-  const googleTestMember = await prisma.member.upsert({
-    where: { memberCode: 'TFHC-2001' },
-    update: {},
-    create: {
-      memberCode: 'TFHC-2001',
-      firstName: 'Eseosa',
-      lastName: 'Glory',
-      phoneNumber: '+2348020000001',
-      roleInUnit: 'Member',
-      status: MemberStatus.ACTIVE,
-      subTeamId: createdSubTeams['Media & IT'],
-    },
-  });
-  await prisma.approvedMember.upsert({
-    where: { normalizedEmail: googleTestEmail },
-    update: { status: 'ACTIVE', memberId: googleTestMember.id },
-    create: { email: googleTestEmail, normalizedEmail: googleTestEmail, status: 'ACTIVE', memberId: googleTestMember.id },
-  });
-
-  console.log('✅ Seeding completed successfully!');
+  console.log('Seeded RBAC roles, event types, categories, service schedules and a bootstrap Super Admin.');
+  console.log('Run `yarn workspace @tfhc/api import:data --apply` to load the real membership + dues.');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error(e.code || e.message || 'Seed failed');
+    process.exitCode = 1;
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

@@ -71,6 +71,8 @@ export class AbsenceProcessingJob {
         });
       }
 
+      if (absentMembers.length) await tx.memberNotification.createMany({data:absentMembers.map(member=>({memberId:member.id,type:'MISSED_SERVICE',title:'Attendance not recorded',body:`No attendance was recorded for ${meeting.title}. Submit an absence explanation or correction request if needed.`,data:{meetingId}}))});
+
       // 5. Generate Immutable Meeting Summary
       const allRecords = await tx.attendanceRecord.findMany({ where: { meetingId } });
 

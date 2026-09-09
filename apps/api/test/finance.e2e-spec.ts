@@ -33,6 +33,7 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     app = mod.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    await app.listen(0, '127.0.0.1');
     app.get(SchedulerRegistry).getCronJobs().forEach((j) => j.stop());
     db = app.get(PrismaService);
     await app.get(RbacService).syncSystemRoles();
