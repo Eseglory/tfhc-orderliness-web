@@ -439,8 +439,91 @@ working state (RBAC + event types + categories + service schedules + venue confi
 + a bootstrap Super Admin; **no fake sample members** — real membership now comes
 from `import:data`). All folded in build- and test-green.
 
+---
+
+## Phase 5 — Real-time in-app chat (DONE 2026-09-09)
+
+### Design
+- **Rooms** (`ChatRoom`): two **system** rooms seeded by migration + `seed.ts` +
+  a boot hook (`ChatService.ensureSystemRooms`) — `GENERAL` (every active
+  member) and `EXECUTIVES` (executive `roleInUnit` via `isExecutiveRole`, or any
+  staff account). Admin-managed `CUSTOM` rooms. `DIRECT` 1:1 rooms keyed by a
+  sorted `directKey` (`memberIdA:memberIdB`) so a pair always converges on one
+  room regardless of who opens it.
+- **Membership** (`ChatRoomMember`): explicit rows for CUSTOM/DIRECT; for system
+  rooms a row is lazily upserted on first access so `lastReadAt` / unread counts
+  are uniform. `role` MEMBER|MODERATOR, `leftAt` for soft-leave.
+- **Messages** (`ChatMessage`): TEXT / IMAGE / AUDIO / SYSTEM, optional
+  `replyToId`, `editedAt`, soft `deletedAt` (body + attachment nulled on delete).
+  Image attachments → `sharp` → webp data URL (≤3 MB in); voice notes stored as
+  audio data URLs (≤5 MB) — same no-bucket approach as profile photos.
+- **Authorisation** is membership-based, not RBAC, so members (who hold no
+  permissions) can chat. `messages.manage_rooms` gates room CRUD + membership;
+  `messages.moderate` gates deleting other people's messages (audit-logged as
+  `CHAT_MESSAGE_MODERATED`). Room-management endpoints also accept a room
+  MODERATOR.
+
+### API
+- `ChatModule` (`apps/api/src/modules/chat/`): `ChatService`, `ChatGateway`,
+  `ChatAttachmentsService`, `ChatController`.
+- **Gateway** — Socket.IO namespace `/chat`. JWT verified in `handleConnection`
+  (`handshake.auth.token` / bearer / query); anonymous or inactive accounts are
+  disconnected. Sockets join `user:<id>` + `room:<id>` for every accessible room.
+  Events: `ready`, `message:new`, `message:update`, `message:typing`,
+  `message:read`, `presence:update`; client emits `room:subscribe`,
+  `message:send`, `message:typing`, `message:read`, `presence:list`. In-memory
+  presence map (memberId → socket ids). `fanOut` also auto-joins a recipient's
+  live sockets to a brand-new room (e.g. a just-created DM) and pushes the
+  message, so realtime works without a page reload.
+- **REST** (history + management, all under `JwtAuthGuard`):
+  `GET /chat/rooms`, `GET /chat/unread`, `GET /chat/contacts`,
+  `POST /chat/direct/:memberId`, `GET /chat/rooms/:id[/members|/messages]`,
+  `POST /chat/rooms/:id/messages`, `POST /chat/rooms/:id/attachments` (multipart),
+  `POST /chat/rooms/:id/read`, `POST /chat/rooms/:id/leave`,
+  `PATCH|DELETE /chat/messages/:id`, and `messages.manage_rooms`-gated
+  `POST /chat/rooms`, `PATCH /chat/rooms/:id`, `POST|DELETE /chat/rooms/:id/members[/:memberId]`.
+- Schema migration `20260909180000_chat` (hand-written via `migrate diff`,
+  `migrate deploy` to dev + e2e): 3 models, 3 enums, backend-only RLS, seeds the
+  two system rooms.
+
+### Web
+- `apps/web/src/lib/chat.ts` — typed REST client, `useChatSocket` hook
+  (single authenticated socket, presence set), `useChatUnread` (nav badge poll).
+- `components/chat/` — `ChatWorkspace` (two-pane list + thread, deep-link
+  `?room=`, optimistic send with socket-echo dedup, infinite-scroll history,
+  typing indicator, read receipts, reply/edit/delete, mobile back-stack),
+  `Composer` (auto-grow textarea, image picker, `MediaRecorder` voice notes),
+  `MessageBubble`, `Avatar`, `ChatModals` (contact picker, new room, manage
+  members).
+- Routes `/member/chat` (own `AuthProvider`+`ToastProvider`, `bottomInset` clears
+  the BottomNav) and `/admin/chat`. Navbar gains **Messages** (member + admin)
+  with an unread badge; member BottomNav swaps Rankings → Messages.
+
+### Verification (2026-09-09, local)
+| Check | Result |
+|---|---|
+| shared build + test | PASS · 33/33 |
+| api build + lint | PASS |
+| api unit tests | 38/38 (chat.util +4) |
+| api integration tests | 113/113 (chat.e2e +7) |
+| web build + lint | PASS |
+| Browser smoke (Playwright, 2 live contexts) | 10/10 — system-room visibility (member cannot see Executives), General history, **bidirectional realtime delivery over the socket**, DM create + realtime room appearance, custom-room create, composer clears the BottomNav. 0 page errors. |
+
+`chat.e2e` covers: system-room visibility + access 403, unread count that clears
+on read, DM single-room convergence + outsider 403, custom-room create /
+add-member / outsider block / moderation delete + audit row / owner edit,
+history pagination (oldest-first + forward cursor), a live socket round-trip
+(`message:new` delivered) and anonymous-socket rejection.
+
+### Deferred
+- Attachment antivirus scan / CDN offload (data URLs are fine at unit scale).
+- Message search, pinned messages, reactions.
+- Push/notification bridge for messages received while offline — folds into
+  Phase 6.
+
+---
+
 ### Remaining
-- Phase 5: real-time WebSocket chat (rooms, DMs, presence, attachments)
 - Phase 6: notification triggers + email templates + SMS/WhatsApp
 - Phase 7: Stitch-restyle the remaining dark-slate admin pages (members,
   follow-up, reports, live-meeting, settings, absence-requests); analytics;

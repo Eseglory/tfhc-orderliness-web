@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { removeAuthToken } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useChatUnread } from '../lib/chat';
 import { LogoIcon } from './LogoIcon';
 
 interface NavItem {
@@ -24,6 +25,7 @@ const MEMBER_NAV: NavItem[] = [
   { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
   { href: '/member/dues', label: 'Dues', icon: 'payments' },
   { href: '/member/welfare', label: 'Welfare', icon: 'volunteer_activism' },
+  { href: '/member/chat', label: 'Messages', icon: 'forum' },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -55,6 +57,7 @@ const ADMIN_NAV: NavItem[] = [
       { href: '/admin/finance/accounts', label: 'Payment Accounts', icon: 'account_balance', anyOf: ['payments.configure'] },
     ],
   },
+  { href: '/admin/chat', label: 'Messages', icon: 'forum' },
   { href: '/admin/approvals', label: 'Approvals', icon: 'fact_check', anyOf: ['approvals.act', 'approvals.read'] },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: 'emoji_events', anyOf: ['scoring.read'] },
   { href: '/admin/follow-up', label: 'Follow-Up', icon: 'warning', anyOf: ['excuses.review', 'corrections.review', 'attendance.read'] },
@@ -80,6 +83,7 @@ export const Navbar: React.FC = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, can, canAny } = useAuth();
+  const chatUnread = useChatUnread();
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = pathname.startsWith('/admin');
@@ -179,9 +183,14 @@ export const Navbar: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <Link key={item.href} href={item.href} className={linkClass(active(item.href))}>
+                <Link key={item.href} href={item.href} className={`relative ${linkClass(active(item.href))}`}>
                   <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
                   <span className="hidden xl:inline">{item.label}</span>
+                  {item.href.endsWith('/chat') && chatUnread > 0 && (
+                    <span className="ml-0.5 rounded-full bg-error px-1.5 text-[10px] font-bold leading-4 text-on-error">
+                      {chatUnread > 99 ? '99+' : chatUnread}
+                    </span>
+                  )}
                 </Link>
               ),
             )}

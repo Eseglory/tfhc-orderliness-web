@@ -3,9 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useChatUnread } from '../lib/chat';
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
+  const unread = useChatUnread();
 
   // The member bottom nav belongs only to the member app.
   if (!pathname.startsWith('/member')) {
@@ -47,15 +49,20 @@ export const BottomNav: React.FC = () => {
         <span className="font-label-sm text-[10px] mt-1 text-outline font-semibold">Check-In</span>
       </Link>
 
-      {/* 4. Rankings */}
+      {/* 4. Messages */}
       <Link
-        href="/member/leaderboard"
-        className={`flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
-          pathname === '/member/leaderboard' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
+        href="/member/chat"
+        className={`relative flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
+          pathname.startsWith('/member/chat') ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <span className="material-symbols-outlined" data-icon="emoji_events">emoji_events</span>
-        <span className="font-label-sm text-[10px]">Rankings</span>
+        <span className="material-symbols-outlined" data-icon="forum">forum</span>
+        <span className="font-label-sm text-[10px]">Messages</span>
+        {unread > 0 && (
+          <span className="absolute top-0 right-3 min-w-[16px] rounded-full bg-error px-1 text-[9px] font-bold leading-4 text-on-error">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </Link>
 
       {/* 5. Profile */}
