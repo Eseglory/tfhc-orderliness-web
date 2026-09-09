@@ -155,7 +155,7 @@ export default function CorrectionRequestPage() {
                   />
                   <div className="flex flex-col">
                     <span className="font-body-md text-body-md font-bold text-on-surface">Arrived but couldn&apos;t scan</span>
-                    <span className="font-label-sm text-label-sm text-on-surface-variant">Technical difficulty with QR code or device.</span>
+                    <span className="font-label-sm text-label-sm text-on-surface-variant">Technical difficulty with location access or device.</span>
                   </div>
                 </label>
 

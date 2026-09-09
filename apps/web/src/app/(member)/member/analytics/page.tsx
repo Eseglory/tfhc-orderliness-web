@@ -40,9 +40,9 @@ export default function PerformanceAnalyticsPage() {
           <div className="relative w-48 h-48 flex items-center justify-center my-4">
             <svg className="w-full h-full score-ring" viewBox="0 0 100 100">
               <circle className="score-circle-bg" cx="50" cy="50" r="45"></circle>
-              <circle className="score-circle-navy" cx="50" cy="50" r="45"></circle>
+              <circle className="score-circle-navy" style={{strokeDasharray: 2*Math.PI*45, strokeDashoffset: 2*Math.PI*45*(1-Number(attRate)/100)}} cx="50" cy="50" r="45"></circle>
               <circle className="score-circle-bg" cx="50" cy="50" r="35"></circle>
-              <circle className="score-circle-gold" cx="50" cy="50" r="35"></circle>
+              <circle className="score-circle-gold" style={{strokeDasharray: 2*Math.PI*35, strokeDashoffset: 2*Math.PI*35*(1-Number(punctRate)/100)}} cx="50" cy="50" r="35"></circle>
             </svg>
             <div className="absolute flex flex-col items-center justify-center text-center">
               <span className="font-headline-lg text-headline-lg font-bold text-primary">{compositeScore}</span>
@@ -86,11 +86,11 @@ export default function PerformanceAnalyticsPage() {
           <div className="space-y-3">
             <div className="flex justify-between items-center p-2 rounded bg-surface-container-low">
               <span className="font-body-md text-body-md text-on-surface">Base Attendance</span>
-              <span className="font-label-md text-label-md font-bold text-primary">{((profile?.attendanceRate ?? 0) * 0.6).toFixed(1)} pts</span>
+              <span className="font-label-md text-label-md font-bold text-primary">{((profile?.attendanceRate ?? 0) * (profile?.scoringWeights?.attendance ?? 0.6)).toFixed(1)} pts</span>
             </div>
             <div className="flex justify-between items-center p-2 rounded bg-surface-container-low">
               <span className="font-body-md text-body-md text-on-surface">Punctuality Bonus</span>
-              <span className="font-label-md text-label-md font-bold text-secondary">{((profile?.punctualityRate ?? 0) * 0.4).toFixed(1)} pts</span>
+              <span className="font-label-md text-label-md font-bold text-secondary">{((profile?.punctualityRate ?? 0) * (profile?.scoringWeights?.punctuality ?? 0.4)).toFixed(1)} pts</span>
             </div>
 
           </div>

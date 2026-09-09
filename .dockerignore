@@ -19,3 +19,6 @@ stitch_tfhc_orderliness_tracker
 TFHC_Project_Documents
 
 **/.next-e2e
+
+**/.next-*
+.demo-e2e.config.ts

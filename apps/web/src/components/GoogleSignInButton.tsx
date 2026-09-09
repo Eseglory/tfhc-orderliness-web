@@ -17,8 +17,17 @@ declare global {
 }
 
 export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: string) => void }) {
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  // A REPLACE_-prefixed value is an unfilled placeholder (mirrors how the API
+  // treats GOOGLE_OAUTH_CLIENT_IDS) — treat it as unset rather than handing a
+  // bogus client_id to Google Identity Services.
+  const clientId = rawClientId && !rawClientId.startsWith('REPLACE_') ? rawClientId : undefined;
   const buttonRef = useRef<HTMLDivElement>(null);
+  // The GIS callback is registered once, but must always invoke the latest
+  // onCredential — binding it to the first render's closure would capture a
+  // stale "Remember Me" value on the login page.
+  const onCredentialRef = useRef(onCredential);
+  onCredentialRef.current = onCredential;
 
   const initialize = () => {
     if (!clientId || !window.google || !buttonRef.current) return;
@@ -27,7 +36,7 @@ export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: s
     buttonRef.current.innerHTML = '';
     window.google.accounts.id.initialize({
       client_id: clientId,
-      callback: (response) => onCredential(response.credential),
+      callback: (response) => onCredentialRef.current(response.credential),
     });
     window.google.accounts.id.renderButton(buttonRef.current, {
       type: 'standard',

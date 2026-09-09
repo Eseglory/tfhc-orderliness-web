@@ -1,143 +1,165 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AuthTransition } from './AuthTransition';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { removeAuthToken } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { LogoIcon } from './LogoIcon';
 
+interface NavItem {
+  href: string;
+  label: string;
+  icon: string;
+  /** Show only if the user holds at least one of these permissions. Empty = always. */
+  anyOf?: string[];
+  children?: NavItem[];
+}
+
+const MEMBER_NAV: NavItem[] = [
+  { href: '/member', label: 'Home', icon: 'home' },
+  { href: '/member/check-in', label: 'Check In', icon: 'location_on' },
+  { href: '/member/my-attendance', label: 'My Attendance', icon: 'calendar_today' },
+  { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
+];
+
+const ADMIN_NAV: NavItem[] = [
+  { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/admin/meetings', label: 'Meetings', icon: 'calendar_today', anyOf: ['events.read', 'attendance.read'] },
+  { href: '/admin/members', label: 'Members', icon: 'group', anyOf: ['members.read'] },
+  { href: '/admin/leaderboard', label: 'Leaderboard', icon: 'emoji_events', anyOf: ['scoring.read'] },
+  { href: '/admin/follow-up', label: 'Follow-Up', icon: 'warning', anyOf: ['approvals.read', 'attendance.read'] },
+  { href: '/admin/reports', label: 'Reports', icon: 'description', anyOf: ['reports.view'] },
+  {
+    href: '/admin/administration/team',
+    label: 'Administration',
+    icon: 'admin_panel_settings',
+    anyOf: ['users.read', 'roles.read', 'settings.read', 'audit.read'],
+    children: [
+      { href: '/admin/administration/team', label: 'Admin Team', icon: 'group', anyOf: ['users.read'] },
+      { href: '/admin/administration/roles', label: 'Roles & Permissions', icon: 'key', anyOf: ['roles.read'] },
+      { href: '/admin/settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read', 'scoring.configure'] },
+      { href: '/admin/audit', label: 'Audit Log', icon: 'history', anyOf: ['audit.read'] },
+    ],
+  },
+];
+
 export const Navbar: React.FC = () => {
+  const [signingOut, setSigningOut] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const { user, can, canAny } = useAuth();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = pathname.startsWith('/admin');
 
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  useEffect(() => setOpenMenu(null), [pathname]);
+
   const handleLogout = () => {
+    setSigningOut(true);
     removeAuthToken();
-    router.push('/login');
+    requestAnimationFrame(() => requestAnimationFrame(() => router.replace('/login')));
   };
+
+  // While RBAC info is still loading we optimistically show items; the backend
+  // enforces access regardless, so a brief flash of an extra link is harmless.
+  const visible = (item: NavItem) => {
+    if (!item.anyOf || item.anyOf.length === 0) return true;
+    if (!user) return true;
+    return canAny(...item.anyOf);
+  };
+
+  const items = (isAdmin ? ADMIN_NAV : MEMBER_NAV).filter(visible);
+  const active = (href: string) => (href === '/admin' || href === '/member' ? pathname === href : pathname.startsWith(href));
+
+  const linkClass = (isActive: boolean) =>
+    `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
+      isActive
+        ? 'bg-primary text-on-primary font-bold'
+        : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
+    }`;
 
   return (
     <header className="bg-surface-container-lowest border-b border-outline-variant/20 sticky top-0 z-50">
+      {signingOut && <AuthTransition action="out" />}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-3">
-            <Link href={isAdmin ? '/admin' : '/member'} className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-surface-container border border-outline-variant/30 p-1 flex items-center justify-center shadow-sm">
-                <LogoIcon alt="The Father's House Logo" className="w-full h-full object-contain" />
+        <div className="flex items-center justify-between gap-4 h-16">
+          <Link href={isAdmin ? '/admin' : '/member'} className="flex shrink-0 items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-surface-container border border-outline-variant/30 p-1 flex items-center justify-center shadow-sm">
+              <LogoIcon alt="The Father's House Logo" className="w-full h-full object-contain" />
+            </div>
+            <div className="hidden sm:block leading-tight">
+              <span className="block whitespace-nowrap text-sm font-bold tracking-tight text-primary">THE FATHER&apos;S HOUSE</span>
+              <div className="flex items-center gap-1.5">
+                <span className="whitespace-nowrap text-[11px] font-medium text-on-surface-variant">Orderliness</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container font-bold">
+                  {isAdmin ? 'Admin' : 'Member'}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold tracking-tight text-primary">THE FATHER&apos;S HOUSE</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-on-surface-variant">Orderliness Tracker</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container font-bold">
-                    {isAdmin ? 'Admin Portal' : 'Member App'}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          </div>
+            </div>
+          </Link>
 
-          <nav className="hidden md:flex items-center space-x-1 font-label-md text-label-md">
-            {isAdmin ? (
-              <>
-                <Link
-                  href="/admin"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">dashboard</span> <span className="hidden lg:inline">Dashboard</span>
+          <nav ref={menuRef} className="hidden md:flex flex-1 items-center justify-center gap-0.5 text-label-md xl:gap-1">
+            {items.map((item) =>
+              item.children ? (
+                <div key={item.href} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="true"
+                    aria-expanded={openMenu === item.href}
+                    onClick={() => setOpenMenu(openMenu === item.href ? null : item.href)}
+                    className={linkClass(pathname.startsWith('/admin/administration') || active(item.href))}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                    <span className="hidden xl:inline">{item.label}</span>
+                    <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                  </button>
+                  {openMenu === item.href && (
+                    <div className="absolute right-0 mt-1 w-56 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-lg">
+                      {item.children.filter(visible).map((child) => (
+                        <Link
+                          key={child.href}
+                          href={child.href}
+                          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${
+                            active(child.href)
+                              ? 'bg-surface-container text-primary'
+                              : 'text-on-surface hover:bg-surface-container'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">{child.icon}</span>
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link key={item.href} href={item.href} className={linkClass(active(item.href))}>
+                  <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                  <span className="hidden xl:inline">{item.label}</span>
                 </Link>
-                <Link
-                  href="/admin/meetings"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin/meetings' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> <span className="hidden lg:inline">Meetings</span>
-                </Link>
-                <Link
-                  href="/admin/members"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin/members' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">group</span> <span className="hidden lg:inline">Members</span>
-                </Link>
-                <Link
-                  href="/admin/leaderboard"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin/leaderboard' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> <span className="hidden lg:inline">Leaderboard</span>
-                </Link>
-                <Link
-                  href="/admin/follow-up"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin/follow-up' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">warning</span> <span className="hidden lg:inline">Follow-Up</span>
-                </Link>
-                <Link
-                  href="/admin/reports"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/admin/reports' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">description</span> <span className="hidden lg:inline">Reports</span>
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/member"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/member' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">home</span> <span className="hidden lg:inline">Home</span>
-                </Link>
-                <Link
-                  href="/member/check-in"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/member/check-in' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">qr_code_scanner</span> <span className="hidden lg:inline">Check In</span>
-                </Link>
-                <Link
-                  href="/member/my-attendance"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/member/my-attendance' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">calendar_today</span> <span className="hidden lg:inline">My Attendance</span>
-                </Link>
-                <Link
-                  href="/member/leaderboard"
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-semibold transition-colors ${
-                    pathname === '/member/leaderboard' ? 'bg-primary text-on-primary font-bold' : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">emoji_events</span> <span className="hidden lg:inline">Leaderboard</span>
-                </Link>
-              </>
+              ),
             )}
           </nav>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push(isAdmin ? '/member' : '/admin')}
-              className="text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors font-semibold border border-outline-variant/30"
-            >
-              <span className="hidden lg:inline">Switch to {isAdmin ? 'Member App' : 'Admin Portal'}</span>
-              <span className="lg:hidden">{isAdmin ? 'Member App' : 'Admin'}</span>
-            </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {(!user || user.role !== 'MEMBER' || isAdmin) && (
+              <button
+                onClick={() => router.push(isAdmin ? '/member' : '/admin')}
+                className="whitespace-nowrap text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors font-semibold border border-outline-variant/30"
+              >
+                {isAdmin ? 'Member app' : 'Admin portal'}
+              </button>
+            )}
             <button
               onClick={handleLogout}
               className="p-2 rounded-lg text-outline hover:text-error hover:bg-error-container/30 transition-colors flex items-center justify-center"
@@ -147,6 +169,25 @@ export const Navbar: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Secondary row: mobile admin sub-nav for Administration */}
+        {isAdmin && items.some((i) => i.children) && pathname.startsWith('/admin/administration') && (
+          <div className="flex gap-1 overflow-x-auto border-t border-outline-variant/20 py-2 md:hidden">
+            {ADMIN_NAV.find((i) => i.children)!
+              .children!.filter(visible)
+              .map((child) => (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    active(child.href) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+                  }`}
+                >
+                  {child.label}
+                </Link>
+              ))}
+          </div>
+        )}
       </div>
     </header>
   );

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { ForbiddenException, Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ScoringService } from './scoring.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -7,6 +7,9 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @Controller('scoring')
 export class ScoringController {
   constructor(private scoringService: ScoringService) {}
+
+  @Get('sub-teams')
+  async teams() { return this.scoringService.teams(); }
 
   @Get('leaderboard')
   async getLeaderboard(
@@ -24,7 +27,8 @@ export class ScoringController {
   }
 
   @Get('member/:memberId')
-  async getMemberPerformance(@Param('memberId') memberId: string) {
+  async getMemberPerformance(@Param('memberId') memberId: string, @CurrentUser() user: any) {
+    if (user.role === 'MEMBER' && user.memberId !== memberId) throw new ForbiddenException('You can only view your own performance details');
     return this.scoringService.getMemberPerformance(memberId);
   }
 

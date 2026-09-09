@@ -1,8 +1,9 @@
 'use client';
 
+import { AttendanceAnalytics } from '../../../../components/AttendanceAnalytics';
 import React, { useState } from 'react';
 import { Navbar } from '../../../../components/Navbar';
-import { API_BASE_URL } from '../../../../lib/api';
+import { API_BASE_URL, getAuthToken } from '../../../../lib/api';
 import { FileText, Download, Table, Calendar } from 'lucide-react';
 
 export default function AdminReportsPage() {
@@ -11,7 +12,7 @@ export default function AdminReportsPage() {
   const handleExportExcel = async () => {
     setDownloading(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('tfhc_token') : '';
+      const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/reports/export/excel`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -57,6 +58,8 @@ export default function AdminReportsPage() {
             <Download className="w-4 h-4" /> {downloading ? 'Generating Excel...' : 'Export Excel (.xlsx)'}
           </button>
         </div>
+
+        <AttendanceAnalytics />
 
         {/* Report Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

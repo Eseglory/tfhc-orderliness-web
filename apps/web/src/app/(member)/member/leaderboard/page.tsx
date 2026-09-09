@@ -6,13 +6,26 @@ import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberLeaderboardPage() {
+  const [period, setPeriod] = useState('month');
+  const [team, setTeam] = useState('');
+  const [teams, setTeams] = useState<any[]>([]);
+  useEffect(() => { fetchApi('/scoring/sub-teams').then(setTeams).catch(() => {}); }, []);
   const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [myMemberId, setMyMemberId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchApi('/scoring/leaderboard')
+    const now = new Date();
+    const start = period === 'month' ? new Date(now.getFullYear(), now.getMonth(), 1) : period === 'quarter' ? new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1) : new Date(now.getFullYear(), 0, 1);
+    const query = new URLSearchParams({startDate:start.toISOString(),endDate:now.toISOString(),...(team ? {subTeamId:team} : {})});
+    fetchApi(`/scoring/leaderboard?${query}`)
       .then((data) => setLeaderboardData(data.map((item: any) => ({ ...item, memberName: `${item.firstName} ${item.lastName}`, attendancePercentage: item.attendanceRate, punctualityPercentage: item.punctualityRate, rankPosition: item.rank }))))
       .catch((err) => console.error(err));
-  }, []);
+    fetchApi('/auth/me')
+      .then((me) => setMyMemberId(me?.memberId ?? null))
+      .catch((err) => console.error(err));
+  }, [period, team]);
+
+  const myRow = myMemberId ? leaderboardData.find((r) => r.memberId === myMemberId) : undefined;
 
   const empty = { memberName: '—', attendancePercentage: 0, totalPoints: 0 };
   const top1 = leaderboardData[0] || empty;
@@ -38,15 +51,9 @@ export default function MemberLeaderboardPage() {
       <main className="flex-grow pb-36 max-w-3xl mx-auto w-full">
         {/* Filters & Scope */}
         <section className="px-edge-margin py-stack-sm flex flex-col gap-stack-sm sticky top-0 bg-background/90 backdrop-blur-md z-30">
-          <div className="flex justify-between items-center gap-gutter">
-            <div className="flex bg-surface-container-low rounded-lg p-1 flex-1">
-              <button className="flex-1 py-1.5 px-3 rounded text-on-surface bg-surface shadow-[0px_2px_8px_rgba(0,0,0,0.05)] font-label-md text-label-md font-bold">This Month</button>
-              <button className="flex-1 py-1.5 px-3 rounded text-on-surface-variant font-label-md text-label-md hover:text-on-surface">Q3 2026</button>
-            </div>
-            <button className="flex items-center gap-1 bg-surface-container-low text-on-surface py-2 px-3 rounded-lg font-label-md text-label-md font-semibold">
-              All Unit Teams
-              <span className="material-symbols-outlined text-lg" data-icon="arrow_drop_down">arrow_drop_down</span>
-            </button>
+          <div className="flex gap-3">
+            <label>Period<select value={period} onChange={e=>setPeriod(e.target.value)} className="block rounded p-2"><option value="month">This Month</option><option value="quarter">This Quarter</option><option value="year">This Year</option></select></label>
+            <label>Sub-team<select value={team} onChange={e=>setTeam(e.target.value)} className="block rounded p-2"><option value="">All Unit Teams</option>{teams.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select></label>
           </div>
         </section>
 
@@ -132,28 +139,30 @@ export default function MemberLeaderboardPage() {
         </section>
       </main>
 
-      {/* Sticky User Bar matching Stitch Screen 11 */}
-      <div className="fixed bottom-20 w-full max-w-3xl left-1/2 -translate-x-1/2 px-edge-margin z-40 mb-2 pointer-events-none">
-        <div className="bg-gradient-to-r from-secondary-container to-[#ffb347] text-on-secondary-container rounded-xl p-3 flex items-center justify-between pointer-events-auto border border-secondary-fixed shadow-[0px_4px_12px_rgba(254,147,44,0.3)]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center font-bold text-secondary-container text-lg shadow-sm border-2 border-surface">
-              6
-            </div>
-            <div className="flex flex-col">
-              <span className="font-headline-sm text-headline-sm font-bold leading-tight text-white">You (Bro. Michael)</span>
-              <div className="flex items-center gap-1 font-label-sm text-label-sm opacity-90 text-white">
-                <span>91.7% Att</span>
-                <span className="w-1 h-1 rounded-full bg-white"></span>
-                <span>81.8% Punct</span>
+      {/* Sticky bar: the signed-in member's own standing */}
+      {myRow && (
+        <div className="fixed bottom-20 w-full max-w-3xl left-1/2 -translate-x-1/2 px-edge-margin z-40 mb-2 pointer-events-none">
+          <div className="bg-gradient-to-r from-secondary-container to-[#ffb347] text-on-secondary-container rounded-xl p-3 flex items-center justify-between pointer-events-auto border border-secondary-fixed shadow-[0px_4px_12px_rgba(254,147,44,0.3)]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center font-bold text-secondary-container text-lg shadow-sm border-2 border-surface">
+                {myRow.rank}
+              </div>
+              <div className="flex flex-col">
+                <span className="font-headline-sm text-headline-sm font-bold leading-tight text-white">You ({myRow.firstName} {myRow.lastName})</span>
+                <div className="flex items-center gap-1 font-label-sm text-label-sm opacity-90 text-white">
+                  <span>{myRow.attendancePercentage}% Att</span>
+                  <span className="w-1 h-1 rounded-full bg-white"></span>
+                  <span>{myRow.punctualityPercentage ?? 0}% Punct</span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col items-end text-white">
-            <span className="font-headline-sm text-headline-sm font-bold">210</span>
-            <span className="font-label-sm text-label-sm uppercase opacity-90">pts</span>
+            <div className="flex flex-col items-end text-white">
+              <span className="font-headline-sm text-headline-sm font-bold">{myRow.totalPoints}</span>
+              <span className="font-label-sm text-label-sm uppercase opacity-90">pts</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

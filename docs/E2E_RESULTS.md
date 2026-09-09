@@ -1,3 +1,5 @@
+> Historical report. Native leftovers described below were removed on 8 September 2026. See [the current PWA readiness report](PWA_READINESS_2026-09-08.md) for the latest state.
+
 # Validation report — 7 September 2026
 
 Two passes on the same day. The first (PWA hardening) is preserved below the

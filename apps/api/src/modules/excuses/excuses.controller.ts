@@ -11,13 +11,16 @@ import { Role } from '@tfhc/shared';
 export class ExcusesController {
   constructor(private excusesService: ExcusesService) {}
 
+  @Get('mine')
+  async mine(@CurrentUser('memberId') memberId?: string) { return this.excusesService.getMyExcuses(memberId); }
+
   @Post()
   async submitExcuse(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.excusesService.submitExcuse({
       memberId,
-      meetingId: body.meetingId,
-      reason: body.reason,
-      category: body.category,
+      meetingId: body?.meetingId,
+      reason: body?.reason,
+      category: body?.category,
     });
   }
 
@@ -46,9 +49,9 @@ export class ExcusesController {
   async submitCorrection(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.excusesService.submitCorrectionRequest({
       memberId,
-      meetingId: body.meetingId,
+      meetingId: body?.meetingId,
       requestedStatus: body.requestedStatus,
-      reason: body.reason,
+      reason: body?.reason,
     });
   }
 

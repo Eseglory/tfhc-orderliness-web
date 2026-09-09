@@ -1,21 +1,23 @@
+import { VenueSessionGuard } from '../components/VenueSessionGuard';
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { AuthGate } from '../components/AuthGate';
 import { BottomNav } from '../components/BottomNav';
 import { OfflineBanner } from '../components/OfflineBanner';
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const inter = localFont({
+  src: '../../public/fonts/inter-latin.woff2',
+  weight: '400 700',
   variable: '--font-inter',
   display: 'swap',
 });
 
 export const metadata: Metadata = {
   title: 'TFHC Orderliness Attendance & Participation Tracker',
-  description: 'Event-based attendance, punctuality tracking, geofencing, dynamic QR verification, and participation leaderboard platform.',
+  description: 'Event-based attendance, punctuality tracking, geofencing, and participation leaderboard platform.',
   manifest: '/manifest.json',
+  other: { 'apple-mobile-web-app-capable': 'yes' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -47,6 +49,7 @@ export default function RootLayout({
     <html lang="en" className={`light ${inter.variable}`}>
       <body className="antialiased selection:bg-secondary-container selection:text-on-secondary-container bg-background text-on-background font-body-md min-h-screen">
         <OfflineBanner />
+        <VenueSessionGuard />
         <AuthGate>{children}</AuthGate>
         <BottomNav />
         <script

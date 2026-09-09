@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // This is a pure JSON API consumed by a separately-hosted web/mobile
+  // This is a pure JSON API consumed by a separately-hosted web
   // client, not an HTML-serving origin, so the default CSP (which assumes
   // same-origin HTML) is disabled; the other helmet headers still apply.
   app.use(helmet({ contentSecurityPolicy: false }));

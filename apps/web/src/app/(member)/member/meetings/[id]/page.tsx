@@ -10,20 +10,34 @@ export default function MeetingDetailPage() {
   const params = useParams();
   const meetingId = params?.id;
 
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [meeting, setMeeting] = useState<any>(null);
 
   useEffect(() => {
     if (meetingId) {
       fetchApi(`/meetings/${meetingId}`)
         .then((data) => setMeeting(data))
-        .catch((err) => console.error(err));
+        .catch((err) => setError(err.message));
     }
   }, [meetingId]);
+
+  const respond = async (attending: boolean) => {
+    setSaving(true); setError('');
+    try {
+      const response = await fetchApi(`/meetings/${meetingId}/response`, { method: 'PUT', body: JSON.stringify({ attending }) });
+      setMeeting((current: any) => ({ ...current, eventResponses: [response] }));
+    } catch (err: any) { setError(err.message || 'Could not save your response'); }
+    finally { setSaving(false); }
+  };
+  if (!meeting) return <main className="p-6"><p role={error ? 'alert' : 'status'}>{error || 'Loading event…'}</p></main>;
+  const response = meeting.eventResponses?.[0];
+  const responseOpen = ['SCHEDULED', 'ACTIVE'].includes(meeting.status) && new Date(meeting.startTime) > new Date();
 
   const title = meeting?.title || 'Sunday Service';
   const categoryName = meeting?.category?.name || 'Spiritual Gathering';
   const locationName = meeting?.locationName || 'Church Auditorium';
-  const description = meeting?.description || 'Join us for the central weekly gathering focused on spiritual renewal and community fellowship. Ensure you check in within the designated window.';
+  const description = meeting?.description || 'No additional details provided.';
 
   const opensTime = meeting?.attendanceOpenTime ? new Date(meeting.attendanceOpenTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '8:15 AM';
   const expectedTime = meeting?.expectedArrivalTime ? new Date(meeting.expectedArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '8:45 AM';
@@ -55,12 +69,25 @@ export default function MeetingDetailPage() {
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">
               <span className="material-symbols-outlined text-[14px] mr-1">info</span>
-              Compulsory
+              {meeting.isCompulsory ? 'Compulsory' : 'Optional'}
             </span>
           </div>
           <p className="font-body-md text-body-md text-on-surface-variant mt-2">
             {description}
           </p>
+        </section>
+
+        <section className="rounded-xl bg-surface-container p-4 space-y-3">
+          <h3 className="font-bold">Will you attend?</h3>
+          <Link className="block underline" href="/member/submit-excuse">Request absence approval</Link>
+          <p>{new Date(meeting.startTime).toLocaleString()}</p>
+          <p role="status">{response ? (response.attending ? 'Your response: Attending' : 'Your response: Not attending') : 'You have not responded yet.'}</p>
+          {error && <p role="alert" className="text-error">{error}</p>}
+          {responseOpen ? <div className="flex gap-3">
+            <button disabled={saving} aria-pressed={response?.attending === true} onClick={() => respond(true)} className="rounded-lg bg-primary text-on-primary px-4 py-3">Attending</button>
+            <button disabled={saving} aria-pressed={response?.attending === false} onClick={() => respond(false)} className="rounded-lg border border-outline px-4 py-3">Not attending</button>
+          </div> : <p>Responses are closed.</p>}
+          <p className="text-sm">Your response can be changed until the event starts. Check in at the venue to record attendance.</p>
         </section>
 
         {/* Time Grid (2x2) matching Stitch Screen 7 */}
@@ -123,17 +150,14 @@ export default function MeetingDetailPage() {
                 <span className="material-symbols-outlined text-outline mt-0.5">location_on</span>
                 <div>
                   <p className="font-headline-sm text-headline-sm text-primary font-bold">{locationName}</p>
-                  <p className="font-body-md text-body-md text-on-surface-variant">Central Campus, West Wing Entrance</p>
+                  <p className="font-body-md text-body-md text-on-surface-variant">Allowed check-in radius: {meeting?.geofenceRadiusMeters ?? 100} metres</p>
                 </div>
               </div>
               <div className="w-full h-px bg-outline-variant/30 my-1"></div>
               <div className="flex items-center gap-3 bg-surface p-3 rounded-lg border border-outline-variant/20">
                 <span className="material-symbols-outlined text-on-tertiary-container">check_circle</span>
                 <p className="font-body-md text-body-md text-on-surface">
-                  You are currently <strong>45m</strong> from the venue{' '}
-                  <span className="inline-block ml-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold bg-tertiary-fixed-dim text-on-tertiary-fixed-variant">
-                    Inside Zone
-                  </span>
+                  Your distance will be measured when you allow location access during check-in.
                 </p>
               </div>
             </div>
@@ -145,10 +169,10 @@ export default function MeetingDetailPage() {
       <div className="fixed bottom-0 w-full px-edge-margin pb-safe pt-4 bg-gradient-to-t from-background via-background to-transparent z-50">
         <div className="max-w-2xl mx-auto pb-4">
           <button
-            onClick={() => router.push('/member/check-in')}
+            onClick={() => router.push(`/member/check-in?meetingId=${meetingId}`)}
             className="w-full bg-primary text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl shadow-[0px_4px_12px_rgba(0,0,0,0.15)] flex justify-center items-center gap-2 transition-transform duration-200 active:scale-[0.98] hover:bg-primary/90"
           >
-            <span className="material-symbols-outlined">qr_code_scanner</span>
+            <span className="material-symbols-outlined">location_on</span>
             Check-In Now
           </button>
         </div>

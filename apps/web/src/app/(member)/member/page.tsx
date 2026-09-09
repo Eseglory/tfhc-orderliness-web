@@ -10,6 +10,13 @@ export default function MemberDashboard() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
+  const [hasUnread, setHasUnread] = useState(false);
+  useEffect(() => {
+    const refresh = () => fetchApi('/members/me/notifications').then((items: any[]) => setHasUnread(items.some(item => item.status === 'UNREAD'))).catch(() => {});
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
   const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
 
   useEffect(() => {
@@ -34,24 +41,32 @@ export default function MemberDashboard() {
   const rankPosition = profile?.rankPosition ?? '—';
   const currentStreak = profile?.currentAttendanceStreak ?? 0;
 
+  const closesInLabel = (() => {
+    if (!activeMeeting?.attendanceCloseTime) return null;
+    const mins = Math.round((new Date(activeMeeting.attendanceCloseTime).getTime() - Date.now()) / 60000);
+    if (mins <= 0) return 'Closing now';
+    if (mins < 60) return `Closes in ${mins} min${mins === 1 ? '' : 's'}`;
+    return `Closes ${new Date(activeMeeting.attendanceCloseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  })();
+
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
       {/* TopAppBar matching Stitch Screen 1 verbatim */}
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-outline-variant bg-surface-container flex items-center justify-center p-1">
-            <LogoIcon alt="User profile photo" className="w-full h-full object-contain" />
+            <Link href="/member/profile" aria-label="My profile" className="w-full h-full">{profile?.member?.profilePhotoUrl ? <img src={profile.member.profilePhotoUrl} alt="User profile photo" className="w-full h-full rounded-full object-cover" /> : <LogoIcon alt="User profile photo" className="w-full h-full object-contain" />}</Link>
           </div>
           <div className="flex flex-col">
             <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Dashboard</span>
             <span className="font-headline-sm text-headline-sm font-bold text-primary">
-              Hello, {profile?.member ? `${profile.member.firstName}` : 'Bro. Michael'}
+              Hello{profile?.member ? `, ${profile.member.firstName}` : ''}
             </span>
           </div>
         </div>
         <Link href="/member/notifications" className="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors group">
           <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="notifications">notifications</span>
-          <span className="absolute top-2 right-2.5 w-2 h-2 bg-error rounded-full"></span>
+          {hasUnread && <span aria-label="Unread notifications" className="absolute top-2 right-2.5 w-2 h-2 bg-error rounded-full"></span>}
         </Link>
       </header>
 
@@ -64,34 +79,41 @@ export default function MemberDashboard() {
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="font-headline-sm text-headline-sm text-primary mb-1 font-bold">
-                  {activeMeeting ? activeMeeting.title : 'Saturday Unit Meeting'}{' '}
-                  <span className="font-label-sm text-label-sm text-error bg-error-container px-2 py-0.5 rounded-full ml-2 align-middle">
-                    Compulsory
-                  </span>
+                  {activeMeeting ? activeMeeting.title : 'No meeting is open right now'}{' '}
+                  {activeMeeting?.isCompulsory && (
+                    <span className="font-label-sm text-label-sm text-error bg-error-container px-2 py-0.5 rounded-full ml-2 align-middle">
+                      Compulsory
+                    </span>
+                  )}
                 </h2>
                 <p className="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
                   <span className="material-symbols-outlined text-[16px]">schedule</span>{' '}
                   {activeMeeting
-                    ? `Today, ${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
-                    : 'Today, 9:00 AM • Auditorium'}
+                    ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
+                    : 'Check back when your next service begins.'}
                 </p>
               </div>
             </div>
-            <div className="bg-surface-variant/50 rounded-lg p-3 flex items-center justify-between border border-surface-variant">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-on-tertiary-container pulse-dot"></div>
-                <span className="font-label-md text-label-md text-on-surface font-semibold">Attendance Window Open</span>
+            {activeMeeting && (
+              <div className="bg-surface-variant/50 rounded-lg p-3 flex items-center justify-between border border-surface-variant">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-on-tertiary-container pulse-dot"></div>
+                  <span className="font-label-md text-label-md text-on-surface font-semibold">Attendance Window Open</span>
+                </div>
+                {closesInLabel && (
+                  <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-1 rounded">
+                    {closesInLabel}
+                  </span>
+                )}
               </div>
-              <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-1 rounded">
-                Closes in 42 mins
-              </span>
-            </div>
+            )}
             <button
               onClick={() => router.push('/member/check-in')}
-              className="w-full bg-primary hover:opacity-90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98] font-bold"
+              disabled={!activeMeeting}
+              className="w-full bg-primary hover:opacity-90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98] font-bold disabled:opacity-50"
             >
-              <span className="material-symbols-outlined" data-icon="qr_code_scanner">qr_code_scanner</span>
-              Proceed to Check-In
+              <span className="material-symbols-outlined" data-icon="location_on">location_on</span>
+              {activeMeeting ? 'Proceed to Check-In' : 'No active check-in'}
             </button>
           </div>
         </section>
@@ -106,9 +128,6 @@ export default function MemberDashboard() {
             <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
               <div className="flex justify-between items-start w-full">
                 <span className="material-symbols-outlined text-outline">group_add</span>
-                <span className="font-label-sm text-label-sm text-on-tertiary-container bg-tertiary-fixed-dim/20 px-1.5 rounded flex items-center gap-0.5">
-                  <span className="material-symbols-outlined text-[12px]">trending_up</span> 2%
-                </span>
               </div>
               <div>
                 <div className="font-headline-md text-headline-md text-primary font-bold">{attendanceRate}%</div>
@@ -120,9 +139,6 @@ export default function MemberDashboard() {
             <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
               <div className="flex justify-between items-start w-full">
                 <span className="material-symbols-outlined text-outline">timer</span>
-                <span className="font-label-sm text-label-sm text-error bg-error-container/50 px-1.5 rounded flex items-center gap-0.5">
-                  <span className="material-symbols-outlined text-[12px]">trending_down</span> 1%
-                </span>
               </div>
               <div>
                 <div className="font-headline-md text-headline-md text-primary font-bold">{punctualityRate}%</div>
@@ -168,8 +184,8 @@ export default function MemberDashboard() {
                 <div key={m.id || idx} className="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
-                      <span className="font-label-sm text-label-sm font-bold">{new Date(m.meetingDate).getDate() || (14 + idx)}</span>
-                      <span className="font-[9px] uppercase leading-none">NOV</span>
+                      <span className="font-label-sm text-label-sm font-bold">{new Date(m.startTime || m.meetingDate).getDate()}</span>
+                      <span className="font-[9px] uppercase leading-none">{new Date(m.startTime || m.meetingDate).toLocaleString([], { month: 'short' })}</span>
                     </div>
                     <div>
                       <div className="font-label-md text-label-md text-primary font-bold">{m.title}</div>
@@ -184,38 +200,9 @@ export default function MemberDashboard() {
                 </div>
               ))
             ) : (
-              <>
-                <div className="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
-                      <span className="font-label-sm text-label-sm font-bold">14</span>
-                      <span className="font-[9px] uppercase leading-none">Nov</span>
-                    </div>
-                    <div>
-                      <div className="font-label-md text-label-md text-primary font-bold">Mid-Week Service</div>
-                      <div className="font-body-md text-[13px] text-on-surface-variant">Wed, 6:00 PM • Main Hall</div>
-                    </div>
-                  </div>
-                  <div className="font-label-sm text-label-sm bg-surface-variant text-on-surface-variant px-2 py-1 rounded font-bold">
-                    15 pts
-                  </div>
-                </div>
-                <div className="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
-                      <span className="font-label-sm text-label-sm font-bold">17</span>
-                      <span className="font-[9px] uppercase leading-none">Nov</span>
-                    </div>
-                    <div>
-                      <div className="font-label-md text-label-md text-primary font-bold">Sunday Grand Service</div>
-                      <div className="font-body-md text-[13px] text-on-surface-variant">Sun, 8:00 AM • Cathedral</div>
-                    </div>
-                  </div>
-                  <div className="font-label-sm text-label-sm bg-surface-variant text-on-surface-variant px-2 py-1 rounded font-bold">
-                    30 pts
-                  </div>
-                </div>
-              </>
+              <div className="bg-surface-container-lowest rounded-lg p-4 border border-outline-variant/30 text-center text-on-surface-variant font-body-md text-body-md">
+                No meetings scheduled yet.
+              </div>
             )}
           </div>
         </section>

@@ -6,9 +6,11 @@ import { fetchApi } from '../../../../lib/api';
 
 export default function SubmitExcusePage() {
   const router = useRouter();
+  const [requests, setRequests] = useState<any[]>([]);
+  const loadRequests = () => fetchApi('/excuses/mine').then(setRequests).catch(error => setMessage(error.message));
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState('');
-  useEffect(() => { fetchApi('/meetings').then(setMeetings).catch(error => setMessage(error.message)); }, []);
+  useEffect(() => { loadRequests(); fetchApi('/meetings').then(setMeetings).catch(error => setMessage(error.message)); }, []);
   const [reason, setReason] = useState('');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -28,9 +30,8 @@ export default function SubmitExcusePage() {
         }),
       });
       setMessage('Excuse submitted for review.');
-      setTimeout(() => {
-        router.push('/member/my-attendance');
-      }, 1500);
+      await loadRequests();
+      setDetails('');
     } catch (err: any) {
       setMessage(err.message || 'Submission failed.');
     } finally {
@@ -132,7 +133,7 @@ export default function SubmitExcusePage() {
           <div className="bg-surface-container-low rounded-lg p-stack-md flex gap-stack-sm border border-surface-variant">
             <span className="material-symbols-outlined text-secondary-container mt-0.5">info</span>
             <p className="font-body-md text-body-md text-on-surface-variant">
-              All absence excuses are subject to review by leadership. You will be notified once a decision has been made.
+              All absence excuses are subject to review by leadership. Check My absence requests below for the decision and administrator’s note.
             </p>
           </div>
 
@@ -147,6 +148,17 @@ export default function SubmitExcusePage() {
             </button>
           </div>
         </form>
+        <section className="space-y-3">
+          <h2 className="font-bold text-xl">My absence requests</h2>
+          {requests.length === 0 && <p>No requests submitted yet.</p>}
+          {requests.map(request => <article key={request.id} className="border rounded-xl p-4 space-y-2">
+            <h3 className="font-bold">{request.meeting.title}</h3>
+            <p>{new Date(request.meeting.startTime).toLocaleString()}</p>
+            <p>{request.reason}</p><p>Status: {request.status}</p>
+            {request.reviewNote && <p>Admin note: {request.reviewNote}</p>}
+          </article>)}
+          <button type="button" onClick={loadRequests} className="underline">Refresh requests</button>
+        </section>
       </main>
     </div>
   );

@@ -7,8 +7,8 @@ import { usePathname } from 'next/navigation';
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
 
-  // Hide bottom nav on admin routes or login page
-  if (pathname.startsWith('/admin') || pathname === '/login' || pathname === '/') {
+  // The member bottom nav belongs only to the member app.
+  if (!pathname.startsWith('/member')) {
     return null;
   }
 
@@ -42,7 +42,7 @@ export const BottomNav: React.FC = () => {
         className="relative flex flex-col items-center justify-center w-16 transition-transform duration-200 active:scale-90 -mt-6"
       >
         <div className="w-14 h-14 bg-secondary rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(144,77,0,0.3)] border-4 border-surface-container-lowest">
-          <span className="material-symbols-outlined text-on-secondary" data-icon="qr_code_scanner">qr_code_scanner</span>
+          <span className="material-symbols-outlined text-on-secondary" data-icon="location_on">location_on</span>
         </div>
         <span className="font-label-sm text-[10px] mt-1 text-outline font-semibold">Check-In</span>
       </Link>

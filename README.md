@@ -1,6 +1,6 @@
 # TFHC Orderliness Attendance & Participation Tracker
 
-Enterprise-grade attendance accountability, punctuality evaluation, geofencing, dynamic QR code verification, and participation leaderboard platform built with **NestJS**, **Next.js 14**, **PostgreSQL (Prisma ORM)**, and **TypeScript**.
+Enterprise-grade attendance accountability, punctuality evaluation, geofencing, dynamic QR code verification, and participation leaderboard platform built with **NestJS**, **Next.js 15**, **PostgreSQL (Prisma ORM)**, and **TypeScript**.
 
 ---
 
@@ -24,7 +24,7 @@ Enterprise-grade attendance accountability, punctuality evaluation, geofencing, 
 tfhc-orderliness-web/
 ├── apps/
 │   ├── api/                   # NestJS Backend API (Auth, Members, Meetings, Attendance, Scoring, Jobs)
-│   └── web/                   # Next.js 14 mobile-first PWA (Member App & Admin Portal)
+│   └── web/                   # Next.js 15 mobile-first PWA (Member App & Admin Portal)
 ├── packages/
 │   └── shared/                # Shared Domain Package (Haversine, Classifier, Scoring, Streaks, Enums)
 └── docs/                      # Technical Documentation & Production Readiness Quality Reports
@@ -34,19 +34,7 @@ tfhc-orderliness-web/
 (manifest, icons, service worker, offline fallback) covering both the member
 experience and the full admin portal.
 
-> **The native Expo/React Native member app (`apps/member-mobile`) has been
-> retired** in favor of this web PWA, which reached full feature parity —
-> including the one feature the mobile app had that the web client didn't
-> (weekly service availability, now at `/member/availability`) — plus the
-> admin portal the mobile app never had. Its Expo push-token registration
-> endpoint (`POST /devices/push-token`) was not ported: it only ever
-> registered tokens with no code anywhere that sent a push through them, and
-> Expo push tokens are meaningless without an Expo client anyway — that
-> `apps/api` module is now unused and can be removed in a later pass once
-> confirmed nothing still calls it. The removed app's source remains fully
-> recoverable from git history (`git log --all -- apps/member-mobile`); see
-> [docs/MEMBER_MOBILE_MIGRATION.md](docs/MEMBER_MOBILE_MIGRATION.md) for the
-> full history of this decision.
+The product is web PWA only. Native clients, native OAuth configuration, and Expo push registration have been removed. Member notifications are delivered in the web app; browser push delivery is not implemented.
 
 ---
 
@@ -113,7 +101,9 @@ endpoint are what both Docker and Render use to confirm each service booted.
 
 - 📋 [Requirements Traceability Matrix](docs/TRACEABILITY.md)
 - 🏗️ [Clean Architecture Specification](docs/ARCHITECTURE.md)
-- ✅ [Formal Production Readiness Quality Report](docs/PRODUCTION_READINESS.md)
+- [Current PWA readiness and remaining deployment setup](docs/PWA_READINESS_2026-09-08.md)
+- [Admin/member E2E and security review](docs/E2E_SECURITY_REVIEW_2026-09-08.md)
+- [Earlier Production Readiness Quality Report](docs/PRODUCTION_READINESS.md)
 
 ### Automated testing
 

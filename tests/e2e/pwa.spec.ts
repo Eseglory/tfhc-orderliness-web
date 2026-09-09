@@ -1,3 +1,4 @@
+import { offlineProxy } from './offline-proxy';
 import { test, expect } from '@playwright/test';
 
 test.describe('PWA installability', () => {
@@ -65,14 +66,19 @@ test.describe('PWA service worker', () => {
     expect(swUrl).toContain('/sw.js');
   });
 
-  test('shows a branded offline fallback instead of the browser error page', async ({ page, context }) => {
-    await page.goto('/login');
-    await page.evaluate(() => navigator.serviceWorker.ready);
-    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
-
-    await context.setOffline(true);
-    await page.goto('/member/check-in').catch(() => {});
-    await expect(page.getByText("You're offline")).toBeVisible();
-    await context.setOffline(false);
+  test('shows a branded offline fallback instead of the browser error page', async ({ page, baseURL }) => {
+    const proxy = await offlineProxy(baseURL!);
+    try {
+      await page.goto(`${proxy.origin}/login`);
+      await page.evaluate(() => navigator.serviceWorker.ready);
+      await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+      proxy.disconnect();
+      await page.goto(`${proxy.origin}/member/check-in`);
+      await expect(page.getByText("You're offline")).toBeVisible();
+      expect(await page.evaluate(async () => {
+        const response = await fetch('/logo-icon.svg');
+        return response.ok && (await response.text()).includes('<svg');
+      })).toBe(true);
+    } finally { await proxy.close(); }
   });
 });

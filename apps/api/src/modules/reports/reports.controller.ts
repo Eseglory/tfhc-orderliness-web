@@ -1,4 +1,4 @@
-import { Controller, Get, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -11,6 +11,15 @@ import { Role } from '@tfhc/shared';
 @Controller('reports')
 export class ReportsController {
   constructor(private reportsService: ReportsService) {}
+
+  @Get('settings')
+  async settings() { return this.reportsService.settings(); }
+  @Roles(Role.ADMIN)
+  @Put('settings')
+  async updateSettings(@Body() body: any) { return this.reportsService.updateSettings(body); }
+
+  @Get('analytics')
+  async analytics(@Query('days') days?: string) { return this.reportsService.getAnalytics(days === undefined ? 30 : Number(days)); }
 
   @Get('dashboard')
   async getDashboard() {

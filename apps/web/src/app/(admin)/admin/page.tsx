@@ -34,6 +34,8 @@ export default function AdminDashboardPage() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+        <Link href="/admin/settings" className="inline-block rounded-lg bg-indigo-600 text-white px-4 py-3">Scoring and follow-up settings</Link>
+        <Link href="/admin/absence-requests" className="inline-block rounded-lg bg-indigo-600 text-white px-4 py-3">Review absence requests</Link>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
           <div>
             <h1 className="text-2xl font-bold text-white">Unit Leadership Overview</h1>
@@ -73,7 +75,7 @@ export default function AdminDashboardPage() {
               href={`/admin/live-meeting/${activeMeeting.id}`}
               className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all text-xs uppercase tracking-wider flex items-center gap-2"
             >
-              Open Live Monitor & QR Screen <ArrowRight className="w-4 h-4" />
+              Open Live Attendance Monitor <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         )}

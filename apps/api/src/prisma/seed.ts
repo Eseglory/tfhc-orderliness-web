@@ -1,9 +1,16 @@
 import { PrismaClient, Role, MemberStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { config } from 'dotenv';
+import { syncSystemRoles } from '../common/rbac/sync-system-roles';
+config();
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const url = new URL(process.env.DATABASE_URL || 'postgresql://invalid');
+  if (process.env.NODE_ENV === 'production' || !['localhost', '127.0.0.1'].includes(url.hostname)) {
+    throw new Error('Demo seeding is restricted to local development databases. Use scripts/bootstrap-admin.cjs for production setup.');
+  }
   console.log('🌱 Seeding TFHC Orderliness database...');
 
   // 1. Create Default Categories
@@ -35,9 +42,14 @@ async function main() {
     createdSubTeams[name] = st.id;
   }
 
-  // 3. Create Admin User
+  // 3. Sync RBAC system roles (Super Admin / Administration / Finance) from the
+  //    shared catalogue so a freshly reset database is immediately usable.
+  await syncSystemRoles(prisma);
+  const superAdminRole = await prisma.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
+
+  // 4. Create Admin User and grant Super Admin.
   const adminPasswordHash = await argon2.hash('Admin@123456');
-  await prisma.user.upsert({
+  const adminUser = await prisma.user.upsert({
     where: { email: 'admin@tfhc.org' },
     update: {},
     create: {
@@ -56,6 +68,11 @@ async function main() {
         },
       },
     },
+  });
+  await prisma.userAccessRole.upsert({
+    where: { userId_roleId: { userId: adminUser.id, roleId: superAdminRole.id } },
+    update: {},
+    create: { userId: adminUser.id, roleId: superAdminRole.id },
   });
 
   // 4. Create Sample Members
@@ -89,6 +106,30 @@ async function main() {
       },
     });
   }
+
+  // 5. Approve a real Google account for local member sign-in testing.
+  // Mirrors the admin flow (member record + approved email, no User row — the
+  // User is provisioned on first Google sign-in). Only usable once
+  // NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID / GOOGLE_OAUTH_CLIENT_IDS are configured.
+  const googleTestEmail = 'engreseglory@gmail.com';
+  const googleTestMember = await prisma.member.upsert({
+    where: { memberCode: 'TFHC-2001' },
+    update: {},
+    create: {
+      memberCode: 'TFHC-2001',
+      firstName: 'Eseosa',
+      lastName: 'Glory',
+      phoneNumber: '+2348020000001',
+      roleInUnit: 'Member',
+      status: MemberStatus.ACTIVE,
+      subTeamId: createdSubTeams['Media & IT'],
+    },
+  });
+  await prisma.approvedMember.upsert({
+    where: { normalizedEmail: googleTestEmail },
+    update: { status: 'ACTIVE', memberId: googleTestMember.id },
+    create: { email: googleTestEmail, normalizedEmail: googleTestEmail, status: 'ACTIVE', memberId: googleTestMember.id },
+  });
 
   console.log('✅ Seeding completed successfully!');
 }

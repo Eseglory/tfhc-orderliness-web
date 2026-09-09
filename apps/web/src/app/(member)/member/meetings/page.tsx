@@ -18,6 +18,10 @@ export default function MemberMeetingsPage() {
   }, []);
 
   const filteredMeetings = meetings.filter((m) => {
+    const past = ['CLOSED', 'CANCELLED'].includes(m.status) || new Date(m.endTime || m.attendanceCloseTime) < new Date();
+    if (filter === 'Upcoming' && past) return false;
+    if (filter === 'Past' && !past) return false;
+    if (filter === 'Mandatory' && !m.isCompulsory) return false;
     if (search && !m.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (selectedCategory !== 'All' && m.category?.name !== selectedCategory) return false;
     return true;

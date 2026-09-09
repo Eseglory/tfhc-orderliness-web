@@ -1,3 +1,4 @@
+import { unitPolicy } from '../../common/unit-policy';
 import { Prisma } from '@prisma/client';
 import {
   Injectable,
@@ -14,7 +15,7 @@ import {
   AttendanceStatus,
   AttendanceMethod,
 } from '@tfhc/shared';
-import * as crypto from 'crypto';
+
 
 @Injectable()
 export class AttendanceService {
@@ -26,9 +27,9 @@ export class AttendanceService {
     latitude: number;
     longitude: number;
     gpsAccuracy?: number;
-    qrPayload?: string;
     deviceInfo?: string;
   }) {
+    if (typeof dto.meetingId !== 'string' || !dto.meetingId.trim()) throw new BadRequestException('Choose a service to check in');
     if (!dto.memberId) throw new ForbiddenException('A member profile is required');
     if (dto.gpsAccuracy !== undefined && (!Number.isFinite(dto.gpsAccuracy) || dto.gpsAccuracy < 0)) throw new BadRequestException('GPS accuracy must be a non-negative number');
     const serverTimestamp = new Date();
@@ -99,33 +100,6 @@ export class AttendanceService {
       throw new BadRequestException(geofenceResult.message);
     }
 
-    // 5. Dynamic QR Verification (Option B) is mandatory for meetings configured with a QR secret.
-    if (meeting.qrSecret) {
-      if (!dto.qrPayload) {
-        throw new BadRequestException('A current meeting QR code is required to check in');
-      }
-      try {
-        const parsed = JSON.parse(dto.qrPayload);
-        const expectedSignature = crypto
-          .createHmac('sha256', meeting.qrSecret)
-          .update(`${parsed.meetingId}:${parsed.timestamp}`)
-          .digest('hex');
-
-        if (parsed.meetingId !== meeting.id || parsed.signature !== expectedSignature) {
-          throw new BadRequestException('Invalid or forged QR code scanned');
-        }
-
-        // QR payloads are short-lived and may not be issued in the future.
-        const ageSeconds = (Date.now() - parsed.timestamp) / 1000;
-        if (!Number.isFinite(ageSeconds) || ageSeconds < -5 || ageSeconds > 60) {
-          throw new BadRequestException('Scanned QR code has expired. Please rescan current screen.');
-        }
-      } catch (err) {
-        if (err instanceof BadRequestException) throw err;
-        throw new BadRequestException('Failed to validate QR code payload format');
-      }
-    }
-
     // 6. Time-based Attendance Classification
     const status = classifyAttendanceStatus(serverTimestamp, {
       attendanceOpenTime: meeting.attendanceOpenTime,
@@ -138,7 +112,7 @@ export class AttendanceService {
     // 7. Calculate Points
     const pointsEarned = calculateAttendancePoints(
       status,
-      meeting.pointWeight * meeting.category.pointWeight
+      meeting.pointWeight * meeting.category.pointWeight, await unitPolicy(this.prisma)
     );
 
     // Serialize check-in against meeting close-out, which updates this same row.
@@ -160,7 +134,7 @@ export class AttendanceService {
         gpsLong: dto.longitude,
         gpsAccuracy: dto.gpsAccuracy,
         distanceFromVenue: geofenceResult.distanceMeters,
-        method: dto.qrPayload ? AttendanceMethod.SYSTEM_GEO_QR : AttendanceMethod.SYSTEM_GEO,
+        method: AttendanceMethod.SYSTEM_GEO,
         pointsEarned,
         deviceInfo: dto.deviceInfo,
       },
@@ -183,7 +157,10 @@ export class AttendanceService {
     meetingId: string;
     status: AttendanceStatus;
     reason: string;
+    actualArrivalTime?: string;
   }) {
+    const arrival = dto.actualArrivalTime ? new Date(dto.actualArrivalTime) : undefined;
+    if (arrival && (!Number.isFinite(arrival.getTime()) || arrival > new Date())) throw new BadRequestException('Arrival time must be a valid past time');
     if (!Object.values(AttendanceStatus).includes(dto.status)) throw new BadRequestException('Invalid attendance status');
     if (typeof dto.reason !== 'string' || !dto.reason.trim()) throw new BadRequestException('An audit reason is required');
     const meeting = await this.prisma.meeting.findUnique({
@@ -194,7 +171,7 @@ export class AttendanceService {
 
     const pointsEarned = calculateAttendancePoints(
       dto.status,
-      meeting.pointWeight * meeting.category.pointWeight
+      meeting.pointWeight * meeting.category.pointWeight, await unitPolicy(this.prisma)
     );
 
     return this.prisma.$transaction(async (tx) => {
@@ -208,6 +185,7 @@ export class AttendanceService {
           where: { id: existing.id },
           data: {
             status: dto.status,
+            ...(arrival ? {actualArrivalTime:arrival} : {}),
             method: AttendanceMethod.MANUAL,
             pointsEarned,
             isModified: true,
@@ -219,7 +197,7 @@ export class AttendanceService {
             memberId: dto.memberId,
             meetingId: dto.meetingId,
             expectedArrivalTime: meeting.expectedArrivalTime,
-            actualArrivalTime: new Date(),
+            actualArrivalTime: arrival ?? new Date(),
             status: dto.status,
             method: AttendanceMethod.MANUAL,
             pointsEarned,

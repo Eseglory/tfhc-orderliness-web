@@ -5,8 +5,7 @@ import { useParams } from 'next/navigation';
 import { Navbar } from '../../../../../components/Navbar';
 import { StatusBadge } from '../../../../../components/StatusBadge';
 import { fetchApi } from '../../../../../lib/api';
-import QRCode from 'qrcode.react';
-import { RefreshCw, Users, CheckCircle2, Clock, QrCode, Plus } from 'lucide-react';
+import { RefreshCw, Users, CheckCircle2, Clock, Plus } from 'lucide-react';
 
 export default function AdminLiveMeetingPage() {
   const params = useParams();
@@ -14,13 +13,13 @@ export default function AdminLiveMeetingPage() {
 
   const [meeting, setMeeting] = useState<any>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [qrToken, setQrToken] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Manual Attendance Modal
   const [showManualModal, setShowManualModal] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [manualArrival, setManualArrival] = useState('');
   const [manualStatus, setManualStatus] = useState('ON_TIME');
   const [manualReason, setManualReason] = useState('Dead phone battery / No smartphone');
   const [submittingManual, setSubmittingManual] = useState(false);
@@ -41,16 +40,6 @@ export default function AdminLiveMeetingPage() {
     }
   }, [meetingId]);
 
-  const fetchQrToken = useCallback(async () => {
-    if (!meetingId) return;
-    try {
-      const data = await fetchApi(`/meetings/${meetingId}/qr-code`);
-      setQrToken(data);
-    } catch (err) {
-      console.error(err);
-    }
-  }, [meetingId]);
-
   const loadMembers = async () => {
     try {
       const data = await fetchApi('/members');
@@ -63,18 +52,16 @@ export default function AdminLiveMeetingPage() {
 
   useEffect(() => {
     loadData();
-    fetchQrToken();
     loadMembers();
 
-    // Auto-refresh stats and QR code every 15 seconds
+    // Auto-refresh attendance stats every 15 seconds
     const interval = setInterval(() => {
       loadData();
-      fetchQrToken();
-    }, 15000);
+      }, 15000);
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMembers runs once on mount by design
-  }, [meetingId, loadData, fetchQrToken]);
+  }, [meetingId, loadData]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +76,7 @@ export default function AdminLiveMeetingPage() {
           meetingId,
           status: manualStatus,
           reason: manualReason,
+          ...(manualArrival ? {actualArrivalTime:new Date(manualArrival).toISOString()} : {}),
         }),
       });
 
@@ -112,6 +100,12 @@ export default function AdminLiveMeetingPage() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+          <section className="p-4 rounded-xl bg-slate-900 border border-slate-800 my-4">
+            <h2 className="font-bold">Attendance responses</h2>
+            <p>{meeting?.eventResponses?.filter((r: any) => r.attending).length ?? 0} attending · {meeting?.eventResponses?.filter((r: any) => !r.attending).length ?? 0} not attending</p>
+            <ul>{meeting?.eventResponses?.map((r: any) => <li key={r.id}>{r.member.firstName} {r.member.lastName}: {r.attending ? 'Attending' : 'Not attending'}</li>)}</ul>
+          </section>
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
           <div>
@@ -128,8 +122,7 @@ export default function AdminLiveMeetingPage() {
             <button
               onClick={() => {
                 loadData();
-                fetchQrToken();
-              }}
+                          }}
               className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
               title="Refresh Live Data"
             >
@@ -144,6 +137,11 @@ export default function AdminLiveMeetingPage() {
           </div>
         </div>
 
+        <section className="flex flex-wrap gap-6 rounded-xl bg-slate-900 p-5">
+          <p>Expected: <strong>{meeting?.expectedCount ?? 0}</strong></p>
+          <p>Not yet present: <strong>{Math.max(0,(meeting?.expectedCount ?? 0)-attendanceRecords.filter(r=>!['ABSENT'].includes(r.status)).length)}</strong></p>
+          <p>Attendance so far: <strong>{meeting?.expectedCount ? (totalPresent/meeting.expectedCount*100).toFixed(1) : '0'}%</strong></p>
+        </section>
         {/* Real-Time Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
@@ -177,29 +175,15 @@ export default function AdminLiveMeetingPage() {
           </div>
         </div>
 
-        {/* Live QR Window & Live Feed Grid */}
+        {/* Location guidance and live attendance */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Dynamic QR Code Screen Display */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center space-y-4 flex flex-col items-center justify-center">
-            <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm uppercase tracking-wider">
-              <QrCode className="w-5 h-5" /> Dynamic Venue QR Code
-            </div>
-
-            {qrToken ? (
-              <div className="bg-white p-4 rounded-2xl shadow-xl inline-block">
-                <QRCode value={qrToken.qrPayload} size={220} level="H" />
-              </div>
-            ) : (
-              <div className="w-56 h-56 bg-slate-800 rounded-2xl flex items-center justify-center text-xs text-slate-500">
-                Generating signed QR...
-              </div>
-            )}
-
-            <p className="text-xs text-slate-400 max-w-xs">
-              Project this QR Code on the auditorium screen. Members scan using their mobile app to verify attendance.
-            </p>
-            <span className="text-[10px] text-slate-500">Auto-refreshes cryptographically every 15s</span>
-          </div>
+          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+            <h2 className="text-lg font-bold">Location check-in</h2>
+            <p>Members open Check in and allow location access at the venue.</p>
+            <p>{meeting?.locationName || 'Loading venue…'}</p>
+            <p className="text-sm text-slate-400">Coordinates: {meeting?.latitude ?? '—'}, {meeting?.longitude ?? '—'}<br />Allowed distance: {meeting?.geofenceRadiusMeters ?? '—'} metres</p>
+            <p className="text-sm text-slate-400">Attendance must be active and within the check-in window. Use manual attendance with a reason if a member cannot obtain an accurate location.</p>
+          </section>
 
           {/* Live Attendance Feed */}
           <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
@@ -274,7 +258,8 @@ export default function AdminLiveMeetingPage() {
                   </select>
                 </div>
 
-                <div>
+                <label className="block">Actual arrival time (optional)<input className="block bg-slate-800 p-2 rounded" type="datetime-local" value={manualArrival} onChange={e=>setManualArrival(e.target.value)}/></label>
+                  <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Attendance Status</label>
                   <select
                     value={manualStatus}

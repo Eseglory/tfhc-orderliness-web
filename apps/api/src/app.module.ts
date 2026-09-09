@@ -1,6 +1,12 @@
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ResponseSecretsInterceptor } from './common/interceptors/response-secrets.interceptor';
 import { Module } from '@nestjs/common';
+import { RbacModule } from './common/rbac/rbac.module';
+import { AccessRolesModule } from './modules/access-roles/access-roles.module';
+import { AdminTeamModule } from './modules/admin-team/admin-team.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { RecurringServicesModule } from './modules/recurring-services/recurring-services.module';
+import { MailModule } from './modules/mail/mail.module';
 import { AppController } from './app.controller';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -14,7 +20,6 @@ import { ScoringModule } from './modules/scoring/scoring.module';
 import { ExcusesModule } from './modules/excuses/excuses.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { ReportsModule } from './modules/reports/reports.module';
-import { DevicesModule } from './modules/devices/devices.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
 import { AbsenceProcessingModule } from './jobs/absence-processing.module';
 import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
@@ -27,10 +32,16 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     // much stricter per-route @Throttle() limit against credential guessing.
     // Relaxed only for automated test runs, which reuse one server process
     // across far more requests per minute than any real user would issue.
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : 300 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : 300 }]),
     PrismaModule,
+    RbacModule,
+    MailModule,
+    RecurringServicesModule,
     AbsenceProcessingModule,
     AuthModule,
+    AccessRolesModule,
+    AdminTeamModule,
+    AuditModule,
     MembersModule,
     MeetingsModule,
     AttendanceModule,
@@ -38,7 +49,6 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     ExcusesModule,
     AlertsModule,
     ReportsModule,
-    DevicesModule,
     AvailabilityModule,
   ],
   controllers: [AppController],

@@ -1,3 +1,4 @@
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { MeetingsService } from './meetings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,6 +22,9 @@ export class MeetingsController {
     return this.meetingsService.createCategory(body);
   }
 
+  @Get('attendance-open')
+  async openAttendance() { return this.meetingsService.findOpenAttendanceMeetings(); }
+
   @Get('active')
   async getActiveMeeting() {
     return this.meetingsService.findActiveMeeting();
@@ -35,14 +39,13 @@ export class MeetingsController {
   }
 
   @Get(':id')
-  async getOne(@Param('id') id: string) {
-    return this.meetingsService.findOne(id);
+  async getOne(@Param('id') id: string, @CurrentUser('role') role: string, @CurrentUser('memberId') memberId?: string) {
+    return this.meetingsService.findOne(id, role === Role.ADMIN || role === Role.LEADER, memberId);
   }
 
-  @Roles(Role.ADMIN, Role.LEADER)
-  @Get(':id/qr-code')
-  async getQrCode(@Param('id') id: string) {
-    return this.meetingsService.generateDynamicQrCode(id);
+  @Put(':id/response')
+  async respond(@Param('id') id: string, @CurrentUser('memberId') memberId: string | undefined, @Body() body: { attending?: boolean }) {
+    return this.meetingsService.respond(id, memberId, body?.attending);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)

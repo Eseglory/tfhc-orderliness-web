@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { ProfilePhoto } from '../../../../components/ProfilePhoto';
 import { Navbar } from '../../../../components/Navbar';
 import { fetchApi } from '../../../../lib/api';
 import { Plus, Users, Search, Filter, ShieldCheck } from 'lucide-react';
@@ -19,25 +20,38 @@ export default function AdminMembersPage() {
   // Form states
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [accessMember, setAccessMember] = useState<any>(null);
+  const [accessEmail, setAccessEmail] = useState('');
+  const [accessStatus, setAccessStatus] = useState('ACTIVE');
+  const [accessError, setAccessError] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [gender, setGender] = useState('Male');
   const [subTeamId, setSubTeamId] = useState('');
   const [roleInUnit, setRoleInUnit] = useState('Member');
   const [subTeamName, setSubTeamName] = useState('');
+  const [editingMember, setEditingMember] = useState<any>(null);
+  const [status, setStatus] = useState('ACTIVE');
+  const [details, setDetails] = useState<Record<string, string>>({});
+  const [pageError, setPageError] = useState('');
+  const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [memData, stData] = await Promise.all([
+      const [memData, stData, user] = await Promise.all([
         fetchApi('/members'),
         fetchApi('/members/sub-teams'),
+        fetchApi('/auth/me'),
       ]);
+      setIsAdmin(user.role === 'ADMIN');
       setMembers(memData);
       setSubTeams(stData);
-      if (stData.length > 0) setSubTeamId(stData[0].id);
+      setPageError('');
     } catch (err) {
-      console.error(err);
+      setPageError(err instanceof Error ? err.message : 'Could not load members.');
     } finally {
       setLoading(false);
     }
@@ -49,16 +63,18 @@ export default function AdminMembersPage() {
 
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
+    setSubmitting(true); setFormError('');
     try {
-      await fetchApi('/members', {
-        method: 'POST',
+      await fetchApi(editingMember ? `/members/${editingMember.id}` : '/members', {
+        method: editingMember ? 'PUT' : 'POST',
         body: JSON.stringify({
+          ...(editingMember ? { ...details, status } : {}),
           firstName,
           lastName,
           phoneNumber,
+          email: !editingMember && isAdmin && email.trim() ? email.trim() : undefined,
           gender,
-          subTeamId: subTeamId || undefined,
+          subTeamId: subTeamId || (editingMember ? null : undefined),
           roleInUnit,
         }),
       });
@@ -67,9 +83,10 @@ export default function AdminMembersPage() {
       setFirstName('');
       setLastName('');
       setPhoneNumber('');
+      setEmail('');
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to create member');
+      setFormError(err.message || 'Failed to save member');
     } finally {
       setSubmitting(false);
     }
@@ -99,7 +116,8 @@ export default function AdminMembersPage() {
     const matchesSearch =
       m.firstName.toLowerCase().includes(search.toLowerCase()) ||
       m.lastName.toLowerCase().includes(search.toLowerCase()) ||
-      m.memberCode.toLowerCase().includes(search.toLowerCase());
+      m.memberCode.toLowerCase().includes(search.toLowerCase()) ||
+      (m.approvedMember?.email || m.user?.email || '').toLowerCase().includes(search.toLowerCase());
     const matchesSubTeam = selectedSubTeam ? m.subTeamId === selectedSubTeam : true;
     return matchesSearch && matchesSubTeam;
   });
@@ -123,7 +141,7 @@ export default function AdminMembersPage() {
               + Add Sub-Team
             </button>
             <button
-              onClick={() => setShowMemberModal(true)}
+              onClick={() => { setEditingMember(null); setFirstName(''); setLastName(''); setPhoneNumber(''); setEmail(''); setSubTeamId(''); setRoleInUnit('Member'); setGender(''); setFormError(''); setShowMemberModal(true); }}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/20"
             >
               <Plus className="w-4 h-4" /> Add New Member
@@ -131,6 +149,7 @@ export default function AdminMembersPage() {
           </div>
         </div>
 
+        {pageError && <p role="alert" className="text-red-300">{pageError}</p>}
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl">
           <div className="relative flex-1">
@@ -139,7 +158,7 @@ export default function AdminMembersPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by member name or code (TFHC-001)..."
+              placeholder="Search by member name, email or code..."
               className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -170,6 +189,8 @@ export default function AdminMembersPage() {
                   <th className="px-6 py-4">Sub-Team</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Actions</th>
+                  {isAdmin && <th className="px-6 py-4">Google access</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -178,7 +199,9 @@ export default function AdminMembersPage() {
                     <tr key={m.id} className="hover:bg-slate-800/30">
                       <td className="px-6 py-4 font-mono font-bold text-indigo-400">{m.memberCode}</td>
                       <td className="px-6 py-4 font-semibold text-white">
+                        {m.profilePhotoUrl && <img src={m.profilePhotoUrl} alt={`${m.firstName} profile picture`} className="w-10 h-10 rounded-full object-cover mb-1" />}
                         {m.firstName} {m.lastName}
+                        <div className="text-xs text-slate-400">{m.approvedMember?.email || m.user?.email}</div>
                       </td>
                       <td className="px-6 py-4 text-slate-400">{m.phoneNumber}</td>
                       <td className="px-6 py-4 text-slate-300">{m.subTeam?.name || 'Unassigned'}</td>
@@ -188,11 +211,25 @@ export default function AdminMembersPage() {
                           {m.status}
                         </span>
                       </td>
+                      <td className="px-6 py-4"><button className="text-indigo-300 underline" aria-label={`Edit ${m.firstName} ${m.lastName}`} onClick={() => {
+                        setEditingMember(m); setFirstName(m.firstName); setLastName(m.lastName); setPhoneNumber(m.phoneNumber);
+                        setEmail(m.approvedMember?.email || m.user?.email || ''); setGender(m.gender || ''); setSubTeamId(m.subTeamId || ''); setRoleInUnit(m.roleInUnit); setStatus(m.status);
+                        setDetails(Object.fromEntries(['middleName', 'preferredName', 'alternatePhoneNumber', 'address', 'profession', 'birthday', 'dateOfBirth'].map(k => [k, k === 'dateOfBirth' ? m[k]?.slice(0, 10) || '' : m[k] || ''])));
+                        setFormError(''); setShowMemberModal(true);
+                      }}>Edit</button></td>
+                      {isAdmin && <td className="px-6 py-4">
+                        <button className="text-indigo-300 underline text-left" onClick={() => {
+                          setAccessMember(m); setAccessEmail(m.approvedMember?.email || m.user?.email || '');
+                          setAccessStatus(m.approvedMember?.status || 'ACTIVE'); setAccessError('');
+                        }} aria-label={`Manage Google access for ${m.firstName} ${m.lastName}`}>
+                          {m.approvedMember?.status || 'Not approved'}
+                        </button>
+                      </td>}
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                    <td colSpan={isAdmin ? 8 : 7} className="px-6 py-12 text-center text-slate-500">
                       {loading ? 'Loading member profiles...' : 'No matching member records found.'}
                     </td>
                   </tr>
@@ -202,13 +239,40 @@ export default function AdminMembersPage() {
           </div>
         </div>
 
+        {accessMember && <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
+          <form role="dialog" aria-modal="true" aria-labelledby="google-access-title" className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4" onSubmit={async e => {
+            e.preventDefault(); setSubmitting(true); setAccessError('');
+            try {
+              await fetchApi(`/members/${accessMember.id}/google-access`, { method: 'PUT', body: JSON.stringify({ email: accessEmail, status: accessStatus }) });
+              setAccessMember(null); await loadData();
+            } catch (error: any) { setAccessError(error.message); }
+            finally { setSubmitting(false); }
+          }}>
+            <h2 id="google-access-title" className="text-xl font-bold">Google sign-in access</h2>
+            <p>{accessMember.firstName} {accessMember.lastName}</p>
+            <label className="block" htmlFor="access-email">Google email</label>
+            <input id="access-email" type="email" required value={accessEmail} readOnly={Boolean(accessMember.user || accessMember.approvedMember)} onChange={e => setAccessEmail(e.target.value)} className="w-full rounded p-3 bg-slate-800" />
+            <label className="block" htmlFor="access-status">Access status</label>
+            <select id="access-status" value={accessStatus} onChange={e => setAccessStatus(e.target.value)} className="w-full rounded p-3 bg-slate-800">
+              <option value="ACTIVE">Approved</option><option value="REVOKED">Revoked</option>
+            </select>
+            {accessError && <p role="alert" className="text-red-300">{accessError}</p>}
+            <div className="flex justify-end gap-4">
+              <button type="button" disabled={submitting} onClick={() => setAccessMember(null)}>Cancel</button>
+              <button disabled={submitting} className="bg-indigo-600 rounded px-4 py-2">{submitting ? 'Saving...' : 'Save Google access'}</button>
+            </div>
+          </form>
+        </div>}
+
         {/* Create Member Modal */}
         {showMemberModal && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4">
-              <h2 className="text-xl font-bold text-white">Add New Unit Member</h2>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
+              <h2 className="text-xl font-bold text-white">{editingMember ? 'Edit Member' : 'Add New Unit Member'}</h2>
+              {editingMember && <ProfilePhoto value={editingMember.profilePhotoUrl} endpoint={`/members/${editingMember.id}/photo`} onChange={url => { setEditingMember((m: any) => ({ ...m, profilePhotoUrl: url })); void loadData(); }} />}
 
               <form onSubmit={handleCreateMember} className="space-y-4">
+                {formError && <p role="alert" className="text-red-300">{formError}</p>}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="firstName">First Name</label>
@@ -244,6 +308,12 @@ export default function AdminMembersPage() {
                   />
                 </div>
 
+                {isAdmin && <div>
+                  <label htmlFor="member-google-email" className="block text-xs font-semibold text-slate-400 mb-1">Google email</label>
+                  <input id="member-google-email" type="email" required={!editingMember} readOnly={Boolean(editingMember)} value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                  <p className="text-xs text-slate-400 mt-1">Email is the fixed sign-in identifier. New members are approved to use this Google account.</p>
+                </div>}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 mb-1">Sub-Team</label>
@@ -252,6 +322,7 @@ export default function AdminMembersPage() {
                       onChange={(e) => setSubTeamId(e.target.value)}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                     >
+                      <option value="">Unassigned</option>
                       {subTeams.map((st) => (
                         <option key={st.id} value={st.id}>
                           {st.name}
@@ -270,6 +341,12 @@ export default function AdminMembersPage() {
                   </div>
                 </div>
 
+                <label className="block text-sm">Gender<input value={gender} onChange={e => setGender(e.target.value)} className="block w-full bg-slate-800 rounded p-2" /></label>
+                {editingMember && <>
+                  {Object.entries({ middleName: 'Middle name', preferredName: 'Preferred name', alternatePhoneNumber: 'Alternate phone', address: 'Address', profession: 'Profession', birthday: 'Birthday (MM-DD)', dateOfBirth: 'Date of birth' }).map(([key, label]) => <label key={key} className="block text-sm">{label}<input type={key === 'dateOfBirth' ? 'date' : 'text'} value={details[key] || ''} onChange={e => setDetails(d => ({ ...d, [key]: e.target.value }))} className="block w-full bg-slate-800 rounded p-2" /></label>)}
+                  <label className="block text-sm">Member status<select value={status} onChange={e => setStatus(e.target.value)} className="block w-full bg-slate-800 rounded p-2">{['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'SUSPENDED', 'EXEMPT', 'NEW_MEMBER'].map(v => <option key={v}>{v}</option>)}</select></label>
+                  <p className="text-xs text-slate-400">Only active members can sign in. Deactivation preserves their history.</p>
+                </>}
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
                   <button
                     type="button"

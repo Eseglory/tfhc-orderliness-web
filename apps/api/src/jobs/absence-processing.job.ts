@@ -9,7 +9,7 @@ export class AbsenceProcessingJob {
 
   constructor(private prisma: PrismaService) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_MINUTE, { disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
   async processClosedMeetings() {
     const now = new Date();
 
@@ -40,9 +40,11 @@ export class AbsenceProcessingJob {
 
       if (updated.count === 0) return; // Already processed by another worker
 
-      // 2. Query all ACTIVE members
+      const meeting = await tx.meeting.findUnique({ where: { id: meetingId } });
+
+      // Optional parallel services only expect committed members and actual attendees.
       const activeMembers = await tx.member.findMany({
-        where: { status: MemberStatus.ACTIVE },
+        where: { status: MemberStatus.ACTIVE, ...(meeting.isCompulsory ? {} : { OR: [{ eventResponses: { some: { meetingId, attending: true } } }, { AND: [{ eventResponses: { none: { meetingId } } }, { serviceCommitments: { some: { meetingId, status: 'COMMITTED' } } }] }, { attendanceRecords: { some: { meetingId } } }] }) },
       });
 
       // 3. Query members who already checked in or submitted an approved excuse
@@ -50,8 +52,6 @@ export class AbsenceProcessingJob {
         where: { meetingId },
       });
       const checkedInMemberIds = new Set(existingRecords.map((r) => r.memberId));
-
-      const meeting = await tx.meeting.findUnique({ where: { id: meetingId } });
 
       // 4. Batch insert ABSENT records for missing active members
       const absentMembers = activeMembers.filter((m) => !checkedInMemberIds.has(m.id));
@@ -71,7 +71,7 @@ export class AbsenceProcessingJob {
       // 5. Generate Immutable Meeting Summary
       const allRecords = await tx.attendanceRecord.findMany({ where: { meetingId } });
 
-      const expectedCount = activeMembers.length;
+      const expectedCount = allRecords.filter(r => !['EXCUSED', 'EXEMPT'].includes(r.status)).length;
       const earlyCount = allRecords.filter((r) => r.status === AttendanceStatus.EARLY).length;
       const onTimeCount = allRecords.filter((r) => r.status === AttendanceStatus.ON_TIME).length;
       const gracePeriodCount = allRecords.filter((r) => r.status === AttendanceStatus.GRACE_PERIOD).length;

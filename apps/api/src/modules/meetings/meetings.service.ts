@@ -1,12 +1,25 @@
 import { AbsenceProcessingJob } from '../../jobs/absence-processing.job';
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MeetingStatus } from '@tfhc/shared';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class MeetingsService {
   constructor(private prisma: PrismaService, private absenceProcessing: AbsenceProcessingJob) {}
+
+  async respond(id: string, memberId: string | undefined, attending: unknown) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    if (typeof attending !== 'boolean') throw new BadRequestException('Choose attending or not attending');
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM meetings WHERE id = ${id} FOR UPDATE`;
+      const meeting = await tx.meeting.findUnique({ where: { id } });
+      if (!meeting) throw new NotFoundException('Event not found');
+      if (!['SCHEDULED', 'ACTIVE'].includes(meeting.status) || meeting.startTime <= new Date()) throw new BadRequestException('Responses close when the event starts');
+      const member = await tx.member.findUnique({ where: { id: memberId } });
+      if (!member || member.status !== 'ACTIVE') throw new ForbiddenException('Only active members can respond');
+      return tx.eventResponse.upsert({ where: { memberId_meetingId: { memberId, meetingId: id } }, create: { memberId, meetingId: id, attending }, update: { attending } });
+    });
+  }
 
   async getCategories() {
     return this.prisma.meetingCategory.findMany({
@@ -45,6 +58,11 @@ export class MeetingsService {
     });
   }
 
+  async findOpenAttendanceMeetings() {
+    const now = new Date();
+    return this.prisma.meeting.findMany({ where: { status: MeetingStatus.ACTIVE, attendanceOpenTime: { lte: now }, attendanceCloseTime: { gte: now } }, include: { category: true }, orderBy: { startTime: 'asc' } });
+  }
+
   async findActiveMeeting() {
     const now = new Date();
     // Return currently active meeting or meeting within attendance window
@@ -58,16 +76,17 @@ export class MeetingsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, includeAttendance = true, memberId?: string) {
     const meeting = await this.prisma.meeting.findUnique({
       where: { id },
       include: {
         category: true,
         meetingSummary: true,
-        attendanceRecords: {
+        eventResponses: includeAttendance ? { include: { member: { select: { firstName: true, lastName: true } } } } : { where: { memberId: memberId ?? '' } },
+        attendanceRecords: includeAttendance ? {
           include: { member: true },
           orderBy: { actualArrivalTime: 'asc' },
-        },
+        } : false,
       },
     });
 
@@ -75,10 +94,15 @@ export class MeetingsService {
       throw new NotFoundException(`Meeting with ID ${id} not found`);
     }
 
+    if (includeAttendance) {
+      const expectedCount = await this.prisma.member.count({where:{status:'ACTIVE',...(meeting.isCompulsory ? {} : {OR:[{eventResponses:{some:{meetingId:id,attending:true}}},{AND:[{eventResponses:{none:{meetingId:id}}},{serviceCommitments:{some:{meetingId:id,status:'COMMITTED'}}}]},{attendanceRecords:{some:{meetingId:id}}}]})}});
+      return {...meeting,expectedCount};
+    }
     return meeting;
   }
 
   async createMeeting(dto: {
+    description?: string;
     title: string;
     categoryId: string;
     meetingDate: Date | string;
@@ -95,7 +119,7 @@ export class MeetingsService {
     isCompulsory?: boolean;
     pointWeight?: number;
   }) {
-    const qrSecret = crypto.randomBytes(16).toString('hex');
+    const qrSecret = null;
     const attendanceOpenTime = new Date(dto.attendanceOpenTime);
     const startTime = new Date(dto.startTime);
     const attendanceCloseTime = new Date(dto.attendanceCloseTime);
@@ -115,6 +139,7 @@ export class MeetingsService {
     return this.prisma.meeting.create({
       data: {
         title: dto.title,
+        description: dto.description,
         categoryId: dto.categoryId,
         meetingDate: new Date(dto.meetingDate),
         startTime,
@@ -150,35 +175,6 @@ export class MeetingsService {
       data: { status },
       include: { category: true },
     });
-  }
-
-  async generateDynamicQrCode(id: string) {
-    const meeting = await this.findOne(id);
-    if (meeting.status !== MeetingStatus.ACTIVE) {
-      throw new BadRequestException('Meeting attendance is not currently active');
-    }
-
-    const timestamp = Date.now();
-    const qrSecret = meeting.qrSecret || 'tfhc-qr-default-secret';
-    
-    // HMAC signature over meetingId + timestamp
-    const signature = crypto
-      .createHmac('sha256', qrSecret)
-      .update(`${meeting.id}:${timestamp}`)
-      .digest('hex');
-
-    const qrPayload = JSON.stringify({
-      meetingId: meeting.id,
-      timestamp,
-      signature,
-    });
-
-    return {
-      meetingId: meeting.id,
-      qrPayload,
-      timestamp,
-      expiresInSeconds: 60,
-    };
   }
 
   async createRecurringMeetings(dto: {

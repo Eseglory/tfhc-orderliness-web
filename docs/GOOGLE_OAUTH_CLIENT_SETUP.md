@@ -2,20 +2,7 @@
 
 This document records non-secret configuration values for TFHC Orderliness member sign-in. Do not add OAuth client secrets, API keys, or service-account files here.
 
-> **Status:** the native Expo member app this document used to describe
-> (Android/iOS OAuth clients, keystore SHA fingerprints) has been retired —
-> see [MEMBER_MOBILE_MIGRATION.md](MEMBER_MOBILE_MIGRATION.md). Member
-> sign-in is now a **web** OAuth 2.0 client used by
-> [`GoogleSignInButton`](../apps/web/src/components/GoogleSignInButton.tsx)
-> on the login page, via [Google Identity
-> Services](https://developers.google.com/identity/gsi/web). The backend
-> (`AuthService.loginMemberWithGoogle`) didn't need to change: it verifies
-> any Google-issued ID token against `https://oauth2.googleapis.com/tokeninfo`
-> and checks the token's `aud` claim against `GOOGLE_OAUTH_CLIENT_IDS` —
-> it doesn't care which platform issued the token, only that a client ID it
-> trusts is on the audience list. Prior Android/iOS client IDs, if any exist
-> in that comma-separated list, can stay there harmlessly; this pass didn't
-> remove them, since nothing here confirms whether they're still wanted.
+The product is a web PWA only. Native OAuth credentials and audiences have been removed. A Google OAuth **Web application** client is required for the browser button. The backend verifies the signed token audience against `GOOGLE_OAUTH_CLIENT_IDS` and requires an active approved member record.
 
 ## Create the Web OAuth 2.0 client
 
@@ -48,9 +35,14 @@ Both `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_IDS` must
 carry the *same* client ID — the frontend requests a token issued for that
 audience, and the backend only accepts tokens whose audience is in its list.
 
-Without `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` set, the login page shows "Member
-Google sign-in is not configured for this deployment" instead of the button
-— the rest of the app (including admin password login) still works.
+Without `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` set — or left at the
+`REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com` placeholder the
+example files ship with — the login page shows "Member Google sign-in is not
+configured for this deployment" instead of the button, and the API returns
+`503 GOOGLE_AUTH_NOT_CONFIGURED` for `POST /auth/google/member`. The rest of the
+app (including admin password login) still works. Any value beginning with
+`REPLACE_` is ignored on both sides; replace it with the exact client ID from
+Google Cloud Console.
 
 ## Verifying it end-to-end
 

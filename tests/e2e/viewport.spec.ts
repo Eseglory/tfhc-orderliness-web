@@ -1,3 +1,4 @@
+const apiURL = `http://127.0.0.1:${process.env.E2E_API_PORT || '4100'}`;
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
@@ -82,7 +83,7 @@ for (const bp of [{ name: '375-mobile', width: 375, height: 812 }, { name: '768-
 
     for (const route of ADMIN_ROUTES) {
       test(`admin route ${route} has no horizontal overflow`, async ({ page, request }) => {
-        const signed = await request.post('http://127.0.0.1:4100/auth/login', { data: { email: 'admin-browser@example.test', password: 'E2ePassword!123' } });
+        const signed = await request.post(`${apiURL}/auth/login`, { data: { email: 'admin-browser@example.test', password: 'E2ePassword!123' } });
         const { accessToken } = await signed.json();
         await page.addInitScript((t) => localStorage.setItem('tfhc_token', t), accessToken);
         await page.goto(route);

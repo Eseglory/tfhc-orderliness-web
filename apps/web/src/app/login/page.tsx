@@ -1,4 +1,5 @@
 'use client';
+import { AuthTransition } from '../../components/AuthTransition';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,8 +9,9 @@ import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@tfhc.org');
-  const [password, setPassword] = useState('Admin@123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,7 +27,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      saveAuthToken(data.accessToken);
+      saveAuthToken(data.accessToken, rememberMe);
 
       if (data.user.role === 'ADMIN' || data.user.role === 'LEADER') {
         router.push('/admin');
@@ -47,7 +49,7 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify({ idToken }),
       });
-      saveAuthToken(data.accessToken);
+      saveAuthToken(data.accessToken, rememberMe);
       router.push('/member');
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed. Please try again.');
@@ -58,6 +60,7 @@ export default function LoginPage() {
 
   return (
     <div className="bg-background text-on-background min-h-screen flex flex-col items-center justify-center p-edge-margin font-body-md antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
+      {loading && <AuthTransition action="in" />}
       {/* Main Authentication Container matching Stitch Screen 2 */}
       <main className="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] p-stack-lg border border-outline-variant/30 flex flex-col gap-stack-lg relative overflow-hidden">
         {/* Subtle decorative top accent */}
@@ -133,13 +136,12 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Remember Me & Demo Info */}
+          {/* Session persistence */}
           <div className="flex items-center justify-between mt-2">
             <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-outline-variant bg-surface" />
+              <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-outline-variant bg-surface" />
               <span className="font-label-sm text-label-sm text-on-surface-variant group-hover:text-on-surface transition-colors">Remember Me</span>
             </label>
-            <span className="font-label-sm text-label-sm text-secondary font-medium">Demo: admin@tfhc.org</span>
           </div>
 
           {/* Submit Button */}

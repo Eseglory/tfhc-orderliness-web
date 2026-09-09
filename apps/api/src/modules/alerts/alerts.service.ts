@@ -1,3 +1,5 @@
+import { unitPolicy } from '../../common/unit-policy';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MemberStatus, AttendanceStatus } from '@tfhc/shared';
@@ -6,7 +8,9 @@ import { MemberStatus, AttendanceStatus } from '@tfhc/shared';
 export class AlertsService {
   constructor(private prisma: PrismaService) {}
 
+  @Cron(CronExpression.EVERY_10_MINUTES, { disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
   async evaluateFollowUpFlags() {
+    const policy = await unitPolicy(this.prisma);
     const activeMembers = await this.prisma.member.findMany({
       where: { status: MemberStatus.ACTIVE },
       include: {
@@ -34,7 +38,7 @@ export class AlertsService {
         }
       }
 
-      if (consecutiveAbsences >= 2) {
+      if (consecutiveAbsences >= policy.followUpAbsences) {
         await this.createOrUpdateFlag(
           member.id,
           1,
@@ -45,7 +49,7 @@ export class AlertsService {
 
       // Rule 2: 3 Total Absences -> Level 2 (Attendance Warning)
       const totalAbsences = records.filter((r) => r.status === AttendanceStatus.ABSENT).length;
-      if (totalAbsences >= 3) {
+      if (totalAbsences >= policy.warningAbsences) {
         await this.createOrUpdateFlag(
           member.id,
           2,
@@ -62,13 +66,14 @@ export class AlertsService {
           r.status === AttendanceStatus.GRACE_PERIOD ||
           r.status === AttendanceStatus.LATE
       ).length;
-      const rate = (attendedCount / records.length) * 100;
+      const expectedCount = records.filter(r => !['EXCUSED', 'EXEMPT'].includes(r.status)).length;
+      const rate = expectedCount ? (attendedCount / expectedCount) * 100 : 0;
 
-      if (records.length >= 5 && rate < 70) {
+      if (expectedCount >= policy.minimumMeetings && rate < policy.reviewAttendanceBelow) {
         await this.createOrUpdateFlag(
           member.id,
           3,
-          `Attendance rate is ${Math.round(rate)}%, below the 70% benchmark threshold.`
+          `Attendance rate is ${Math.round(rate)}%, below the ${policy.reviewAttendanceBelow}% benchmark threshold.`
         );
         newlyFlaggedMembers.push({ memberId: member.id, level: 3 });
       }

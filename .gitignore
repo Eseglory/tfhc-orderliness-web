@@ -25,3 +25,6 @@ test-results/
 *.tsbuildinfo
 
 .next-e2e/
+
+# Isolated Next.js build directories used by verification runs
+.next-*/

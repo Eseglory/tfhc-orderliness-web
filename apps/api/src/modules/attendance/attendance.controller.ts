@@ -17,12 +17,11 @@ export class AttendanceController {
       // A member identity always comes from the signed JWT; accepting it from
       // the request body would let one authenticated user check in as another.
       memberId,
-      meetingId: body.meetingId,
-      latitude: typeof body.latitude === 'number' ? body.latitude : NaN,
-      longitude: typeof body.longitude === 'number' ? body.longitude : NaN,
-      gpsAccuracy: body.gpsAccuracy,
-      qrPayload: body.qrPayload,
-      deviceInfo: body.deviceInfo,
+      meetingId: body?.meetingId,
+      latitude: typeof body?.latitude === 'number' ? body?.latitude : NaN,
+      longitude: typeof body?.longitude === 'number' ? body?.longitude : NaN,
+      gpsAccuracy: body?.gpsAccuracy,
+      deviceInfo: body?.deviceInfo,
     });
   }
 
@@ -32,9 +31,10 @@ export class AttendanceController {
     return this.attendanceService.recordManualAttendance({
       adminUserId,
       memberId: body.memberId,
-      meetingId: body.meetingId,
+      meetingId: body?.meetingId,
       status: body.status,
       reason: body.reason,
+      actualArrivalTime: body.actualArrivalTime,
     });
   }
 

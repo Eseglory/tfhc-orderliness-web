@@ -13,6 +13,10 @@ export default function AdminMeetingsPage() {
 
   // Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [description, setDescription] = useState('');
+  const [isCompulsory, setIsCompulsory] = useState(false);
+  const [gracePeriodMinutes, setGracePeriodMinutes] = useState(10);
+  const [pointWeight, setPointWeight] = useState(1);
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
@@ -20,9 +24,9 @@ export default function AdminMeetingsPage() {
   const [expectedArrivalTime, setExpectedArrivalTime] = useState('');
   const [attendanceOpenTime, setAttendanceOpenTime] = useState('');
   const [attendanceCloseTime, setAttendanceCloseTime] = useState('');
-  const [locationName, setLocationName] = useState('Church Auditorium');
-  const [latitude, setLatitude] = useState(6.4531);
-  const [longitude, setLongitude] = useState(3.3958);
+  const [locationName, setLocationName] = useState('The Father’s House Church, 90 Alagbole–Akute Road, Iju, Ojodu');
+  const [latitude, setLatitude] = useState(6.6697906);
+  const [longitude, setLongitude] = useState(3.3581822);
   const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState(100);
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,7 +59,7 @@ export default function AdminMeetingsPage() {
       await fetchApi('/meetings', {
         method: 'POST',
         body: JSON.stringify({
-          title,
+          title, description, isCompulsory, gracePeriodMinutes, pointWeight,
           categoryId,
           meetingDate: new Date(meetingDate).toISOString(),
           startTime: new Date(`${meetingDate}T${startTime}`).toISOString(),
@@ -99,6 +103,7 @@ export default function AdminMeetingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Meeting Management</h1>
+            <Link href="/admin/services" className="text-sm text-indigo-300 underline">Configure recurring services and reminders</Link>
             <p className="text-xs text-slate-400 mt-1">Configure meeting schedules, time windows & geofences</p>
           </div>
 
@@ -156,14 +161,15 @@ export default function AdminMeetingsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right space-x-2">
-                        {m.status === 'ACTIVE' ? (
-                          <>
                             <Link
                               href={`/admin/live-meeting/${m.id}`}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-emerald-600 text-slate-950 font-bold"
                             >
-                              <Eye className="w-3.5 h-3.5" /> Monitor
+                              <Eye className="w-3.5 h-3.5" /> Responses / Monitor
                             </Link>
+                        {m.status === 'ACTIVE' ? (
+                          <>
+
                             <button
                               onClick={() => handleStatusToggle(m.id, m.status)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-rose-600/20 text-rose-300 border border-rose-500/30"
@@ -201,6 +207,11 @@ export default function AdminMeetingsPage() {
               <h2 className="text-xl font-bold text-white">Create New Meeting</h2>
 
               <form onSubmit={handleCreateMeeting} className="space-y-4">
+                <label className="block">Grace period (minutes)<input type="number" min="0" required value={gracePeriodMinutes} onChange={e=>setGracePeriodMinutes(Number(e.target.value))} className="block bg-slate-800 p-2" /></label>
+                <label className="block">Meeting points multiplier<input type="number" min="0" step="0.1" required value={pointWeight} onChange={e=>setPointWeight(Number(e.target.value))} className="block bg-slate-800 p-2" /></label>
+                <p className="text-sm text-slate-400">Create a custom event or service. Members can view it and indicate whether they will attend.</p>
+                <label className="block text-sm text-slate-400">Description<textarea value={description} onChange={e => setDescription(e.target.value)} className="block w-full bg-slate-800 rounded-lg p-2" /></label>
+                <label className="flex gap-2 text-sm text-slate-400"><input type="checkbox" checked={isCompulsory} onChange={e => setIsCompulsory(e.target.checked)} />Compulsory attendance</label>
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Meeting Title</label>
                   <input
