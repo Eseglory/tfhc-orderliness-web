@@ -139,7 +139,7 @@ export default function RecurringServicesPage() {
                   </p>
                   {canManage && (
                     <div className="flex gap-2 border-t border-outline-variant/15 pt-2">
-                      <Button variant="secondary" className="text-xs" onClick={() => setEdit({ ...s })}>Edit series</Button>
+                      <Button variant="secondary" className="text-xs" aria-label={`Edit ${s.title}`} onClick={() => setEdit({ ...s })}>Edit series</Button>
                       <Button variant="ghost" className="text-xs" onClick={() => setOccurrencesFor(s)}>Occurrences</Button>
                     </div>
                   )}

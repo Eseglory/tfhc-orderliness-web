@@ -194,12 +194,31 @@
       "phoneNumber": "08060656526",
       "birthday": "22nd April",
       "profession": "Customer Service Executive / Realtor"
-    }
-  ],
-  "skipped": [
+    },
+    {
+      "firstName": "Adekunle",
+      "lastName": "Oluwatobi",
+      "email": "oluwatobiisrael18@gmail.com",
+      "phoneNumber": "08000000000",
+      "birthday": "16th August",
+      "profession": "Accountant/Public Servant"
+    },
     {
       "firstName": "Somtochukwu",
-      "reason": "no email in the source sheet (cell held an =AI() placeholder)"
+      "lastName": "Otega",
+      "email": "somtotega@gmail.com",
+      "phoneNumber": "08088472758",
+      "birthday": "5th October",
+      "profession": "Quality assurance personal"
+    },
+    {
+      "firstName": "Amaka",
+      "lastName": "Otega",
+      "email": "amakatega@gmail.com",
+      "phoneNumber": "08052076744",
+      "birthday": "18th June",
+      "profession": "Business"
     }
-  ]
+  ],
+  "skipped": []
 }

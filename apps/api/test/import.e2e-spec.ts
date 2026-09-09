@@ -37,6 +37,13 @@ describe('Directory + dues import (real PostgreSQL)', () => {
     const tokens = app.get(AuthService);
     const pw = await argon2.hash('E2ePassword!123');
 
+    await db.payment.deleteMany({ where: { member: { OR: [{ approvedMember: { normalizedEmail: { contains: '@import.test' } } }, { memberCode: { contains: 'IMP-' } }] } } });
+    await db.memberDuesAssignment.deleteMany({ where: { period: { year: 2091 } } });
+    await db.duesPeriod.deleteMany({ where: { year: 2091 } });
+    await db.approvedMember.deleteMany({ where: { normalizedEmail: { contains: '@import.test' } } });
+    await db.user.deleteMany({ where: { email: { endsWith: '@import.test' } } });
+    await db.member.deleteMany({ where: { OR: [{ memberCode: { contains: 'IMP-' } }, { firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp'] } }] } });
+
     const admin = await db.user.create({ data: { email: dom('impadmin'), passwordHash: pw, role: 'ADMIN' } });
     await db.userAccessRole.create({ data: { userId: admin.id, roleId: (await db.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } })).id } });
     adminToken = tokens.generateToken(admin.id, admin.email, 'ADMIN');

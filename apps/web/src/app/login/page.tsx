@@ -17,6 +17,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const emailEl = document.getElementById('memberId') as HTMLInputElement | null;
+    if (emailEl && emailEl.value) {
+      setEmail(emailEl.value);
+    }
+    const pwdEl = document.getElementById('password') as HTMLInputElement | null;
+    if (pwdEl && pwdEl.value) {
+      setPassword(pwdEl.value);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +99,7 @@ export default function LoginPage() {
         )}
 
         {/* Form Section */}
-        <form className="flex flex-col gap-stack-md mt-4" onSubmit={handleLogin}>
+        <form className="flex flex-col gap-stack-md mt-4" onSubmit={handleLogin} data-hydrated={mounted ? 'true' : 'false'}>
           {/* Member ID / Email Input */}
           <div className="flex flex-col gap-1">
             <label className="font-label-sm text-label-sm text-on-surface-variant ml-1" htmlFor="memberId">

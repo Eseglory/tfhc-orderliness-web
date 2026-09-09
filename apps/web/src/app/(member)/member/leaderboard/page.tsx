@@ -36,7 +36,7 @@ export default function MemberLeaderboardPage() {
   return (
     <div className="bg-background text-on-background min-h-screen pb-safe antialiased flex flex-col font-body-md">
       {/* TopAppBar matching Stitch Screen 11 */}
-      <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 docked full-width top-0 z-40 relative border-b border-outline-variant/10">
+      <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center p-1">
             <LogoIcon alt="Logo" className="w-full h-full object-contain" />
@@ -48,17 +48,17 @@ export default function MemberLeaderboardPage() {
         </Link>
       </header>
 
-      <main className="flex-grow pb-36 max-w-3xl mx-auto w-full">
+      <main className="flex-grow pb-36 max-w-3xl mx-auto w-full min-w-0 overflow-x-hidden">
         {/* Filters & Scope */}
         <section className="px-edge-margin py-stack-sm flex flex-col gap-stack-sm sticky top-0 bg-background/90 backdrop-blur-md z-30">
           <div className="flex gap-3">
-            <label>Period<select value={period} onChange={e=>setPeriod(e.target.value)} className="block rounded p-2"><option value="month">This Month</option><option value="quarter">This Quarter</option><option value="year">This Year</option></select></label>
-            <label>Sub-team<select value={team} onChange={e=>setTeam(e.target.value)} className="block rounded p-2"><option value="">All Unit Teams</option>{teams.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select></label>
+            <label className="text-xs font-semibold text-on-surface-variant">Period<select value={period} onChange={e=>setPeriod(e.target.value)} className="block rounded p-2 text-sm bg-surface-container border border-outline-variant/30 text-on-surface mt-1"><option value="month">This Month</option><option value="quarter">This Quarter</option><option value="year">This Year</option></select></label>
+            <label className="text-xs font-semibold text-on-surface-variant flex-1 min-w-0">Sub-team<select value={team} onChange={e=>setTeam(e.target.value)} className="block w-full max-w-[180px] sm:max-w-xs truncate rounded p-2 text-sm bg-surface-container border border-outline-variant/30 text-on-surface mt-1"><option value="">All Unit Teams</option>{teams.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select></label>
           </div>
         </section>
 
         {/* Podium (Top 3) matching Stitch Screen 11 */}
-        <section className="px-edge-margin py-section-gap flex justify-center items-end gap-2 md:gap-4 h-64 mt-4">
+        <section className="px-edge-margin py-section-gap flex justify-center items-end gap-2 md:gap-4 h-64 mt-4 max-w-full overflow-hidden">
           {/* #2 Silver */}
           <div className="flex flex-col items-center">
             <div className="relative mb-2">
@@ -141,14 +141,14 @@ export default function MemberLeaderboardPage() {
 
       {/* Sticky bar: the signed-in member's own standing */}
       {myRow && (
-        <div className="fixed bottom-20 w-full max-w-3xl left-1/2 -translate-x-1/2 px-edge-margin z-40 mb-2 pointer-events-none">
+        <div className="fixed bottom-20 inset-x-0 mx-auto w-full max-w-3xl px-edge-margin z-40 mb-2 pointer-events-none">
           <div className="bg-gradient-to-r from-secondary-container to-[#ffb347] text-on-secondary-container rounded-xl p-3 flex items-center justify-between pointer-events-auto border border-secondary-fixed shadow-[0px_4px_12px_rgba(254,147,44,0.3)]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center font-bold text-secondary-container text-lg shadow-sm border-2 border-surface">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center font-bold text-secondary-container text-lg shadow-sm border-2 border-surface shrink-0">
                 {myRow.rank}
               </div>
-              <div className="flex flex-col">
-                <span className="font-headline-sm text-headline-sm font-bold leading-tight text-white">You ({myRow.firstName} {myRow.lastName})</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-headline-sm text-headline-sm font-bold leading-tight text-white truncate">You ({myRow.firstName} {myRow.lastName})</span>
                 <div className="flex items-center gap-1 font-label-sm text-label-sm opacity-90 text-white">
                   <span>{myRow.attendancePercentage}% Att</span>
                   <span className="w-1 h-1 rounded-full bg-white"></span>
@@ -156,7 +156,7 @@ export default function MemberLeaderboardPage() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end text-white">
+            <div className="flex flex-col items-end text-white shrink-0 ml-2">
               <span className="font-headline-sm text-headline-sm font-bold">{myRow.totalPoints}</span>
               <span className="font-label-sm text-label-sm uppercase opacity-90">pts</span>
             </div>

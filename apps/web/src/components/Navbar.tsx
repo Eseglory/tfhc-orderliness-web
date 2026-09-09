@@ -122,7 +122,7 @@ export const Navbar: React.FC = () => {
     !item.children!.some((other) => other !== child && other.href.length > child.href.length && active(other.href));
 
   const linkClass = (isActive: boolean) =>
-    `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
+    `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors 2xl:px-3 ${
       isActive
         ? 'bg-primary text-on-primary font-bold'
         : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
@@ -132,12 +132,12 @@ export const Navbar: React.FC = () => {
     <header className="bg-surface-container-lowest border-b border-outline-variant/20 sticky top-0 z-50">
       {signingOut && <AuthTransition action="out" />}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4 h-16">
+        <div className="flex items-center justify-between gap-2 sm:gap-4 h-16 min-w-0">
           <Link href={isAdmin ? '/admin' : '/member'} className="flex shrink-0 items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-surface-container border border-outline-variant/30 p-1 flex items-center justify-center shadow-sm">
               <LogoIcon alt="The Father's House Logo" className="w-full h-full object-contain" />
             </div>
-            <div className="hidden sm:block leading-tight">
+            <div className="hidden lg:block leading-tight">
               <span className="block whitespace-nowrap text-sm font-bold tracking-tight text-primary">THE FATHER&apos;S HOUSE</span>
               <div className="flex items-center gap-1.5">
                 <span className="whitespace-nowrap text-[11px] font-medium text-on-surface-variant">Orderliness</span>
@@ -148,7 +148,7 @@ export const Navbar: React.FC = () => {
             </div>
           </Link>
 
-          <nav ref={menuRef} className="hidden md:flex flex-1 items-center justify-center gap-0.5 text-label-md xl:gap-1">
+          <nav ref={menuRef} className="hidden md:flex flex-1 items-center justify-center gap-0.5 text-label-md 2xl:gap-1 min-w-0">
             {items.map((item) =>
               item.children ? (
                 <div key={item.href} className="relative">
@@ -156,11 +156,13 @@ export const Navbar: React.FC = () => {
                     type="button"
                     aria-haspopup="true"
                     aria-expanded={openMenu === item.href}
+                    aria-label={item.label}
+                    title={item.label}
                     onClick={() => setOpenMenu(openMenu === item.href ? null : item.href)}
                     className={linkClass(groupActive(item))}
                   >
                     <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                    <span className="hidden xl:inline">{item.label}</span>
+                    <span className="hidden 2xl:inline">{item.label}</span>
                     <span className="material-symbols-outlined text-[16px]">expand_more</span>
                   </button>
                   {openMenu === item.href && (
@@ -183,9 +185,9 @@ export const Navbar: React.FC = () => {
                   )}
                 </div>
               ) : (
-                <Link key={item.href} href={item.href} className={`relative ${linkClass(active(item.href))}`}>
+                <Link key={item.href} href={item.href} title={item.label} aria-label={item.label} className={`relative ${linkClass(active(item.href))}`}>
                   <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                  <span className="hidden xl:inline">{item.label}</span>
+                  <span className="hidden 2xl:inline">{item.label}</span>
                   {item.href.endsWith('/chat') && chatUnread > 0 && (
                     <span className="ml-0.5 rounded-full bg-error px-1.5 text-[10px] font-bold leading-4 text-on-error">
                       {chatUnread > 99 ? '99+' : chatUnread}
