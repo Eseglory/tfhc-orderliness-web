@@ -10,6 +10,7 @@ import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { WelfareModule } from './modules/welfare/welfare.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { RecurringServicesModule } from './modules/recurring-services/recurring-services.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { MailModule } from './modules/mail/mail.module';
 import { AppController } from './app.controller';
 import { ConfigModule } from '@nestjs/config';
@@ -58,6 +59,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     AlertsModule,
     ReportsModule,
     AvailabilityModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

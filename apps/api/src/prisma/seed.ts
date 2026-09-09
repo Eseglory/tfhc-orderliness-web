@@ -54,6 +54,16 @@ async function main() {
     await prisma.subTeam.upsert({ where: { name }, update: {}, create: { name, isSystem: true } });
   }
 
+  // System chat rooms. Membership is resolved dynamically by the chat service
+  // (every active member is in General; executives + staff are in Executives).
+  const chatRooms = [
+    { key: 'GENERAL', name: 'General', description: 'Unit-wide conversation for every member.', type: 'GENERAL' as const },
+    { key: 'EXECUTIVES', name: 'Executives', description: 'Private channel for unit executives and administrators.', type: 'EXECUTIVES' as const },
+  ];
+  for (const r of chatRooms) {
+    await prisma.chatRoom.upsert({ where: { key: r.key }, update: {}, create: r });
+  }
+
   // Recurring service schedules + the shared venue/reminder config the generator
   // needs to produce upcoming events on boot.
   await prisma.systemSetting.upsert({

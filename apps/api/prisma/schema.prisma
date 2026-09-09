@@ -225,6 +225,8 @@ model Member {
   welfareRequests    WelfareRequest[]
   duesAssignments    MemberDuesAssignment[]
   payments           Payment[]
+  chatMemberships    ChatRoomMember[]
+  chatMessages       ChatMessage[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -974,4 +976,86 @@ model Payment {
   @@index([status, purpose])
   @@index([duesAssignmentId])
   @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// In-app chat (real-time messaging)
+// ---------------------------------------------------------------------------
+
+enum ChatRoomType {
+  GENERAL
+  EXECUTIVES
+  CUSTOM
+  DIRECT
+}
+
+enum ChatMemberRole {
+  MEMBER
+  MODERATOR
+}
+
+enum ChatMessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  SYSTEM
+}
+
+model ChatRoom {
+  id           String           @id @default(uuid())
+  key          String?          @unique
+  name         String
+  description  String?
+  type         ChatRoomType
+  imageUrl     String?
+  isActive     Boolean          @default(true)
+  /// DIRECT rooms: sorted "memberIdA:memberIdB" so the pair is unique.
+  directKey    String?          @unique
+  createdById  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  members      ChatRoomMember[]
+  messages     ChatMessage[]
+
+  @@index([type, isActive])
+  @@map("chat_rooms")
+}
+
+model ChatRoomMember {
+  id         String         @id @default(uuid())
+  roomId     String
+  room       ChatRoom       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role       ChatMemberRole @default(MEMBER)
+  lastReadAt DateTime?
+  mutedUntil DateTime?
+  joinedAt   DateTime       @default(now())
+  leftAt     DateTime?
+
+  @@unique([roomId, memberId])
+  @@index([memberId])
+  @@map("chat_room_members")
+}
+
+model ChatMessage {
+  id             String          @id @default(uuid())
+  roomId         String
+  room           ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderMemberId String?
+  sender         Member?         @relation(fields: [senderMemberId], references: [id], onDelete: SetNull)
+  type           ChatMessageType @default(TEXT)
+  body           String?
+  attachmentUrl  String?
+  attachmentMeta Json?
+  replyToId      String?
+  replyTo        ChatMessage?    @relation("ChatMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        ChatMessage[]   @relation("ChatMessageReplies")
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+
+  @@index([roomId, createdAt])
+  @@index([senderMemberId])
+  @@map("chat_messages")
 }
