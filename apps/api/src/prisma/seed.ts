@@ -2,6 +2,7 @@ import { PrismaClient, Role, MemberStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { config } from 'dotenv';
 import { syncSystemRoles } from '../common/rbac/sync-system-roles';
+import { DEFAULT_EVENT_TYPES } from '@tfhc/shared';
 config();
 
 const prisma = new PrismaClient();
@@ -46,6 +47,17 @@ async function main() {
   //    shared catalogue so a freshly reset database is immediately usable.
   await syncSystemRoles(prisma);
   const superAdminRole = await prisma.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
+
+  for (const [i, t] of DEFAULT_EVENT_TYPES.entries()) {
+    await prisma.eventType.upsert({
+      where: { key: t.key },
+      update: { isSystem: true },
+      create: {
+        key: t.key, name: t.name, description: t.description, icon: t.icon, color: t.color,
+        defaultCompulsory: t.defaultCompulsory, isSystem: true, sortOrder: (i + 1) * 10,
+      },
+    });
+  }
 
   // 4. Create Admin User and grant Super Admin.
   const adminPasswordHash = await argon2.hash('Admin@123456');

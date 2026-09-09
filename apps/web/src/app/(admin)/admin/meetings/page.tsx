@@ -1,360 +1,350 @@
 'use client';
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../../../components/Navbar';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Field,
+  Modal,
+  PageHeader,
+  Spinner,
+  inputClass,
+  useToast,
+} from '../../../../components/ui';
+import {
+  EventForm,
+  EventTypeOption,
+  CategoryOption,
+  emptyEvent,
+  meetingToForm,
+} from '../../../../components/EventForm';
 import { fetchApi } from '../../../../lib/api';
-import { Plus, Calendar, MapPin, Play, Square, Eye } from 'lucide-react';
+import { useAuth } from '../../../../lib/auth';
 
-export default function AdminMeetingsPage() {
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+interface Meeting {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string | null;
+  status: string;
+  locationName: string;
+  geofenceRadiusMeters: number;
+  isCompulsory: boolean;
+  visibility: string;
+  archivedAt: string | null;
+  cancelReason: string | null;
+  category?: { name: string };
+  eventType?: { name: string; color: string | null } | null;
+  _count?: { attendanceRecords: number; invitations: number };
+}
+
+const STATUS_TONE: Record<string, 'success' | 'neutral' | 'info' | 'warning' | 'danger'> = {
+  ACTIVE: 'success',
+  CLOSED: 'neutral',
+  SCHEDULED: 'info',
+  CANCELLED: 'danger',
+};
+
+export default function AdminEventsPage() {
+  const { can, loading: authLoading } = useAuth();
+  const { notify } = useToast();
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [eventTypes, setEventTypes] = useState<EventTypeOption[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [description, setDescription] = useState('');
-  const [isCompulsory, setIsCompulsory] = useState(false);
-  const [gracePeriodMinutes, setGracePeriodMinutes] = useState(10);
-  const [pointWeight, setPointWeight] = useState(1);
-  const [title, setTitle] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [meetingDate, setMeetingDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [expectedArrivalTime, setExpectedArrivalTime] = useState('');
-  const [attendanceOpenTime, setAttendanceOpenTime] = useState('');
-  const [attendanceCloseTime, setAttendanceCloseTime] = useState('');
-  const [locationName, setLocationName] = useState('The Father’s House Church, 90 Alagbole–Akute Road, Iju, Ojodu');
-  const [latitude, setLatitude] = useState(6.6697906);
-  const [longitude, setLongitude] = useState(3.3581822);
-  const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState(100);
-  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
-  const loadData = async () => {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Meeting | null>(null);
+  const [busyId, setBusyId] = useState('');
+
+  const canCreate = can('events.create');
+  const canEdit = can('events.update');
+
+  const load = async () => {
     setLoading(true);
     try {
-      const [mtgs, cats] = await Promise.all([
-        fetchApi('/meetings'),
-        fetchApi('/meetings/categories'),
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (typeFilter) params.set('eventTypeId', typeFilter);
+      if (search.trim()) params.set('search', search.trim());
+      if (showArchived) params.set('includeArchived', 'true');
+      const [m, t, c] = await Promise.all([
+        fetchApi<Meeting[]>(`/meetings?${params}`),
+        fetchApi<EventTypeOption[]>('/meetings/event-types'),
+        fetchApi<CategoryOption[]>('/meetings/categories'),
       ]);
-      setMeetings(mtgs);
-      setCategories(cats);
-      if (cats.length > 0) setCategoryId(cats[0].id);
-    } catch (err) {
-      console.error(err);
+      setMeetings(m);
+      setEventTypes(t);
+      setCategories(c);
+      setError('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load events.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (authLoading) return;
+    const h = setTimeout(load, search ? 300 : 0);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, status, typeFilter, search, showArchived]);
 
-  const handleCreateMeeting = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
+  const initialForm = useMemo(
+    () => (editing ? meetingToForm(editing) : { ...emptyEvent, categoryId: categories[0]?.id ?? '' }),
+    [editing, categories],
+  );
 
+  const act = async (id: string, fn: () => Promise<unknown>, ok: string) => {
+    setBusyId(id);
     try {
-      await fetchApi('/meetings', {
-        method: 'POST',
-        body: JSON.stringify({
-          title, description, isCompulsory, gracePeriodMinutes, pointWeight,
-          categoryId,
-          meetingDate: new Date(meetingDate).toISOString(),
-          startTime: new Date(`${meetingDate}T${startTime}`).toISOString(),
-          expectedArrivalTime: new Date(`${meetingDate}T${expectedArrivalTime}`).toISOString(),
-          attendanceOpenTime: new Date(`${meetingDate}T${attendanceOpenTime}`).toISOString(),
-          attendanceCloseTime: new Date(`${meetingDate}T${attendanceCloseTime}`).toISOString(),
-          locationName,
-          latitude: Number(latitude),
-          longitude: Number(longitude),
-          geofenceRadiusMeters: Number(geofenceRadiusMeters),
-        }),
-      });
-
-      setShowCreateModal(false);
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create meeting');
+      await fn();
+      notify(ok, 'success');
+      load();
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Action failed', 'error');
     } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleStatusToggle = async (meetingId: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'ACTIVE' ? 'CLOSED' : 'ACTIVE';
-    try {
-      await fetchApi(`/meetings/${meetingId}/status`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: newStatus }),
-      });
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to update meeting status');
+      setBusyId('');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-12">
+    <div className="min-h-screen bg-background">
       <Navbar />
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+        <PageHeader
+          title="Events"
+          subtitle="Services, meetings and every other church activity."
+          actions={
+            <div className="flex gap-2">
+              <Link href="/admin/calendar">
+                <Button variant="secondary">Calendar</Button>
+              </Link>
+              <Link href="/admin/services">
+                <Button variant="secondary">Recurring</Button>
+              </Link>
+              {canCreate && (
+                <Button
+                  onClick={() => {
+                    setEditing(null);
+                    setFormOpen(true);
+                  }}
+                >
+                  + New event
+                </Button>
+              )}
+            </div>
+          }
+        />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Meeting Management</h1>
-            <Link href="/admin/services" className="text-sm text-indigo-300 underline">Configure recurring services and reminders</Link>
-            <p className="text-xs text-slate-400 mt-1">Configure meeting schedules, time windows & geofences</p>
-          </div>
-
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/20"
-          >
-            <Plus className="w-4 h-4" /> Create New Meeting
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className={`${inputClass} max-w-xs`}
+            placeholder="Search title or venue…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select className={`${inputClass} w-auto`} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {['SCHEDULED', 'ACTIVE', 'CLOSED', 'CANCELLED'].map((s) => (
+              <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>
+            ))}
+          </select>
+          <select className={`${inputClass} w-auto`} value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="">All types</option>
+            {eventTypes.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm text-on-surface-variant">
+            <input type="checkbox" className="h-4 w-4 rounded border-outline-variant text-primary" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Show archived
+          </label>
         </div>
 
-        {/* Meetings List Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-800/60 border-b border-slate-800">
+        {loading ? (
+          <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
+        ) : error ? (
+          <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />
+        ) : meetings.length === 0 ? (
+          <EmptyState
+            title="No events found"
+            description={search || status || typeFilter ? 'Try clearing the filters.' : 'Create your first event to get started.'}
+            action={canCreate && !search && !status ? <Button onClick={() => { setEditing(null); setFormOpen(true); }}>+ New event</Button> : undefined}
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
+            <table className="w-full min-w-[52rem] text-sm">
+              <thead className="border-b border-outline-variant/20 bg-surface-container-low/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
                 <tr>
-                  <th className="px-6 py-4">Title</th>
-                  <th className="px-6 py-4">Category</th>
-                  <th className="px-6 py-4">Date & Start Time</th>
-                  <th className="px-6 py-4">Venue & Radius</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-4 py-3 font-semibold">Event</th>
+                  <th className="px-4 py-3 font-semibold">When</th>
+                  <th className="px-4 py-3 font-semibold">Venue</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {meetings.length > 0 ? (
-                  meetings.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-800/30">
-                      <td className="px-6 py-4 font-semibold text-white">
-                        {m.title}
-                        <span className="block text-xs font-normal text-slate-400">
-                          {m._count?.attendanceRecords ?? 0} checked in
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-slate-400">{m.category?.name}</td>
-                      <td className="px-6 py-4 text-slate-300">
-                        {new Date(m.startTime).toLocaleDateString()} at{' '}
+              <tbody className="divide-y divide-outline-variant/15">
+                {meetings.map((m) => (
+                  <tr key={m.id} className={m.archivedAt ? 'opacity-60' : ''}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {m.eventType?.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: m.eventType.color }} />}
+                        <span className="font-semibold text-on-surface">{m.title}</span>
+                        {m.visibility === 'RESTRICTED' && <Badge tone="warning">Restricted</Badge>}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-on-surface-variant">
+                        <span>{m.eventType?.name ?? m.category?.name ?? '—'}</span>
+                        <span>{m._count?.attendanceRecords ?? 0} checked in</span>
+                        {!m.isCompulsory && <span>Optional</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-on-surface-variant">
+                      {new Date(m.startTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                      <span className="block text-xs">
                         {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-6 py-4 text-slate-400">
-                        {m.locationName} ({m.geofenceRadiusMeters}m)
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                            m.status === 'ACTIVE'
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : m.status === 'CLOSED'
-                              ? 'bg-slate-800 text-slate-400'
-                              : 'bg-indigo-500/20 text-indigo-400'
-                          }`}
-                        >
-                          {m.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                            <Link
-                              href={`/admin/live-meeting/${m.id}`}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-emerald-600 text-slate-950 font-bold"
-                            >
-                              <Eye className="w-3.5 h-3.5" /> Responses / Monitor
-                            </Link>
-                        {m.status === 'ACTIVE' ? (
-                          <>
-
-                            <button
-                              onClick={() => handleStatusToggle(m.id, m.status)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-rose-600/20 text-rose-300 border border-rose-500/30"
-                            >
-                              <Square className="w-3.5 h-3.5" /> Close
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleStatusToggle(m.id, m.status)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30"
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-on-surface-variant">
+                      {m.locationName}
+                      <span className="block text-xs">{m.geofenceRadiusMeters} m radius</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{m.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap justify-end gap-1">
+                        <Link href={`/admin/live-meeting/${m.id}`}>
+                          <Button variant="ghost" className="text-xs">Monitor</Button>
+                        </Link>
+                        {canEdit && (m.status === 'ACTIVE' || m.status === 'SCHEDULED') && (
+                          <Button
+                            variant="ghost"
+                            className="text-xs"
+                            loading={busyId === m.id}
+                            onClick={() =>
+                              act(
+                                m.id,
+                                () => fetchApi(`/meetings/${m.id}/status`, { method: 'PUT', body: JSON.stringify({ status: m.status === 'ACTIVE' ? 'CLOSED' : 'ACTIVE' }) }),
+                                m.status === 'ACTIVE' ? 'Attendance closed' : 'Attendance open',
+                              )
+                            }
                           >
-                            <Play className="w-3.5 h-3.5" /> Open Attendance
-                          </button>
+                            {m.status === 'ACTIVE' ? 'Close' : 'Open'}
+                          </Button>
                         )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                      {loading ? 'Loading scheduled meetings...' : 'No meetings configured yet.'}
+                        {canEdit && ['SCHEDULED', 'ACTIVE'].includes(m.status) && (
+                          <Button variant="ghost" className="text-xs" onClick={() => { setEditing(m); setFormOpen(true); }}>Edit</Button>
+                        )}
+                        {canCreate && (
+                          <Button variant="ghost" className="text-xs" loading={busyId === m.id} onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/duplicate`, { method: 'POST', body: '{}' }), 'Event duplicated')}>
+                            Duplicate
+                          </Button>
+                        )}
+                        {can('events.cancel') && m.status !== 'CLOSED' && m.status !== 'CANCELLED' && (
+                          <Button variant="ghost" className="text-xs text-error" onClick={() => setCancelTarget(m)}>Cancel</Button>
+                        )}
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            className="text-xs"
+                            loading={busyId === m.id}
+                            onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/archive`, { method: m.archivedAt ? 'DELETE' : 'POST' }), m.archivedAt ? 'Restored' : 'Archived')}
+                          >
+                            {m.archivedAt ? 'Restore' : 'Archive'}
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Create Meeting Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-bold text-white">Create New Meeting</h2>
-
-              <form onSubmit={handleCreateMeeting} className="space-y-4">
-                <label className="block">Grace period (minutes)<input type="number" min="0" required value={gracePeriodMinutes} onChange={e=>setGracePeriodMinutes(Number(e.target.value))} className="block bg-slate-800 p-2" /></label>
-                <label className="block">Meeting points multiplier<input type="number" min="0" step="0.1" required value={pointWeight} onChange={e=>setPointWeight(Number(e.target.value))} className="block bg-slate-800 p-2" /></label>
-                <p className="text-sm text-slate-400">Create a custom event or service. Members can view it and indicate whether they will attend.</p>
-                <label className="block text-sm text-slate-400">Description<textarea value={description} onChange={e => setDescription(e.target.value)} className="block w-full bg-slate-800 rounded-lg p-2" /></label>
-                <label className="flex gap-2 text-sm text-slate-400"><input type="checkbox" checked={isCompulsory} onChange={e => setIsCompulsory(e.target.checked)} />Compulsory attendance</label>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Meeting Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Saturday Unit Meeting"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Category</label>
-                    <select
-                      value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    >
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.pointWeight}x)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Meeting Date</label>
-                    <input
-                      type="date"
-                      required
-                      value={meetingDate}
-                      onChange={(e) => setMeetingDate(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Attendance Opens</label>
-                    <input
-                      type="time"
-                      required
-                      value={attendanceOpenTime}
-                      onChange={(e) => setAttendanceOpenTime(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Expected Arrival</label>
-                    <input
-                      type="time"
-                      required
-                      value={expectedArrivalTime}
-                      onChange={(e) => setExpectedArrivalTime(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Meeting Starts</label>
-                    <input
-                      type="time"
-                      required
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Attendance Closes</label>
-                    <input
-                      type="time"
-                      required
-                      value={attendanceCloseTime}
-                      onChange={(e) => setAttendanceCloseTime(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Location Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={locationName}
-                      onChange={(e) => setLocationName(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={latitude}
-                      onChange={(e) => setLatitude(Number(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-400 mb-1">Radius (m)</label>
-                    <input
-                      type="number"
-                      required
-                      value={geofenceRadiusMeters}
-                      onChange={(e) => setGeofenceRadiusMeters(Number(e.target.value))}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/20"
-                  >
-                    {submitting ? 'Creating...' : 'Save & Schedule Meeting'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
         )}
       </main>
+
+      {formOpen && (
+        <EventForm
+          open={formOpen}
+          initial={initialForm}
+          eventTypes={eventTypes}
+          categories={categories}
+          onClose={() => setFormOpen(false)}
+          onSubmit={async (payload) => {
+            if (editing) await fetchApi(`/meetings/${editing.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+            else await fetchApi('/meetings', { method: 'POST', body: JSON.stringify(payload) });
+            setFormOpen(false);
+            notify(editing ? 'Event updated' : 'Event created', 'success');
+            load();
+          }}
+        />
+      )}
+
+      <CancelDialog
+        meeting={cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onDone={() => {
+          setCancelTarget(null);
+          notify('Event cancelled', 'success');
+          load();
+        }}
+      />
     </div>
+  );
+}
+
+function CancelDialog({ meeting, onClose, onDone }: { meeting: Meeting | null; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { notify } = useToast();
+  useEffect(() => setReason(''), [meeting]);
+  if (!meeting) return null;
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Cancel ${meeting.title}?`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Keep event</Button>
+          <Button
+            variant="danger"
+            loading={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await fetchApi(`/meetings/${meeting.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) });
+                onDone();
+              } catch (e) {
+                notify(e instanceof Error ? e.message : 'Could not cancel', 'error');
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            Cancel event
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-on-surface-variant">Members will see this event as cancelled. Attendance already recorded is kept.</p>
+        <Field label="Reason (optional)">
+          <input className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="e.g. Venue unavailable" />
+        </Field>
+      </div>
+    </Modal>
   );
 }

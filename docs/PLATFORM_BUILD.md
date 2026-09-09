@@ -163,6 +163,83 @@ lock, `audit.read` gating.
 - Invite email is sent inline with an 8s cap + shareable-link fallback; move to
   the async notification queue in the notifications phase.
 - Existing controllers still use `@Roles(enum)`; migrate to `@RequirePermissions`
-  as each module is reworked (Events, Finance, …).
-- Dark-slate admin pages (dashboard, meetings, members, …) not yet restyled to
-  the Stitch token system — that is the dedicated UI phase.
+  as each module is reworked (Events done; Finance, …).
+- Dark-slate admin pages (dashboard, members, follow-up, reports, live-meeting,
+  services, settings) not yet restyled to the Stitch token system.
+
+---
+
+## Phase 2 — Event system
+
+### 2a — Event types, visibility & lookup management (DONE 2026-09-09)
+
+**Recurrence engine** — `packages/shared/src/recurrence.ts`: pure `expandRecurrence`
+(DAILY/WEEKLY/MONTHLY/YEARLY, `interval`, `byWeekday`, `byMonthday`, `bySetPos`
+nth-weekday, `count`, `until`) working in a single zone's wall-clock time via a
+`zoneOffsetMinutes` seam (Lagos = 60, exact). `describeRecurrence` for UI. 12 unit
+tests covering every master-prompt scenario. **Wired into series generation in 2b.**
+
+**Schema** (`20260909140000_event_types_visibility`):
+- `event_types` — key/name/icon/colour/`defaultCompulsory`/`isSystem`/`active`/`sortOrder`;
+  11 defaults seeded (Service, Meeting, Training, Prayer, Bible Study, Special
+  Service, Outreach, Wedding, Funeral, Celebration, Other)
+- `event_audiences` — `{ meetingId, scope?(ALL_MEMBERS|EXECUTIVES|ADMINS), memberId?, subTeamId? }`
+- `event_invitations` — `{ meetingId, memberId, status }` (INVITED/ACCEPTED/DECLINED/TENTATIVE/NO_RESPONSE)
+- `meetings` +`eventTypeId`, `visibility` (PUBLIC/RESTRICTED), `allDay`, `address`,
+  `organizerName`, `coverImageUrl`, `notes`, `cancelReason`, `archivedAt`, `createdById`
+- `meeting_categories`/`sub_teams` +`isSystem`/`active`
+- backfills `meetings.eventTypeId` from the legacy category name; marks core rows `isSystem`
+
+**Visibility** — `common/event-visibility.ts`: `canViewEvent()` + `visibilityWhere()`
+Prisma fragment. RESTRICTED events are invisible to members outside the audience in
+list / detail / calendar / RSVP, and **check-in is refused** (enforced in
+`attendance.service`). Staff always see everything. 6 unit tests.
+
+**API**:
+| Route | Permission |
+|---|---|
+| `GET /meetings/event-types` | any authenticated |
+| `GET /meetings/calendar?from&to` | any authenticated (visibility-filtered) |
+| `GET /meetings` \| `/meetings/:id` | any authenticated (visibility-filtered; `search`, `eventTypeId`, `from`/`to`, `includeArchived`) |
+| `POST /meetings` \| `/meetings/recurring` | `events.create` (audiences, event type default-compulsory) |
+| `PATCH /meetings/:id` | `events.update` (CLOSED/CANCELLED rejected) |
+| `POST /meetings/:id/duplicate` | `events.create` |
+| `POST /meetings/:id/cancel` | `events.cancel` |
+| `POST` \| `DELETE /meetings/:id/archive` | `events.update` |
+| `GET/POST/PATCH/DELETE /lookups/:kind` | `lookups.read` / `lookups.manage` — `event-types`, `meeting-categories`, `sub-teams`; system rows deactivate-only, in-use rows undeletable |
+
+Meetings controller migrated `@Roles` → `@RequirePermissions`. All event mutations
+write audit entries.
+
+**Web**:
+- `components/EventForm.tsx` — full create/edit modal (type, category, all-day,
+  4 time fields, venue+geofence, grace/weight/compulsory, visibility + audience
+  picker for scopes/sub-teams/members, organiser, notes)
+- `/admin/meetings` rebuilt on the UI kit: filters, event-type colour badges,
+  restricted badge, row actions (monitor/open-close/edit/duplicate/cancel/archive)
+- `/admin/calendar` — month grid + agenda view, prev/next/today, day/event detail
+- `/admin/administration/lookups` — tabbed lookup admin (Event Types / Scoring
+  Categories / Sub-teams)
+- Navbar: **Events** dropdown (Calendar / All Events / Recurring / Event Types),
+  generalised multi-dropdown support
+
+**Verification (2026-09-09, local)**:
+| Check | Result |
+|---|---|
+| shared build + test | PASS · 27/27 (recurrence +12) |
+| api build + lint | PASS |
+| api unit tests | 34/34 (event-visibility +6) |
+| api integration tests | 87/87 (events.e2e +7) — full suite green in one run |
+| web build + lint | PASS |
+| Browser smoke (Playwright) | login → lookups (create/delete type) → events (create RESTRICTED event w/ audience) → calendar (month + day detail) → cancel + archive. PASS |
+
+`events.e2e` covers: 11 default types, lookup gating + system/in-use protection,
+public vs restricted creation (restricted needs an audience), restricted events
+hidden from outsiders in list/detail/calendar/RSVP, outsider check-in refused,
+update/duplicate/cancel/archive, no editing CLOSED.
+
+### 2b — Generalised recurrence series + occurrence exceptions + event dashboard (NEXT)
+
+Refactor `ServiceSchedule` → `EventSeries` (per-series location/audience/recurrence
+using the 2a engine); occurrence exceptions (cancel one / edit this / edit this &
+future / edit series); event dashboard with real charts.

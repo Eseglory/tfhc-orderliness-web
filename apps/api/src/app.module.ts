@@ -5,6 +5,7 @@ import { RbacModule } from './common/rbac/rbac.module';
 import { AccessRolesModule } from './modules/access-roles/access-roles.module';
 import { AdminTeamModule } from './modules/admin-team/admin-team.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { LookupsModule } from './modules/lookups/lookups.module';
 import { RecurringServicesModule } from './modules/recurring-services/recurring-services.module';
 import { MailModule } from './modules/mail/mail.module';
 import { AppController } from './app.controller';
@@ -42,6 +43,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     AccessRolesModule,
     AdminTeamModule,
     AuditModule,
+    LookupsModule,
     MembersModule,
     MeetingsModule,
     AttendanceModule,

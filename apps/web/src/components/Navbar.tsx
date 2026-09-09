@@ -26,19 +26,31 @@ const MEMBER_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: 'dashboard' },
-  { href: '/admin/meetings', label: 'Meetings', icon: 'calendar_today', anyOf: ['events.read', 'attendance.read'] },
+  {
+    href: '/admin/calendar',
+    label: 'Events',
+    icon: 'event',
+    anyOf: ['events.read', 'attendance.read'],
+    children: [
+      { href: '/admin/calendar', label: 'Calendar', icon: 'calendar_month' },
+      { href: '/admin/meetings', label: 'All Events', icon: 'event_note' },
+      { href: '/admin/services', label: 'Recurring Events', icon: 'repeat' },
+      { href: '/admin/administration/lookups', label: 'Event Types', icon: 'category', anyOf: ['lookups.read'] },
+    ],
+  },
   { href: '/admin/members', label: 'Members', icon: 'group', anyOf: ['members.read'] },
   { href: '/admin/leaderboard', label: 'Leaderboard', icon: 'emoji_events', anyOf: ['scoring.read'] },
   { href: '/admin/follow-up', label: 'Follow-Up', icon: 'warning', anyOf: ['approvals.read', 'attendance.read'] },
   { href: '/admin/reports', label: 'Reports', icon: 'description', anyOf: ['reports.view'] },
   {
     href: '/admin/administration/team',
-    label: 'Administration',
+    label: 'Admin',
     icon: 'admin_panel_settings',
-    anyOf: ['users.read', 'roles.read', 'settings.read', 'audit.read'],
+    anyOf: ['users.read', 'roles.read', 'settings.read', 'audit.read', 'lookups.read'],
     children: [
       { href: '/admin/administration/team', label: 'Admin Team', icon: 'group', anyOf: ['users.read'] },
       { href: '/admin/administration/roles', label: 'Roles & Permissions', icon: 'key', anyOf: ['roles.read'] },
+      { href: '/admin/administration/lookups', label: 'Lookup Tables', icon: 'category', anyOf: ['lookups.read'] },
       { href: '/admin/settings', label: 'Settings', icon: 'settings', anyOf: ['settings.read', 'scoring.configure'] },
       { href: '/admin/audit', label: 'Audit Log', icon: 'history', anyOf: ['audit.read'] },
     ],
@@ -80,6 +92,9 @@ export const Navbar: React.FC = () => {
 
   const items = (isAdmin ? ADMIN_NAV : MEMBER_NAV).filter(visible);
   const active = (href: string) => (href === '/admin' || href === '/member' ? pathname === href : pathname.startsWith(href));
+  const groupActive = (item: NavItem) =>
+    active(item.href) || Boolean(item.children?.some((c) => active(c.href)));
+  const activeGroup = items.find((i) => i.children && groupActive(i));
 
   const linkClass = (isActive: boolean) =>
     `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
@@ -117,7 +132,7 @@ export const Navbar: React.FC = () => {
                     aria-haspopup="true"
                     aria-expanded={openMenu === item.href}
                     onClick={() => setOpenMenu(openMenu === item.href ? null : item.href)}
-                    className={linkClass(pathname.startsWith('/admin/administration') || active(item.href))}
+                    className={linkClass(groupActive(item))}
                   >
                     <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
                     <span className="hidden xl:inline">{item.label}</span>
@@ -170,22 +185,20 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Secondary row: mobile admin sub-nav for Administration */}
-        {isAdmin && items.some((i) => i.children) && pathname.startsWith('/admin/administration') && (
+        {/* Secondary row: mobile sub-nav for the active dropdown section */}
+        {isAdmin && activeGroup && (
           <div className="flex gap-1 overflow-x-auto border-t border-outline-variant/20 py-2 md:hidden">
-            {ADMIN_NAV.find((i) => i.children)!
-              .children!.filter(visible)
-              .map((child) => (
-                <Link
-                  key={child.href}
-                  href={child.href}
-                  className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    active(child.href) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
-                  }`}
-                >
-                  {child.label}
-                </Link>
-              ))}
+            {activeGroup.children!.filter(visible).map((child) => (
+              <Link
+                key={child.href}
+                href={child.href}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  active(child.href) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+                }`}
+              >
+                {child.label}
+              </Link>
+            ))}
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { canViewEvent } from '../../common/event-visibility';
 import {
   validateGeofence,
   classifyAttendanceStatus,
@@ -60,13 +61,22 @@ export class AttendanceService {
     // 2. Verify Meeting
     const meeting = await this.prisma.meeting.findUnique({
       where: { id: dto.meetingId },
-      include: { category: true },
+      include: { category: true, audiences: true },
     });
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
     if (meeting.status !== 'ACTIVE') {
       throw new BadRequestException('Attendance check-in is not currently open for this meeting');
+    }
+    if (
+      !canViewEvent(meeting.visibility, meeting.audiences, {
+        memberId: member.id,
+        subTeamId: member.subTeamId,
+        roleInUnit: member.roleInUnit,
+      })
+    ) {
+      throw new BadRequestException('This event is not open to you');
     }
 
     if (serverTimestamp < meeting.attendanceOpenTime || serverTimestamp > meeting.attendanceCloseTime) {
