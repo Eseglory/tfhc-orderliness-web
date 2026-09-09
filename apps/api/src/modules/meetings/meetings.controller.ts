@@ -39,6 +39,12 @@ export class MeetingsController {
     return this.meetingsService.findActiveMeeting();
   }
 
+  @Get('dashboard')
+  @RequirePermissions('events.read')
+  dashboard() {
+    return this.meetingsService.eventsDashboard();
+  }
+
   @Get('calendar')
   calendar(
     @Query('from') from: string,

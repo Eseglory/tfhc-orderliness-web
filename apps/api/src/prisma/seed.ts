@@ -3,6 +3,7 @@ import * as argon2 from 'argon2';
 import { config } from 'dotenv';
 import { syncSystemRoles } from '../common/rbac/sync-system-roles';
 import { DEFAULT_EVENT_TYPES } from '@tfhc/shared';
+import { SERVICE_SCHEDULES } from '../modules/recurring-services/service-schedules';
 config();
 
 const prisma = new PrismaClient();
@@ -38,9 +39,47 @@ async function main() {
     const st = await prisma.subTeam.upsert({
       where: { name },
       update: {},
-      create: { name },
+      create: { name, isSystem: true },
     });
     createdSubTeams[name] = st.id;
+  }
+
+  // 2b. Recurring service schedules + shared venue/reminder configuration so the
+  //     generator has something to produce on boot.
+  await prisma.systemSetting.upsert({
+    where: { key: 'recurring_services_config' },
+    update: {},
+    create: {
+      key: 'recurring_services_config',
+      value: JSON.stringify({
+        venue: {
+          name: 'The Father’s House Church, 90 Alagbole–Akute Road, Iju, Ojodu',
+          latitude: 6.6697906,
+          longitude: 3.3581822,
+          radiusMeters: 120,
+        },
+        arrivalMinutesBefore: 30,
+        reminderMinutes: [60],
+        recipients: 'all',
+        remindersEnabled: false,
+      }),
+    },
+  });
+  for (const s of SERVICE_SCHEDULES) {
+    await prisma.serviceSchedule.upsert({
+      where: { id: s.id },
+      update: {},
+      create: {
+        id: s.id,
+        title: s.title,
+        dayOfWeek: s.dayOfWeek,
+        startMinutes: s.startMinutes,
+        endMinutes: s.endMinutes,
+        categoryName: s.categoryName,
+        enabled: true,
+        eventTypeKey: s.categoryName === 'Special Programme' ? 'SPECIAL_SERVICE' : 'SERVICE',
+      },
+    });
   }
 
   // 3. Sync RBAC system roles (Super Admin / Administration / Finance) from the

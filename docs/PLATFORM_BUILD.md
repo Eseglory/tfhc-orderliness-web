@@ -238,8 +238,54 @@ public vs restricted creation (restricted needs an audience), restricted events
 hidden from outsiders in list/detail/calendar/RSVP, outsider check-in refused,
 update/duplicate/cancel/archive, no editing CLOSED.
 
-### 2b — Generalised recurrence series + occurrence exceptions + event dashboard (NEXT)
+### 2b — Generalised recurrence + occurrence exceptions + event dashboard (DONE 2026-09-09)
 
-Refactor `ServiceSchedule` → `EventSeries` (per-series location/audience/recurrence
-using the 2a engine); occurrence exceptions (cancel one / edit this / edit this &
-future / edit series); event dashboard with real charts.
+Kept the `service_schedules` table (no data migration / test rewrite) and made it
+a general series:
+- **Schema** (`20260909150000_recurrence_exceptions`): `service_schedules`
+  +`recurrenceRule` (JSON, nullable — null ⇒ legacy weekly), `eventTypeKey`,
+  `visibility`, `horizonDays`, timestamps; `service_schedule_exceptions`
+  (`{ scheduleId, occurrenceStart, kind: SKIP|MODIFIED }`); `meetings`
+  +`isException`, `occurrenceStart`. Backfills `occurrenceStart` on existing
+  series meetings and maps categories → `eventTypeKey`.
+- **`service-schedules.ts` `occurrences()`** — uses `expandRecurrence` from the
+  shared engine when a `recurrenceRule` is present (every-N-weeks, selected
+  weekdays, nth-weekday-of-month, until), else the unchanged legacy weekly path.
+- **`RecurringServicesService`**: `generateUpcoming` resolves `eventTypeId`, sets
+  `occurrenceStart`/`visibility`, **skips SKIP-exception dates**, and **never
+  touches `isException` meetings** on reconcile. New `cancelOccurrence` /
+  `restoreOccurrence` (create/remove a SKIP exception + flip the meeting) and
+  `markOccurrenceModified`. `saveSchedule` accepts the rule + normalises WEEKLY
+  to the anchor weekday; audited.
+- **`MeetingsService.updateMeeting`** — editing one occurrence of a series marks
+  it `isException` + writes a MODIFIED exception so regeneration leaves it alone.
+- **API**: `POST`/`DELETE /service-schedules/:id/occurrences/:meetingId/cancel`;
+  `GET /meetings/dashboard` (KPIs + events-by-type + completed-by-month w/ avg
+  attendance rate); recurring controller migrated to `@RequirePermissions`.
+- **Web**: `components/RecurrenceBuilder` (weekly / fortnightly / selected days /
+  monthly-nth + end date); `/admin/services` rebuilt on the UI kit with series
+  cards, the recurrence builder, and an **Occurrences** modal (cancel/restore a
+  single date); new `/admin/meetings/dashboard` with CSS-bar charts. Navbar
+  Events dropdown gains Event Dashboard; child-active highlighting fixed for
+  nested prefixes.
+- **Seed**: creates `recurring_services_config` + the 10 service schedules so
+  a fresh DB generates events on boot.
+
+**Verification (2026-09-09, local)**:
+| Check | Result |
+|---|---|
+| shared build + test | PASS · 27/27 |
+| api build + lint | PASS |
+| api unit tests | 34/34 |
+| api integration tests | 92/92 (series.e2e +4, events dashboard +1) |
+| web build + lint | PASS |
+| Browser smoke (Playwright) | recurring series list → create monthly-nth series → occurrences modal (cancel + restore) → event dashboard charts. PASS |
+
+`series.e2e` covers: fortnightly rule spacing + `occurrenceStart`/`eventTypeId`,
+cancel-one survives regeneration + restore, single-occurrence edit detaches from
+series-wide edits, permission gating.
+
+### 2c — Event invitations / RSVP surfacing, week/day calendar views, cover images
+
+Deferred: `EventInvitation` write path (schema + `event_responses` sync exist),
+week/day calendar views (month + agenda done), cover-image upload.

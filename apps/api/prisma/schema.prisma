@@ -312,16 +312,46 @@ model EventInvitation {
 }
 
 model ServiceSchedule {
-  id           String @id
-  title        String
-  dayOfWeek    Int
-  startMinutes Int
-  endMinutes   Int?
-  categoryName String
-  enabled      Boolean @default(true)
-  meetings     Meeting[]
+  id             String   @id
+  title          String
+  dayOfWeek      Int
+  startMinutes   Int
+  endMinutes     Int?
+  categoryName   String
+  enabled        Boolean  @default(true)
+  // When set, this rule (RecurrenceRule JSON) drives occurrence generation and
+  // dayOfWeek is only the fallback/legacy anchor. Null ⇒ legacy weekly behaviour.
+  recurrenceRule Json?
+  eventTypeKey   String?
+  visibility     EventVisibility @default(PUBLIC)
+  horizonDays    Int      @default(28)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  meetings       Meeting[]
+  exceptions     ServiceScheduleException[]
 
   @@map("service_schedules")
+}
+
+model ServiceScheduleException {
+  id             String          @id @default(uuid())
+  scheduleId     String
+  schedule       ServiceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  // The series-computed occurrence start this exception applies to.
+  occurrenceStart DateTime
+  kind           ServiceExceptionKind
+  createdById    String?
+  reason         String?
+  createdAt      DateTime        @default(now())
+
+  @@unique([scheduleId, occurrenceStart])
+  @@index([scheduleId])
+  @@map("service_schedule_exceptions")
+}
+
+enum ServiceExceptionKind {
+  SKIP
+  MODIFIED
 }
 
 model Meeting {
@@ -351,6 +381,8 @@ model Meeting {
   geofenceRadiusMeters Float               @default(100.0)
   status               MeetingStatus       @default(SCHEDULED)
   cancelReason         String?
+  isException          Boolean             @default(false)
+  occurrenceStart      DateTime?
   isCompulsory         Boolean             @default(true)
   pointWeight          Float               @default(1.0)
   visibility           EventVisibility     @default(PUBLIC)

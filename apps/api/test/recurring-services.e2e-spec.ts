@@ -34,7 +34,7 @@ describe('Recurring service lifecycle with PostgreSQL', () => {
       else await db.systemSetting.deleteMany({ where: { key: 'recurring_services_config' } });
       await db.communicationDelivery.deleteMany({ where: { recipient: `reminder-${run}@example.test` } });
       if (recipientId) { await db.approvedMember.deleteMany({ where: { memberId: recipientId } }); await db.member.delete({ where: { id: recipientId } }); }
-      if (adminId) await db.user.delete({ where: { id: adminId } });
+      if (adminId) { await db.auditLog.deleteMany({ where: { actorUserId: adminId } }); await db.user.delete({ where: { id: adminId } }); }
     }
     if (app) await app.close();
   });

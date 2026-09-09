@@ -34,6 +34,7 @@ const ADMIN_NAV: NavItem[] = [
     children: [
       { href: '/admin/calendar', label: 'Calendar', icon: 'calendar_month' },
       { href: '/admin/meetings', label: 'All Events', icon: 'event_note' },
+      { href: '/admin/meetings/dashboard', label: 'Event Dashboard', icon: 'insights' },
       { href: '/admin/services', label: 'Recurring Events', icon: 'repeat' },
       { href: '/admin/administration/lookups', label: 'Event Types', icon: 'category', anyOf: ['lookups.read'] },
     ],
@@ -95,6 +96,10 @@ export const Navbar: React.FC = () => {
   const groupActive = (item: NavItem) =>
     active(item.href) || Boolean(item.children?.some((c) => active(c.href)));
   const activeGroup = items.find((i) => i.children && groupActive(i));
+  // A child is "current" only if no sibling with a longer (more specific) href also matches.
+  const childActive = (item: NavItem, child: NavItem) =>
+    active(child.href) &&
+    !item.children!.some((other) => other !== child && other.href.length > child.href.length && active(other.href));
 
   const linkClass = (isActive: boolean) =>
     `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
@@ -145,7 +150,7 @@ export const Navbar: React.FC = () => {
                           key={child.href}
                           href={child.href}
                           className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${
-                            active(child.href)
+                            childActive(item, child)
                               ? 'bg-surface-container text-primary'
                               : 'text-on-surface hover:bg-surface-container'
                           }`}
@@ -193,7 +198,7 @@ export const Navbar: React.FC = () => {
                 key={child.href}
                 href={child.href}
                 className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                  active(child.href) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
+                  childActive(activeGroup, child) ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'
                 }`}
               >
                 {child.label}

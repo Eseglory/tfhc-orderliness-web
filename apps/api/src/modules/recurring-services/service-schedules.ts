@@ -1,3 +1,5 @@
+import { expandRecurrence, isValidRecurrenceRule, RecurrenceRule } from '@tfhc/shared';
+
 export const SERVICE_SCHEDULES = [
   { id: 'sunday-first', title: 'First Service', dayOfWeek: 0, startMinutes: 420, endMinutes: 480, categoryName: 'Sunday Service' },
   { id: 'sunday-second', title: 'Second Service', dayOfWeek: 0, startMinutes: 510, endMinutes: 600, categoryName: 'Sunday Service' },
@@ -11,17 +13,62 @@ export const SERVICE_SCHEDULES = [
   { id: 'thursday-divine', title: 'Divine Intervention Service', dayOfWeek: 4, startMinutes: 480, endMinutes: 600, categoryName: 'Special Programme' },
 ];
 
+export type ScheduleShape = {
+  dayOfWeek: number;
+  startMinutes: number;
+  endMinutes: number | null;
+  recurrenceRule?: unknown;
+  horizonDays?: number | null;
+};
+
 // Africa/Lagos is UTC+01:00 year-round. Date arithmetic stays independent of host timezone.
-export function occurrences(schedule: { dayOfWeek: number; startMinutes: number; endMinutes: number | null }, now: Date, days = 28) {
-  const local = new Date(now.getTime() + 3600000);
+const LAGOS_OFFSET_MIN = 60;
+
+/**
+ * Upcoming occurrence start/end instants for a schedule.
+ *
+ * - No `recurrenceRule` ⇒ legacy behaviour: every `dayOfWeek` in the next
+ *   `days` window (default 28) at `startMinutes` local time.
+ * - With a `recurrenceRule` ⇒ the shared recurrence engine drives the dates,
+ *   anchored to today at `startMinutes`, over the same window.
+ */
+export function occurrences(schedule: ScheduleShape, now: Date, days?: number) {
+  const window = days ?? schedule.horizonDays ?? 28;
+  const rule = schedule.recurrenceRule;
+
+  if (rule && isValidRecurrenceRule(rule)) {
+    return recurrenceOccurrences(schedule, rule as RecurrenceRule, now, window);
+  }
+
+  const local = new Date(now.getTime() + LAGOS_OFFSET_MIN * 60000);
   const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
   const results: { startTime: Date; endTime: Date | null }[] = [];
-  for (let day = 0; day < days; day++) {
+  for (let day = 0; day < window; day++) {
     const date = new Date(midnight + day * 86400000);
     if (date.getUTCDay() !== schedule.dayOfWeek) continue;
     const startTime = new Date(date.getTime() + (schedule.startMinutes - 60) * 60000);
     if (startTime <= now) continue;
-    results.push({ startTime, endTime: schedule.endMinutes === null ? null : new Date(date.getTime() + (schedule.endMinutes - 60) * 60000) });
+    results.push({
+      startTime,
+      endTime: schedule.endMinutes === null ? null : new Date(date.getTime() + (schedule.endMinutes - 60) * 60000),
+    });
   }
   return results;
+}
+
+function recurrenceOccurrences(schedule: ScheduleShape, rule: RecurrenceRule, now: Date, days: number) {
+  // Anchor dtStart to "today" at the schedule's local start time.
+  const local = new Date(now.getTime() + LAGOS_OFFSET_MIN * 60000);
+  const startUtc = new Date(
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + (schedule.startMinutes - 60) * 60000,
+  );
+  const to = new Date(now.getTime() + days * 86400000);
+  const durationMs = schedule.endMinutes === null ? null : (schedule.endMinutes - schedule.startMinutes) * 60000;
+
+  return expandRecurrence(rule, startUtc, { from: now, to, zoneOffsetMinutes: LAGOS_OFFSET_MIN, max: 200 })
+    .filter((start) => start > now)
+    .map((start) => ({
+      startTime: start,
+      endTime: durationMs === null ? null : new Date(start.getTime() + durationMs),
+    }));
 }

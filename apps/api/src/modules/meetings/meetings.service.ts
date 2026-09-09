@@ -426,10 +426,32 @@ export class MeetingsService {
       ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),
     };
 
+    // Editing one occurrence of a recurring series turns it into an exception so
+    // series regeneration leaves it untouched.
+    const isSeriesOccurrence = Boolean(existing.serviceScheduleId);
+    if (isSeriesOccurrence) data.isException = true;
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (audiences) {
         await tx.eventAudience.deleteMany({ where: { meetingId: id } });
         if (audiences.length) await tx.eventAudience.createMany({ data: audiences.map((a) => ({ ...a, meetingId: id })) });
+      }
+      if (isSeriesOccurrence) {
+        await tx.serviceScheduleException.upsert({
+          where: {
+            scheduleId_occurrenceStart: {
+              scheduleId: existing.serviceScheduleId!,
+              occurrenceStart: existing.occurrenceStart ?? existing.startTime,
+            },
+          },
+          update: { kind: 'MODIFIED', createdById: actorUserId },
+          create: {
+            scheduleId: existing.serviceScheduleId!,
+            occurrenceStart: existing.occurrenceStart ?? existing.startTime,
+            kind: 'MODIFIED',
+            createdById: actorUserId,
+          },
+        });
       }
       return tx.meeting.update({ where: { id }, data, include: { category: true, eventType: true, audiences: true } });
     });
@@ -530,6 +552,66 @@ export class MeetingsService {
       entityId: id,
     });
     return updated;
+  }
+
+  async eventsDashboard() {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const weekEnd = new Date(now.getTime() + 7 * 86400000);
+    const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+
+    const [total, upcoming, thisWeek, thisMonth, cancelled, recurring, restricted, byType, recentClosed] = await Promise.all([
+      this.prisma.meeting.count({ where: { archivedAt: null } }),
+      this.prisma.meeting.count({ where: { archivedAt: null, status: { in: ['SCHEDULED', 'ACTIVE'] }, startTime: { gte: now } } }),
+      this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: now, lte: weekEnd } } }),
+      this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: monthStart } } }),
+      this.prisma.meeting.count({ where: { archivedAt: null, status: 'CANCELLED' } }),
+      this.prisma.serviceSchedule.count({ where: { enabled: true } }),
+      this.prisma.meeting.count({ where: { archivedAt: null, visibility: 'RESTRICTED' } }),
+      this.prisma.meeting.groupBy({
+        by: ['eventTypeId'],
+        where: { archivedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.meeting.findMany({
+        where: { status: 'CLOSED', startTime: { gte: yearAgo } },
+        select: { startTime: true, meetingSummary: { select: { attendanceRate: true } } },
+      }),
+    ]);
+
+    const types = await this.prisma.eventType.findMany({ select: { id: true, name: true, color: true } });
+    const typeName = new Map(types.map((t) => [t.id, t]));
+    const eventsByType = byType
+      .map((r) => ({
+        type: r.eventTypeId ? typeName.get(r.eventTypeId)?.name ?? 'Unknown' : 'Uncategorised',
+        color: r.eventTypeId ? typeName.get(r.eventTypeId)?.color ?? null : null,
+        count: r._count._all,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const months: Record<string, { count: number; rateSum: number; rateN: number }> = {};
+    for (const m of recentClosed) {
+      const key = `${m.startTime.getFullYear()}-${String(m.startTime.getMonth() + 1).padStart(2, '0')}`;
+      months[key] ??= { count: 0, rateSum: 0, rateN: 0 };
+      months[key].count++;
+      if (m.meetingSummary) {
+        months[key].rateSum += m.meetingSummary.attendanceRate;
+        months[key].rateN++;
+      }
+    }
+    const eventsByMonth = Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, v]) => ({
+        month,
+        count: v.count,
+        avgAttendanceRate: v.rateN ? Math.round(v.rateSum / v.rateN) : null,
+      }));
+
+    return {
+      kpis: { total, upcoming, thisWeek, thisMonth, cancelled, recurringSeries: recurring, restricted },
+      eventsByType,
+      eventsByMonth,
+    };
   }
 
   async findOpenAttendanceMeetings() {

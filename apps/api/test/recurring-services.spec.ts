@@ -18,7 +18,7 @@ describe('Recurring services', () => {
   it('does not generate meetings or email until venue and reminder settings exist', async () => {
     const db = { systemSetting: { findUnique: jest.fn().mockResolvedValue(null) } };
     const mail = { sendEmail: jest.fn() };
-    const service = new RecurringServicesService(db as any, mail as any);
+    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any);
     expect(await service.generateUpcoming()).toEqual({ created: 0, configured: false });
     expect(await service.sendDueReminders()).toEqual({ sent: 0 });
     expect(mail.sendEmail).not.toHaveBeenCalled();
@@ -35,7 +35,7 @@ describe('Recurring services', () => {
       communicationDelivery: { createMany: jest.fn(async ({ data }) => { const key = data[0].idempotencyKey; if (claims.has(key)) return { count: 0 }; claims.add(key); return { count: 1 }; }), update: jest.fn() },
     };
     const mail = { sendEmail: jest.fn().mockResolvedValue({ messageId: 'sent' }) };
-    const service = new RecurringServicesService(db as any, mail as any);
+    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any);
     expect(await service.sendDueReminders(now)).toEqual({ sent: 1 });
     expect(await service.sendDueReminders(now)).toEqual({ sent: 0 });
     expect(mail.sendEmail).toHaveBeenCalledTimes(1);

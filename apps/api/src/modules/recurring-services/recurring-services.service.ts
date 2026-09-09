@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Prisma } from '@prisma/client';
+import { isValidRecurrenceRule, describeRecurrence, RecurrenceRule } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { AuditService } from '../../common/rbac/audit.service';
 import { occurrences } from './service-schedules';
 import { randomUUID } from 'crypto';
 
@@ -16,7 +19,11 @@ export type RecurringConfig = {
 @Injectable()
 export class RecurringServicesService implements OnApplicationBootstrap {
   private readonly logger = new Logger(RecurringServicesService.name);
-  constructor(private readonly prisma: PrismaService, private readonly mail: MailService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+    private readonly audit: AuditService,
+  ) {}
 
   private async configuration(): Promise<RecurringConfig | null> {
     const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'recurring_services_config' } });
@@ -32,7 +39,31 @@ export class RecurringServicesService implements OnApplicationBootstrap {
   }
 
   async list() {
-    return { schedules: await this.prisma.serviceSchedule.findMany({ orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }] }), config: await this.configuration() };
+    const schedules = await this.prisma.serviceSchedule.findMany({
+      orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }],
+      include: {
+        exceptions: { orderBy: { occurrenceStart: 'asc' } },
+        _count: { select: { meetings: true } },
+      },
+    });
+    return {
+      schedules: schedules.map((s) => ({
+        ...s,
+        recurrenceSummary: s.recurrenceRule && isValidRecurrenceRule(s.recurrenceRule)
+          ? describeRecurrence(s.recurrenceRule as RecurrenceRule)
+          : `Weekly on ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek]}`,
+      })),
+      config: await this.configuration(),
+    };
+  }
+
+  /** Normalise an incoming recurrence rule; default WEEKLY to the schedule weekday. */
+  private normaliseRule(rule: unknown, dayOfWeek: number): RecurrenceRule | null {
+    if (rule === null || rule === undefined) return null;
+    if (!isValidRecurrenceRule(rule)) throw new BadRequestException('Invalid recurrence rule');
+    const r = { ...(rule as RecurrenceRule) };
+    if (r.freq === 'WEEKLY' && (!r.byWeekday || r.byWeekday.length === 0)) r.byWeekday = [dayOfWeek];
+    return r;
   }
 
   async saveConfiguration(config: RecurringConfig) {
@@ -41,12 +72,93 @@ export class RecurringServicesService implements OnApplicationBootstrap {
     return this.generateUpcoming(new Date(), true);
   }
 
-  async saveSchedule(id: string | undefined, dto: any) {
+  async saveSchedule(id: string | undefined, dto: any, actorUserId?: string) {
     if (!dto || typeof dto.title !== 'string' || !dto.title.trim() || dto.title.length > 120 || typeof dto.categoryName !== 'string' || !dto.categoryName.trim() || dto.categoryName.length > 80 || !Number.isInteger(dto.dayOfWeek) || dto.dayOfWeek < 0 || dto.dayOfWeek > 6 || !Number.isInteger(dto.startMinutes) || dto.startMinutes < 0 || dto.startMinutes > 1439 || (dto.endMinutes !== null && (!Number.isInteger(dto.endMinutes) || dto.endMinutes <= dto.startMinutes || dto.endMinutes > 1440)) || typeof dto.enabled !== 'boolean') throw new BadRequestException('Valid title, weekday, start time and optional later end time are required');
-    const data = { title: dto.title.trim(), categoryName: dto.categoryName.trim(), dayOfWeek: dto.dayOfWeek, startMinutes: dto.startMinutes, endMinutes: dto.endMinutes, enabled: dto.enabled };
-    const saved = id ? await this.prisma.serviceSchedule.update({ where: { id }, data }) : await this.prisma.serviceSchedule.create({ data: { id: randomUUID(), ...data } });
+
+    const rule = dto.recurrenceRule === undefined ? undefined : this.normaliseRule(dto.recurrenceRule, dto.dayOfWeek);
+    const horizonDays = dto.horizonDays === undefined ? undefined : Number(dto.horizonDays);
+    if (horizonDays !== undefined && (!Number.isInteger(horizonDays) || horizonDays < 7 || horizonDays > 120))
+      throw new BadRequestException('Generation horizon must be 7–120 days');
+
+    const data: Prisma.ServiceScheduleUncheckedUpdateInput = {
+      title: dto.title.trim(),
+      categoryName: dto.categoryName.trim(),
+      dayOfWeek: dto.dayOfWeek,
+      startMinutes: dto.startMinutes,
+      endMinutes: dto.endMinutes,
+      enabled: dto.enabled,
+      ...(rule !== undefined ? { recurrenceRule: rule === null ? Prisma.DbNull : (rule as unknown as Prisma.InputJsonValue) } : {}),
+      ...(dto.eventTypeKey !== undefined ? { eventTypeKey: dto.eventTypeKey || null } : {}),
+      ...(dto.visibility !== undefined ? { visibility: dto.visibility === 'RESTRICTED' ? 'RESTRICTED' : 'PUBLIC' } : {}),
+      ...(horizonDays !== undefined ? { horizonDays } : {}),
+    };
+
+    const saved = id
+      ? await this.prisma.serviceSchedule.update({ where: { id }, data })
+      : await this.prisma.serviceSchedule.create({ data: { id: randomUUID(), ...(data as Prisma.ServiceScheduleUncheckedCreateInput) } });
+
+    if (actorUserId)
+      await this.audit.record({
+        actorUserId,
+        action: id ? 'SERIES_UPDATED' : 'SERIES_CREATED',
+        entity: 'ServiceSchedule',
+        entityId: saved.id,
+        newData: { title: saved.title, dayOfWeek: saved.dayOfWeek, enabled: saved.enabled },
+      });
+
     await this.generateUpcoming(new Date(), true);
     return saved;
+  }
+
+  // -------------------------------------------------------------------------
+  // Occurrence-level exceptions (§10 of the spec)
+  // -------------------------------------------------------------------------
+
+  private async occurrenceMeeting(scheduleId: string, meetingId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting || meeting.serviceScheduleId !== scheduleId) throw new NotFoundException('Occurrence not found for this series');
+    if (meeting.status === 'CLOSED') throw new BadRequestException('A closed occurrence cannot be changed');
+    return meeting;
+  }
+
+  async cancelOccurrence(scheduleId: string, meetingId: string, reason: string | undefined, actorUserId: string) {
+    const meeting = await this.occurrenceMeeting(scheduleId, meetingId);
+    const occurrenceStart = meeting.occurrenceStart ?? meeting.startTime;
+    await this.prisma.$transaction([
+      this.prisma.meeting.update({
+        where: { id: meetingId },
+        data: { status: 'CANCELLED', scheduleCancelled: true, isException: true, cancelReason: reason?.trim() || 'Cancelled for this date' },
+      }),
+      this.prisma.serviceScheduleException.upsert({
+        where: { scheduleId_occurrenceStart: { scheduleId, occurrenceStart } },
+        update: { kind: 'SKIP', reason: reason?.trim() || null, createdById: actorUserId },
+        create: { scheduleId, occurrenceStart, kind: 'SKIP', reason: reason?.trim() || null, createdById: actorUserId },
+      }),
+    ]);
+    await this.audit.record({ actorUserId, action: 'SERIES_OCCURRENCE_CANCELLED', entity: 'Meeting', entityId: meetingId, reason: reason?.trim() || null });
+    return { cancelled: true };
+  }
+
+  async restoreOccurrence(scheduleId: string, meetingId: string, actorUserId: string) {
+    const meeting = await this.occurrenceMeeting(scheduleId, meetingId);
+    const occurrenceStart = meeting.occurrenceStart ?? meeting.startTime;
+    await this.prisma.$transaction([
+      this.prisma.serviceScheduleException.deleteMany({ where: { scheduleId, occurrenceStart } }),
+      this.prisma.meeting.update({ where: { id: meetingId }, data: { status: 'SCHEDULED', scheduleCancelled: false, isException: false, cancelReason: null } }),
+    ]);
+    await this.audit.record({ actorUserId, action: 'SERIES_OCCURRENCE_RESTORED', entity: 'Meeting', entityId: meetingId });
+    await this.generateUpcoming(new Date(), true);
+    return { restored: true };
+  }
+
+  /** Mark a meeting as an individually-edited occurrence so series regeneration
+   *  leaves it alone. Called by MeetingsService.updateMeeting for series events. */
+  async markOccurrenceModified(scheduleId: string, meetingId: string, occurrenceStart: Date, actorUserId?: string) {
+    await this.prisma.serviceScheduleException.upsert({
+      where: { scheduleId_occurrenceStart: { scheduleId, occurrenceStart } },
+      update: { kind: 'MODIFIED', createdById: actorUserId ?? null },
+      create: { scheduleId, occurrenceStart, kind: 'MODIFIED', createdById: actorUserId ?? null },
+    });
   }
 
   async onApplicationBootstrap() {
@@ -59,34 +171,79 @@ export class RecurringServicesService implements OnApplicationBootstrap {
   async generateUpcoming(now = new Date(), reconcile = false) {
     const config = await this.configuration();
     if (!config) return { created: 0, configured: false };
-    const schedules = await this.prisma.serviceSchedule.findMany({});
+    const schedules = await this.prisma.serviceSchedule.findMany({ include: { exceptions: true } });
+    const eventTypes = await this.prisma.eventType.findMany({ select: { id: true, key: true } });
+    const typeByKey = new Map(eventTypes.map((t) => [t.key, t.id]));
     let created = 0;
+
     for (const schedule of schedules) {
       if (!schedule.enabled) {
-        if (reconcile) await this.prisma.meeting.updateMany({ where: { serviceScheduleId: schedule.id, startTime: { gt: now }, status: 'SCHEDULED' }, data: { status: 'CANCELLED', scheduleCancelled: true } });
+        if (reconcile)
+          await this.prisma.meeting.updateMany({
+            where: { serviceScheduleId: schedule.id, startTime: { gt: now }, status: 'SCHEDULED', isException: false },
+            data: { status: 'CANCELLED', scheduleCancelled: true },
+          });
         continue;
       }
       const category = await this.prisma.meetingCategory.upsert({ where: { name: schedule.categoryName }, update: {}, create: { name: schedule.categoryName, basePoints: 5 } });
-      const data = occurrences(schedule, now).map(({ startTime, endTime }) => {
-        const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
-        return {
-          serviceScheduleId: schedule.id, title: schedule.title, categoryId: category.id,
-          meetingDate: startTime, startTime, endTime, expectedArrivalTime,
-          attendanceOpenTime: new Date(expectedArrivalTime.getTime() - 30 * 60000), attendanceCloseTime: endTime || new Date(startTime.getTime() + 10 * 60000),
-          locationName: config.venue.name, latitude: config.venue.latitude, longitude: config.venue.longitude,
-          geofenceRadiusMeters: config.venue.radiusMeters, isCompulsory: false,
-        };
-      });
+      const eventTypeId = schedule.eventTypeKey ? typeByKey.get(schedule.eventTypeKey) ?? null : null;
+      const skipDates = new Set(schedule.exceptions.filter((e) => e.kind === 'SKIP').map((e) => e.occurrenceStart.getTime()));
+      const modifiedDates = new Set(schedule.exceptions.filter((e) => e.kind === 'MODIFIED').map((e) => e.occurrenceStart.getTime()));
+
+      const data = occurrences(schedule, now)
+        .filter(({ startTime }) => !skipDates.has(startTime.getTime()))
+        .map(({ startTime, endTime }) => {
+          const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
+          return {
+            serviceScheduleId: schedule.id,
+            occurrenceStart: startTime,
+            eventTypeId,
+            visibility: schedule.visibility,
+            title: schedule.title,
+            categoryId: category.id,
+            meetingDate: startTime,
+            startTime,
+            endTime,
+            expectedArrivalTime,
+            attendanceOpenTime: new Date(expectedArrivalTime.getTime() - 30 * 60000),
+            attendanceCloseTime: endTime || new Date(startTime.getTime() + 10 * 60000),
+            locationName: config.venue.name,
+            latitude: config.venue.latitude,
+            longitude: config.venue.longitude,
+            geofenceRadiusMeters: config.venue.radiusMeters,
+            isCompulsory: false,
+          };
+        });
+
       if (reconcile) {
-        const upcoming = await this.prisma.meeting.findMany({ where: { serviceScheduleId: schedule.id, startTime: { gt: now }, OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }] } });
+        const upcoming = await this.prisma.meeting.findMany({
+          where: {
+            serviceScheduleId: schedule.id,
+            startTime: { gt: now },
+            isException: false,
+            OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }],
+          },
+        });
         for (const meeting of upcoming) {
-          const desired = data.find(d => d.startTime.getTime() === meeting.startTime.getTime());
-          if (desired) {
-            await this.prisma.meeting.updateMany({ where: { id: meeting.id, OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }] }, data: { ...desired, status: 'SCHEDULED', scheduleCancelled: false } });
-          } else if (meeting.startTime.getTime() < now.getTime() + 28 * 86400000) await this.prisma.meeting.updateMany({ where: { id: meeting.id, status: 'SCHEDULED' }, data: { status: 'CANCELLED', scheduleCancelled: true } });
+          const key = (meeting.occurrenceStart ?? meeting.startTime).getTime();
+          const desired = data.find((d) => d.occurrenceStart.getTime() === key || d.startTime.getTime() === meeting.startTime.getTime());
+          if (desired && !skipDates.has(key)) {
+            await this.prisma.meeting.updateMany({
+              where: { id: meeting.id, isException: false, OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }] },
+              data: { ...desired, status: 'SCHEDULED', scheduleCancelled: false },
+            });
+          } else if (meeting.startTime.getTime() < now.getTime() + schedule.horizonDays * 86400000) {
+            await this.prisma.meeting.updateMany({
+              where: { id: meeting.id, status: 'SCHEDULED', isException: false },
+              data: { status: 'CANCELLED', scheduleCancelled: true },
+            });
+          }
         }
       }
-      const result = await this.prisma.meeting.createMany({ data, skipDuplicates: true });
+
+      // Never (re)create a modified occurrence — its edited meeting already exists.
+      const toCreate = data.filter((d) => !modifiedDates.has(d.occurrenceStart.getTime()));
+      const result = await this.prisma.meeting.createMany({ data: toCreate, skipDuplicates: true });
       created += result.count;
     }
     return { created, configured: true };

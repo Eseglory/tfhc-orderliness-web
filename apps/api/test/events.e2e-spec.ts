@@ -211,4 +211,13 @@ describe('Event system (real PostgreSQL)', () => {
     await db.meeting.update({ where: { id: publicId }, data: { status: 'CLOSED' } });
     await http().patch(`/meetings/${publicId}`).set(auth(adminToken)).send({ title: 'too late' }).expect(400);
   });
+
+  test('event dashboard aggregates KPIs and breakdowns', async () => {
+    await http().get('/meetings/dashboard').set(auth(insiderToken)).expect(403);
+    const d = (await http().get('/meetings/dashboard').set(auth(adminToken)).expect(200)).body;
+    expect(typeof d.kpis.total).toBe('number');
+    expect(d.kpis.total).toBeGreaterThan(0);
+    expect(Array.isArray(d.eventsByType)).toBe(true);
+    expect(Array.isArray(d.eventsByMonth)).toBe(true);
+  });
 });
