@@ -627,10 +627,44 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-[calc(100vh-4rem)]">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-[calc(100vh-4rem)] p-3 sm:p-6 lg:p-8 pb-24 lg:pb-8">
           {children}
         </main>
       </div>
+
+      {/* Mobile Fixed Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 px-2 py-1.5 shadow-lg flex items-center justify-around">
+        {[
+          { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+          { href: '/admin/members', label: 'People', icon: Users },
+          { href: '/admin/calendar', label: 'Activities', icon: Calendar },
+          { href: '/admin/meetings/dashboard', label: 'Operations', icon: Layers },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-bold transition-all ${
+                isActive
+                  ? 'text-indigo-600 dark:text-indigo-400 scale-105'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Icon className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
+              <span>{tab.label}</span>
+            </Link>
+          );
+        })}
+        <button
+          onClick={() => setMobileDrawerOpen(true)}
+          className="flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all"
+        >
+          <Menu className="w-5 h-5 mb-0.5" />
+          <span>More</span>
+        </button>
+      </nav>
     </div>
   );
 };
