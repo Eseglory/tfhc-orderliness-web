@@ -23,6 +23,8 @@ export class MailService implements OnModuleDestroy {
       tls: { minVersion: 'TLSv1.2', rejectUnauthorized: true },
       connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000,
       disableFileAccess: true, disableUrlAccess: true,
+      // Keep connections alive so only the first send pays the TLS handshake.
+      pool: true, maxConnections: 3, maxMessages: 50,
     });
     return this.transport;
   }

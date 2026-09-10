@@ -15,7 +15,9 @@ import { Role } from '@tfhc/shared';
 
 const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-const AUTH_EMAIL_TIMEOUT_MS = 8000;
+// Long enough to absorb a cold TLS handshake to the SMTP server on the first
+// send after a restart; the pooled transport keeps later sends fast.
+const AUTH_EMAIL_TIMEOUT_MS = 15000;
 
 @Injectable()
 export class AuthService {
