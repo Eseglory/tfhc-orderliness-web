@@ -455,31 +455,37 @@ export default function AdminMembersPage() {
                         {/* Member Column */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            {m.profilePhotoUrl ? (
-                              <img
-                                src={m.profilePhotoUrl}
-                                alt={`${m.firstName} avatar`}
-                                className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
-                                {m.firstName?.[0] || 'M'}
-                                {m.lastName?.[0] || ''}
+                            <Link
+                              href={`/admin/members/${m.id || 'ORD-2041'}`}
+                              className="group flex items-center gap-3 hover:opacity-80 transition-opacity"
+                            >
+                              {m.profilePhotoUrl ? (
+                                <img
+                                  src={m.profilePhotoUrl}
+                                  alt={`${m.firstName} avatar`}
+                                  className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
+                                  {m.firstName?.[0] || 'M'}
+                                  {m.lastName?.[0] || ''}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate flex items-center gap-1.5">
+                                  <span>{m.firstName} {m.lastName}</span>
+                                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
+                                    {m.memberCode}
+                                  </span>
+                                  {m.gender && (
+                                    <span className="text-[10px] text-slate-400">{m.gender}</span>
+                                  )}
+                                </div>
                               </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="font-extrabold text-slate-900 dark:text-white truncate">
-                                {m.firstName} {m.lastName}
-                              </p>
-                              <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
-                                  {m.memberCode}
-                                </span>
-                                {m.gender && (
-                                  <span className="text-[10px] text-slate-400">{m.gender}</span>
-                                )}
-                              </div>
-                            </div>
+                            </Link>
                           </div>
                         </td>
 
