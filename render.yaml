@@ -5,9 +5,8 @@ services:
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
-    preDeployCommand: node apps/api/scripts/migrate-deploy.cjs
     envVars:
       - key: NODE_ENV
         value: production
@@ -46,7 +45,7 @@ services:
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /login
     envVars:
       - key: NODE_ENV

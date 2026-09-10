@@ -19,5 +19,4 @@ RUN apk add --no-cache openssl
 COPY --from=builder --chown=node:node /app /app
 USER node
 EXPOSE 4000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "apps/api/dist/apps/api/src/main.js"]
+CMD ["sh", "-c", "node apps/api/scripts/migrate-deploy.cjs && node apps/api/dist/apps/api/src/main.js"]
