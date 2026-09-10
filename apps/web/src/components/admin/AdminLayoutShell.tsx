@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -21,90 +21,128 @@ import {
   Search,
   Plus,
   ChevronDown,
+  ChevronRight,
   Menu,
   X,
   LogOut,
   Building2,
   Bell,
   Sparkles,
-  ExternalLink,
-  ChevronRight,
-  Flame
+  Flame,
+  FileText,
+  Sliders,
+  FolderTree,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Layers,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { logout } from '../../lib/api';
 import { LogoIcon } from '../LogoIcon';
-import { ProfilePhoto } from '../ProfilePhoto';
 import { GlobalSearchModal } from './GlobalSearchModal';
+import { AdminBreadcrumb } from './AdminBreadcrumb';
 
-interface NavGroup {
-  title: string;
-  items: {
-    label: string;
-    href: string;
-    icon: React.ElementType;
-    badge?: string | number;
-    exact?: boolean;
-    anyOf?: string[];
-  }[];
+interface NavChild {
+  href: string;
+  label: string;
+  icon?: React.ElementType;
+  badge?: string | number;
+  anyOf?: string[];
+  exact?: boolean;
 }
 
-const NAV_GROUPS: NavGroup[] = [
+interface NavParent {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  href?: string; // If direct link without children (e.g. Dashboard)
+  exact?: boolean;
+  anyOf?: string[];
+  badge?: string | number;
+  children?: NavChild[];
+}
+
+const NAVIGATION_TREE: NavParent[] = [
   {
-    title: 'OVERVIEW',
-    items: [
-      { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, exact: true },
+    key: 'dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    href: '/admin',
+    exact: true,
+  },
+  {
+    key: 'people',
+    label: 'People & Congregation',
+    icon: Users,
+    anyOf: ['members.read'],
+    children: [
+      { href: '/admin/members', label: 'Members Directory', icon: Users, anyOf: ['members.read'] },
+      { href: '/admin/leaderboard', label: 'Leaderboard & Points', icon: Trophy, anyOf: ['scoring.read'] },
     ],
   },
   {
-    title: 'PEOPLE',
-    items: [
-      { label: 'Members Directory', href: '/admin/members', icon: Users, anyOf: ['members.read'] },
+    key: 'events',
+    label: 'Events & Gatherings',
+    icon: Calendar,
+    anyOf: ['events.read', 'attendance.read', 'attendance.mark'],
+    children: [
+      { href: '/admin/calendar', label: 'Events Calendar', icon: Calendar, anyOf: ['events.read'] },
+      { href: '/admin/meetings', label: 'All Meetings & Services', icon: Clock, anyOf: ['events.read'] },
+      { href: '/admin/services', label: 'Recurring Service Series', icon: Layers, anyOf: ['events.read'] },
+      { href: '/admin/meetings/dashboard', label: 'Operations & Feature Board', icon: Kanban, anyOf: ['events.read'] },
+      { href: '/admin/live-meeting', label: 'Live Roster Session', icon: Flame, anyOf: ['attendance.mark'] },
     ],
   },
   {
-    title: 'ATTENDANCE & ANALYTICS',
-    items: [
-      { label: 'Overview & Trends', href: '/admin/reports', icon: BarChart3, anyOf: ['reports.view'] },
-      { label: 'Events Calendar', href: '/admin/calendar', icon: Calendar, anyOf: ['events.read'] },
-      { label: 'Live Meeting Session', href: '/admin/live-meeting', icon: Flame, anyOf: ['attendance.mark'] },
+    key: 'attendance',
+    label: 'Attendance & Analytics',
+    icon: BarChart3,
+    anyOf: ['reports.view', 'attendance.read'],
+    children: [
+      { href: '/admin/reports', label: 'Overview & Trends', icon: BarChart3, anyOf: ['reports.view'] },
     ],
   },
   {
-    title: 'CHURCH OPERATIONS',
-    items: [
-      { label: 'All Meetings & Services', href: '/admin/meetings', icon: Clock, anyOf: ['events.read'] },
-      { label: 'Recurring Series', href: '/admin/services', icon: Calendar, anyOf: ['events.read'] },
-      { label: 'Operations & Feature Board', href: '/admin/meetings/dashboard', icon: Kanban, anyOf: ['events.read'] },
+    key: 'tracking',
+    label: 'Tracking & Approvals',
+    icon: CheckSquare,
+    anyOf: ['approvals.read', 'approvals.act', 'excuses.review'],
+    children: [
+      { href: '/admin/approvals', label: 'Approvals Center', icon: CheckSquare, anyOf: ['approvals.read', 'approvals.act'] },
+      { href: '/admin/absence-requests', label: 'Absence Requests', icon: FileText, anyOf: ['excuses.review'] },
+      { href: '/admin/follow-up', label: 'Follow-Up & Flags', icon: AlertTriangle, anyOf: ['excuses.review'] },
     ],
   },
   {
-    title: 'TRACKING & APPROVALS',
-    items: [
-      { label: 'Approvals & Requests', href: '/admin/approvals', icon: CheckSquare, anyOf: ['approvals.read', 'approvals.act'] },
-      { label: 'Follow-Up & Flags', href: '/admin/follow-up', icon: AlertTriangle, anyOf: ['excuses.review'] },
-      { label: 'Leaderboard', href: '/admin/leaderboard', icon: Trophy, anyOf: ['scoring.read'] },
+    key: 'finance',
+    label: 'Finance & Stewardship',
+    icon: DollarSign,
+    anyOf: ['dues.read', 'payments.read', 'expenses.read'],
+    children: [
+      { href: '/admin/finance', label: 'Finance Overview', icon: DollarSign, anyOf: ['dues.read', 'payments.read'] },
+      { href: '/admin/finance/dues', label: 'Monthly Dues', icon: Calendar, anyOf: ['dues.read'] },
+      { href: '/admin/finance/payments', label: 'Payments & Receipts', icon: CheckSquare, anyOf: ['payments.read'] },
+      { href: '/admin/finance/expenses', label: 'Expenses & Budget', icon: FileText, anyOf: ['expenses.read'] },
+      { href: '/admin/finance/accounts', label: 'Payment Accounts', icon: Building2, anyOf: ['payments.configure'] },
     ],
   },
   {
-    title: 'FINANCE & STEWARDSHIP',
-    items: [
-      { label: 'Finance Overview', href: '/admin/finance', icon: DollarSign, anyOf: ['dues.read', 'payments.read'] },
-    ],
+    key: 'chat',
+    label: 'Team Messages & Chat',
+    icon: MessageSquare,
+    href: '/admin/chat',
   },
   {
-    title: 'COMMUNICATION',
-    items: [
-      { label: 'Team Messages', href: '/admin/chat', icon: MessageSquare },
-    ],
-  },
-  {
-    title: 'ADMINISTRATION',
-    items: [
-      { label: 'Admin Team', href: '/admin/administration/team', icon: Shield, anyOf: ['users.read'] },
-      { label: 'Roles & Permissions', href: '/admin/administration/roles', icon: Shield, anyOf: ['roles.read'] },
-      { label: 'Settings', href: '/admin/settings', icon: Settings, anyOf: ['settings.read'] },
-      { label: 'Audit Log', href: '/admin/audit', icon: History, anyOf: ['audit.read'] },
+    key: 'administration',
+    label: 'Administration',
+    icon: Shield,
+    anyOf: ['users.read', 'roles.read', 'settings.read', 'audit.read', 'lookups.read'],
+    children: [
+      { href: '/admin/administration/team', label: 'Admin Team', icon: Users, anyOf: ['users.read'] },
+      { href: '/admin/administration/roles', label: 'Roles & Permissions', icon: Shield, anyOf: ['roles.read'] },
+      { href: '/admin/administration/lookups', label: 'Lookup Tables', icon: FolderTree, anyOf: ['lookups.read'] },
+      { href: '/admin/settings', label: 'System Settings', icon: Settings, anyOf: ['settings.read'] },
+      { href: '/admin/audit', label: 'Audit Logs', icon: History, anyOf: ['audit.read'] },
     ],
   },
 ];
@@ -118,7 +156,12 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
   const router = useRouter();
   const { user, canAny } = useAuth();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Navigation states
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [openParents, setOpenParents] = useState<Record<string, boolean>>({});
+
+  // Dropdowns & modals
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -126,6 +169,20 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
   const quickActionRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Auto-expand parent menu if current route matches any child
+  useEffect(() => {
+    NAVIGATION_TREE.forEach((parent) => {
+      if (parent.children) {
+        const isChildActive = parent.children.some((child) =>
+          child.exact ? pathname === child.href : pathname.startsWith(child.href)
+        );
+        if (isChildActive) {
+          setOpenParents((prev) => ({ ...prev, [parent.key]: true }));
+        }
+      }
+    });
+  }, [pathname]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -153,33 +210,64 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Close mobile sidebar when route changes
+  // Close mobile drawer on route navigation
   useEffect(() => {
-    setSidebarOpen(false);
+    setMobileDrawerOpen(false);
   }, [pathname]);
+
+  const toggleParent = (key: string) => {
+    setOpenParents((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleLogout = async () => {
     await logout();
     router.push('/login');
   };
 
+  // Filter navigation tree by permissions
+  const authorizedTree = useMemo(() => {
+    return NAVIGATION_TREE.filter((parent) => {
+      if (parent.anyOf && !canAny(...parent.anyOf)) return false;
+      if (parent.children) {
+        const visibleChildren = parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf));
+        return visibleChildren.length > 0;
+      }
+      return true;
+    }).map((parent) => {
+      if (!parent.children) return parent;
+      return {
+        ...parent,
+        children: parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf)),
+      };
+    });
+  }, [canAny]);
+
   return (
     <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">
       <GlobalSearchModal isOpen={searchModalOpen} onClose={() => setSearchModalOpen(false)} />
 
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-4 lg:px-6 shadow-sm">
+      {/* Top Navbar Header */}
+      <header className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-4 lg:px-6 shadow-xs">
         <div className="flex items-center gap-3">
-          {/* Mobile menu toggle */}
+          {/* Mobile & Tablet Hamburger Toggle */}
           <button
-            onClick={() => setSidebarOpen(true)}
+            onClick={() => setMobileDrawerOpen(true)}
             className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none"
-            aria-label="Open sidebar menu"
+            aria-label="Open navigation drawer"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Logo brand & campus selector */}
+          {/* Desktop Sidebar Width Toggle Button */}
+          <button
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            className="hidden lg:flex p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+
+          {/* Brand Logo & Name */}
           <Link href="/admin" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-md shadow-slate-900/10 dark:shadow-none group-hover:scale-105 transition-transform">
               <LogoIcon alt="TFHC Orderliness logo" className="w-5 h-5 text-emerald-400" />
@@ -196,28 +284,33 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
           </Link>
 
           {/* Campus Switcher Badge */}
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 ml-3 border border-slate-200/60 dark:border-slate-700/60">
+          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 ml-2 border border-slate-200/60 dark:border-slate-700/60">
             <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-            <span className="font-medium truncate max-w-[140px]">{selectedCampus}</span>
+            <span className="font-medium truncate max-w-[150px]">{selectedCampus}</span>
           </div>
         </div>
 
-        {/* Center/Right controls: Search bar trigger, Quick Action, Profile */}
+        {/* Center / Right controls */}
         <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Breadcrumb Trail on larger screens */}
+          <div className="hidden md:block mr-2">
+            <AdminBreadcrumb />
+          </div>
+
           {/* Omni Search Button */}
           <button
             onClick={() => setSearchModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-all border border-slate-200/70 dark:border-slate-700/70 text-xs sm:text-sm font-medium w-36 sm:w-64"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-all border border-slate-200/70 dark:border-slate-700/70 text-xs sm:text-sm font-medium w-32 sm:w-56"
           >
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="truncate hidden sm:inline">Search congregants, reports...</span>
+            <span className="truncate hidden sm:inline">Search (CMD+K)...</span>
             <span className="truncate sm:hidden">Search...</span>
             <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 ml-auto">
               ⌘K
             </kbd>
           </button>
 
-          {/* Quick Action Button Dropdown */}
+          {/* Quick Action Dropdown */}
           <div className="relative" ref={quickActionRef}>
             <button
               onClick={() => setQuickActionOpen((prev) => !prev)}
@@ -336,109 +429,189 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         </div>
       </header>
 
-      {/* Main Layout Container with Responsive Sidebar */}
+      {/* Main App Container */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Mobile Sidebar Backdrop */}
-        {sidebarOpen && (
+        {/* Mobile / Tablet Slide-Over Drawer Backdrop */}
+        {mobileDrawerOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileDrawerOpen(false)}
           />
         )}
 
-        {/* Sidebar */}
+        {/* Sidebar (Desktop Persistent + Mobile/Tablet Slide-Over Drawer) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`fixed inset-y-0 left-0 z-40 bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 flex flex-col transition-all duration-200 ease-in-out lg:static ${
+            mobileDrawerOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+          } ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-[270px]'}`}
         >
-          {/* Mobile Sidebar Header */}
+          {/* Mobile Drawer Header */}
           <div className="lg:hidden flex items-center justify-between p-4 border-b border-slate-200/80 dark:border-slate-800">
-            <span className="font-bold text-sm text-slate-900 dark:text-white">Operations Menu</span>
+            <span className="font-extrabold text-sm text-slate-900 dark:text-white">Admin Navigation</span>
             <button
-              onClick={() => setSidebarOpen(false)}
+              onClick={() => setMobileDrawerOpen(false)}
               className="p-1 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Navigation Groups */}
-          <nav className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin">
-            {NAV_GROUPS.map((group) => {
-              // Filter items by permission if defined
-              const visibleItems = group.items.filter(
-                (item) => !item.anyOf || canAny(...item.anyOf)
-              );
-              if (visibleItems.length === 0) return null;
+          {/* Navigation Accordion Tree */}
+          <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin">
+            {authorizedTree.map((item) => {
+              const Icon = item.icon;
+              const hasChildren = Boolean(item.children && item.children.length > 0);
+              const isOpen = Boolean(openParents[item.key]);
 
+              // Check if parent or any child is currently active
+              const isDirectActive = item.href
+                ? item.exact
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href)
+                : false;
+
+              const isChildActive = hasChildren
+                ? item.children!.some((c) => (c.exact ? pathname === c.href : pathname.startsWith(c.href)))
+                : false;
+
+              // Direct link without children (e.g. Dashboard, Chat)
+              if (!hasChildren && item.href) {
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
+                      isDirectActive
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 transition-transform ${
+                          isDirectActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-indigo-600'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!sidebarCollapsed && item.badge && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              }
+
+              // Parent Menu with Accordion Children
               return (
-                <div key={group.title}>
-                  <p className="px-3 text-[10px] font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase mb-1.5">
-                    {group.title}
-                  </p>
-                  <div className="space-y-0.5">
-                    {visibleItems.map((item) => {
-                      const isActive = item.exact
-                        ? pathname === item.href
-                        : pathname.startsWith(item.href);
-                      const Icon = item.icon;
+                <div key={item.key} className="space-y-1 pt-1">
+                  {/* Parent Button */}
+                  <button
+                    onClick={() => toggleParent(item.key)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all group ${
+                      isChildActive
+                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isChildActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-400 group-hover:text-indigo-600'
+                        }`}
+                      />
+                      {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
 
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                            isActive
-                              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
-                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100'
+                    {!sidebarCollapsed && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.badge && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            {item.badge}
+                          </span>
+                        )}
+                        <ChevronRight
+                          className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                            isOpen ? 'rotate-90' : ''
                           }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Icon
-                              className={`w-4 h-4 shrink-0 ${
-                                isActive ? 'text-white' : 'text-slate-400 dark:text-slate-500'
-                              }`}
-                            />
-                            <span className="truncate">{item.label}</span>
-                          </div>
-                          {item.badge && (
-                            <span
-                              className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md ${
-                                isActive
-                                  ? 'bg-indigo-700 text-white'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                              }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
+                        />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Child Menu Accordion List */}
+                  {!sidebarCollapsed && isOpen && item.children && (
+                    <div className="ml-5 pl-3 border-l-2 border-slate-200/80 dark:border-slate-800 space-y-0.5 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                      {item.children.map((child) => {
+                        const isChildActiveCurrent = child.exact
+                          ? pathname === child.href
+                          : pathname.startsWith(child.href);
+                        const ChildIcon = child.icon;
+
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                              isChildActiveCurrent
+                                ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {ChildIcon && (
+                                <ChildIcon
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    isChildActiveCurrent ? 'text-white' : 'text-slate-400'
+                                  }`}
+                                />
+                              )}
+                              <span className="truncate">{child.label}</span>
+                            </div>
+
+                            {child.badge && (
+                              <span
+                                className={`px-1.5 py-0.2 text-[10px] font-bold rounded ${
+                                  isChildActiveCurrent
+                                    ? 'bg-indigo-700 text-white'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600'
+                                }`}
+                              >
+                                {child.badge}
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </nav>
 
           {/* Sidebar Status Footer */}
-          <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-            <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 truncate">
-                  Cloud Sync Active
-                </p>
-                <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 truncate">
-                  Production Node v3.4.1
-                </p>
+          {!sidebarCollapsed && (
+            <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 truncate">
+                    Cloud Sync Active
+                  </p>
+                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 truncate">
+                    Production Node v3.4.1
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </aside>
 
-        {/* Content Viewport */}
+        {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-[calc(100vh-4rem)]">
           {children}
         </main>
