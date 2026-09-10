@@ -7,10 +7,10 @@ import { ChatWorkspace } from '../../../../components/chat/ChatWorkspace';
 function AdminChat() {
   const room = useSearchParams().get('room');
   return (
-    <div className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background">
       <Navbar />
       <ChatWorkspace deepLinkRoomId={room} />
-    </div>
+    </main>
   );
 }
 

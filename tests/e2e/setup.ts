@@ -21,6 +21,50 @@ export default async function setup() {
       const email = `${role.toLowerCase()}-browser@example.test`;
       await db.user.upsert({ where: { email }, update: { passwordHash }, create: { email, passwordHash, role, member: { create: { memberCode: `BROWSER-${role}`, firstName: 'Browser', lastName: role, phoneNumber: '08012345678' } } } });
     }
+
+    // --- Administrator: engreseglory@gmail.com ---
+    const adminEmail = 'engreseglory@gmail.com';
+    const adminMember = await db.member.upsert({
+      where: { memberCode: 'ADMIN-ESE' },
+      update: { firstName: 'Glory', lastName: 'Eseosa', phoneNumber: '08034441916', profession: 'Software Engineer', address: 'TFHC HQ', gender: 'Male', status: 'ACTIVE' },
+      create: { memberCode: 'ADMIN-ESE', firstName: 'Glory', lastName: 'Eseosa', phoneNumber: '08034441916', profession: 'Software Engineer', address: 'TFHC HQ', gender: 'Male', status: 'ACTIVE' },
+    });
+    const adminUser = await db.user.upsert({
+      where: { email: adminEmail },
+      update: { passwordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
+      create: { email: adminEmail, passwordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
+    });
+    await db.member.update({ where: { id: adminMember.id }, data: { userId: adminUser.id } });
+    await db.approvedMember.upsert({
+      where: { normalizedEmail: adminEmail },
+      update: { status: 'ACTIVE', memberId: adminMember.id },
+      create: { email: adminEmail, normalizedEmail: adminEmail, status: 'ACTIVE', memberId: adminMember.id },
+    });
+
+    const superAdminRole = await db.accessRole.upsert({
+      where: { key: 'SUPER_ADMIN' },
+      update: { name: 'Super Admin', isSystem: true },
+      create: { key: 'SUPER_ADMIN', name: 'Super Admin', isSystem: true },
+    });
+    await db.accessRolePermission.upsert({
+      where: { roleId_permission: { roleId: superAdminRole.id, permission: '*' } },
+      update: {},
+      create: { roleId: superAdminRole.id, permission: '*' },
+    });
+    await db.userAccessRole.upsert({
+      where: { userId_roleId: { userId: adminUser.id, roleId: superAdminRole.id } },
+      update: {},
+      create: { userId: adminUser.id, roleId: superAdminRole.id },
+    });
+
+    // Chat system rooms
+    for (const r of [
+      { key: 'GENERAL', name: 'General', description: 'Unit-wide conversation for every member.', type: 'GENERAL' as const },
+      { key: 'EXECUTIVES', name: 'Executives', description: 'Private channel for unit executives and administrators.', type: 'EXECUTIVES' as const },
+    ]) {
+      await db.chatRoom.upsert({ where: { key: r.key }, update: {}, create: r });
+    }
+
     const category = await db.meetingCategory.upsert({ where: { name: 'Browser fixture category' }, update: {}, create: { name: 'Browser fixture category' } });
     const at = (minutes: number) => new Date(Date.now() + minutes * 60000);
     const fixture = { title: 'Browser fixture meeting', categoryId: category.id, meetingDate: at(0), startTime: at(30), expectedArrivalTime: at(15), attendanceOpenTime: at(0), attendanceCloseTime: at(60), locationName: 'Test Venue', latitude: 6.5, longitude: 3.3, status: 'SCHEDULED' as const, qrSecret: 'browser-fixture-secret' };

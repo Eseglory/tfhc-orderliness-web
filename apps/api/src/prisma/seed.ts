@@ -103,28 +103,33 @@ async function main() {
   }
 
   // Bootstrap Super Admin (needed for sign-in and to attribute imports).
+  const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com';
+  const adminMember = await prisma.member.upsert({
+    where: { memberCode: 'ADMIN-ESE' },
+    update: { firstName: 'Glory', lastName: 'Eseosa', phoneNumber: '08034441916', profession: 'Software Engineer', address: 'TFHC HQ', gender: 'Male', status: MemberStatus.ACTIVE },
+    create: { memberCode: 'ADMIN-ESE', firstName: 'Glory', lastName: 'Eseosa', phoneNumber: '08034441916', profession: 'Software Engineer', address: 'TFHC HQ', gender: 'Male', status: MemberStatus.ACTIVE },
+  });
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@tfhc.org' },
-    update: {},
+    where: { email: adminEmail },
+    update: { role: Role.ADMIN, passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
     create: {
-      email: 'admin@tfhc.org',
-      passwordHash: await argon2.hash('Admin@123456'),
+      email: adminEmail,
+      passwordHash: await argon2.hash(process.env.BOOTSTRAP_ADMIN_PASSWORD || 'SuperAdminPassword123!'),
       role: Role.ADMIN,
       passwordAuthEnabled: true,
       emailVerifiedAt: new Date(),
       passwordChangedAt: new Date(),
-      member: {
-        create: {
-          memberCode: 'TFHC-0001',
-          firstName: 'Unit',
-          lastName: 'Leader',
-          phoneNumber: '+2348000000000',
-          roleInUnit: 'Head of Unit',
-          status: MemberStatus.ACTIVE,
-        },
-      },
+      isActive: true,
+      member: { connect: { id: adminMember.id } },
     },
   });
+  await prisma.member.update({ where: { id: adminMember.id }, data: { userId: adminUser.id } });
+  await prisma.approvedMember.upsert({
+    where: { normalizedEmail: adminEmail },
+    update: { status: 'ACTIVE', memberId: adminMember.id },
+    create: { email: adminEmail, normalizedEmail: adminEmail, status: 'ACTIVE', memberId: adminMember.id },
+  });
+
   const superRole = await prisma.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
   await prisma.userAccessRole.upsert({
     where: { userId_roleId: { userId: adminUser.id, roleId: superRole.id } },
@@ -132,7 +137,7 @@ async function main() {
     create: { userId: adminUser.id, roleId: superRole.id },
   });
 
-  console.log('Seeded RBAC roles, event types, categories, service schedules and a bootstrap Super Admin.');
+  console.log('Seeded RBAC roles, event types, categories, service schedules and Super Admin.');
   console.log('Run `yarn workspace @tfhc/api import:data --apply` to load the real membership + dues.');
 }
 
