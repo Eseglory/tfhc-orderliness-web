@@ -158,9 +158,7 @@ export default function AdminDashboardPage() {
 
   // Trajectory sparkline data from analytics services
   const sparklineData = useMemo(() => {
-    const s = analytics?.services || [];
-    if (s.length === 0) return [20, 25, 30, 28, 35, 40, 42];
-    return s.map((x) => x.attended);
+    return analytics?.services?.map((x) => x.attended) || [];
   }, [analytics]);
 
   const lastService = useMemo(() => {
@@ -170,7 +168,11 @@ export default function AdminDashboardPage() {
 
   const totalMembersCount = stats?.totalActiveMembers || 0;
   const lastAttendanceCount = lastService?.attended || stats?.avgAttendance || 0;
-  const attendancePunctuality = stats?.avgPunctuality ? `${stats.avgPunctuality}%` : '88.4%';
+  const punctualityRateDisplay = analytics?.punctualityRate != null
+    ? `${analytics.punctualityRate}%`
+    : stats?.avgPunctuality != null
+    ? `${stats.avgPunctuality}%`
+    : '0%';
 
   return (
     <AdminLayoutShell>
@@ -237,8 +239,9 @@ export default function AdminDashboardPage() {
             value={totalMembersCount.toLocaleString()}
             subValue="active"
             change={{
-              value: '+12 this month',
-              positive: true,
+              value: totalMembersCount > 0 ? `${totalMembersCount} on roster` : 'No members yet',
+              positive: totalMembersCount > 0,
+              neutral: totalMembersCount === 0,
             }}
             context="Registered active roster"
             sparkline={sparklineData}
@@ -253,10 +256,11 @@ export default function AdminDashboardPage() {
             value={lastAttendanceCount.toLocaleString()}
             subValue="attendees"
             change={{
-              value: `${attendancePunctuality} punctual`,
-              positive: true,
+              value: `${punctualityRateDisplay} punctual`,
+              positive: Number.parseFloat(punctualityRateDisplay) >= 50,
+              neutral: Number.parseFloat(punctualityRateDisplay) === 0,
             }}
-            context={lastService?.title || 'Main Sanctuary Gathering'}
+            context={lastService?.title || (stats?.meetingsHeld ? `${stats.meetingsHeld} services held` : 'No closed services yet')}
             sparkline={sparklineData}
             tone="emerald"
             icon={BarChart3}
@@ -266,14 +270,14 @@ export default function AdminDashboardPage() {
           {/* 3. Active Trackers */}
           <AdminKpiCard
             label="Active Trackers"
-            value={3}
-            subValue={`${flagsCount} pending`}
+            value={flagsCount}
+            subValue={flagsCount === 0 ? 'all clear' : `${flagsCount} flagged`}
             change={{
-              value: flagsCount === 0 ? 'All Clear' : `${flagsCount} Flagged`,
+              value: flagsCount === 0 ? 'Queue Cleared' : `${flagsCount} Attention Items`,
               positive: flagsCount === 0,
               neutral: flagsCount === 0,
             }}
-            context="Pastoral follow-up & campaigns"
+            context="Pastoral follow-up & alerts"
             tone="amber"
             icon={CheckCircle}
             onClick={() => window.location.assign('/admin/follow-up')}
@@ -285,10 +289,10 @@ export default function AdminDashboardPage() {
             value={upcomingMeetings.length}
             subValue={activeMeeting ? '1 Live' : 'Scheduled'}
             change={{
-              value: activeMeeting ? 'Live Gathering' : 'Next: Leadership',
+              value: activeMeeting ? 'Live Gathering Active' : `${upcomingMeetings.length} Scheduled`,
               neutral: true,
             }}
-            context="Church calendar & series"
+            context={upcomingMeetings[0]?.title ? `Next: ${upcomingMeetings[0].title}` : 'Church calendar & series'}
             tone="purple"
             icon={Calendar}
             onClick={() => window.location.assign('/admin/meetings')}
