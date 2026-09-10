@@ -1046,6 +1046,7 @@ model ChatRoomMember {
 
   @@unique([roomId, memberId])
   @@index([memberId])
+  @@index([roomId])
   @@map("chat_room_members")
 }
 
@@ -1066,7 +1067,9 @@ model ChatMessage {
   deletedAt      DateTime?
   createdAt      DateTime        @default(now())
 
-  @@index([roomId, createdAt])
+  @@index([roomId, createdAt(sort: Desc)])
+  @@index([roomId, deletedAt, createdAt(sort: Desc)])
   @@index([senderMemberId])
   @@map("chat_messages")
 }
+

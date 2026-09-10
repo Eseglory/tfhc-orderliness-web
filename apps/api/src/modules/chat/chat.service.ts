@@ -188,66 +188,134 @@ export class ChatService implements OnApplicationBootstrap {
   async listRooms(viewer: ChatViewer) {
     const memberId = this.requireMember(viewer);
     const rooms = await this.roomsForViewer(viewer);
+    if (rooms.length === 0) return [];
+    const roomIds = rooms.map((r) => r.id);
+
+    // 1. Memberships of the viewer for all rooms (1 single batched query)
     const membershipRows = await this.prisma.chatRoomMember.findMany({
-      where: { memberId, roomId: { in: rooms.map((r) => r.id) } },
+      where: { memberId, roomId: { in: roomIds } },
     });
     const membership = new Map(membershipRows.map((m) => [m.roomId, m]));
 
-    const out = await Promise.all(
-      rooms.map(async (room) => {
-        const mine = membership.get(room.id) ?? null;
-        const lastReadAt = mine?.lastReadAt ?? null;
+    // 2. Latest message per room in 1 single query using DISTINCT ON
+    const latestMessages = await this.prisma.chatMessage.findMany({
+      where: { roomId: { in: roomIds }, deletedAt: null },
+      distinct: ['roomId'],
+      orderBy: [{ roomId: 'asc' }, { createdAt: 'desc' }],
+      include: { sender: { select: senderSelect } },
+    });
+    const lastMessageMap = new Map(latestMessages.map((m) => [m.roomId, m]));
 
-        const [lastMessage, unreadCount, memberCount] = await Promise.all([
-          this.prisma.chatMessage.findFirst({
-            where: { roomId: room.id, deletedAt: null },
-            orderBy: { createdAt: 'desc' },
-            include: { sender: { select: senderSelect } },
-          }),
-          this.prisma.chatMessage.count({
-            where: {
-              roomId: room.id,
-              deletedAt: null,
-              senderMemberId: { not: memberId },
-              ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
-            },
-          }),
-          this.roomMemberCount(room),
-        ]);
+    // 3. Batched unread counts in 1 single SQL aggregation query
+    const unreadMap = new Map<string, number>();
+    try {
+      const unreadRows = await this.prisma.$queryRaw<Array<{ roomId: string; count: bigint | number }>>`
+        SELECT m."roomId", COUNT(m.id)::int AS "count"
+        FROM "chat_messages" m
+        LEFT JOIN "chat_room_members" crm 
+          ON crm."roomId" = m."roomId" AND crm."memberId" = ${memberId}
+        WHERE m."roomId" = ANY(${roomIds}::text[])
+          AND m."deletedAt" IS NULL
+          AND (m."senderMemberId" IS NULL OR m."senderMemberId" != ${memberId})
+          AND (crm."lastReadAt" IS NULL OR m."createdAt" > crm."lastReadAt")
+        GROUP BY m."roomId";
+      `;
+      for (const row of unreadRows) {
+        unreadMap.set(row.roomId, Number(row.count));
+      }
+    } catch {
+      for (const room of rooms) {
+        const lastReadAt = membership.get(room.id)?.lastReadAt;
+        const cnt = await this.prisma.chatMessage.count({
+          where: {
+            roomId: room.id,
+            deletedAt: null,
+            senderMemberId: { not: memberId },
+            ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+          },
+        });
+        unreadMap.set(room.id, cnt);
+      }
+    }
 
-        let direct: { memberId: string; name: string; photoUrl: string | null } | null = null;
-        if (room.type === 'DIRECT') {
-          const other = await this.prisma.chatRoomMember.findFirst({
-            where: { roomId: room.id, memberId: { not: memberId } },
-            include: { member: { select: senderSelect } },
+    // 4. Batched member counts (1 batch query for custom/direct rooms)
+    const generalCountPromise = rooms.some((r) => r.type === 'GENERAL')
+      ? this.prisma.member.count({ where: { status: ACTIVE_MEMBER } })
+      : Promise.resolve(0);
+    const execCountPromise = rooms.some((r) => r.type === 'EXECUTIVES')
+      ? this.executiveMemberIds().then((ids) => ids.length)
+      : Promise.resolve(0);
+
+    const customRoomIds = rooms.filter((r) => r.type === 'CUSTOM' || r.type === 'DIRECT').map((r) => r.id);
+    const customCountsPromise =
+      customRoomIds.length > 0
+        ? this.prisma.chatRoomMember.groupBy({
+            by: ['roomId'],
+            where: { roomId: { in: customRoomIds }, leftAt: null },
+            _count: { _all: true },
+          })
+        : Promise.resolve([]);
+
+    const [generalCount, execCount, customCounts] = await Promise.all([
+      generalCountPromise,
+      execCountPromise,
+      customCountsPromise,
+    ]);
+
+    const memberCountMap = new Map<string, number>();
+    for (const row of customCounts) {
+      memberCountMap.set(row.roomId, row._count._all);
+    }
+
+    // 5. Batched other member details for DIRECT rooms (1 single query)
+    const directRoomIds = rooms.filter((r) => r.type === 'DIRECT').map((r) => r.id);
+    const directMembersMap = new Map<string, { memberId: string; name: string; photoUrl: string | null }>();
+    if (directRoomIds.length > 0) {
+      const otherMembers = await this.prisma.chatRoomMember.findMany({
+        where: { roomId: { in: directRoomIds }, memberId: { not: memberId } },
+        include: { member: { select: senderSelect } },
+      });
+      for (const om of otherMembers) {
+        if (om.member) {
+          directMembersMap.set(om.roomId, {
+            memberId: om.member.id,
+            name: displayName(om.member),
+            photoUrl: om.member.profilePhotoUrl,
           });
-          if (other?.member) {
-            direct = {
-              memberId: other.member.id,
-              name: displayName(other.member),
-              photoUrl: other.member.profilePhotoUrl,
-            };
-          }
         }
+      }
+    }
 
-        return {
-          id: room.id,
-          key: room.key,
-          type: room.type,
-          name: room.type === 'DIRECT' && direct ? direct.name : room.name,
-          description: room.description,
-          imageUrl: room.type === 'DIRECT' && direct ? direct.photoUrl : room.imageUrl,
-          isActive: room.isActive,
-          role: mine?.role ?? null,
-          muted: mine?.mutedUntil ? mine.mutedUntil.getTime() > Date.now() : false,
-          memberCount,
-          unreadCount,
-          lastReadAt,
-          direct,
-          lastMessage: lastMessage ? this.toMessageDto(lastMessage, viewer) : null,
-        };
-      }),
-    );
+    const out = rooms.map((room) => {
+      const mine = membership.get(room.id) ?? null;
+      const lastReadAt = mine?.lastReadAt ?? null;
+      const lastMessage = lastMessageMap.get(room.id) ?? null;
+      const unreadCount = unreadMap.get(room.id) ?? 0;
+      const memberCount =
+        room.type === 'GENERAL'
+          ? generalCount
+          : room.type === 'EXECUTIVES'
+            ? execCount
+            : memberCountMap.get(room.id) ?? 0;
+      const direct = directMembersMap.get(room.id) ?? null;
+
+      return {
+        id: room.id,
+        key: room.key,
+        type: room.type,
+        name: room.type === 'DIRECT' && direct ? direct.name : room.name,
+        description: room.description,
+        imageUrl: room.type === 'DIRECT' && direct ? direct.photoUrl : room.imageUrl,
+        isActive: room.isActive,
+        role: mine?.role ?? null,
+        muted: mine?.mutedUntil ? mine.mutedUntil.getTime() > Date.now() : false,
+        memberCount,
+        unreadCount,
+        lastReadAt,
+        direct,
+        lastMessage: lastMessage ? this.toMessageDto(lastMessage, viewer) : null,
+      };
+    });
 
     out.sort((a, b) => {
       const at = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
@@ -257,11 +325,6 @@ export class ChatService implements OnApplicationBootstrap {
     return out;
   }
 
-  private async roomMemberCount(room: ChatRoom): Promise<number> {
-    if (room.type === 'GENERAL') return this.prisma.member.count({ where: { status: ACTIVE_MEMBER } });
-    if (room.type === 'EXECUTIVES') return (await this.executiveMemberIds()).length;
-    return this.prisma.chatRoomMember.count({ where: { roomId: room.id, leftAt: null } });
-  }
 
   async getRoom(roomId: string, viewer: ChatViewer) {
     await this.loadRoom(roomId, viewer);
