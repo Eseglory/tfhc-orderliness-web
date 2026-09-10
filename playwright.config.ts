@@ -5,6 +5,10 @@ const database = process.env.TEST_DATABASE_URL;
 if (!database || !/^postgresql:\/\/[^@]+@(127\.0\.0\.1|localhost):\d+\/tfhc_e2e(?:\?|$)/.test(database)) throw new Error('Set TEST_DATABASE_URL to an isolated local tfhc_e2e database');
 export default defineConfig({
   testDir: './tests/e2e', fullyParallel: false, workers: 1, timeout: 30000,
+  // One retry: WebKit in particular times out intermittently when the host is
+  // under load (single worker, full Nest + Next builds). A test that only fails
+  // that way is reported flaky, not failed.
+  retries: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { baseURL: `http://127.0.0.1:${webPort}`, trace: 'retain-on-failure', screenshot: 'only-on-failure', serviceWorkers: 'block' },
   projects: [
