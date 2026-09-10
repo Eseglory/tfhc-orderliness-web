@@ -5,8 +5,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ProfilePhoto } from '../../../../components/ProfilePhoto';
 import { useRouter } from 'next/navigation';
-import { fetchApi, removeAuthToken, ApiError } from '../../../../lib/api';
+import { fetchApi, logout, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
+import { ChangePasswordCard } from '../../../../components/ChangePasswordCard';
 
 type Profile = {
   id: string;
@@ -86,8 +87,7 @@ export default function MemberProfilePage() {
   const [signingOut, setSigningOut] = useState(false);
   const handleLogout = () => {
     setSigningOut(true);
-    removeAuthToken();
-    requestAnimationFrame(() => requestAnimationFrame(() => router.replace('/login')));
+    void logout().finally(() => requestAnimationFrame(() => requestAnimationFrame(() => router.replace('/login'))));
   };
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -259,6 +259,9 @@ export default function MemberProfilePage() {
                 <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
               </Link>
             </section>
+
+            <div className="uppercase font-label-md text-label-md text-on-surface-variant px-1">Account &amp; security</div>
+            <ChangePasswordCard variant="light" />
 
             <section className="pb-stack-lg">
               <button

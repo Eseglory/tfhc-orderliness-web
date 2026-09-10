@@ -32,5 +32,47 @@ export default async function setup() {
       update: { closesAt: at(60 * 24 * 7) },
       create: { weekStart: cycleWeekStart, opensAt: at(0), closesAt: at(60 * 24 * 7) },
     });
+
+    // --- Email-auth fixtures -------------------------------------------------
+    // An approved member with a directory record but no account yet: the target
+    // for the self-registration browser flow.
+    const registerEmail = 'register-browser@example.test';
+    const regMember = await db.member.upsert({
+      where: { memberCode: 'BROWSER-REGISTER' },
+      update: {},
+      create: { memberCode: 'BROWSER-REGISTER', firstName: 'Reggie', lastName: 'Ster', phoneNumber: '08055550000' },
+    });
+    await db.approvedMember.upsert({
+      where: { normalizedEmail: registerEmail },
+      update: { status: 'ACTIVE', memberId: regMember.id },
+      create: { email: registerEmail, normalizedEmail: registerEmail, status: 'ACTIVE', memberId: regMember.id },
+    });
+
+    // A member with a run of absences, to trigger the "we've missed you" nudge.
+    const nudgeUser = await db.user.upsert({
+      where: { email: 'nudge-browser@example.test' },
+      update: { passwordHash },
+      create: { email: 'nudge-browser@example.test', passwordHash, role: 'MEMBER', member: { create: { memberCode: 'BROWSER-NUDGE', firstName: 'Missy', lastName: 'Gone', phoneNumber: '08066660000', dateOfBirth: new Date('1990-01-01'), gender: 'Female', address: '1 Test Road' } } },
+      include: { member: true },
+    });
+    for (let i = 1; i <= 3; i++) {
+      const past = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
+      const meeting = await db.meeting.upsert({
+        where: { id: `00000000-0000-4000-8000-00000000010${i}` },
+        update: {},
+        create: {
+          id: `00000000-0000-4000-8000-00000000010${i}`,
+          title: `Past fixture meeting ${i}`, categoryId: category.id,
+          meetingDate: past, startTime: past, expectedArrivalTime: past,
+          attendanceOpenTime: past, attendanceCloseTime: new Date(past.getTime() + 3600000),
+          locationName: 'Test Venue', latitude: 6.5, longitude: 3.3, status: 'CLOSED', qrSecret: `past-fixture-${i}`,
+        },
+      });
+      await db.attendanceRecord.upsert({
+        where: { memberId_meetingId: { memberId: nudgeUser.member!.id, meetingId: meeting.id } },
+        update: { status: 'ABSENT' },
+        create: { memberId: nudgeUser.member!.id, meetingId: meeting.id, expectedArrivalTime: past, status: 'ABSENT', method: 'MANUAL', pointsEarned: 0 },
+      });
+    }
   } finally { await db.$disconnect(); }
 }

@@ -119,6 +119,17 @@ model User {
   inviteExpiresAt DateTime?
   inviteAcceptedAt DateTime?
   lastLoginAt     DateTime?
+  lastLogoutAt    DateTime?
+  // Password auth: staff always have it; members get it when they self-register
+  // with email + password (still gated by the ApprovedMember allowlist).
+  passwordAuthEnabled Boolean @default(false)
+  emailVerifiedAt        DateTime?
+  emailVerifyTokenHash  String?   @unique
+  emailVerifyExpiresAt  DateTime?
+  passwordResetTokenHash String?  @unique
+  passwordResetExpiresAt DateTime?
+  // Bumped on every password change/reset; tokens issued earlier are rejected.
+  passwordChangedAt     DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   member       Member?

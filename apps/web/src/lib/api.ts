@@ -71,3 +71,16 @@ export function removeAuthToken() {
     sessionStorage.removeItem('tfhc_token');
   }
 }
+
+/**
+ * End the session: tell the API (best-effort — it only stamps the account
+ * timeline) then drop the local token. Callers redirect to /login afterwards.
+ */
+export async function logout() {
+  try {
+    await fetchApi('/auth/logout', { method: 'POST' });
+  } catch {
+    // Stateless sessions — a failed call must never block sign-out.
+  }
+  removeAuthToken();
+}

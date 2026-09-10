@@ -15,7 +15,7 @@ async function provision(db, email, password) {
       throw new Error('Existing account cannot be promoted or have its password replaced by bootstrap.');
     }
     if (!existing && await tx.user.count({ where: { role: 'ADMIN' } })) throw new Error('An administrator already exists; bootstrap is only for the first administrator.');
-    const admin = existing || await tx.user.create({ data: { email, passwordHash: hash, role: 'ADMIN' } });
+    const admin = existing || await tx.user.create({ data: { email, passwordHash: hash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), passwordChangedAt: new Date() } });
     const categories = [
       { name: 'Unit Meeting', basePoints: 10, pointWeight: 1 },
       { name: 'Sunday Service', basePoints: 5, pointWeight: 1 },

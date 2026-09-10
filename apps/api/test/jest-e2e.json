@@ -3,6 +3,9 @@
   "preset": "ts-jest",
   "testEnvironment": "node",
   "watchman": false,
+  "setupFiles": [
+    "<rootDir>/test/e2e-env.ts"
+  ],
   "testMatch": [
     "**/test/**/*.e2e-spec.ts"
   ],

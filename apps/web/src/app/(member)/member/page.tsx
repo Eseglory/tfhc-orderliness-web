@@ -1,207 +1,230 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../lib/api';
 import { LogoIcon } from '../../../components/LogoIcon';
+import { EngagementNudge } from '../../../components/activeness/EngagementNudge';
+import { ProfileCompletionReminder } from '../../../components/activeness/ProfileCompletionReminder';
+
+type Performance = {
+  member?: { firstName: string; profilePhotoUrl: string | null; subTeam?: { name: string } | null };
+  attendanceRate: number;
+  punctualityRate: number;
+  totalPoints: number;
+  rankPosition?: number | string;
+  currentAttendanceStreak: number;
+  attendedCount: number;
+  onTimeCount: number;
+  lateCount: number;
+  absentCount: number;
+  excusedCount: number;
+  expectedCount: number;
+  recognition?: { eligible: boolean };
+};
+
+/** Circular progress ring for the headline attendance figure. */
+function Ring({ value, label }: { value: number; label: string }) {
+  const r = 46, c = 2 * Math.PI * r;
+  const off = c - (Math.min(100, Math.max(0, value)) / 100) * c;
+  const tone = value >= 90 ? '#059669' : value >= 75 ? '#d97706' : '#e11d48';
+  return (
+    <div className="relative flex h-32 w-32 items-center justify-center">
+      <svg viewBox="0 0 110 110" className="h-full w-full -rotate-90">
+        <circle cx="55" cy="55" r={r} fill="none" stroke="currentColor" strokeWidth="9" className="text-surface-container" />
+        <circle cx="55" cy="55" r={r} fill="none" stroke={tone} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} />
+      </svg>
+      <div className="absolute text-center">
+        <p className="font-headline-md text-headline-md font-extrabold text-primary">{value.toFixed(0)}%</p>
+        <p className="font-label-sm text-label-sm text-on-surface-variant">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function MemberDashboard() {
   const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
+  const [perf, setPerf] = useState<Performance | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
+  const [upcoming, setUpcoming] = useState<any[]>([]);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+
   useEffect(() => {
-    const refresh = () => fetchApi('/members/me/notifications').then((items: any[]) => setHasUnread(items.some(item => item.status === 'UNREAD'))).catch(() => {});
+    const refresh = () => fetchApi('/members/me/notifications').then((items: any[]) => setHasUnread(items.some((i) => i.status === 'UNREAD'))).catch(() => {});
     refresh();
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, []);
-  const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchApi('/scoring/my-performance')
-      .then((data) => setProfile(data))
-      .catch((err) => console.error(err));
-
-    fetchApi('/meetings/active')
-      .then((activeMeetingResponse) => {
-        if (activeMeetingResponse) setActiveMeeting(activeMeetingResponse);
-      })
-      .catch((err) => console.error(err));
-
-    fetchApi('/meetings')
-      .then((allMs) => setUpcomingMeetings(allMs.slice(0, 3)))
-      .catch((err) => console.error(err));
+    const ac = new AbortController();
+    const get = <T,>(url: string) => fetchApi<T>(url, { signal: ac.signal });
+    get<Performance>('/scoring/my-performance').then(setPerf).catch(() => {});
+    get('/meetings/active').then((m) => m && setActiveMeeting(m)).catch(() => {});
+    get<any[]>('/meetings').then((all) => setUpcoming((all || []).slice(0, 3))).catch(() => {});
+    // 404 when the weekly cycle hasn't been opened — treated as "not open".
+    get<{ cycle?: { state?: string; closesAt?: string }; submitted?: boolean }>('/availability/current')
+      .then((a) => setAvailabilityOpen(Boolean(
+        a?.cycle?.state === 'OPEN' && !a.submitted && (!a.cycle.closesAt || new Date(a.cycle.closesAt) > new Date()),
+      )))
+      .catch(() => {});
+    return () => ac.abort();
   }, []);
 
-  const attendanceRate = (profile?.attendanceRate ?? 0).toFixed(1);
-  const punctualityRate = (profile?.punctualityRate ?? 0).toFixed(1);
-  const totalPoints = profile?.totalPoints ?? 0;
-  const rankPosition = profile?.rankPosition ?? '—';
-  const currentStreak = profile?.currentAttendanceStreak ?? 0;
-
-  const closesInLabel = (() => {
+  const closesLabel = useMemo(() => {
     if (!activeMeeting?.attendanceCloseTime) return null;
     const mins = Math.round((new Date(activeMeeting.attendanceCloseTime).getTime() - Date.now()) / 60000);
     if (mins <= 0) return 'Closing now';
     if (mins < 60) return `Closes in ${mins} min${mins === 1 ? '' : 's'}`;
     return `Closes ${new Date(activeMeeting.attendanceCloseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  })();
+  }, [activeMeeting]);
+
+  const firstName = perf?.member?.firstName;
+  const month = new Date().toLocaleString([], { month: 'long' });
 
   return (
-    <div className="bg-background text-on-background font-body-md min-h-screen flex flex-col pb-24 relative overflow-x-hidden">
-      {/* TopAppBar matching Stitch Screen 1 verbatim */}
-      <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background font-body-md text-on-background pb-28">
+      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-outline-variant/10 bg-background px-edge-margin">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden border border-outline-variant bg-surface-container flex items-center justify-center p-1">
-            <Link href="/member/profile" aria-label="My profile" className="w-full h-full">{profile?.member?.profilePhotoUrl ? <img src={profile.member.profilePhotoUrl} alt="User profile photo" className="w-full h-full rounded-full object-cover" /> : <LogoIcon alt="User profile photo" className="w-full h-full object-contain" />}</Link>
-          </div>
+          <Link href="/member/profile" aria-label="My profile" className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-outline-variant bg-surface-container p-1">
+            {perf?.member?.profilePhotoUrl
+              ? <img src={perf.member.profilePhotoUrl} alt="Profile" className="h-full w-full rounded-full object-cover" />
+              : <LogoIcon alt="Profile" className="h-full w-full object-contain" />}
+          </Link>
           <div className="flex flex-col">
-            <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Dashboard</span>
-            <span className="font-headline-sm text-headline-sm font-bold text-primary">
-              Hello{profile?.member ? `, ${profile.member.firstName}` : ''}
-            </span>
+            <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Dashboard</span>
+            <span className="font-headline-sm text-headline-sm font-bold text-primary">Hello{firstName ? `, ${firstName}` : ''}</span>
           </div>
         </div>
-        <Link href="/member/notifications" className="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors group">
-          <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors" data-icon="notifications">notifications</span>
-          {hasUnread && <span aria-label="Unread notifications" className="absolute top-2 right-2.5 w-2 h-2 bg-error rounded-full"></span>}
+        <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface-variant">
+          <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
+          {hasUnread && <span aria-label="Unread notifications" className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-error" />}
         </Link>
       </header>
 
-      {/* Main Content matching Stitch Screen 1 verbatim */}
-      <main className="flex-1 flex flex-col gap-stack-lg px-edge-margin py-stack-md max-w-md mx-auto sm:max-w-xl md:max-w-4xl w-full">
-        {/* Live Meeting Banner Widget */}
-        <section className="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 overflow-hidden relative">
-          <div className="absolute top-0 left-0 w-1 h-full bg-tertiary-container"></div>
-          <div className="p-4 flex flex-col gap-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="font-headline-sm text-headline-sm text-primary mb-1 font-bold">
-                  {activeMeeting ? activeMeeting.title : 'No meeting is open right now'}{' '}
-                  {activeMeeting?.isCompulsory && (
-                    <span className="font-label-sm text-label-sm text-error bg-error-container px-2 py-0.5 rounded-full ml-2 align-middle">
-                      Compulsory
-                    </span>
-                  )}
-                </h2>
-                <p className="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">schedule</span>{' '}
-                  {activeMeeting
-                    ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
-                    : 'Check back when your next service begins.'}
-                </p>
-              </div>
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-stack-lg px-edge-margin py-stack-md md:max-w-2xl">
+        {/* Primary action */}
+        <section className="relative overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
+          <div className={`absolute left-0 top-0 h-full w-1 ${activeMeeting ? 'bg-tertiary-container' : 'bg-outline-variant'}`} />
+          <div className="flex flex-col gap-4 p-4">
+            <div>
+              <h2 className="font-headline-sm text-headline-sm font-bold text-primary">
+                {activeMeeting ? activeMeeting.title : 'No service is open right now'}
+                {activeMeeting?.isCompulsory && (
+                  <span className="ml-2 align-middle rounded-full bg-error-container px-2 py-0.5 font-label-sm text-label-sm text-error">Compulsory</span>
+                )}
+              </h2>
+              <p className="mt-1 flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
+                <span className="material-symbols-outlined text-[16px]">schedule</span>
+                {activeMeeting
+                  ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
+                  : 'You’re all caught up. Check back when your next gathering begins.'}
+              </p>
             </div>
             {activeMeeting && (
-              <div className="bg-surface-variant/50 rounded-lg p-3 flex items-center justify-between border border-surface-variant">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-on-tertiary-container pulse-dot"></div>
-                  <span className="font-label-md text-label-md text-on-surface font-semibold">Attendance Window Open</span>
-                </div>
-                {closesInLabel && (
-                  <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-1 rounded">
-                    {closesInLabel}
-                  </span>
-                )}
+              <div className="flex items-center justify-between rounded-lg border border-surface-variant bg-surface-variant/50 p-3">
+                <span className="flex items-center gap-2 font-label-md text-label-md font-semibold text-on-surface">
+                  <span className="h-3 w-3 rounded-full bg-on-tertiary-container" /> Attendance window open
+                </span>
+                {closesLabel && <span className="rounded bg-surface-container-high px-2 py-1 font-label-sm text-label-sm text-on-surface-variant">{closesLabel}</span>}
               </div>
             )}
             <button
               onClick={() => router.push('/member/check-in')}
               disabled={!activeMeeting}
-              className="w-full bg-primary hover:opacity-90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98] font-bold disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-label-md text-label-md font-bold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
             >
-              <span className="material-symbols-outlined" data-icon="location_on">location_on</span>
-              {activeMeeting ? 'Proceed to Check-In' : 'No active check-in'}
+              <span className="material-symbols-outlined">location_on</span>
+              {activeMeeting ? 'Proceed to check-in' : 'No active check-in'}
             </button>
           </div>
         </section>
 
-        {/* Quick Stats Carousel */}
-        <section>
-          <div className="flex justify-between items-end mb-3">
-            <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold">Performance Overview</h3>
+        {availabilityOpen && (
+          <Link href="/member/availability" className="flex items-center gap-3 rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-on-surface">
+            <span className="material-symbols-outlined text-secondary">event_available</span>
+            <span className="flex-1 text-sm font-medium">This week’s availability is open — let your team know when you can serve.</span>
+            <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+          </Link>
+        )}
+
+        <EngagementNudge />
+        <ProfileCompletionReminder />
+
+        {/* Performance snapshot */}
+        <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">Your standing</h3>
+            {perf?.recognition?.eligible && (
+              <span className="rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm font-bold text-on-secondary-container">Recognition eligible</span>
+            )}
           </div>
-          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 snap-x">
-            {/* Stat Card 1 */}
-            <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
-              <div className="flex justify-between items-start w-full">
-                <span className="material-symbols-outlined text-outline">group_add</span>
-              </div>
-              <div>
-                <div className="font-headline-md text-headline-md text-primary font-bold">{attendanceRate}%</div>
-                <div className="font-label-sm text-label-sm text-on-surface-variant">Attendance Rate</div>
-              </div>
-            </div>
-
-            {/* Stat Card 2 */}
-            <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
-              <div className="flex justify-between items-start w-full">
-                <span className="material-symbols-outlined text-outline">timer</span>
-              </div>
-              <div>
-                <div className="font-headline-md text-headline-md text-primary font-bold">{punctualityRate}%</div>
-                <div className="font-label-sm text-label-sm text-on-surface-variant">Punctuality</div>
-              </div>
-            </div>
-
-            {/* Stat Card 3 */}
-            <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px] relative overflow-hidden">
-              <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-secondary-container/20 rounded-full blur-xl"></div>
-              <div className="flex justify-between items-start w-full relative z-10">
-                <span className="material-symbols-outlined text-secondary">workspace_premium</span>
-                <span className="font-label-sm text-label-sm font-bold text-secondary">#{rankPosition}</span>
-              </div>
-              <div className="relative z-10">
-                <div className="font-headline-md text-headline-md text-primary font-bold">{totalPoints}</div>
-                <div className="font-label-sm text-label-sm text-on-surface-variant">Total Points</div>
-              </div>
-            </div>
-
-            {/* Stat Card 4 */}
-            <div className="snap-start min-w-[140px] flex-shrink-0 bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 p-3 flex flex-col justify-between h-[110px]">
-              <div className="flex justify-between items-start w-full">
-                <span className="material-symbols-outlined text-outline">local_fire_department</span>
-              </div>
-              <div>
-                <div className="font-headline-md text-headline-md text-primary font-bold">{currentStreak}</div>
-                <div className="font-label-sm text-label-sm text-on-surface-variant">Consecutive Streak</div>
-              </div>
+          <div className="flex items-center gap-4">
+            <Ring value={perf?.attendanceRate ?? 0} label="attendance" />
+            <div className="flex-1 space-y-2">
+              {[
+                ['Punctuality', `${(perf?.punctualityRate ?? 0).toFixed(0)}%`],
+                ['Points', `${perf?.totalPoints ?? 0}`],
+                ['Rank', perf?.rankPosition ? `#${perf.rankPosition}` : '—'],
+                ['Streak', `${perf?.currentAttendanceStreak ?? 0} in a row`],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between border-b border-outline-variant/20 pb-1.5 last:border-0">
+                  <span className="font-body-md text-body-md text-on-surface-variant">{k}</span>
+                  <span className="font-label-md text-label-md font-bold text-primary">{v}</span>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* Upcoming Schedule */}
+        {/* This month */}
         <section>
-          <div className="flex justify-between items-end mb-3">
-            <h3 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-bold">Upcoming Schedule</h3>
-            <Link href="/member/meetings" className="font-label-sm text-label-sm text-primary hover:underline font-bold">View All</Link>
+          <h3 className="mb-3 font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">{month} so far</h3>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              ['Present', perf?.attendedCount ?? 0, 'text-emerald-600'],
+              ['On time', perf?.onTimeCount ?? 0, 'text-emerald-600'],
+              ['Absent', perf?.absentCount ?? 0, 'text-rose-600'],
+              ['Excused', perf?.excusedCount ?? 0, 'text-on-surface-variant'],
+            ].map(([label, value, tone]) => (
+              <div key={label as string} className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 text-center shadow-[0px_2px_8px_rgba(0,0,0,0.03)]">
+                <p className={`font-headline-sm text-headline-sm font-extrabold ${tone as string}`}>{value as number}</p>
+                <p className="font-label-sm text-label-sm text-on-surface-variant">{label as string}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Upcoming */}
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <h3 className="font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">Upcoming schedule</h3>
+            <Link href="/member/meetings" className="font-label-sm text-label-sm font-bold text-primary hover:underline">View all</Link>
           </div>
           <div className="flex flex-col gap-2">
-            {upcomingMeetings.length > 0 ? (
-              upcomingMeetings.map((m, idx) => (
-                <div key={m.id || idx} className="bg-surface-container-lowest rounded-lg p-3 border border-outline-variant/30 flex items-center justify-between shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+            {upcoming.length > 0 ? (
+              upcoming.map((m, i) => (
+                <Link key={m.id || i} href={`/member/meetings/${m.id}`} className="flex items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-surface-container flex flex-col items-center justify-center text-primary">
-                      <span className="font-label-sm text-label-sm font-bold">{new Date(m.startTime || m.meetingDate).getDate()}</span>
-                      <span className="font-[9px] uppercase leading-none">{new Date(m.startTime || m.meetingDate).toLocaleString([], { month: 'short' })}</span>
+                    <div className="flex h-10 w-10 flex-col items-center justify-center rounded bg-surface-container text-primary">
+                      <span className="font-label-sm text-label-sm font-bold leading-none">{new Date(m.startTime || m.meetingDate).getDate()}</span>
+                      <span className="text-[9px] uppercase leading-none">{new Date(m.startTime || m.meetingDate).toLocaleString([], { month: 'short' })}</span>
                     </div>
                     <div>
-                      <div className="font-label-md text-label-md text-primary font-bold">{m.title}</div>
-                      <div className="font-body-md text-[13px] text-on-surface-variant">
+                      <p className="font-label-md text-label-md font-bold text-primary">{m.title}</p>
+                      <p className="text-[13px] text-on-surface-variant">
                         {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.locationName}
-                      </div>
+                      </p>
                     </div>
                   </div>
-                  <div className="font-label-sm text-label-sm bg-surface-variant text-on-surface-variant px-2 py-1 rounded font-bold">
-                    +{m.pointWeight * 10 || 15} pts
-                  </div>
-                </div>
+                  <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+                </Link>
               ))
             ) : (
-              <div className="bg-surface-container-lowest rounded-lg p-4 border border-outline-variant/30 text-center text-on-surface-variant font-body-md text-body-md">
-                No meetings scheduled yet.
+              <div className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-4 text-center font-body-md text-body-md text-on-surface-variant">
+                No gatherings scheduled yet.
               </div>
             )}
           </div>

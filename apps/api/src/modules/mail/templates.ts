@@ -92,3 +92,33 @@ ${preview}
 
   return { subject: input.heading, text: textParts.join('\n'), html };
 }
+
+/** "Verify your email" — sent when a member self-registers with a password. */
+export function renderVerificationEmail(firstName: string, verifyUrl: string) {
+  return renderBrandedEmail({
+    heading: 'Confirm your email address',
+    preview: 'Confirm your email to finish setting up your TFHC Orderliness account.',
+    paragraphs: [
+      `Hello ${firstName},`,
+      'Thanks for registering for TFHC Orderliness. Confirm this email address to activate your account and sign in.',
+      "If you didn't create an account, you can ignore this message.",
+    ],
+    cta: { label: 'Confirm email address', url: verifyUrl },
+    footnote: 'This link expires in 24 hours. You can request a new one from the sign-in page.',
+  });
+}
+
+/** "Reset your password" — sent from the forgot-password flow. */
+export function renderPasswordResetEmail(firstName: string, resetUrl: string) {
+  return renderBrandedEmail({
+    heading: 'Reset your password',
+    preview: 'Use the link below to choose a new password.',
+    paragraphs: [
+      `Hello ${firstName},`,
+      'We received a request to reset the password on your TFHC Orderliness account. Choose a new password using the button below.',
+      "If you didn't request this, no action is needed — your password stays the same.",
+    ],
+    cta: { label: 'Choose a new password', url: resetUrl },
+    footnote: 'This link expires in 1 hour and can only be used once.',
+  });
+}

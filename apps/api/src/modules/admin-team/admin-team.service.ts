@@ -16,24 +16,12 @@ import { AuditService } from '../../common/rbac/audit.service';
 import { MailService } from '../mail/mail.service';
 import { renderBrandedEmail } from '../mail/templates';
 import { hashInviteToken } from '../../common/invite-token';
+import { webBaseUrl } from '../../common/web-url';
+import { settleWithin } from '../../common/settle-within';
 import { InviteAdminDto, UpdateAdminDto } from './admin-team.dto';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const INVITE_EMAIL_TIMEOUT_MS = 8000;
-
-/**
- * Resolve to the promise's value, or `fallback` if it takes longer than `ms`.
- * The slow promise is never left to reject unhandled — it is drained in the
- * background. Used so a stalled SMTP handshake can't hold an interactive
- * request open.
- */
-function settleWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  const guarded = promise.catch(() => fallback);
-  return Promise.race([
-    guarded,
-    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
-  ]);
-}
 
 @Injectable()
 export class AdminTeamService {
@@ -47,10 +35,7 @@ export class AdminTeamService {
   ) {}
 
   private webBaseUrl(): string {
-    const configured =
-      this.config.get<string>('APP_WEB_URL') ||
-      (this.config.get<string>('CORS_ORIGIN') || '').split(',')[0].trim();
-    return (configured || 'http://localhost:3000').replace(/\/+$/, '');
+    return webBaseUrl(this.config);
   }
 
   private async generateMemberCode(tx: Prisma.TransactionClient): Promise<string> {

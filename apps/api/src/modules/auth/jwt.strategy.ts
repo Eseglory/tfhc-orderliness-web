@@ -10,6 +10,8 @@ export interface JwtPayload {
   email: string;
   role: string;
   memberId?: string;
+  /** Issued-at (seconds), set by jsonwebtoken. Compared to passwordChangedAt. */
+  iat?: number;
 }
 
 export interface AuthenticatedUser {
@@ -51,10 +53,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User account no longer exists');
     }
 
+    // A password change / reset signs out every session issued beforehand.
+    // jsonwebtoken's `iat` is whole seconds, so compare at second granularity:
+    // a token issued in the same wall-clock second as the change is kept (that's
+    // the freshly-issued one the caller keeps using).
+    if (user.passwordChangedAt && typeof payload.iat === 'number' &&
+        Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat) {
+      throw new UnauthorizedException('Your session ended because the account password was changed');
+    }
+
     if (user.role === 'MEMBER' && (!user.member || user.member.status !== 'ACTIVE')) {
       throw new UnauthorizedException('Member account is not active');
     }
-    if (user.role === 'MEMBER' && user.googleSubject &&
+    // Revocation of a member's allowlist entry must take effect immediately, for
+    // both Google and email/password members. Locally-signed test identities
+    // (no googleSubject, no password auth) are exempt — they have no allowlist row.
+    if (user.role === 'MEMBER' && (user.googleSubject || user.passwordAuthEnabled) &&
         (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) {
       throw new UnauthorizedException('Member access has been revoked');
     }

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { AuthTransition } from './AuthTransition';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { removeAuthToken } from '../lib/api';
+import { logout } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useChatUnread } from '../lib/chat';
 import { LogoIcon } from './LogoIcon';
@@ -79,28 +79,16 @@ const ADMIN_NAV: NavItem[] = [
 
 export const Navbar: React.FC = () => {
   const [signingOut, setSigningOut] = useState(false);
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, can, canAny } = useAuth();
+  const { user, canAny } = useAuth();
   const chatUnread = useChatUnread();
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = pathname.startsWith('/admin');
 
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenu(null);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, []);
-  useEffect(() => setOpenMenu(null), [pathname]);
-
   const handleLogout = () => {
     setSigningOut(true);
-    removeAuthToken();
-    requestAnimationFrame(() => requestAnimationFrame(() => router.replace('/login')));
+    void logout().finally(() => requestAnimationFrame(() => requestAnimationFrame(() => router.replace('/login'))));
   };
 
   // While RBAC info is still loading we optimistically show items; the backend
@@ -122,7 +110,7 @@ export const Navbar: React.FC = () => {
     !item.children!.some((other) => other !== child && other.href.length > child.href.length && active(other.href));
 
   const linkClass = (isActive: boolean) =>
-    `flex items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
       isActive
         ? 'bg-primary text-on-primary font-bold'
         : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
@@ -148,52 +136,27 @@ export const Navbar: React.FC = () => {
             </div>
           </Link>
 
-          <nav ref={menuRef} className="hidden md:flex flex-1 items-center justify-center gap-0.5 text-label-md xl:gap-1">
-            {items.map((item) =>
-              item.children ? (
-                <div key={item.href} className="relative">
-                  <button
-                    type="button"
-                    aria-haspopup="true"
-                    aria-expanded={openMenu === item.href}
-                    onClick={() => setOpenMenu(openMenu === item.href ? null : item.href)}
-                    className={linkClass(groupActive(item))}
-                  >
-                    <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                    <span className="hidden xl:inline">{item.label}</span>
-                    <span className="material-symbols-outlined text-[16px]">expand_more</span>
-                  </button>
-                  {openMenu === item.href && (
-                    <div className="absolute right-0 mt-1 w-56 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 shadow-lg">
-                      {item.children.filter(visible).map((child) => (
-                        <Link
-                          key={child.href}
-                          href={child.href}
-                          className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${
-                            childActive(item, child)
-                              ? 'bg-surface-container text-primary'
-                              : 'text-on-surface hover:bg-surface-container'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-[18px]">{child.icon}</span>
-                          {child.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link key={item.href} href={item.href} className={`relative ${linkClass(active(item.href))}`}>
-                  <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                  <span className="hidden xl:inline">{item.label}</span>
-                  {item.href.endsWith('/chat') && chatUnread > 0 && (
-                    <span className="ml-0.5 rounded-full bg-error px-1.5 text-[10px] font-bold leading-4 text-on-error">
-                      {chatUnread > 99 ? '99+' : chatUnread}
-                    </span>
-                  )}
-                </Link>
-              ),
-            )}
+          {/* Primary nav. Scrolls horizontally rather than pushing the page
+              wide when the item set is large; grouped sections open their
+              children in the sub-row below. */}
+          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto text-label-md md:flex xl:justify-center xl:gap-1">
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={(item.children ? groupActive(item) : active(item.href)) ? 'page' : undefined}
+                className={linkClass(item.children ? groupActive(item) : active(item.href))}
+              >
+                <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                <span className="hidden xl:inline">{item.label}</span>
+                {item.children && <span className="material-symbols-outlined text-[16px]">expand_more</span>}
+                {item.href.endsWith('/chat') && chatUnread > 0 && (
+                  <span className="ml-0.5 rounded-full bg-error px-1.5 text-[10px] font-bold leading-4 text-on-error">
+                    {chatUnread > 99 ? '99+' : chatUnread}
+                  </span>
+                )}
+              </Link>
+            ))}
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -215,9 +178,9 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Secondary row: mobile sub-nav for the active dropdown section */}
+        {/* Secondary row: sub-nav for the active grouped section. */}
         {isAdmin && activeGroup && (
-          <div className="flex gap-1 overflow-x-auto border-t border-outline-variant/20 py-2 md:hidden">
+          <div className="no-scrollbar flex gap-1 overflow-x-auto border-t border-outline-variant/20 py-2">
             {activeGroup.children!.filter(visible).map((child) => (
               <Link
                 key={child.href}

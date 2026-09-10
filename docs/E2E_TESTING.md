@@ -18,6 +18,8 @@ yarn test:e2e
 
 Playwright builds and starts its own API on port 4100 and a production Next.js server on 3100. These ports must be free, or set `E2E_API_PORT` and `E2E_WEB_PORT` to unused local ports. The E2E Compose file uses a separate project name so it cannot replace the development database. It runs Chromium desktop/mobile, WebKit desktop/iPhone, Firefox desktop, and a separate viewport project auditing horizontal overflow from 320 through 1920px. Member browser sessions use locally signed test identities backed by real database users because Google OAuth requires an external interactive account. API tests separately verify that members cannot use password login.
 
+The Playwright API server runs with SMTP disabled and `APP_WEB_URL` pinned to the e2e web port, so verification / reset flows return the link in the JSON body (`verifyUrl` / `devUrl`) instead of sending real email. `tests/e2e/auth.spec.ts` (chromium only) covers the member email-auth lifecycle and the three activeness popups; `tests/e2e/setup.ts` seeds its fixtures — `register-browser@example.test` (approved, no account — the registration target, detached before each test), `nudge-browser@example.test` (three `ABSENT` records for the engagement nudge), plus past closed meetings. `member-browser@example.test` has an incomplete profile on purpose, for the completion reminder.
+
 Reports are generated in `playwright-report/`; failed browser tests preserve screenshots and traces in `test-results/`. Use `yarn exec playwright show-report` to inspect results.
 
 Additional checks:

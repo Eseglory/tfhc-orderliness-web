@@ -523,6 +523,117 @@ history pagination (oldest-first + forward cursor), a live socket round-trip
 
 ---
 
+## Phase 8 — Member email/password auth + account self-service (DONE 2026-09-10)
+
+Done ahead of Phases 6–7 at the user's request. Members could previously only
+sign in with Google, and only staff had a password (invite-only, no reset). This
+phase adds email/password auth for members — still gated by the `ApprovedMember`
+allowlist — plus the full password lifecycle and three "activeness" prompts, and
+restyles the `/admin` and `/member` dashboards (a down-payment on Phase 7).
+
+### Auth model
+
+- **Registration** (`POST /auth/register`, public) — email must be `ACTIVE` on
+  `ApprovedMember` **and** linked to an active `Member` (the same gate the
+  Google path enforces). A Google-only member who registers is *upgraded* in
+  place (password added, one account kept). Never returns a session — the
+  account is unusable until the emailed verification link is followed.
+- **Verification** (`POST /auth/verify-email`) — one-time sha256-hashed token,
+  24 h TTL; on success sets `emailVerifiedAt` and returns a JWT.
+  `resend-verification` is uniform (no account enumeration).
+- **Password reset** — `forgot-password` (always `{ ok: true }`) → emailed
+  one-time link, 1 h TTL → `reset-password` sets the hash, verifies the email
+  and returns a session.
+- **Change password** (`POST /auth/change-password`, authed) — verifies the
+  current password, rejects reuse, returns a fresh token for the caller.
+- **Session invalidation** — every reset/change stamps `User.passwordChangedAt`;
+  `jwt.strategy` rejects any token whose `iat` (whole seconds) predates it, so
+  other sessions are signed out. The member-revocation check now covers
+  password members too (not just `googleSubject` ones); locally-signed test
+  identities with neither remain exempt.
+- **SMTP fallback** — when mail delivery fails and `NODE_ENV !== 'production'`,
+  the verify/reset URL is returned in the JSON body so local/e2e runs aren't
+  blocked on a mail server. `settleWithin` (extracted to `common/`) caps a
+  stalled SMTP handshake at 8 s.
+
+Migration `20260910000000_email_auth`: `users` +`passwordAuthEnabled`,
+`emailVerifiedAt`, `emailVerify{TokenHash,ExpiresAt}`,
+`passwordReset{TokenHash,ExpiresAt}`, `passwordChangedAt`, `lastLogoutAt`;
+backfills existing staff to `passwordAuthEnabled = true` / verified.
+
+### Web
+
+- Public pages `/register`, `/verify-email`, `/forgot-password`,
+  `/reset-password` (shared `AuthShell`); `/login` gains "Create account",
+  "Forgot password?" and a resend-verification action.
+- `ChangePasswordCard` (light + dark variants) on `/member/profile`
+  ("Account & security") and `/admin/settings`.
+- `lib/api.ts` `logout()` — best-effort `POST /auth/logout` then token clear;
+  Navbar + member profile use it.
+- **Activeness popups** — `components/activeness/`, mounted via new
+  `(member)/layout.tsx` (all three) and `(admin)/layout.tsx` (idle only):
+  `IdleTimeoutModal` (28 min idle → 2 min countdown → sign-out; test seam
+  `window.__IDLE_WARNING_MS__`), `EngagementNudge` (≥2 of last 5 services
+  absent; dismissed per ISO week), `ProfileCompletionReminder` (missing
+  phone/DOB/gender/address/photo; dismissed per session).
+
+### Dashboards restyled (Phase 7 down-payment)
+
+- `/admin` rebuilt on Stitch light tokens to match the Navbar: identity strip,
+  dark "Live session control" card (real `/meetings/active` +
+  `/attendance/meeting/:id` counts), 4 metric tiles, action queue (pending
+  excuses + corrections), inline SVG attendance-trajectory sparkline,
+  punctuality stacked bar, sub-team compliance (aggregated `/scoring/leaderboard`),
+  at-risk follow-up (`/alerts`), tools grid, Excel export.
+- `/member` rebuilt: primary-action card, attendance ring + standing, "month so
+  far" grid, availability prompt, upcoming schedule. The engagement / profile
+  nudges render as in-flow cards on `/member` only — never overlaying another
+  page's controls.
+
+### Navbar fix (pre-existing regression from Phase 1)
+
+The Phase 1 data-driven `Navbar` rewrite grew the admin nav to ~11 items with
+click-to-open dropdown popovers and no overflow handling — it pushed the page
+`~135px` wide at 768px and `~293px` at 1440px on every admin route. Latent
+because the viewport-audit project hadn't been re-run since. Fixed: the primary
+nav is a horizontal-scroll strip (`overflow-x-auto`, no page overflow), grouped
+sections (Events / Finance / Admin) are plain links that open their children in
+the existing sub-row (which now shows on desktop too). Removed the popover state
+machine.
+
+### Verification (2026-09-10, local)
+
+| Check | Result |
+|---|---|
+| shared build + test | PASS |
+| api build + lint | PASS |
+| api unit tests | 56/56 (`auth-email.spec` +18) |
+| api integration tests | 118/118 (`auth-email.e2e-spec` +5; clean e2e DB) |
+| web build + lint | PASS (pre-existing `<img>` warnings only) |
+| Browser smoke (Playwright, dev stack) | register → verify → member dashboard → change password → other session bounced → logout → re-login → forgot-password. PASS |
+| `tests/e2e/auth.spec.ts` + `web.spec.ts` (chromium) | 52/52 |
+| Full Playwright matrix (chromium / mobile-web / webkit / mobile-safari / firefox / viewports) | 452 tests; see below |
+
+`web.spec.ts` fixes made this phase: the admin- and member-route smoke loops
+asserted the dashboard heading on *every* page (copy-paste bug — all failing
+since Phase 4) → now assert the route resolved + no real console errors;
+`realError()` filters WebKit's benign RSC-prefetch / navigation-abort noise;
+`admin configures recurring service sessions` rewritten for the Phase 2 series
+editor (it targeted the long-gone "Add session" UI).
+
+Pre-existing `import.e2e-spec.ts` failures (2) are e2e-DB pollution, not a
+regression — clear with `prisma migrate reset --skip-seed --force` on the e2e DB.
+
+### Deferred
+- Google-only members still can't get a password via `forgot-password` (must
+  use `/register`); acceptable given the allowlist gate.
+- Reset/verify emails go straight through `MailService`; move to the async
+  notification queue in Phase 6.
+- `/member` dashboard fires `/availability/current`, which 404s until an admin
+  opens the weekly cycle — caught and treated as "not open".
+
+---
+
 ### Remaining
 - Phase 6: notification triggers + email templates + SMS/WhatsApp
 - Phase 7: Stitch-restyle the remaining dark-slate admin pages (members,

@@ -110,6 +110,9 @@ async function main() {
       email: 'admin@tfhc.org',
       passwordHash: await argon2.hash('Admin@123456'),
       role: Role.ADMIN,
+      passwordAuthEnabled: true,
+      emailVerifiedAt: new Date(),
+      passwordChangedAt: new Date(),
       member: {
         create: {
           memberCode: 'TFHC-0001',

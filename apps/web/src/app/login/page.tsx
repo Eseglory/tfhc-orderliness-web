@@ -2,8 +2,9 @@
 import { AuthTransition } from '../../components/AuthTransition';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { fetchApi, saveAuthToken } from '../../lib/api';
+import { fetchApi, saveAuthToken, ApiError } from '../../lib/api';
 import { LogoIcon } from '../../components/LogoIcon';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 
@@ -17,11 +18,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resent, setResent] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setNeedsVerification(false);
+    setResent('');
 
     try {
       const data = await fetchApi('/auth/login', {
@@ -37,10 +42,25 @@ export default function LoginPage() {
         router.push('/member');
       }
     } catch (err: any) {
-      setError(err.message || 'Sign in failed. Please check credentials.');
+      if (err instanceof ApiError && /confirm your email/i.test(err.message)) {
+        setNeedsVerification(true);
+        setError(err.message);
+      } else {
+        setError(err.message || 'Sign in failed. Please check credentials.');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const resendVerification = async () => {
+    setResent('');
+    try {
+      await fetchApi('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) });
+    } catch {
+      /* uniform response regardless */
+    }
+    setResent('If that account still needs confirming, a new link is on its way.');
   };
 
   const handleGoogleCredential = async (idToken: string) => {
@@ -80,9 +100,17 @@ export default function LoginPage() {
         </header>
 
         {error && (
-          <div className="p-3 rounded-lg bg-error-container text-on-error-container font-body-md text-sm border border-error/20 text-center">
-            {error}
+          <div className="p-3 rounded-lg bg-error-container text-on-error-container font-body-md text-sm border border-error/20 text-center space-y-2">
+            <p>{error}</p>
+            {needsVerification && (
+              <button type="button" onClick={resendVerification} className="text-sm font-semibold underline">
+                Resend confirmation email
+              </button>
+            )}
           </div>
+        )}
+        {resent && (
+          <p role="status" className="text-xs text-center text-on-surface-variant">{resent}</p>
         )}
 
         {/* Form Section */}
@@ -145,6 +173,7 @@ export default function LoginPage() {
               <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="w-4 h-4 rounded border-outline-variant bg-surface" />
               <span className="font-label-sm text-label-sm text-on-surface-variant group-hover:text-on-surface transition-colors">Remember Me</span>
             </label>
+            <Link href="/forgot-password" className="font-label-sm text-label-sm text-primary hover:underline">Forgot password?</Link>
           </div>
 
           {/* Submit Button */}
@@ -158,20 +187,25 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Members authenticate with Google, not a password (see /auth/login) */}
+        {/* Members may also sign in with Google (see /auth/google/member) */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-outline-variant" />
-          <span className="font-label-sm text-label-sm text-on-surface-variant">Members sign in with Google</span>
+          <span className="font-label-sm text-label-sm text-on-surface-variant">or</span>
           <div className="flex-1 h-px bg-outline-variant" />
         </div>
         <GoogleSignInButton onCredential={handleGoogleCredential} />
+
+        <p className="text-center font-body-md text-body-md text-on-surface-variant">
+          New here?{' '}
+          <Link href="/register" className="text-primary font-semibold hover:underline">Create an account</Link>
+        </p>
       </main>
 
       <footer className="mt-stack-lg text-center">
-        <a className="font-body-md text-body-md text-outline hover:text-on-surface transition-colors flex items-center justify-center gap-2" href="#">
+        <span className="font-body-md text-body-md text-outline flex items-center justify-center gap-2">
           <span className="material-symbols-outlined text-[18px]">help</span>
-          Need help? Contact Unit Administrator
-        </a>
+          Registration is open to approved members only
+        </span>
       </footer>
     </div>
   );
