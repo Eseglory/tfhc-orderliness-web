@@ -1,0 +1,59 @@
+name: CI/CD & Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build & Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable Corepack & Install Dependencies
+        run: |
+          corepack enable
+          corepack prepare yarn@4.5.3 --activate
+          yarn install
+
+      - name: Build Shared Package
+        run: yarn build:shared
+
+      - name: Generate Prisma Client & Build API
+        run: |
+          yarn workspace @tfhc/api prisma:generate
+          yarn build:api
+
+      - name: Build Web App
+        run: yarn build:web
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          DOCKER_BUILD: 'true'
+          NEXT_PUBLIC_API_URL: 'https://tfhc-orderliness-api.onrender.com'
+
+  deploy-to-render:
+    name: Deploy to Render
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Trigger Automatic Render Deployment
+        run: node scripts/deploy-to-render.cjs
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_OWNER_ID: 'tea-cspppb56l47c73f6skmg'
