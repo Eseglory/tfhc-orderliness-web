@@ -5,6 +5,7 @@ import './globals.css';
 import { AuthGate } from '../components/AuthGate';
 import { BottomNav } from '../components/BottomNav';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { ThemeProvider } from '../lib/theme';
 
 const inter = localFont({
   src: '../../public/fonts/inter-latin.woff2',
@@ -46,12 +47,39 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`light ${inter.variable}`}>
+    <html lang="en" className={`light ${inter.variable}`} suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('tfhc_theme_preference');
+                  if (theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                    document.documentElement.classList.remove('light');
+                    document.documentElement.style.colorScheme = 'dark';
+                  } else {
+                    document.documentElement.classList.add('light');
+                    document.documentElement.classList.remove('dark');
+                    document.documentElement.style.colorScheme = 'light';
+                  }
+                } catch (e) {
+                  document.documentElement.classList.add('light');
+                  document.documentElement.classList.remove('dark');
+                }
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="antialiased selection:bg-secondary-container selection:text-on-secondary-container bg-background text-on-background font-body-md min-h-screen">
-        <OfflineBanner />
-        <VenueSessionGuard />
-        <AuthGate>{children}</AuthGate>
-        <BottomNav />
+        <ThemeProvider>
+          <OfflineBanner />
+          <VenueSessionGuard />
+          <AuthGate>{children}</AuthGate>
+          <BottomNav />
+        </ThemeProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

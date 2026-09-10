@@ -303,7 +303,7 @@ suite('Application HTTP integration (real PostgreSQL)', () => {
     await request(app.getHttpServer()).post('/attendance/manual').set(auth(admin)).send({memberId,meetingId:meeting.id,status:'EARLY'}).expect(400);
   });
   test('leaderboard date filters exclude records outside the interval', async () => {
-    const r = await request(app.getHttpServer()).get('/scoring/leaderboard?startDate=2000-01-01&endDate=2000-01-31').set(auth(member)).expect(200);
+    const r = await request(app.getHttpServer()).get('/scoring/leaderboard?startDate=2000-01-01&endDate=2000-01-31&limit=1000').set(auth(member)).expect(200);
     expect(r.body.find((m:any)=>m.memberId===memberId).expectedCount).toBe(0);
   });
   test('close-out is idempotent and creates absence records and summary', async () => {

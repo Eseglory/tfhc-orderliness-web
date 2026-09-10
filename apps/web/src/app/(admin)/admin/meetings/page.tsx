@@ -184,93 +184,157 @@ export default function AdminEventsPage() {
             action={canCreate && !search && !status ? <Button onClick={() => { setEditing(null); setFormOpen(true); }}>+ New event</Button> : undefined}
           />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
-            <table className="w-full min-w-[52rem] text-sm">
-              <thead className="border-b border-outline-variant/20 bg-surface-container-low/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Event</th>
-                  <th className="px-4 py-3 font-semibold">When</th>
-                  <th className="px-4 py-3 font-semibold">Venue</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/15">
-                {meetings.map((m) => (
-                  <tr key={m.id} className={m.archivedAt ? 'opacity-60' : ''}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {m.eventType?.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: m.eventType.color }} />}
-                        <span className="font-semibold text-on-surface">{m.title}</span>
-                        {m.visibility === 'RESTRICTED' && <Badge tone="warning">Restricted</Badge>}
+          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm overflow-hidden">
+            {/* Desktop & Tablet Table */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full min-w-[52rem] text-sm">
+                <thead className="border-b border-outline-variant/20 bg-surface-container-low/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Event</th>
+                    <th className="px-4 py-3 font-semibold">When</th>
+                    <th className="px-4 py-3 font-semibold">Venue</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/15">
+                  {meetings.map((m) => (
+                    <tr key={m.id} className={m.archivedAt ? 'opacity-60' : ''}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {m.eventType?.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: m.eventType.color }} />}
+                          <span className="font-semibold text-on-surface">{m.title}</span>
+                          {m.visibility === 'RESTRICTED' && <Badge tone="warning">Restricted</Badge>}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-on-surface-variant">
+                          <span>{m.eventType?.name ?? m.category?.name ?? '—'}</span>
+                          <span>{m._count?.attendanceRecords ?? 0} checked in</span>
+                          {!m.isCompulsory && <span>Optional</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-on-surface-variant">
+                        {new Date(m.startTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                        <span className="block text-xs">
+                          {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-on-surface-variant">
+                        {m.locationName}
+                        <span className="block text-xs">{m.geofenceRadiusMeters} m radius</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{m.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Link href={`/admin/live-meeting/${m.id}`}>
+                            <Button variant="ghost" className="text-xs">Monitor</Button>
+                          </Link>
+                          {canEdit && (m.status === 'ACTIVE' || m.status === 'SCHEDULED') && (
+                            <Button
+                              variant="ghost"
+                              className="text-xs"
+                              loading={busyId === m.id}
+                              onClick={() =>
+                                act(
+                                  m.id,
+                                  () => fetchApi(`/meetings/${m.id}/status`, { method: 'PUT', body: JSON.stringify({ status: m.status === 'ACTIVE' ? 'CLOSED' : 'ACTIVE' }) }),
+                                  m.status === 'ACTIVE' ? 'Attendance closed' : 'Attendance open',
+                                )
+                              }
+                            >
+                              {m.status === 'ACTIVE' ? 'Close' : 'Open'}
+                            </Button>
+                          )}
+                          {canEdit && ['SCHEDULED', 'ACTIVE'].includes(m.status) && (
+                            <Button variant="ghost" className="text-xs" onClick={() => { setEditing(m); setFormOpen(true); }}>Edit</Button>
+                          )}
+                          {canCreate && (
+                            <Button variant="ghost" className="text-xs" loading={busyId === m.id} onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/duplicate`, { method: 'POST', body: '{}' }), 'Event duplicated')}>
+                              Duplicate
+                            </Button>
+                          )}
+                          {can('events.cancel') && m.status !== 'CLOSED' && m.status !== 'CANCELLED' && (
+                            <Button variant="ghost" className="text-xs text-error" onClick={() => setCancelTarget(m)}>Cancel</Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              className="text-xs"
+                              loading={busyId === m.id}
+                              onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/archive`, { method: m.archivedAt ? 'DELETE' : 'POST' }), m.archivedAt ? 'Restored' : 'Archived')}
+                            >
+                              {m.archivedAt ? 'Restore' : 'Archive'}
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards (< 768px) */}
+            <div className="block md:hidden divide-y divide-outline-variant/15">
+              {meetings.map((m) => (
+                <div key={m.id} className={`p-4 space-y-3 ${m.archivedAt ? 'opacity-60' : ''}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        {m.eventType?.color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: m.eventType.color }} />}
+                        <h3 className="font-bold text-sm text-on-surface leading-tight">{m.title}</h3>
                       </div>
-                      <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-on-surface-variant">
-                        <span>{m.eventType?.name ?? m.category?.name ?? '—'}</span>
-                        <span>{m._count?.attendanceRecords ?? 0} checked in</span>
-                        {!m.isCompulsory && <span>Optional</span>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-on-surface-variant">
-                      {new Date(m.startTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                      <span className="block text-xs">
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        {m.eventType?.name ?? m.category?.name ?? 'General'} • {m._count?.attendanceRecords ?? 0} checked in
+                      </p>
+                    </div>
+                    <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{m.status}</Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-surface-container-low/50 border border-outline-variant/20">
+                    <div>
+                      <span className="text-[10px] text-on-surface-variant uppercase font-semibold block">When</span>
+                      <span className="font-semibold text-on-surface block">
+                        {new Date(m.startTime).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })},{' '}
                         {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-on-surface-variant">
-                      {m.locationName}
-                      <span className="block text-xs">{m.geofenceRadiusMeters} m radius</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={STATUS_TONE[m.status] ?? 'neutral'}>{m.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <Link href={`/admin/live-meeting/${m.id}`}>
-                          <Button variant="ghost" className="text-xs">Monitor</Button>
-                        </Link>
-                        {canEdit && (m.status === 'ACTIVE' || m.status === 'SCHEDULED') && (
-                          <Button
-                            variant="ghost"
-                            className="text-xs"
-                            loading={busyId === m.id}
-                            onClick={() =>
-                              act(
-                                m.id,
-                                () => fetchApi(`/meetings/${m.id}/status`, { method: 'PUT', body: JSON.stringify({ status: m.status === 'ACTIVE' ? 'CLOSED' : 'ACTIVE' }) }),
-                                m.status === 'ACTIVE' ? 'Attendance closed' : 'Attendance open',
-                              )
-                            }
-                          >
-                            {m.status === 'ACTIVE' ? 'Close' : 'Open'}
-                          </Button>
-                        )}
-                        {canEdit && ['SCHEDULED', 'ACTIVE'].includes(m.status) && (
-                          <Button variant="ghost" className="text-xs" onClick={() => { setEditing(m); setFormOpen(true); }}>Edit</Button>
-                        )}
-                        {canCreate && (
-                          <Button variant="ghost" className="text-xs" loading={busyId === m.id} onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/duplicate`, { method: 'POST', body: '{}' }), 'Event duplicated')}>
-                            Duplicate
-                          </Button>
-                        )}
-                        {can('events.cancel') && m.status !== 'CLOSED' && m.status !== 'CANCELLED' && (
-                          <Button variant="ghost" className="text-xs text-error" onClick={() => setCancelTarget(m)}>Cancel</Button>
-                        )}
-                        {canEdit && (
-                          <Button
-                            variant="ghost"
-                            className="text-xs"
-                            loading={busyId === m.id}
-                            onClick={() => act(m.id, () => fetchApi(`/meetings/${m.id}/archive`, { method: m.archivedAt ? 'DELETE' : 'POST' }), m.archivedAt ? 'Restored' : 'Archived')}
-                          >
-                            {m.archivedAt ? 'Restore' : 'Archive'}
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-on-surface-variant uppercase font-semibold block">Venue</span>
+                      <span className="font-semibold text-on-surface block truncate">
+                        {m.locationName}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <Link href={`/admin/live-meeting/${m.id}`} className="flex-1">
+                      <Button variant="secondary" className="w-full text-xs justify-center min-h-[38px]">Monitor</Button>
+                    </Link>
+                    {canEdit && (m.status === 'ACTIVE' || m.status === 'SCHEDULED') && (
+                      <Button
+                        variant="secondary"
+                        className="text-xs min-h-[38px]"
+                        loading={busyId === m.id}
+                        onClick={() =>
+                          act(
+                            m.id,
+                            () => fetchApi(`/meetings/${m.id}/status`, { method: 'PUT', body: JSON.stringify({ status: m.status === 'ACTIVE' ? 'CLOSED' : 'ACTIVE' }) }),
+                            m.status === 'ACTIVE' ? 'Attendance closed' : 'Attendance open',
+                          )
+                        }
+                      >
+                        {m.status === 'ACTIVE' ? 'Close' : 'Open'}
+                      </Button>
+                    )}
+                    {canEdit && ['SCHEDULED', 'ACTIVE'].includes(m.status) && (
+                      <Button variant="ghost" className="text-xs min-h-[38px]" onClick={() => { setEditing(m); setFormOpen(true); }}>Edit</Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

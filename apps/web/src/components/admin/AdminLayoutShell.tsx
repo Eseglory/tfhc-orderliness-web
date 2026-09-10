@@ -41,6 +41,7 @@ import { logout } from '../../lib/api';
 import { LogoIcon } from '../LogoIcon';
 import { GlobalSearchModal } from './GlobalSearchModal';
 import { AdminBreadcrumb } from './AdminBreadcrumb';
+import { ThemeSwitcher } from '../ThemeSwitcher';
 
 interface NavChild {
   href: string;
@@ -370,6 +371,9 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
             )}
           </div>
 
+          {/* Theme Switcher Header Action */}
+          <ThemeSwitcher variant="dropdown" />
+
           {/* Admin Profile Dropdown */}
           <div className="relative" ref={profileMenuRef}>
             <button
@@ -391,13 +395,20 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
             </button>
 
             {profileMenuOpen && (
-              <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
                   <p className="text-xs font-bold text-slate-900 dark:text-white">
                     {user?.firstName} {user?.lastName}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
                 </div>
+                
+                {/* Theme Selector inside Profile Menu */}
+                <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Theme Preference</p>
+                  <ThemeSwitcher variant="segmented" className="w-full justify-between" />
+                </div>
+
                 <Link
                   href="/member"
                   onClick={() => setProfileMenuOpen(false)}
@@ -595,7 +606,11 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
           {/* Sidebar Status Footer */}
           {!sidebarCollapsed && (
-            <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Theme</span>
+                <ThemeSwitcher variant="segmented" />
+              </div>
               <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                 <div className="min-w-0">

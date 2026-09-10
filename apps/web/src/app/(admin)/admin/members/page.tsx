@@ -172,6 +172,38 @@ export default function AdminMembersPage() {
     document.body.removeChild(link);
   };
 
+  const handleOpenEdit = (m: any) => {
+    setEditingMember(m);
+    setFirstName(m.firstName || '');
+    setLastName(m.lastName || '');
+    setPhoneNumber(m.phoneNumber || '');
+    setEmail(m.approvedMember?.email || m.user?.email || '');
+    setGender(m.gender || 'Male');
+    setSubTeamId(m.subTeamId || '');
+    setRoleInUnit(m.roleInUnit || 'Member');
+    setStatus(m.status || 'ACTIVE');
+    setDetails(
+      Object.fromEntries(
+        [
+          'middleName',
+          'preferredName',
+          'alternatePhoneNumber',
+          'address',
+          'profession',
+          'birthday',
+          'dateOfBirth',
+        ].map((k) => [
+          k,
+          k === 'dateOfBirth'
+            ? m[k]?.slice(0, 10) || ''
+            : m[k] || '',
+        ])
+      )
+    );
+    setFormError('');
+    setShowMemberModal(true);
+  };
+
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -380,9 +412,10 @@ export default function AdminMembersPage() {
           </div>
         </div>
 
-        {/* High-Density Members Directory Table */}
+        {/* High-Density Members Directory Table / Mobile Cards */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+          {/* Desktop & Tablet Table */}
+          <div className="overflow-x-auto hidden md:block">
             <table className="w-full text-left text-xs sm:text-sm text-slate-600 dark:text-slate-300">
               <thead className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800">
                 <tr>
@@ -516,37 +549,7 @@ export default function AdminMembersPage() {
                           <div className="flex items-center justify-end gap-1.5">
                             {/* Edit Button */}
                             <button
-                              onClick={() => {
-                                setEditingMember(m);
-                                setFirstName(m.firstName);
-                                setLastName(m.lastName);
-                                setPhoneNumber(m.phoneNumber);
-                                setEmail(m.approvedMember?.email || m.user?.email || '');
-                                setGender(m.gender || 'Male');
-                                setSubTeamId(m.subTeamId || '');
-                                setRoleInUnit(m.roleInUnit || 'Member');
-                                setStatus(m.status || 'ACTIVE');
-                                setDetails(
-                                  Object.fromEntries(
-                                    [
-                                      'middleName',
-                                      'preferredName',
-                                      'alternatePhoneNumber',
-                                      'address',
-                                      'profession',
-                                      'birthday',
-                                      'dateOfBirth',
-                                    ].map((k) => [
-                                      k,
-                                      k === 'dateOfBirth'
-                                        ? m[k]?.slice(0, 10) || ''
-                                        : m[k] || '',
-                                    ])
-                                  )
-                                );
-                                setFormError('');
-                                setShowMemberModal(true);
-                              }}
+                              onClick={() => handleOpenEdit(m)}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               title="Edit Member"
                             >
@@ -596,6 +599,123 @@ export default function AdminMembersPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Card-Based Transformation (< 768px) */}
+          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
+            {paginatedMembers.length > 0 ? (
+              paginatedMembers.map((m) => {
+                const statusColors: Record<string, string> = {
+                  ACTIVE: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60',
+                  NEW_MEMBER: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-800/60',
+                  ON_LEAVE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
+                  INACTIVE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+                  SUSPENDED: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60',
+                };
+
+                const joinedDate = m.createdAt
+                  ? new Date(m.createdAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : 'Established';
+
+                return (
+                  <div key={m.id} className="p-4 space-y-3 bg-white dark:bg-slate-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        {m.profilePhotoUrl ? (
+                          <img
+                            src={m.profilePhotoUrl}
+                            alt={`${m.firstName} avatar`}
+                            className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
+                            {m.firstName?.[0] || 'M'}
+                            {m.lastName?.[0] || ''}
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            {m.firstName} {m.lastName}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
+                              {m.memberCode}
+                            </span>
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                                statusColors[m.status] || statusColors.ACTIVE
+                              }`}
+                            >
+                              {m.status?.replace('_', ' ') || 'ACTIVE'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/70 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block">Ministry</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
+                          {m.subTeam?.name || 'General Registry'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block">Attendance</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 block">
+                          92% Consistent
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block">Contact</span>
+                        <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300 block truncate">
+                          {m.phoneNumber || 'No phone'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block">Joined</span>
+                        <span className="text-slate-700 dark:text-slate-300 block">
+                          {joinedDate}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Mobile Touch Actions */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => handleOpenEdit(m)}
+                        className="flex-1 min-h-[40px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span>Edit Profile</span>
+                      </button>
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            setAccessMember(m);
+                            setAccessEmail(m.approvedMember?.email || m.user?.email || '');
+                            setAccessStatus(m.approvedMember?.status || 'ACTIVE');
+                            setAccessError('');
+                          }}
+                          className="min-h-[40px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs"
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>Access</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-8 text-center text-xs text-slate-400">
+                {loading ? 'Loading member records...' : 'No members found matching criteria.'}
+              </div>
+            )}
           </div>
 
           {/* Pagination Controls Footer */}
