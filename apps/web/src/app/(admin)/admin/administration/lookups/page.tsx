@@ -1,7 +1,19 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../../components/Navbar';
+import {
+  Database,
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  Sliders,
+  Layers,
+  Tag,
+  Users,
+  Award,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import {
   Badge,
   Button,
@@ -9,7 +21,6 @@ import {
   EmptyState,
   Field,
   Modal,
-  PageHeader,
   Spinner,
   inputClass,
   useToast,
@@ -29,10 +40,10 @@ interface Row {
   extra: Record<string, any>;
 }
 
-const TABS: { kind: Kind; label: string; noun: string; hint: string }[] = [
-  { kind: 'event-types', label: 'Event Types', noun: 'event type', hint: 'How events are classified (Service, Wedding, Training…).' },
-  { kind: 'meeting-categories', label: 'Scoring Categories', noun: 'category', hint: 'Attendance scoring weights per category of activity.' },
-  { kind: 'sub-teams', label: 'Sub-teams & Groups', noun: 'sub-team', hint: 'Unit sub-teams; also used to target restricted events.' },
+const TABS: { kind: Kind; label: string; noun: string; hint: string; icon: any }[] = [
+  { kind: 'event-types', label: 'Event Types', noun: 'event type', hint: 'How gatherings are classified (Services, Vigils, Rehearsals, Conferences).', icon: Tag },
+  { kind: 'meeting-categories', label: 'Scoring Categories', noun: 'category', hint: 'Attendance points & weight multipliers awarded per gathering classification.', icon: Award },
+  { kind: 'sub-teams', label: 'Sub-teams & Groups', noun: 'sub-team', hint: 'Unit departments, sub-teams, and group assignments.', icon: Users },
 ];
 
 export default function LookupsPage() {
@@ -62,105 +73,139 @@ export default function LookupsPage() {
 
   useEffect(() => {
     if (!authLoading) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, tab]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/admin" className="hover:text-primary">Dashboard</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Lookup Tables</span>
-        </nav>
-        <PageHeader
-          title="Lookup Tables"
-          subtitle="Configurable classifications used across the platform."
-          actions={manage ? <Button onClick={() => setEditing('new')}>+ New {meta.noun}</Button> : undefined}
-        />
+    <AdminLayoutShell activeHref="/admin/settings">
+      <div className="space-y-6 pb-16">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <Link href="/admin/settings" className="hover:text-indigo-600 transition-colors">SETTINGS</Link>
+              <span>/</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">CLASSIFICATIONS &amp; LOOKUPS</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                System Classifications &amp; Lookups
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Manage system taxonomy, meeting scoring weights, sub-teams, and platform classifications.
+            </p>
+          </div>
 
-        <div className="flex gap-1 overflow-x-auto rounded-xl bg-surface-container p-1">
-          {TABS.map((t) => (
-            <button
-              key={t.kind}
-              onClick={() => setTab(t.kind)}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                tab === t.kind ? 'bg-surface-container-lowest text-primary shadow-sm' : 'text-on-surface-variant'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {manage && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditing('new')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                New {meta.noun}
+              </button>
+            </div>
+          )}
         </div>
-        <p className="text-sm text-on-surface-variant">{meta.hint}</p>
+
+        {/* Tab Strip */}
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const isSelected = tab === t.kind;
+              return (
+                <button
+                  key={t.kind}
+                  onClick={() => setTab(t.kind)}
+                  className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 pl-1">{meta.hint}</p>
+        </div>
 
         {loading ? (
-          <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
+          <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
         ) : error ? (
           <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />
         ) : rows.length === 0 ? (
-          <EmptyState title={`No ${meta.label.toLowerCase()} yet`} />
+          <EmptyState title={`No ${meta.label.toLowerCase()} yet`} action={manage ? <Button onClick={() => setEditing('new')}>+ New {meta.noun}</Button> : undefined} />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
-            <table className="w-full min-w-[32rem] text-sm">
-              <thead className="border-b border-outline-variant/20 bg-surface-container-low/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">In use</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/15">
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {tab === 'event-types' && r.extra.color && (
-                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: r.extra.color }} />
-                        )}
-                        <span className="font-semibold text-on-surface">{r.name}</span>
-                        {r.isSystem && <Badge tone="info">System</Badge>}
-                      </div>
-                      {r.description && <div className="text-xs text-on-surface-variant">{r.description}</div>}
-                      {tab === 'meeting-categories' && (
-                        <div className="text-xs text-on-surface-variant">
-                          {r.extra.basePoints} base pts · ×{r.extra.pointWeight} weight
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-on-surface-variant">{r.inUse}</td>
-                    <td className="px-4 py-3">
-                      {r.active ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Inactive</Badge>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        {manage && (
-                          <Button variant="ghost" className="text-xs" onClick={() => setEditing(r)}>
-                            Edit
-                          </Button>
-                        )}
-                        {manage && (
-                          <Button
-                            variant="ghost"
-                            className="text-xs text-error"
-                            disabled={!r.deletable}
-                            title={r.deletable ? '' : r.isSystem ? 'System entries cannot be deleted' : `Used by ${r.inUse} record(s)`}
-                            onClick={() => setDeleting(r)}
-                          >
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    </td>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/75 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-5 py-3.5">Classification Name</th>
+                    <th className="px-4 py-3.5">Associated Records</th>
+                    <th className="px-4 py-3.5">Status</th>
+                    <th className="px-4 py-3.5 text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          {tab === 'event-types' && r.extra.color && (
+                            <span className="h-3 w-3 shrink-0 rounded-full shadow-xs" style={{ background: r.extra.color }} />
+                          )}
+                          <span className="font-bold text-slate-900 dark:text-white text-sm">{r.name}</span>
+                          {r.isSystem && <Badge tone="info">System</Badge>}
+                        </div>
+                        {r.description && <div className="text-[11px] text-slate-400 mt-0.5">{r.description}</div>}
+                        {tab === 'meeting-categories' && (
+                          <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                            {r.extra.basePoints} base pts · ×{r.extra.pointWeight} score multiplier
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500 font-bold">
+                        {r.inUse} <span className="font-normal text-slate-400 text-[11px]">in use</span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {r.active ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Inactive</Badge>}
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          {manage && (
+                            <button
+                              className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
+                              onClick={() => setEditing(r)}
+                            >
+                              Edit
+                            </button>
+                          )}
+                          {manage && (
+                            <button
+                              className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                              disabled={!r.deletable}
+                              title={r.deletable ? '' : r.isSystem ? 'System entries cannot be deleted' : `Used by ${r.inUse} record(s)`}
+                              onClick={() => setDeleting(r)}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-      </main>
+      </div>
 
       {editing && (
         <LookupEditor
@@ -194,7 +239,7 @@ export default function LookupsPage() {
           }
         }}
       />
-    </div>
+    </AdminLayoutShell>
   );
 }
 

@@ -153,6 +153,7 @@ const NAVIGATION_TREE: NavParent[] = [
 
 interface AdminLayoutShellProps {
   children: React.ReactNode;
+  activeHref?: string;
 }
 
 export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) => {

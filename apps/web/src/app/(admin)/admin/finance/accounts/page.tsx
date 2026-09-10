@@ -1,8 +1,18 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../../components/Navbar';
-import { Badge, Button, ConfirmDialog, EmptyState, Field, Modal, PageHeader, Spinner, inputClass, useToast } from '../../../../../components/ui';
+import {
+  Landmark,
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  EyeOff,
+  Copy,
+  RefreshCw,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
+import { Badge, Button, ConfirmDialog, EmptyState, Field, Modal, Spinner, inputClass, useToast } from '../../../../../components/ui';
 import { fetchApi, ApiError } from '../../../../../lib/api';
 import { useAuth } from '../../../../../lib/auth';
 
@@ -37,58 +47,130 @@ export default function PaymentAccountsPage() {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (!authLoading) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
+  const copyAccount = (num: string) => {
+    navigator.clipboard.writeText(num);
+    notify('Account number copied to clipboard', 'success');
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/admin/finance" className="hover:text-primary">Finance</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Payment Accounts</span>
-        </nav>
-        <PageHeader
-          title="Payment Accounts"
-          subtitle="The bank details members see when making a payment."
-          actions={manage ? <Button onClick={() => setEditing('new')}>+ Add account</Button> : undefined}
-        />
+    <AdminLayoutShell activeHref="/admin/finance">
+      <div className="space-y-6 pb-16">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <Link href="/admin/finance" className="hover:text-indigo-600 transition-colors">FINANCE</Link>
+              <span>/</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">BANK ACCOUNTS</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Payment &amp; Receiving Accounts
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Configure treasury receiving accounts displayed to members during payment checkout.
+            </p>
+          </div>
+
+          {manage && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditing('new')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add Bank Account
+              </button>
+            </div>
+          )}
+        </div>
 
         {loading ? (
-          <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
+          <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
         ) : error ? (
           <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No accounts configured" description="Members will have no bank details to pay into." action={manage ? <Button onClick={() => setEditing('new')}>+ Add account</Button> : undefined} />
+          <EmptyState
+            title="No Payment Accounts Configured"
+            description="Members currently will not see any bank accounts to transfer dues into."
+            action={manage ? <Button onClick={() => setEditing('new')}>+ Add Account</Button> : undefined}
+          />
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {rows.map((a) => (
-              <article key={a.id} className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+              <article
+                key={a.id}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-on-surface">{a.bankName}</span>
-                      {a.isActive ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Hidden</Badge>}
+                      <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
+                        <Landmark className="w-4 h-4" />
+                      </div>
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm">{a.bankName}</span>
                     </div>
-                    <p className="mt-0.5 text-sm text-on-surface">{a.accountName}</p>
-                    <p className="font-mono text-sm text-on-surface-variant">{a.accountNumber}</p>
-                    {a.instructions && <p className="mt-1 text-xs text-on-surface-variant">{a.instructions}</p>}
+                    {a.isActive ? (
+                      <Badge tone="success">Active</Badge>
+                    ) : (
+                      <Badge tone="neutral">Hidden</Badge>
+                    )}
                   </div>
-                  {manage && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" className="text-xs" onClick={() => setEditing(a)}>Edit</Button>
-                      <Button variant="ghost" className="text-xs text-error" onClick={() => setDeleting(a)}>Delete</Button>
+
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium">Account Name</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{a.accountName}</p>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Account Number</p>
+                      <p className="font-mono text-base font-black text-slate-900 dark:text-white tracking-widest">{a.accountNumber}</p>
                     </div>
+                    <button
+                      onClick={() => copyAccount(a.accountNumber)}
+                      className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      title="Copy account number"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {a.instructions && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 bg-amber-50/50 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-100/50 dark:border-amber-900/30">
+                      <span className="font-bold text-amber-700 dark:text-amber-400">Note: </span>
+                      {a.instructions}
+                    </p>
                   )}
                 </div>
+
+                {manage && (
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setEditing(a)}
+                      className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setDeleting(a)}
+                      className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {editing && (
         <AccountModal
@@ -120,7 +202,7 @@ export default function PaymentAccountsPage() {
           }
         }}
       />
-    </div>
+    </AdminLayoutShell>
   );
 }
 

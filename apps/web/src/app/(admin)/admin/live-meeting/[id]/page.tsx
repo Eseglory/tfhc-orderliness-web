@@ -1,11 +1,23 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
-import { Navbar } from '../../../../../components/Navbar';
+import Link from 'next/link';
+import {
+  Radio,
+  Users,
+  CheckCircle2,
+  Clock,
+  Plus,
+  RefreshCw,
+  MapPin,
+  Calendar,
+  AlertCircle,
+  Activity,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import { StatusBadge } from '../../../../../components/StatusBadge';
 import { fetchApi } from '../../../../../lib/api';
-import { RefreshCw, Users, CheckCircle2, Clock, Plus } from 'lucide-react';
 
 export default function AdminLiveMeetingPage() {
   const params = useParams();
@@ -57,10 +69,9 @@ export default function AdminLiveMeetingPage() {
     // Auto-refresh attendance stats every 15 seconds
     const interval = setInterval(() => {
       loadData();
-      }, 15000);
+    }, 15000);
 
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadMembers runs once on mount by design
   }, [meetingId, loadData]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
@@ -76,7 +87,7 @@ export default function AdminLiveMeetingPage() {
           meetingId,
           status: manualStatus,
           reason: manualReason,
-          ...(manualArrival ? {actualArrivalTime:new Date(manualArrival).toISOString()} : {}),
+          ...(manualArrival ? { actualArrivalTime: new Date(manualArrival).toISOString() } : {}),
         }),
       });
 
@@ -96,127 +107,186 @@ export default function AdminLiveMeetingPage() {
   const totalPresent = earlyCount + onTimeCount + graceCount + lateCount;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 pb-12">
-      <Navbar />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-          <section className="p-4 rounded-xl bg-slate-900 border border-slate-800 my-4">
-            <h2 className="font-bold">Attendance responses</h2>
-            <p>{meeting?.eventResponses?.filter((r: any) => r.attending).length ?? 0} attending · {meeting?.eventResponses?.filter((r: any) => !r.attending).length ?? 0} not attending</p>
-            <ul>{meeting?.eventResponses?.map((r: any) => <li key={r.id}>{r.member.firstName} {r.member.lastName}: {r.attending ? 'Attending' : 'Not attending'}</li>)}</ul>
-          </section>
-
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-          <div>
-            <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
-              🔴 Live Active Meeting Monitor
-            </span>
-            <h1 className="text-2xl font-bold text-white mt-2">{meeting?.title || 'Active Meeting'}</h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Venue: {meeting?.locationName} | Geofence: {meeting?.geofenceRadiusMeters}m
+    <AdminLayoutShell activeHref="/admin/meetings">
+      <div className="space-y-6 pb-16">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <Link href="/admin/meetings" className="hover:text-indigo-600 transition-colors">MEETINGS</Link>
+              <span>/</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                LIVE ACTIVE MONITOR
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                {meeting?.title || 'Live Gathering Monitor'}
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Venue: {meeting?.locationName ?? 'Campus Hall'} · Geofence Radius: {meeting?.geofenceRadiusMeters ?? 100}m
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                loadData();
-                          }}
-              className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
               title="Refresh Live Data"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+              Refresh
             </button>
             <button
               onClick={() => setShowManualModal(true)}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/20 flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
             >
-              <Plus className="w-4 h-4" /> Record Manual Attendance
+              <Plus className="w-4 h-4" />
+              Record Manual Attendance
             </button>
           </div>
         </div>
 
-        <section className="flex flex-wrap gap-6 rounded-xl bg-slate-900 p-5">
-          <p>Expected: <strong>{meeting?.expectedCount ?? 0}</strong></p>
-          <p>Not yet present: <strong>{Math.max(0,(meeting?.expectedCount ?? 0)-attendanceRecords.filter(r=>!['ABSENT'].includes(r.status)).length)}</strong></p>
-          <p>Attendance so far: <strong>{meeting?.expectedCount ? (totalPresent/meeting.expectedCount*100).toFixed(1) : '0'}%</strong></p>
-        </section>
-        {/* Real-Time Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Checked In</div>
-            <div className="text-3xl font-extrabold text-white">{totalPresent}</div>
-            <div className="text-xs text-emerald-400 font-medium mt-1">Present members</div>
+        {/* 5 Metric Real-Time Stats Grid - Swipeable on mobile */}
+        <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pb-1 sm:pb-0">
+          <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Checked In</span>
+              <Users className="w-4 h-4 text-indigo-600" />
+            </div>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{totalPresent}</p>
+            <p className="mt-1 text-[11px] font-bold text-emerald-600">Present members</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Early</div>
-            <div className="text-3xl font-extrabold text-emerald-400">{earlyCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Arrival &lt; expected</div>
+          <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Early Arrival</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            </div>
+            <p className="mt-2 text-2xl font-black text-emerald-600">{earlyCount}</p>
+            <p className="mt-1 text-[11px] text-slate-400">Arrived before start</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">On Time</div>
-            <div className="text-3xl font-extrabold text-green-400">{onTimeCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Arrival &lt; start</div>
+          <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">On Time</span>
+              <Clock className="w-4 h-4 text-green-600" />
+            </div>
+            <p className="mt-2 text-2xl font-black text-green-600">{onTimeCount}</p>
+            <p className="mt-1 text-[11px] text-slate-400">Arrived on schedule</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Grace Period</div>
-            <div className="text-3xl font-extrabold text-amber-400">{graceCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Within grace window</div>
+          <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Grace Window</span>
+              <Clock className="w-4 h-4 text-amber-500" />
+            </div>
+            <p className="mt-2 text-2xl font-black text-amber-600">{graceCount}</p>
+            <p className="mt-1 text-[11px] text-slate-400">Within grace period</p>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Late</div>
-            <div className="text-3xl font-extrabold text-orange-400">{lateCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Arrival &gt; grace</div>
+          <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Late Arrival</span>
+              <AlertCircle className="w-4 h-4 text-rose-500" />
+            </div>
+            <p className="mt-2 text-2xl font-black text-rose-600">{lateCount}</p>
+            <p className="mt-1 text-[11px] text-slate-400">After grace period</p>
           </div>
         </div>
 
-        {/* Location guidance and live attendance */}
+        {/* Location & Live Attendance Details */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
-            <h2 className="text-lg font-bold">Location check-in</h2>
-            <p>Members open Check in and allow location access at the venue.</p>
-            <p>{meeting?.locationName || 'Loading venue…'}</p>
-            <p className="text-sm text-slate-400">Coordinates: {meeting?.latitude ?? '—'}, {meeting?.longitude ?? '—'}<br />Allowed distance: {meeting?.geofenceRadiusMeters ?? '—'} metres</p>
-            <p className="text-sm text-slate-400">Attendance must be active and within the check-in window. Use manual attendance with a reason if a member cannot obtain an accurate location.</p>
-          </section>
+          {/* Location & Attendance Summary */}
+          <div className="space-y-4">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Venue Geofence Status</h2>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Members check in with GPS geolocation on mobile device.
+              </p>
+              <div className="space-y-2 pt-1 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-400">Venue</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{meeting?.locationName || 'Loading venue…'}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-400">Radius</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{meeting?.geofenceRadiusMeters ?? 100} metres</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-400">Coordinates</span>
+                  <span className="font-mono text-slate-800 dark:text-slate-200">{meeting?.latitude ?? '—'}, {meeting?.longitude ?? '—'}</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">RSVP Responses</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                  <span className="text-xl font-black text-emerald-600">
+                    {meeting?.eventResponses?.filter((r: any) => r.attending).length ?? 0}
+                  </span>
+                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Attending</span>
+                </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                  <span className="text-xl font-black text-rose-600">
+                    {meeting?.eventResponses?.filter((r: any) => !r.attending).length ?? 0}
+                  </span>
+                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Declined</span>
+                </div>
+              </div>
+            </section>
+          </div>
 
           {/* Live Attendance Feed */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4">
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Live Attendance Feed</h2>
-              <span className="text-xs text-slate-400">{attendanceRecords.length} records captured</span>
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Live Check-in Stream</h2>
+              </div>
+              <span className="text-xs text-slate-400 font-bold">{attendanceRecords.length} records captured</span>
             </div>
 
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="text-xs text-slate-400 uppercase bg-slate-800/60 sticky top-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50/75 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3">Member</th>
                     <th className="px-4 py-3">Sub-Team</th>
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">Distance</th>
+                    <th className="px-4 py-3">Arrival Time</th>
+                    <th className="px-4 py-3">GPS Distance</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/50">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
                   {attendanceRecords.length > 0 ? (
                     attendanceRecords.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-800/30">
-                        <td className="px-4 py-3 font-semibold text-white">
-                          {r.member?.firstName} {r.member?.lastName}
-                          <span className="block text-xs font-normal text-slate-400">{r.member?.memberCode}</span>
+                      <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900 dark:text-white">
+                            {r.member?.firstName} {r.member?.lastName}
+                          </div>
+                          <span className="text-[11px] text-slate-400">{r.member?.memberCode}</span>
                         </td>
-                        <td className="px-4 py-3 text-slate-400">{r.member?.subTeam?.name || 'Protocol'}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                        <td className="px-4 py-3 text-slate-500 font-medium">{r.member?.subTeam?.name || 'General'}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
                           {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString() : 'N/A'}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                          {r.distanceFromVenue ? `${Math.round(r.distanceFromVenue)}m` : 'N/A'}
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                          {r.distanceFromVenue ? `${Math.round(r.distanceFromVenue)}m` : 'On-Site'}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={r.status} />
@@ -225,7 +295,7 @@ export default function AdminLiveMeetingPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
+                      <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
                         No check-ins recorded yet for this meeting.
                       </td>
                     </tr>
@@ -238,17 +308,17 @@ export default function AdminLiveMeetingPage() {
 
         {/* Manual Attendance Modal */}
         {showManualModal && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4">
-              <h2 className="text-lg font-bold text-white">Record Manual Attendance</h2>
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Record Manual Attendance Override</h2>
 
               <form onSubmit={handleManualSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Select Member</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Member</label>
                   <select
                     value={selectedMemberId}
                     onChange={(e) => setSelectedMemberId(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none"
                   >
                     {members.map((m) => (
                       <option key={m.id} value={m.id}>
@@ -258,13 +328,24 @@ export default function AdminLiveMeetingPage() {
                   </select>
                 </div>
 
-                <label className="block">Actual arrival time (optional)<input className="block bg-slate-800 p-2 rounded" type="datetime-local" value={manualArrival} onChange={e=>setManualArrival(e.target.value)}/></label>
-                  <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Attendance Status</label>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Actual Arrival Time (Optional)
+                  </label>
+                  <input
+                    className="w-full bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none"
+                    type="datetime-local"
+                    value={manualArrival}
+                    onChange={(e) => setManualArrival(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Attendance Status</label>
                   <select
                     value={manualStatus}
                     onChange={(e) => setManualStatus(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none"
                   >
                     <option value="EARLY">EARLY</option>
                     <option value="ON_TIME">ON TIME</option>
@@ -275,38 +356,39 @@ export default function AdminLiveMeetingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">Mandatory Audit Reason</label>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Mandatory Audit Reason</label>
                   <textarea
                     required
                     rows={2}
                     value={manualReason}
                     onChange={(e) => setManualReason(e.target.value)}
-                    placeholder="Provide reason for manual override..."
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-indigo-500"
+                    placeholder="Provide justification for manual override..."
+                    className="w-full bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none"
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-2">
+                <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowManualModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submittingManual}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/20"
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs text-white shadow-sm transition-all"
                   >
-                    {submittingManual ? 'Saving...' : 'Record & Audit'}
+                    {submittingManual ? 'Saving…' : 'Record & Audit'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AdminLayoutShell>
   );
 }
+

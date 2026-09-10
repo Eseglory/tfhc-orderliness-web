@@ -1,7 +1,20 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../../components/Navbar';
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Shield,
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  Lock,
+  Users,
+  KeyRound,
+  RefreshCw,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import {
   Badge,
   Button,
@@ -9,7 +22,6 @@ import {
   EmptyState,
   Field,
   Modal,
-  PageHeader,
   Spinner,
   inputClass,
   useToast,
@@ -63,33 +75,46 @@ export default function RolesPage() {
 
   useEffect(() => {
     if (!authLoading) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
   const totalPerms = useMemo(() => catalog.reduce((n, g) => n + g.permissions.length, 0), [catalog]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/admin" className="hover:text-primary">Dashboard</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Roles &amp; Permissions</span>
-        </nav>
+    <AdminLayoutShell activeHref="/admin/settings">
+      <div className="space-y-6 pb-16">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <Link href="/admin/settings" className="hover:text-indigo-600 transition-colors">SETTINGS</Link>
+              <span>/</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">ROLES &amp; PERMISSIONS</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Roles &amp; Access Governance
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Configure granular module permissions and security roles for staff and administrators.
+            </p>
+          </div>
 
-        <PageHeader
-          title="Roles & Permissions"
-          subtitle="Control what each administrator can see and do. Super Admin always has full access."
-          actions={
-            can('roles.create') ? (
-              <Button onClick={() => setEditing('new')}>+ New role</Button>
-            ) : undefined
-          }
-        />
+          {can('roles.create') && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setEditing('new')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                New Role
+              </button>
+            </div>
+          )}
+        </div>
 
         {loading ? (
-          <div className="flex justify-center py-16 text-on-surface-variant">
+          <div className="flex justify-center py-24 text-slate-400">
             <Spinner />
           </div>
         ) : error ? (
@@ -97,53 +122,68 @@ export default function RolesPage() {
         ) : roles.length === 0 ? (
           <EmptyState title="No roles yet" />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {roles.map((role) => (
-              <article key={role.id} className="flex flex-col rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-on-surface">{role.name}</h3>
-                    <p className="mt-0.5 text-xs text-on-surface-variant">{role.description || '—'}</p>
+              <article
+                key={role.id}
+                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-xl ${role.isSuperAdmin ? 'bg-amber-50 dark:bg-amber-950 text-amber-600' : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600'}`}>
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">{role.name}</h3>
+                        <p className="text-xs text-slate-400">{role.description || 'Custom administrative role'}</p>
+                      </div>
+                    </div>
+                    <Badge tone={role.isSystem ? 'info' : 'neutral'}>
+                      {role.isSystem ? 'System' : 'Custom'}
+                    </Badge>
                   </div>
-                  <Badge tone={role.isSystem ? 'info' : 'neutral'}>{role.isSystem ? 'System' : 'Custom'}</Badge>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2">
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Permissions</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {role.isSuperAdmin ? 'Full Access' : `${role.permissions.length} of ${totalPerms}`}
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-950/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block">Staff Assigned</span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {role.memberCount} administrators
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="mt-4 flex items-center gap-4 text-xs text-on-surface-variant">
-                  <span>
-                    <strong className="text-on-surface">
-                      {role.isSuperAdmin ? 'All' : role.permissions.length}
-                    </strong>{' '}
-                    {role.isSuperAdmin ? 'permissions' : `of ${totalPerms} permissions`}
-                  </span>
-                  <span>
-                    <strong className="text-on-surface">{role.memberCount}</strong> assigned
-                  </span>
-                </div>
-                <div className="mt-4 flex gap-2 border-t border-outline-variant/20 pt-3">
-                  <Button
-                    variant="secondary"
-                    className="text-xs"
+
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end gap-2">
+                  <button
+                    className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
                     onClick={() => setEditing(role)}
                     disabled={!role.editable && !can('roles.read')}
                   >
-                    {role.editable && can('roles.update') ? 'Edit' : 'View'}
-                  </Button>
+                    {role.editable && can('roles.update') ? 'Edit Permissions' : 'View Access'}
+                  </button>
                   {can('roles.delete') && (
-                    <Button
-                      variant="ghost"
-                      className="text-xs text-error"
+                    <button
+                      className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors disabled:opacity-30 disabled:pointer-events-none"
                       disabled={!role.deletable}
                       title={role.deletable ? '' : role.isSystem ? 'System roles cannot be deleted' : 'Role is still assigned to accounts'}
                       onClick={() => setDeleting(role)}
                     >
                       Delete
-                    </Button>
+                    </button>
                   )}
                 </div>
               </article>
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {editing && (
         <RoleEditor
@@ -177,7 +217,7 @@ export default function RolesPage() {
           }
         }}
       />
-    </div>
+    </AdminLayoutShell>
   );
 }
 

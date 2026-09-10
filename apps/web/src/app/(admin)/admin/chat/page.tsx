@@ -1,16 +1,17 @@
 'use client';
 import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Navbar } from '../../../../components/Navbar';
+import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { ChatWorkspace } from '../../../../components/chat/ChatWorkspace';
 
 function AdminChat() {
   const room = useSearchParams().get('room');
   return (
-    <main className="min-h-screen bg-background">
-      <Navbar />
-      <ChatWorkspace deepLinkRoomId={room} />
-    </main>
+    <AdminLayoutShell activeHref="/admin/chat">
+      <div className="h-[calc(100vh-140px)] rounded-2xl border border-outline/10 bg-surface dark:bg-slate-900 shadow-sm overflow-hidden">
+        <ChatWorkspace deepLinkRoomId={room} />
+      </div>
+    </AdminLayoutShell>
   );
 }
 
@@ -21,3 +22,4 @@ export default function AdminChatPage() {
     </Suspense>
   );
 }
+

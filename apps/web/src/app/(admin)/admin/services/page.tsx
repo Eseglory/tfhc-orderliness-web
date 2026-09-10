@@ -1,24 +1,35 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../components/Navbar';
 import {
-  Badge,
-  Button,
-  EmptyState,
-  Field,
-  Modal,
-  PageHeader,
-  Spinner,
-  inputClass,
-  useToast,
-} from '../../../../components/ui';
+  Layers,
+  Clock,
+  Calendar,
+  Building2,
+  CheckCircle2,
+  AlertCircle,
+  Plus,
+  Search,
+  RefreshCw,
+  Sparkles,
+  ChevronRight,
+  Edit2,
+  Power,
+  Sliders,
+  Shield,
+  History,
+  Check,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { RecurrenceBuilder, RecurrenceRule, ruleToPreset } from '../../../../components/RecurrenceBuilder';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
+import { Modal, useToast } from '../../../../components/ui';
 
 const WD = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const clock = (m: number | null) => (m === null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+const clock = (m: number | null) =>
+  m === null ? '' : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const toMin = (v: string) => (v ? Number(v.split(':')[0]) * 60 + Number(v.split(':')[1]) : null);
 
 interface Schedule {
@@ -41,13 +52,15 @@ interface Schedule {
 export default function RecurringServicesPage() {
   const { can, loading: authLoading } = useAuth();
   const { notify } = useToast();
+
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [config, setConfig] = useState<any>(null);
   const [eventTypes, setEventTypes] = useState<{ key: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [edit, setEdit] = useState<Schedule | null>(null);
-  const [occurrencesFor, setOccurrencesFor] = useState<Schedule | null>(null);
+  const [search, setSearch] = useState('');
+
   const canManage = can('events.create') || can('events.update');
 
   const load = async () => {
@@ -61,7 +74,11 @@ export default function RecurringServicesPage() {
       setEventTypes(types);
       setError('');
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 403 ? 'You do not have access to recurring events.' : 'Could not load recurring events.');
+      setError(
+        e instanceof ApiError && e.status === 403
+          ? 'You do not have access to recurring events.'
+          : 'Could not load recurring events.',
+      );
     } finally {
       setLoading(false);
     }
@@ -69,7 +86,6 @@ export default function RecurringServicesPage() {
 
   useEffect(() => {
     if (!authLoading) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
 
   const saveSchedule = async (s: Schedule) => {
@@ -90,332 +106,387 @@ export default function RecurringServicesPage() {
       body: JSON.stringify(body),
     });
     setEdit(null);
-    notify('Saved. Upcoming events updated.', 'success');
+    notify('Saved. Recurring schedule updated.', 'success');
     load();
   };
 
-  return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/admin/meetings" className="hover:text-primary">Events</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Recurring</span>
-        </nav>
-        <PageHeader
-          title="Recurring Events"
-          subtitle="Series that generate events automatically. All times use Africa/Lagos."
-          actions={
-            can('events.create') ? (
-              <Button onClick={() => setEdit({ title: '', dayOfWeek: 0, startMinutes: 420, endMinutes: null, categoryName: 'Sunday Service', enabled: true, recurrenceRule: null, visibility: 'PUBLIC', horizonDays: 28 })}>
-                + New series
-              </Button>
-            ) : undefined
-          }
-        />
-
-        {loading ? (
-          <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
-        ) : error ? (
-          <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {schedules.map((s) => (
-                <article key={s.id} className="space-y-2 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-bold text-on-surface">{s.title}</h3>
-                    <Badge tone={s.enabled ? 'success' : 'neutral'}>{s.enabled ? 'Active' : 'Paused'}</Badge>
-                  </div>
-                  <p className="text-sm text-on-surface-variant">
-                    {s.recurrenceSummary} · {clock(s.startMinutes)}
-                    {s.endMinutes !== null ? `–${clock(s.endMinutes)}` : ''}
-                  </p>
-                  <p className="text-xs text-on-surface-variant">
-                    {s._count?.meetings ?? 0} generated
-                    {s.exceptions?.length ? ` · ${s.exceptions.length} exception${s.exceptions.length > 1 ? 's' : ''}` : ''}
-                    {s.visibility === 'RESTRICTED' ? ' · Restricted' : ''}
-                  </p>
-                  {canManage && (
-                    <div className="flex gap-2 border-t border-outline-variant/15 pt-2">
-                      <Button variant="secondary" className="text-xs" aria-label={`Edit ${s.title}`} onClick={() => setEdit({ ...s })}>Edit series</Button>
-                      <Button variant="ghost" className="text-xs" onClick={() => setOccurrencesFor(s)}>Occurrences</Button>
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
-
-            {config && can('events.update') && <VenueConfig config={config} onSaved={load} />}
-          </>
-        )}
-      </main>
-
-      {edit && (
-        <SeriesEditor
-          value={edit}
-          eventTypes={eventTypes}
-          onClose={() => setEdit(null)}
-          onSave={saveSchedule}
-        />
-      )}
-
-      {occurrencesFor && (
-        <OccurrencesModal
-          schedule={occurrencesFor}
-          onClose={() => setOccurrencesFor(null)}
-          onChanged={load}
-        />
-      )}
-    </div>
-  );
-}
-
-function SeriesEditor({
-  value,
-  eventTypes,
-  onClose,
-  onSave,
-}: {
-  value: Schedule;
-  eventTypes: { key: string; name: string }[];
-  onClose: () => void;
-  onSave: (s: Schedule) => Promise<void>;
-}) {
-  const [s, setS] = useState<Schedule>({ ...value });
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
-  const set = <K extends keyof Schedule>(k: K, v: Schedule[K]) => setS((p) => ({ ...p, [k]: v }));
-  const { rule } = ruleToPreset(s.recurrenceRule ?? null, s.dayOfWeek);
-
-  const submit = async () => {
-    setErr('');
-    if (s.title.trim().length < 2) return setErr('Give the series a name.');
-    if (s.endMinutes !== null && s.endMinutes <= s.startMinutes) return setErr('End time must be after the start time.');
-    setSaving(true);
-    try {
-      await onSave(s);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not save.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      size="lg"
-      title={s.id ? 'Edit series' : 'New series'}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} loading={saving}>{s.id ? 'Save series' : 'Create series'}</Button>
-        </>
+  const filtered = useMemo(() => {
+    return schedules.filter((s) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        return s.title.toLowerCase().includes(q) || s.categoryName.toLowerCase().includes(q);
       }
-    >
-      <div className="space-y-4">
-        <Field label="Series name" required>
-          <input className={inputClass} value={s.title} onChange={(e) => set('title', e.target.value)} maxLength={120} />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Event type">
-            <select className={inputClass} value={s.eventTypeKey ?? ''} onChange={(e) => set('eventTypeKey', e.target.value || null)}>
-              <option value="">— None —</option>
-              {eventTypes.map((t) => (
-                <option key={t.key} value={t.key}>{t.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Scoring category" required>
-            <input className={inputClass} value={s.categoryName} onChange={(e) => set('categoryName', e.target.value)} maxLength={80} />
-          </Field>
-          <Field label="Anchor weekday">
-            <select className={inputClass} value={s.dayOfWeek} onChange={(e) => set('dayOfWeek', Number(e.target.value))}>
-              {WD.map((d, i) => (
-                <option key={d} value={i}>{d}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Visibility">
-            <select className={inputClass} value={s.visibility ?? 'PUBLIC'} onChange={(e) => set('visibility', e.target.value as 'PUBLIC' | 'RESTRICTED')}>
-              <option value="PUBLIC">All members</option>
-              <option value="RESTRICTED">Restricted</option>
-            </select>
-          </Field>
-          <Field label="Start time" required>
-            <input type="time" className={inputClass} value={clock(s.startMinutes)} onChange={(e) => set('startMinutes', toMin(e.target.value) ?? 0)} />
-          </Field>
-          <Field label="End time (optional)">
-            <input type="time" className={inputClass} value={clock(s.endMinutes)} onChange={(e) => set('endMinutes', toMin(e.target.value))} />
-          </Field>
-        </div>
+      return true;
+    });
+  }, [schedules, search]);
 
-        <RecurrenceBuilder value={rule} dayOfWeek={s.dayOfWeek} onChange={(r) => set('recurrenceRule', r)} />
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Generate ahead (days)" hint="7–120">
-            <input type="number" min={7} max={120} className={inputClass} value={s.horizonDays ?? 28} onChange={(e) => set('horizonDays', Number(e.target.value))} />
-          </Field>
-          <label className="flex items-end gap-2 pb-2.5 text-sm">
-            <input type="checkbox" className="h-4 w-4 rounded border-outline-variant text-primary" checked={s.enabled} onChange={(e) => set('enabled', e.target.checked)} />
-            Active (generate upcoming events)
-          </label>
-        </div>
-
-        {err && <p role="alert" className="text-sm font-medium text-error">{err}</p>}
-      </div>
-    </Modal>
-  );
-}
-
-function OccurrencesModal({
-  schedule,
-  onClose,
-  onChanged,
-}: {
-  schedule: Schedule;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const { notify } = useToast();
-  const [rows, setRows] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState('');
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const now = new Date().toISOString();
-      const to = new Date(Date.now() + 120 * 864e5).toISOString();
-      const list = await fetchApi<any[]>(`/meetings?from=${encodeURIComponent(now)}&to=${encodeURIComponent(to)}&includeArchived=true`);
-      setRows(list.filter((m) => m.serviceScheduleId === schedule.id || m.serviceSchedule?.id === schedule.id));
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const cancelOne = async (m: any) => {
-    setBusy(m.id);
-    try {
-      await fetchApi(`/service-schedules/${schedule.id}/occurrences/${m.id}/cancel`, { method: 'POST', body: JSON.stringify({ reason: 'Cancelled for this date' }) });
-      notify('Occurrence cancelled', 'success');
-      load();
-      onChanged();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : 'Could not cancel', 'error');
-    } finally {
-      setBusy('');
-    }
-  };
-  const restoreOne = async (m: any) => {
-    setBusy(m.id);
-    try {
-      await fetchApi(`/service-schedules/${schedule.id}/occurrences/${m.id}/cancel`, { method: 'DELETE' });
-      notify('Occurrence restored', 'success');
-      load();
-      onChanged();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : 'Could not restore', 'error');
-    } finally {
-      setBusy('');
-    }
-  };
+  const stats = useMemo(() => {
+    const total = schedules.length;
+    const enabled = schedules.filter((s) => s.enabled).length;
+    const totalMeetings = schedules.reduce((acc, s) => acc + (s._count?.meetings || 0), 0);
+    return { total, enabled, totalMeetings };
+  }, [schedules]);
 
   return (
-    <Modal open onClose={onClose} size="lg" title={`${schedule.title} — occurrences`} description="Cancel or restore a single date without affecting the rest of the series.">
-      {loading ? (
-        <div className="flex justify-center py-10 text-on-surface-variant"><Spinner /></div>
-      ) : rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-on-surface-variant">No upcoming occurrences.</p>
-      ) : (
-        <ul className="divide-y divide-outline-variant/15">
-          {rows.map((m) => (
-            <li key={m.id} className="flex items-center justify-between gap-3 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-on-surface">
-                  {new Date(m.startTime).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </p>
-                <p className="text-xs text-on-surface-variant">
-                  {m.status}
-                  {m.isException ? ' · edited' : ''}
-                  {m.title !== schedule.title ? ` · "${m.title}"` : ''}
-                </p>
+    <AdminLayoutShell>
+      <div className="space-y-6 pb-16">
+        {/* Top Breadcrumb & Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <span>CHURCH OPERATIONS</span>
+              <span>/</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">GRACE CATHEDRAL CAMPUS</span>
+              <span>/</span>
+              <span>RECURRING SERVICE SERIES</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Recurring Liturgical &amp; Service Series
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Automated horizon generation for weekly Sunday services, midweek gatherings, and synods.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={load}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+              Sync Engine
+            </button>
+            {canManage && (
+              <button
+                onClick={() =>
+                  setEdit({
+                    title: '',
+                    dayOfWeek: 0,
+                    startMinutes: 600,
+                    endMinutes: 720,
+                    categoryName: 'Sunday Service',
+                    enabled: true,
+                    visibility: 'PUBLIC',
+                    horizonDays: 28,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Add Recurring Series
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Metric KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                ACTIVE SERIES
+              </span>
+              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
+                <Layers className="w-4 h-4" />
               </div>
-              {m.status === 'CANCELLED' ? (
-                <Button variant="ghost" className="text-xs" loading={busy === m.id} onClick={() => restoreOne(m)}>Restore</Button>
-              ) : m.status === 'CLOSED' ? (
-                <span className="text-xs text-on-surface-variant">closed</span>
-              ) : (
-                <Button variant="ghost" className="text-xs text-error" loading={busy === m.id} onClick={() => cancelOne(m)}>Cancel this date</Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Modal>
-  );
-}
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.enabled}</span>
+              <span className="text-xs font-bold text-slate-400">/ {stats.total} Series</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              <span className="font-bold text-emerald-600">Auto-Generates</span> upcoming calendar
+            </div>
+          </div>
 
-function VenueConfig({ config: initial, onSaved }: { config: any; onSaved: () => void }) {
-  const { notify } = useToast();
-  const [config, setConfig] = useState(initial);
-  const [saving, setSaving] = useState(false);
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                GENERATION HORIZON
+              </span>
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 dark:text-white">28 Days</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              <span>Rolling future instances buffer</span>
+            </div>
+          </div>
 
-  const save = async () => {
-    setSaving(true);
-    try {
-      await fetchApi('/service-schedules/config', { method: 'PUT', body: JSON.stringify(config) });
-      notify('Settings saved', 'success');
-      onSaved();
-    } catch (e) {
-      notify(e instanceof Error ? e.message : 'Could not save settings', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                TOTAL INSTANCES
+              </span>
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+                <Calendar className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.totalMeetings}</span>
+              <span className="text-xs font-bold text-slate-400">Events</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              <span>Generated in schedule history</span>
+            </div>
+          </div>
 
-  return (
-    <section className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm">
-      <h2 className="text-lg font-bold text-on-surface">Default venue &amp; reminders</h2>
-      <p className="text-sm text-on-surface-variant">Applied to every generated recurring event. One-off events set their own venue.</p>
-      <Field label="Venue name" required>
-        <input className={inputClass} value={config.venue.name} onChange={(e) => setConfig({ ...config, venue: { ...config.venue, name: e.target.value } })} />
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {(['latitude', 'longitude', 'radiusMeters'] as const).map((k) => (
-          <Field key={k} label={k === 'radiusMeters' ? 'Check-in radius (m)' : k[0].toUpperCase() + k.slice(1)}>
-            <input type="number" step="any" className={inputClass} value={config.venue[k]} onChange={(e) => setConfig({ ...config, venue: { ...config.venue, [k]: Number(e.target.value) } })} />
-          </Field>
-        ))}
+          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                ENGINE HEALTH
+              </span>
+              <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600">
+                <Sparkles className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-emerald-600">Healthy</span>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">
+              <span>Cron scheduler synced</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Series Search & List */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search recurring series... (⌘K)"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-5">SERIES TITLE &amp; CATEGORY</th>
+                  <th className="py-3 px-4">CADENCE &amp; TIME</th>
+                  <th className="py-3 px-4">STATUS</th>
+                  <th className="py-3 px-4">GENERATED INSTANCES</th>
+                  <th className="py-3 px-5 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                {filtered.length > 0 ? (
+                  filtered.map((s) => (
+                    <tr key={s.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            {WD[s.dayOfWeek]?.slice(0, 2) || 'SU'}
+                          </div>
+                          <div>
+                            <span className="font-extrabold text-slate-900 dark:text-white text-xs block">
+                              {s.title}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {s.categoryName} • {s.visibility || 'PUBLIC'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-white block">
+                            Every {WD[s.dayOfWeek]}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {clock(s.startMinutes)} – {clock(s.endMinutes)}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            s.enabled
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}
+                        >
+                          {s.enabled ? 'Active Engine' : 'Paused'}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          {s._count?.meetings ?? 0}
+                        </span>
+                        <span className="text-[10px] text-slate-400 ml-1">events</span>
+                      </td>
+
+                      <td className="py-3.5 px-5 text-right">
+                        {canManage && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setEdit(s)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              title="Edit Series"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => saveSchedule({ ...s, enabled: !s.enabled })}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                s.enabled
+                                  ? 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950'
+                                  : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                              title={s.enabled ? 'Disable Series' : 'Enable Series'}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-xs text-slate-400">
+                      No recurring series created yet. Click &quot;Add Recurring Series&quot; to configure.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Edit Modal */}
+        {edit && (
+          <Modal
+            open={Boolean(edit)}
+            onClose={() => setEdit(null)}
+            title={edit.id ? 'Edit Recurring Series' : 'New Recurring Series'}
+          >
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveSchedule(edit);
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Series Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={edit.title}
+                  onChange={(e) => setEdit({ ...edit, title: e.target.value })}
+                  placeholder="e.g. Sunday Contemporary Worship"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Day of Week
+                  </label>
+                  <select
+                    value={edit.dayOfWeek}
+                    onChange={(e) => setEdit({ ...edit, dayOfWeek: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold"
+                  >
+                    {WD.map((name, i) => (
+                      <option key={i} value={i}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Category Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={edit.categoryName}
+                    onChange={(e) => setEdit({ ...edit, categoryName: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={clock(edit.startMinutes)}
+                    onChange={(e) => setEdit({ ...edit, startMinutes: toMin(e.target.value) ?? 600 })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={clock(edit.endMinutes)}
+                    onChange={(e) => setEdit({ ...edit, endMinutes: toMin(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="enabledCheckbox"
+                  checked={edit.enabled}
+                  onChange={(e) => setEdit({ ...edit, enabled: e.target.checked })}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                />
+                <label htmlFor="enabledCheckbox" className="font-bold text-slate-800 dark:text-slate-200 cursor-pointer">
+                  Series Engine Enabled (Automatically create upcoming calendar occurrences)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEdit(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+                >
+                  Save Series
+                </button>
+              </div>
+            </form>
+          </Modal>
+        )}
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Arrive minutes before">
-          <input type="number" min={0} max={180} className={inputClass} value={config.arrivalMinutesBefore} onChange={(e) => setConfig({ ...config, arrivalMinutesBefore: Number(e.target.value) })} />
-        </Field>
-        <Field label="Reminder minutes before">
-          <input type="number" min={1} max={10080} className={inputClass} value={config.reminderMinutes[0] || 60} onChange={(e) => setConfig({ ...config, reminderMinutes: [Number(e.target.value)] })} />
-        </Field>
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" className="h-4 w-4 rounded border-outline-variant text-primary" checked={config.remindersEnabled} onChange={(e) => setConfig({ ...config, remindersEnabled: e.target.checked })} />
-        Send email reminders
-      </label>
-      <Field label="Send reminders to">
-        <select className={inputClass} value={config.recipients} onChange={(e) => setConfig({ ...config, recipients: e.target.value })}>
-          <option value="all">All active approved members</option>
-          <option value="committed">Only members committed to the event</option>
-        </select>
-      </Field>
-      <Button onClick={save} loading={saving}>Save settings</Button>
-    </section>
+    </AdminLayoutShell>
   );
 }

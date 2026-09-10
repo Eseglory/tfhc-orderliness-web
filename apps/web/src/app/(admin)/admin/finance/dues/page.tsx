@@ -1,14 +1,27 @@
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../../components/Navbar';
+import {
+  CreditCard,
+  Plus,
+  Upload,
+  Search,
+  Filter,
+  RefreshCw,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Users,
+  ChevronRight,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import {
   Badge,
   Button,
   EmptyState,
   Field,
   Modal,
-  PageHeader,
   Spinner,
   inputClass,
   useToast,
@@ -108,8 +121,8 @@ export default function DuesPage() {
 
   useEffect(() => {
     if (!authLoading) loadPeriods();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
+
   useEffect(() => {
     if (selected) loadDetail(selected);
   }, [selected]);
@@ -124,122 +137,205 @@ export default function DuesPage() {
   }, [detail, statusFilter, search]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/admin/finance" className="hover:text-primary">Finance</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Monthly Dues</span>
-        </nav>
-        <PageHeader
-          title="Monthly Dues"
-          subtitle="Per-member dues, payments and arrears by month."
-          actions={
-            canManage ? (
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setImporting(true)}>Import from spreadsheet</Button>
-                {can('dues.create') && <Button onClick={() => setCreating(true)}>+ New period</Button>}
-              </div>
-            ) : undefined
-          }
-        />
+    <AdminLayoutShell activeHref="/admin/finance">
+      <div className="space-y-6 pb-16">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
+              <Link href="/admin/finance" className="hover:text-indigo-600 transition-colors">FINANCE</Link>
+              <span>/</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">MONTHLY DUES</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                Monthly Dues Management
+              </h1>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Per-member dues, collection tracking, and arrears management across months.
+            </p>
+          </div>
+
+          {canManage && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setImporting(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
+              >
+                <Upload className="w-3.5 h-3.5 text-slate-400" />
+                Import Matrix
+              </button>
+              {can('dues.create') && (
+                <button
+                  onClick={() => setCreating(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Period
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {loading ? (
-          <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
+          <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
         ) : error ? (
           <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={loadPeriods}>Retry</Button>} />
         ) : periods.length === 0 ? (
           <EmptyState
-            title="No dues periods yet"
-            description="Create a period (or import the spreadsheet) to start."
-            action={can('dues.create') ? <Button onClick={() => setCreating(true)}>+ New period</Button> : undefined}
+            title="No Dues Periods Yet"
+            description="Create a period (or import the spreadsheet matrix) to start tracking collections."
+            action={can('dues.create') ? <Button onClick={() => setCreating(true)}>+ New Period</Button> : undefined}
           />
         ) : (
           <>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {periods.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelected(p.id)}
-                  className={`whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-semibold ${
-                    selected === p.id ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant/30 bg-surface-container-lowest text-on-surface-variant'
-                  }`}
-                >
-                  {p.label}
-                  <span className="ml-1.5 text-xs opacity-70">{p.assignmentCount}</span>
-                </button>
-              ))}
+            {/* Horizontal Period Selector Ribbon */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+              {periods.map((p) => {
+                const isSelected = selected === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelected(p.id)}
+                    className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    <span>{p.label}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                      {p.assignmentCount}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {detailLoading || !detail ? (
-              <div className="flex justify-center py-16 text-on-surface-variant"><Spinner /></div>
+              <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {[
-                    ['Expected', naira(detail.summary.expected), 'text-on-surface'],
-                    ['Collected', naira(detail.summary.collected), 'text-tertiary'],
-                    ['Outstanding', naira(detail.summary.outstanding), detail.summary.outstanding ? 'text-error' : 'text-on-surface'],
-                    ['Collection rate', `${detail.summary.collectionRate}%`, 'text-on-surface'],
-                    ['Overdue members', String(detail.summary.overdue), detail.summary.overdue ? 'text-error' : 'text-on-surface'],
-                  ].map(([label, value, tone]) => (
-                    <div key={label} className="rounded-xl border border-outline-variant/25 bg-surface-container-lowest p-3 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{label}</p>
-                      <p className={`mt-0.5 text-lg font-bold ${tone}`}>{value}</p>
-                    </div>
-                  ))}
+                {/* 5 Metric KPI Cards - Swipeable on mobile */}
+                <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pb-1 sm:pb-0">
+                  <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Expected</p>
+                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-white">{naira(detail.summary.expected)}</p>
+                  </div>
+                  <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Collected</p>
+                    <p className="mt-1 text-xl font-black text-emerald-600">{naira(detail.summary.collected)}</p>
+                  </div>
+                  <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Outstanding</p>
+                    <p className={`mt-1 text-xl font-black ${detail.summary.outstanding > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+                      {naira(detail.summary.outstanding)}
+                    </p>
+                  </div>
+                  <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Collection Rate</p>
+                    <p className="mt-1 text-xl font-black text-indigo-600 dark:text-indigo-400">{detail.summary.collectionRate}%</p>
+                  </div>
+                  <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Overdue</p>
+                    <p className={`mt-1 text-xl font-black ${detail.summary.overdue > 0 ? 'text-amber-600' : 'text-slate-900 dark:text-white'}`}>
+                      {detail.summary.overdue} <span className="text-xs font-normal text-slate-400">members</span>
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <input className={`${inputClass} max-w-xs`} placeholder="Search member…" value={search} onChange={(e) => setSearch(e.target.value)} />
-                  <select className={`${inputClass} w-auto`} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                    <option value="">All statuses</option>
-                    {['PAID', 'PARTIALLY_PAID', 'OUTSTANDING', 'OVERDUE', 'EXEMPT', 'WAIVED'].map((s) => (
-                      <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                    ))}
-                  </select>
-                  <span className="text-xs text-on-surface-variant">{rows.length} of {detail.assignments.length}</span>
-                </div>
+                {/* Filter and Search Bar */}
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                      placeholder="Search member name or code…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
 
-                <div className="overflow-x-auto rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-sm">
-                  <table className="w-full min-w-[40rem] text-sm">
-                    <thead className="border-b border-outline-variant/20 bg-surface-container-low/60 text-left text-xs uppercase tracking-wide text-on-surface-variant">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold">Member</th>
-                        <th className="px-4 py-3 font-semibold">Due</th>
-                        <th className="px-4 py-3 font-semibold">Paid</th>
-                        <th className="px-4 py-3 font-semibold">Balance</th>
-                        <th className="px-4 py-3 font-semibold">Status</th>
-                        {canManage && <th className="px-4 py-3" />}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant/15">
-                      {rows.map((a) => (
-                        <tr key={a.id}>
-                          <td className="px-4 py-2.5">
-                            <div className="font-medium text-on-surface">{a.member.name}</div>
-                            <div className="text-xs text-on-surface-variant">{a.member.memberCode}{a.member.subTeam ? ` · ${a.member.subTeam}` : ''}</div>
-                          </td>
-                          <td className="px-4 py-2.5 text-on-surface-variant">{naira(a.amountDue)}</td>
-                          <td className="px-4 py-2.5 text-on-surface-variant">{naira(a.amountPaid)}</td>
-                          <td className={`px-4 py-2.5 font-medium ${a.balance ? 'text-error' : 'text-tertiary'}`}>{naira(a.balance)}</td>
-                          <td className="px-4 py-2.5"><Badge tone={STATUS_TONE[a.status] ?? 'neutral'}>{a.status.replace('_', ' ')}</Badge></td>
-                          {canManage && (
-                            <td className="px-4 py-2.5 text-right">
-                              <Button variant="ghost" className="text-xs" onClick={() => setEditAssignment(a)}>Adjust</Button>
-                            </td>
-                          )}
-                        </tr>
+                  <div className="flex items-center gap-3">
+                    <select
+                      className="px-3 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="">All Statuses</option>
+                      {['PAID', 'PARTIALLY_PAID', 'OUTSTANDING', 'OVERDUE', 'EXEMPT', 'WAIVED'].map((s) => (
+                        <option key={s} value={s}>{s.replace('_', ' ')}</option>
                       ))}
-                    </tbody>
-                  </table>
+                    </select>
+                    <span className="text-xs text-slate-400 font-bold whitespace-nowrap">
+                      {rows.length} of {detail.assignments.length} records
+                    </span>
+                  </div>
+                </div>
+
+                {/* Data Table */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50/75 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="px-5 py-3.5">Member</th>
+                          <th className="px-4 py-3.5">Amount Due</th>
+                          <th className="px-4 py-3.5">Amount Paid</th>
+                          <th className="px-4 py-3.5">Balance</th>
+                          <th className="px-4 py-3.5">Status</th>
+                          {canManage && <th className="px-4 py-3.5 text-right">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
+                        {rows.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="text-center py-12 text-slate-400">
+                              No assignments match your search filter.
+                            </td>
+                          </tr>
+                        ) : (
+                          rows.map((a) => (
+                            <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                              <td className="px-5 py-3.5">
+                                <div className="font-bold text-slate-900 dark:text-white">{a.member.name}</div>
+                                <div className="text-[11px] text-slate-400">{a.member.memberCode}{a.member.subTeam ? ` · ${a.member.subTeam}` : ''}</div>
+                              </td>
+                              <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300 font-semibold">{naira(a.amountDue)}</td>
+                              <td className="px-4 py-3.5 text-emerald-600 font-semibold">{naira(a.amountPaid)}</td>
+                              <td className={`px-4 py-3.5 font-bold ${a.balance > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+                                {naira(a.balance)}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <Badge tone={STATUS_TONE[a.status] ?? 'neutral'}>
+                                  {a.status.replace('_', ' ')}
+                                </Badge>
+                              </td>
+                              {canManage && (
+                                <td className="px-4 py-3.5 text-right">
+                                  <button
+                                    onClick={() => setEditAssignment(a)}
+                                    className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
+                                  >
+                                    Adjust
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </>
             )}
           </>
         )}
-      </main>
+      </div>
 
       {creating && (
         <NewPeriodModal
@@ -274,7 +370,7 @@ export default function DuesPage() {
           }}
         />
       )}
-    </div>
+    </AdminLayoutShell>
   );
 }
 
