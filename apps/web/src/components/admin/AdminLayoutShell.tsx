@@ -35,6 +35,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Layers,
+  HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { logout } from '../../lib/api';
@@ -87,7 +88,9 @@ const NAVIGATION_TREE: NavParent[] = [
     icon: Calendar,
     anyOf: ['events.read', 'attendance.read', 'attendance.mark'],
     children: [
-      { href: '/admin/calendar', label: 'Events Calendar', icon: Calendar, anyOf: ['events.read'] },
+      { href: '/admin/calendar', label: 'Activities & Master Calendar', icon: Calendar, anyOf: ['events.read'] },
+      { href: '/admin/events', label: 'Events Management & Ticketing', icon: Sparkles, anyOf: ['events.read'] },
+      { href: '/admin/appointments', label: 'Appointments & Pastoral Care', icon: HeartHandshake, anyOf: ['events.read'] },
       { href: '/admin/meetings', label: 'All Meetings & Services', icon: Clock, anyOf: ['events.read'] },
       { href: '/admin/services', label: 'Recurring Service Series', icon: Layers, anyOf: ['events.read'] },
       { href: '/admin/meetings/dashboard', label: 'Operations & Feature Board', icon: Kanban, anyOf: ['events.read'] },
