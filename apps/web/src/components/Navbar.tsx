@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AuthTransition } from './AuthTransition';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -79,12 +79,23 @@ const ADMIN_NAV: NavItem[] = [
 
 export const Navbar: React.FC = () => {
   const [signingOut, setSigningOut] = useState(false);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { user, canAny } = useAuth();
   const chatUnread = useChatUnread();
+  const menuRef = useRef<HTMLElement>(null);
 
   const isAdmin = pathname.startsWith('/admin');
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  useEffect(() => setOpenMenu(null), [pathname]);
 
   const handleLogout = () => {
     setSigningOut(true);
