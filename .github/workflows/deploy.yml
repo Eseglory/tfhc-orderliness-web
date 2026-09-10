@@ -32,6 +32,9 @@ jobs:
           yarn workspace @tfhc/api prisma:generate
           yarn build:api
 
+      - name: Run API Unit Tests
+        run: yarn workspace @tfhc/api test
+
       - name: Build Web App
         run: yarn build:web
         env:
