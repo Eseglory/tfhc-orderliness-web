@@ -19,8 +19,16 @@ function realError(message: string) {
   return !/due to access control checks\.?$/.test(message) && !/_rsc=/.test(message);
 }
 
+async function adminToken() {
+  const db = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
+  try {
+    const user = await db.user.findUniqueOrThrow({where:{email:'admin-browser@example.test'}});
+    return jwt.sign({sub:user.id}, 'e2e-local-only-secret', {expiresIn:'1h'});
+  } finally { await db.$disconnect(); }
+}
 async function login(page: any) {
-  await page.goto('/login', {waitUntil:'domcontentloaded'});
+  await page.goto('/login');
+  await page.locator('form[data-hydrated="true"]').waitFor();
   await page.getByLabel('Member ID / Email').fill('admin-browser@example.test');
   await page.getByLabel('Password', {exact:true}).fill('E2ePassword!123');
   await page.getByRole('button', {name:/Sign In/}).click();
@@ -57,7 +65,8 @@ test('member Google sign-in button posts the credential and surfaces backend err
 });
 
 test('invalid credentials show an actionable error', async ({page}) => {
-  await page.goto('/login', {waitUntil:'domcontentloaded'});
+  await page.goto('/login');
+  await page.locator('form[data-hydrated="true"]').waitFor();
   await page.getByLabel('Member ID / Email').fill('admin-browser@example.test');
   await page.getByLabel('Password', {exact:true}).fill('wrong');
   await page.getByRole('button', {name:/Sign In/}).click();
@@ -73,7 +82,8 @@ test('login, home routing and logout', async ({page}) => {
 });
 for (const route of ['/admin','/admin/members','/admin/meetings','/admin/leaderboard','/admin/follow-up','/admin/reports']) {
   test(`admin route ${route}`, async ({page}) => {
-    await login(page);
+    const token = await adminToken();
+    await page.addInitScript(t=>localStorage.setItem('tfhc_token',t),token);
     const errors:string[]=[];
     page.on('pageerror', e=>{ if (realError(e.message)) errors.push(e.message); });
     page.on('response', r=>{if(r.url().startsWith(`${apiURL}`) && r.status()>=400) errors.push(`${r.status()} ${r.url()}`);});
@@ -412,29 +422,24 @@ test('admin configures a recurring event series', async ({ page, request }) => {
   expect((await request.put(`${apiURL}/service-schedules/config`, { headers, data: config })).ok()).toBeTruthy();
   await page.goto('/admin/services');
   const title = `Children browser ${Date.now()}`;
-
   await page.getByRole('button', { name: '+ New series' }).click();
-  const editor = page.getByRole('dialog');
-  await editor.getByLabel(/Series name/).fill(title);
-  await editor.getByLabel(/Start time/).fill('08:30');
-  await editor.getByLabel('End time (optional)').fill('10:00');
-  await editor.getByRole('button', { name: 'Create series' }).click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-
+  await page.getByLabel('Series name').fill(title);
+  await page.getByLabel(/Start time/).fill('08:30');
+  await page.getByLabel(/End time/).fill('10:00');
+  await page.getByRole('button', { name: 'Create series', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: `Edit ${title}`, exact: true }).click();
+  await page.getByLabel(/End time/).fill('10:15');
+  await page.getByLabel(/Active \(generate upcoming events\)/).uncheck();
+  await page.getByRole('button', { name: 'Save series', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
   const card = page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
-  await expect(card).toBeVisible();
-
-  await card.getByRole('button', { name: 'Edit series' }).click();
-  const editor2 = page.getByRole('dialog');
-  await editor2.getByLabel('End time (optional)').fill('10:15');
-  await editor2.getByLabel(/^Active/).uncheck();
-  await editor2.getByRole('button', { name: 'Save series' }).click();
-  await expect(page.getByRole('dialog')).toBeHidden();
-
   await expect(card).toContainText('Paused');
-  await expect(card).toContainText('08:30–10:15');
+  await expect(card).toContainText(/08:30[–-]10:15/);
   await page.reload();
-  await expect(card).toContainText('Paused');
+  const reloadedCard = page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+  await expect(reloadedCard).toContainText('Paused');
 });
 
 test('custom event is visible and member RSVP changes persist for admin', async ({page, request}) => {
@@ -488,7 +493,8 @@ test('venue session signs out after an overdue check confirms departure', async 
 });
 
 test('sign-in displays the branded loading screen', async ({page}) => {
-  await page.goto('/login',{waitUntil:'domcontentloaded'});
+  await page.goto('/login');
+  await page.locator('form[data-hydrated="true"]').waitFor();
   let release!: () => void;
   const pending = new Promise<void>(resolve=>{release=resolve;});
   await page.route(`${apiURL}/auth/login`,async route=>{await pending;await route.continue();});

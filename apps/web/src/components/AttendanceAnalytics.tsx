@@ -27,16 +27,16 @@ export function AttendanceAnalytics() {
   }, [days, version, from, to, filters]);
   const rate = (value: number | null) => value === null ? 'No data' : `${value}%`;
   return <section className="space-y-5" aria-label="Attendance analytics">
-    <div className="flex flex-wrap gap-4 items-center justify-between">
+    <div className="flex flex-wrap gap-4 items-center justify-between min-w-0">
       <h2 className="text-xl font-bold">Attendance analytics</h2>
-      <label>Reporting period <select className="bg-slate-800 rounded p-2" value={days} onChange={e => setDays(Number(e.target.value))}>
+      <label className="text-sm">Reporting period <select className="bg-slate-800 rounded p-2 max-w-full" value={days} onChange={e => setDays(Number(e.target.value))}>
         {[7,30,90,365].map(n => <option key={n} value={n}>Last {n} days</option>)}
       </select></label>
-      {options && <>{(['categoryId','subTeamId','memberId'] as const).map(key => <label key={key}>{key==='categoryId'?'Category':key==='subTeamId'?'Sub-team':'Member'}<select value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})} className="block bg-slate-800 p-2 rounded"><option value="">All</option>{(key==='categoryId'?options.categories:key==='subTeamId'?options.teams:options.members).map((item:any)=><option key={item.id} value={item.id}>{item.name || `${item.firstName} ${item.lastName}`}</option>)}</select></label>)}</>}
-      <label>From<input type="date" className="block bg-slate-800 rounded p-2" value={from} onChange={e=>setFrom(e.target.value)}/></label>
-      <label>To<input type="date" className="block bg-slate-800 rounded p-2" value={to} onChange={e=>setTo(e.target.value)}/></label>
-      <button className="underline" onClick={() => {setFrom('');setTo('');}}>Clear dates</button>
-      <button className="underline" onClick={() => setVersion(v => v+1)}>Refresh analytics</button>
+      {options && <>{(['categoryId','subTeamId','memberId'] as const).map(key => <label key={key} className="text-sm max-w-full">{key==='categoryId'?'Category':key==='subTeamId'?'Sub-team':'Member'}<select value={filters[key]} onChange={e=>setFilters({...filters,[key]:e.target.value})} className="block bg-slate-800 p-2 rounded max-w-[200px] sm:max-w-xs truncate"><option value="">All</option>{(key==='categoryId'?options.categories:key==='subTeamId'?options.teams:options.members).map((item:any)=><option key={item.id} value={item.id}>{item.name || `${item.firstName} ${item.lastName}`}</option>)}</select></label>)}</>}
+      <label className="text-sm">From<input type="date" className="block bg-slate-800 rounded p-2 max-w-[160px]" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+      <label className="text-sm">To<input type="date" className="block bg-slate-800 rounded p-2 max-w-[160px]" value={to} onChange={e=>setTo(e.target.value)}/></label>
+      <button className="underline text-sm" onClick={() => {setFrom('');setTo('');}}>Clear dates</button>
+      <button className="underline text-sm" onClick={() => setVersion(v => v+1)}>Refresh analytics</button>
     </div>
     {error ? <p role="alert">{error}</p> : !data ? <p role="status">Loading analytics…</p> : <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
