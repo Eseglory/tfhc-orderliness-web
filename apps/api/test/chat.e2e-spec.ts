@@ -256,9 +256,77 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     expect((evt as any).body).toBe(`realtime ${run}`);
   });
 
+  test('media & attachments: strictly enforce 2 MB hard limit and support documents', async () => {
+    const generalId = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL').id;
+
+    // 1. Valid small file (<= 2 MB) succeeds
+    const smallDoc = Buffer.from('TFHC Orderliness Meeting Minutes - Test Document Content', 'utf-8');
+    const docRes = await http()
+      .post(`/chat/rooms/${generalId}/attachments`)
+      .set(auth(aliceToken))
+      .attach('file', smallDoc, { filename: 'minutes.txt', contentType: 'text/plain' })
+      .expect(201);
+
+    expect(docRes.body.type).toBe('TEXT');
+    expect(docRes.body.attachmentMeta.kind).toBe('document');
+    expect(docRes.body.attachmentMeta.name).toBe('minutes.txt');
+
+    // 2. Over 2 MB file is strictly rejected by server (Multer / Service guard)
+    const oversizedBuffer = Buffer.alloc(2.2 * 1024 * 1024, 0x61); // 2.2 MB
+    const rejectRes = await http()
+      .post(`/chat/rooms/${generalId}/attachments`)
+      .set(auth(aliceToken))
+      .attach('file', oversizedBuffer, { filename: 'huge.txt', contentType: 'text/plain' });
+
+    expect([400, 413]).toContain(rejectRes.status);
+  });
+
+
+  test('executive room websocket & REST isolation: non-executives cannot subscribe or read', async () => {
+    const execRoom = (await http().get('/chat/rooms').set(auth(execToken)).expect(200)).body.find((r: any) => r.key === 'EXECUTIVES');
+    expect(execRoom).toBeTruthy();
+
+    // REST: non-exec Alice receives 403 Forbidden
+    await http().get(`/chat/rooms/${execRoom.id}/messages`).set(auth(aliceToken)).expect(403);
+    await http().post(`/chat/rooms/${execRoom.id}/messages`).set(auth(aliceToken)).send({ body: 'hack attempt' }).expect(403);
+
+    // WebSocket: Alice socket cannot join Executive room
+    const aliceSock = await socket(aliceToken);
+    const subRes = await new Promise<any>((resolve) => {
+      aliceSock.emit('room:subscribe', { roomId: execRoom.id }, resolve);
+    });
+    expect(subRes.ok).toBe(false);
+
+    // Executive socket CAN subscribe
+    const execSock = await socket(execToken);
+    const execSubRes = await new Promise<any>((resolve) => {
+      execSock.emit('room:subscribe', { roomId: execRoom.id }, resolve);
+    });
+    expect(execSubRes.ok).toBe(true);
+  });
+
+  test('emoji & unicode support: message preserves complex unicode symbols', async () => {
+    const generalId = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL').id;
+    const emojiText = 'Praise God! 🙏🔥⛪🕊️✨🤝😇🎉 Hallelujah!';
+
+    const msg = (
+      await http()
+        .post(`/chat/rooms/${generalId}/messages`)
+        .set(auth(aliceToken))
+        .send({ body: emojiText })
+        .expect(201)
+    ).body;
+
+    expect(msg.body).toBe(emojiText);
+
+    const history = (await http().get(`/chat/rooms/${generalId}/messages?limit=1`).set(auth(aliceToken)).expect(200)).body;
+    expect(history.messages[history.messages.length - 1].body).toBe(emojiText);
+  });
+
   test('unread summary aggregates across rooms', async () => {
     const summary = (await http().get('/chat/unread').set(auth(bobToken)).expect(200)).body;
     expect(typeof summary.total).toBe('number');
     expect(Array.isArray(summary.rooms)).toBe(true);
   });
 });
+

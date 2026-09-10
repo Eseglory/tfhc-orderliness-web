@@ -77,11 +77,43 @@ export function Composer({
     await onSend(value);
   };
 
+  const COMMON_EMOJIS = ['😀', '😂', '😍', '🙏', '🙌', '👍', '👏', '🔥', '🎉', '❤️', '🕊️', '⛪', '✝️', '🌟', '✨', '🤝', '😇', '🥳', '💡', '📖', '💪', '😊', '🤩', '💯'];
+
+  const [showEmojis, setShowEmojis] = useState(false);
+  const emojiRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const clickOut = (ev: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(ev.target as Node)) {
+        setShowEmojis(false);
+      }
+    };
+    if (showEmojis) document.addEventListener('mousedown', clickOut);
+    return () => document.removeEventListener('mousedown', clickOut);
+  }, [showEmojis]);
+
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    if (el) {
+      const start = el.selectionStart || text.length;
+      const end = el.selectionEnd || text.length;
+      const next = text.slice(0, start) + emoji + text.slice(end);
+      setText(next);
+      handleChange(next);
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      handleChange(text + emoji);
+    }
+  };
+
   const pickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) return notify('Files must be 5 MB or smaller.', 'error');
+    if (file.size > 2 * 1024 * 1024) return notify('Maximum file size is 2 MB.', 'error');
     void onAttach(file);
   };
 
@@ -98,6 +130,9 @@ export function Composer({
         setRecording(false);
         setElapsed(0);
         if (blob.size > 1000) {
+          if (blob.size > 2 * 1024 * 1024) {
+            return notify('Maximum file size is 2 MB.', 'error');
+          }
           const ext = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
           void onAttach(new File([blob], `voice-note.${ext}`, { type: blob.type }));
         }
@@ -128,7 +163,36 @@ export function Composer({
   }
 
   return (
-    <div className="border-t border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
+    <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
+      {showEmojis && (
+        <div
+          ref={emojiRef}
+          className="absolute bottom-16 left-4 z-20 w-72 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-xl backdrop-blur-md"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold text-on-surface-variant">Emojis</span>
+            <button
+              onClick={() => setShowEmojis(false)}
+              className="rounded p-0.5 text-on-surface-variant hover:bg-surface-container"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-6 gap-1.5 text-center text-xl">
+            {COMMON_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => insertEmoji(emoji)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-surface-container hover:scale-110 active:scale-95 transition-all"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {(replyTo || editing) && (
         <div className="mb-1.5 flex items-center gap-2 rounded-lg bg-surface-container px-3 py-1.5 text-xs">
           <span className="material-symbols-outlined text-[16px] text-primary">
@@ -168,11 +232,28 @@ export function Composer({
         </div>
       ) : (
         <div className="flex items-end gap-1.5">
-          <input ref={fileRef} type="file" accept="image/*,audio/*" hidden onChange={pickFile} />
           <button
+            type="button"
+            onClick={() => setShowEmojis((v) => !v)}
+            className={`rounded-full p-2 transition-colors ${
+              showEmojis ? 'bg-surface-container text-primary' : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+            aria-label="Insert emoji"
+          >
+            <span className="material-symbols-outlined text-[22px]">sentiment_satisfied</span>
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+            hidden
+            onChange={pickFile}
+          />
+          <button
+            type="button"
             onClick={() => fileRef.current?.click()}
             className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container"
-            aria-label="Attach file"
+            aria-label="Attach file (up to 2 MB)"
           >
             <span className="material-symbols-outlined text-[22px]">attach_file</span>
           </button>
@@ -194,7 +275,7 @@ export function Composer({
           {text.trim() || editing ? (
             <button
               onClick={submit}
-              className="rounded-full bg-primary p-2.5 text-on-primary hover:opacity-90"
+              className="rounded-full bg-primary p-2.5 text-on-primary hover:opacity-90 transition-opacity"
               aria-label={editing ? 'Save edit' : 'Send message'}
             >
               <span className="material-symbols-outlined text-[20px]">{editing ? 'check' : 'send'}</span>
@@ -202,7 +283,7 @@ export function Composer({
           ) : (
             <button
               onClick={startRecording}
-              className="rounded-full bg-surface-container p-2.5 text-on-surface-variant hover:bg-surface-container-high"
+              className="rounded-full bg-surface-container p-2.5 text-on-surface-variant hover:bg-surface-container-high transition-colors"
               aria-label="Record voice note"
             >
               <span className="material-symbols-outlined text-[20px]">mic</span>
@@ -213,3 +294,4 @@ export function Composer({
     </div>
   );
 }
+

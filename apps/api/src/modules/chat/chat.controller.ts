@@ -100,7 +100,7 @@ export class ChatController {
   }
 
   @Post('rooms/:id/attachments')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 + 1, files: 1 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1 } }))
   async attach(
     @Param('id') id: string,
     @UploadedFile() file: { buffer: Buffer; size: number; mimetype?: string; originalname?: string },
