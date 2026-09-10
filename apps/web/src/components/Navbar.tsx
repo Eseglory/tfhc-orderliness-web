@@ -110,7 +110,7 @@ export const Navbar: React.FC = () => {
     !item.children!.some((other) => other !== child && other.href.length > child.href.length && active(other.href));
 
   const linkClass = (isActive: boolean) =>
-    `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors xl:px-3 ${
+    `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2 py-2 rounded-lg font-semibold transition-colors 2xl:px-3 ${
       isActive
         ? 'bg-primary text-on-primary font-bold'
         : 'text-on-surface-variant hover:text-primary hover:bg-surface-container'
@@ -139,7 +139,7 @@ export const Navbar: React.FC = () => {
           {/* Primary nav. Scrolls horizontally rather than pushing the page
               wide when the item set is large; grouped sections open their
               children in the sub-row below. */}
-          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto text-label-md md:flex xl:justify-center xl:gap-1">
+          <nav className="no-scrollbar hidden min-w-0 flex-1 items-center gap-0.5 overflow-x-auto text-label-md md:flex 2xl:justify-center 2xl:gap-1">
             {items.map((item) => (
               <Link
                 key={item.href}
@@ -148,7 +148,7 @@ export const Navbar: React.FC = () => {
                 className={linkClass(item.children ? groupActive(item) : active(item.href))}
               >
                 <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                <span className="hidden xl:inline">{item.label}</span>
+                <span className="hidden 2xl:inline">{item.label}</span>
                 {item.children && <span className="material-symbols-outlined text-[16px]">expand_more</span>}
                 {item.href.endsWith('/chat') && chatUnread > 0 && (
                   <span className="ml-0.5 rounded-full bg-error px-1.5 text-[10px] font-bold leading-4 text-on-error">
