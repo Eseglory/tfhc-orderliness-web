@@ -1,10 +1,12 @@
 'use client';
+import { Badge, LockKeyhole, Eye, EyeOff, ArrowRight, HelpCircle } from 'lucide-react';
+import { safeDestination } from '../../lib/pwa/deep-link';
 import { AuthTransition } from '../../components/AuthTransition';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { fetchApi, saveAuthToken, ApiError } from '../../lib/api';
+import { fetchApi, saveAuthToken, saveAuthUser, ApiError } from '../../lib/api';
 import { LogoIcon } from '../../components/LogoIcon';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
 
@@ -48,12 +50,26 @@ export default function LoginPage() {
       });
 
       saveAuthToken(data.accessToken, rememberMe);
-
-      if (data.user.role === 'ADMIN' || data.user.role === 'LEADER') {
-        router.push('/admin');
-      } else {
-        router.push('/member');
+      if (data.user) {
+        saveAuthUser(
+          {
+            userId: data.user.id,
+            email: data.user.email,
+            role: data.user.role,
+            memberId: data.user.member?.id,
+            memberCode: data.user.member?.memberCode,
+            firstName: data.user.member?.firstName,
+            lastName: data.user.member?.lastName,
+            permissions: data.user.permissions ?? data.permissions ?? [],
+            accessRoles: data.user.accessRoles ?? data.accessRoles ?? [],
+            isSuperAdmin: Boolean(data.user.isSuperAdmin ?? data.isSuperAdmin),
+          },
+          rememberMe,
+        );
       }
+
+      router.push(safeDestination(new URLSearchParams(window.location.search).get('next'),
+        data.user.role === 'ADMIN' || data.user.role === 'LEADER' || Boolean(data.user.isSuperAdmin)));
     } catch (err: any) {
       if (err instanceof ApiError && /confirm your email/i.test(err.message)) {
         setNeedsVerification(true);
@@ -85,7 +101,25 @@ export default function LoginPage() {
         body: JSON.stringify({ idToken }),
       });
       saveAuthToken(data.accessToken, rememberMe);
-      router.push('/member');
+      if (data.user) {
+        saveAuthUser(
+          {
+            userId: data.user.id,
+            email: data.user.email,
+            role: data.user.role,
+            memberId: data.user.member?.id,
+            memberCode: data.user.member?.memberCode,
+            firstName: data.user.member?.firstName,
+            lastName: data.user.member?.lastName,
+            permissions: data.user.permissions ?? [],
+            accessRoles: data.user.accessRoles ?? [],
+            isSuperAdmin: Boolean(data.user.isSuperAdmin),
+          },
+          rememberMe,
+        );
+      }
+      router.push(safeDestination(new URLSearchParams(window.location.search).get('next'),
+        data.user?.role === 'ADMIN' || data.user?.role === 'LEADER' || Boolean(data.user?.isSuperAdmin)));
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed. Please try again.');
     } finally {
@@ -127,7 +161,7 @@ export default function LoginPage() {
         )}
 
         {/* Form Section */}
-        <form className="flex flex-col gap-stack-md mt-4" onSubmit={handleLogin} data-hydrated={mounted ? 'true' : 'false'}>
+        <form action="javascript:void(0)" className="flex flex-col gap-stack-md mt-4" onSubmit={handleLogin} data-hydrated={mounted ? 'true' : 'false'}>
           {/* Member ID / Email Input */}
           <div className="flex flex-col gap-1">
             <label className="font-label-sm text-label-sm text-on-surface-variant ml-1" htmlFor="memberId">
@@ -135,7 +169,7 @@ export default function LoginPage() {
             </label>
             <div className="relative flex items-center">
               <div className="absolute left-3 text-outline flex items-center pointer-events-none">
-                <span className="material-symbols-outlined text-xl">badge</span>
+                <Badge size={20} aria-hidden="true" />
               </div>
               <input
                 id="memberId"
@@ -156,7 +190,7 @@ export default function LoginPage() {
             </label>
             <div className="relative flex items-center">
               <div className="absolute left-3 text-outline flex items-center pointer-events-none">
-                <span className="material-symbols-outlined text-xl">lock</span>
+                <LockKeyhole size={20} aria-hidden="true" />
               </div>
               <input
                 id="password"
@@ -173,9 +207,7 @@ export default function LoginPage() {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 text-outline hover:text-on-surface transition-colors flex items-center justify-center p-1 rounded-full focus:outline-none"
               >
-                <span className="material-symbols-outlined text-xl">
-                  {showPassword ? 'visibility' : 'visibility_off'}
-                </span>
+                {showPassword ? <Eye size={20} aria-hidden="true" /> : <EyeOff size={20} aria-hidden="true" />}
               </button>
             </div>
           </div>
@@ -196,7 +228,7 @@ export default function LoginPage() {
             className="w-full h-12 bg-primary text-on-primary font-label-md text-label-md rounded-lg mt-stack-sm hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
           >
             <span>{loading ? 'Signing In...' : 'Sign In'}</span>
-            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            <ArrowRight size={18} aria-hidden="true" />
           </button>
         </form>
 
@@ -215,8 +247,8 @@ export default function LoginPage() {
       </main>
 
       <footer className="mt-stack-lg text-center">
-        <span className="font-body-md text-body-md text-outline flex items-center justify-center gap-2">
-          <span className="material-symbols-outlined text-[18px]">help</span>
+        <span className="font-body-md text-body-md text-on-surface-variant flex items-center justify-center gap-2">
+          <HelpCircle size={18} aria-hidden="true" />
           Registration is open to approved members only
         </span>
       </footer>

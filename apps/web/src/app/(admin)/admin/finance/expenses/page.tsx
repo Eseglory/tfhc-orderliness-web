@@ -112,7 +112,7 @@ export default function ExpensesPage() {
             </div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Ministry Expenses &amp; Disbursements
+                Operational Expenses &amp; Disbursements
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">

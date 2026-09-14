@@ -46,7 +46,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Congregational lifecycle health, attendance consistency, and membership progression
+              Member lifecycle health, attendance consistency, and membership progression
             </p>
           </div>
           <Link

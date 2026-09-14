@@ -1,0 +1,32 @@
+-- All application data is accessed through the authenticated Nest API.
+-- Preserve table-owner access and deny direct Data API access without policies.
+SET lock_timeout = '5s';
+SET statement_timeout = '60s';
+ALTER TABLE "access_role_permissions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "access_roles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "appointments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "approval_actions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "approval_requests" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "approval_steps" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "approval_workflows" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "chat_messages" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "chat_room_members" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "chat_rooms" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "dues_periods" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "event_audiences" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "event_invitations" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "event_types" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "expense_categories" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "expenses" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "external_calendar_event_mappings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "google_calendar_integrations" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "member_dues_assignments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "organization_services" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "payment_accounts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "push_subscriptions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "pwa_device_sessions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "resumable_uploads" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "service_schedule_exceptions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "user_access_roles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "welfare_requests" ENABLE ROW LEVEL SECURITY;

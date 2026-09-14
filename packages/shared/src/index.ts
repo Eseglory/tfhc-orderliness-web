@@ -6,3 +6,5 @@ export * from './permissions';
 export * from './recurrence';
 export * from './event-types';
 export * from './name-match';
+export * from './email-validation';
+

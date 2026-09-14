@@ -1,3 +1,4 @@
+import './setup-test-env';
 import 'reflect-metadata';
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -9,9 +10,8 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { RbacService } from '../src/common/rbac/rbac.service';
 
-const database = process.env.TEST_DATABASE_URL;
+const database = process.env.TEST_DATABASE_URL || 'postgresql://postgres:tfhc_e2e_only@127.0.0.1:55498/tfhc_e2e';
 if (database && !/^postgresql:\/\/[^@]+@(127\.0\.0\.1|localhost):\d+\/tfhc_e2e(?:\?|$)/.test(database)) throw new Error('Tests require a local tfhc_e2e database');
-if (!database) throw new Error('Set TEST_DATABASE_URL to run API integration tests');
 
 describe('Directory + dues import (real PostgreSQL)', () => {
   let app: INestApplication;
@@ -22,27 +22,30 @@ describe('Directory + dues import (real PostgreSQL)', () => {
   let adminToken: string;
   let memberToken: string;
 
-  const dom = (n: string) => `${n}-${run}@import.test`;
+  const dom = (n: string) => `${n}-${run}@tfhc.org`;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = database;
     process.env.JWT_SECRET = 'e2e-local-only-secret';
+    process.env.DISABLE_SCHEDULED_JOBS = 'true';
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
+    await app.listen(0, '127.0.0.1');
     app.get(SchedulerRegistry).getCronJobs().forEach((j) => j.stop());
     db = app.get(PrismaService);
     await app.get(RbacService).syncSystemRoles();
     const tokens = app.get(AuthService);
     const pw = await argon2.hash('E2ePassword!123');
 
-    await db.payment.deleteMany({ where: { member: { OR: [{ approvedMember: { normalizedEmail: { contains: '@import.test' } } }, { memberCode: { contains: 'IMP-' } }] } } });
-    await db.memberDuesAssignment.deleteMany({ where: { period: { year: 2091 } } });
+    await db.payment.deleteMany({ where: { member: { OR: [{ firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp', 'Adeyemi'] } }, { lastName: { in: ['Adeyemi', 'Okoro', 'Balogun', 'Member'] } }] } } });
+    await db.memberDuesAssignment.deleteMany({ where: { member: { OR: [{ firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp', 'Adeyemi'] } }, { lastName: { in: ['Adeyemi', 'Okoro', 'Balogun', 'Member'] } }] } } });
     await db.duesPeriod.deleteMany({ where: { year: 2091 } });
-    await db.approvedMember.deleteMany({ where: { normalizedEmail: { contains: '@import.test' } } });
-    await db.user.deleteMany({ where: { email: { endsWith: '@import.test' } } });
-    await db.member.deleteMany({ where: { OR: [{ memberCode: { contains: 'IMP-' } }, { firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp'] } }] } });
+    await db.approvedMember.deleteMany({ where: { OR: [{ normalizedEmail: { contains: run } }, { member: { OR: [{ firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp', 'Adeyemi'] } }, { lastName: { in: ['Adeyemi', 'Okoro', 'Balogun', 'Member'] } }] } }] } });
+    await db.auditLog.deleteMany({ where: { actorUser: { email: { contains: run } } } });
+    await db.user.deleteMany({ where: { OR: [{ email: { contains: run } }, { member: { OR: [{ firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp', 'Adeyemi'] } }, { lastName: { in: ['Adeyemi', 'Okoro', 'Balogun', 'Member'] } }] } }] } });
+    await db.member.deleteMany({ where: { OR: [{ memberCode: { contains: run } }, { firstName: { in: ['Grace', 'Chinedu', 'Titi', 'Imp', 'Adeyemi'] } }, { lastName: { in: ['Adeyemi', 'Okoro', 'Balogun', 'Member'] } }] } });
 
     const admin = await db.user.create({ data: { email: dom('impadmin'), passwordHash: pw, role: 'ADMIN' } });
     await db.userAccessRole.create({ data: { userId: admin.id, roleId: (await db.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } })).id } });
@@ -59,9 +62,9 @@ describe('Directory + dues import (real PostgreSQL)', () => {
     if (db) {
       await db.payment.deleteMany({ where: { member: { OR: [{ approvedMember: { normalizedEmail: { contains: run } } }, { memberCode: { contains: run } }] } } });
       await db.duesPeriod.deleteMany({ where: { year: 2091 } });
-      await db.auditLog.deleteMany({ where: { actorUser: { email: { endsWith: `-${run}@import.test` } } } });
+      await db.auditLog.deleteMany({ where: { actorUser: { email: { endsWith: `-${run}@tfhc.org` } } } });
       await db.approvedMember.deleteMany({ where: { normalizedEmail: { contains: run } } });
-      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@import.test` } } });
+      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@tfhc.org` } } });
       await db.member.deleteMany({ where: { OR: [{ memberCode: { contains: run } }, { firstName: { in: ['Titi', 'Grace'] }, phoneNumber: 'UNVERIFIED' }] } });
     }
     if (app) await app.close();
@@ -78,7 +81,9 @@ describe('Directory + dues import (real PostgreSQL)', () => {
   test('directory import: dry run then apply, linking by email', async () => {
     await http().post('/members/import').set(auth(memberToken)).send(directory()).expect(403);
 
-    const dry = (await http().post('/members/import').set(auth(adminToken)).send({ ...directory(), apply: false }).expect(201)).body;
+    const response = await http().post('/members/import').set(auth(adminToken)).send({ ...directory(), apply: false });
+    expect({ status: response.status, body: response.body }).toMatchObject({ status: 201 });
+    const dry = response.body;
     expect(dry.dryRun).toBe(true);
     expect(dry.created).toHaveLength(2);
     expect(dry.errors).toHaveLength(1);

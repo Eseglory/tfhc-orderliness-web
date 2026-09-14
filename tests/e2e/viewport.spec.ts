@@ -6,7 +6,7 @@ import * as jwt from 'jsonwebtoken';
 async function memberToken() {
   const db = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
   try {
-    const user = await db.user.findUniqueOrThrow({ where: { email: 'member-browser@example.test' } });
+    const user = await db.user.findUniqueOrThrow({ where: { email: 'member-browser@tfhc.org' } });
     return jwt.sign({ sub: user.id }, 'e2e-local-only-secret', { expiresIn: '1h' });
   } finally {
     await db.$disconnect();
@@ -42,6 +42,12 @@ const MEMBER_ROUTES = [
   '/member/notifications',
   '/member/rewards',
   '/member/correction-request',
+  '/member/dues',
+  '/member/welfare',
+  '/member/chat',
+  '/member/calendar',
+  '/member/files',
+  '/member/offline',
 ];
 
 const ADMIN_ROUTES = [
@@ -83,7 +89,7 @@ for (const bp of [{ name: '375-mobile', width: 375, height: 812 }, { name: '768-
 
     for (const route of ADMIN_ROUTES) {
       test(`admin route ${route} has no horizontal overflow`, async ({ page, request }) => {
-        const signed = await request.post(`${apiURL}/auth/login`, { data: { email: 'admin-browser@example.test', password: 'E2ePassword!123' } });
+        const signed = await request.post(`${apiURL}/auth/login`, { data: { email: 'admin-browser@tfhc.org', password: 'E2ePassword!123' } });
         const { accessToken } = await signed.json();
         await page.addInitScript((t) => localStorage.setItem('tfhc_token', t), accessToken);
         await page.goto(route);

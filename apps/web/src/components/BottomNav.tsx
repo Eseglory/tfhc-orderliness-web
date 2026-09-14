@@ -27,18 +27,18 @@ export const BottomNav: React.FC = () => {
         <span className="font-label-sm text-[10px]">Home</span>
       </Link>
 
-      {/* 2. Meetings */}
+      {/* 2. Attendance */}
       <Link
-        href="/member/meetings"
+        href="/member/my-attendance"
         className={`flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
-          pathname === '/member/meetings' || pathname === '/member/my-attendance' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
+          pathname === '/member/my-attendance' || pathname === '/member/meetings' ? 'text-primary font-bold' : 'text-outline hover:text-primary'
         }`}
       >
-        <span className="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
-        <span className="font-label-sm text-[10px]">Meetings</span>
+        <span className="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+        <span className="font-label-sm text-[10px]">Attendance</span>
       </Link>
 
-      {/* 3. Check-In (Scanner Floating Action Button) */}
+      {/* 3. Check In (Floating Action Button) */}
       <Link
         href="/member/check-in"
         className="relative flex flex-col items-center justify-center w-16 transition-transform duration-200 active:scale-90 -mt-6"
@@ -46,10 +46,10 @@ export const BottomNav: React.FC = () => {
         <div className="w-14 h-14 bg-secondary rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(144,77,0,0.3)] border-4 border-surface-container-lowest">
           <span className="material-symbols-outlined text-on-secondary" data-icon="location_on">location_on</span>
         </div>
-        <span className="font-label-sm text-[10px] mt-1 text-outline font-semibold">Check-In</span>
+        <span className="font-label-sm text-[10px] mt-1 text-outline font-semibold">Check In</span>
       </Link>
 
-      {/* 4. Messages */}
+      {/* 4. Notices */}
       <Link
         href="/member/chat"
         className={`relative flex flex-col items-center justify-center transition-transform duration-200 active:scale-90 w-16 gap-1 ${
@@ -57,7 +57,7 @@ export const BottomNav: React.FC = () => {
         }`}
       >
         <span className="material-symbols-outlined" data-icon="forum">forum</span>
-        <span className="font-label-sm text-[10px]">Messages</span>
+        <span className="font-label-sm text-[10px]">Notices</span>
         {unread > 0 && (
           <span className="absolute top-0 right-3 min-w-[16px] rounded-full bg-error px-1 text-[9px] font-bold leading-4 text-on-error">
             {unread > 99 ? '99+' : unread}

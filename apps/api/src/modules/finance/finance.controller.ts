@@ -123,6 +123,13 @@ export class FinanceController {
     return this.dues.listPeriods();
   }
 
+  @Get('dues/matrix')
+  @RequirePermissions('dues.read')
+  annualMatrix(@Query('year') year?: string) {
+    const parsedYear = year ? parseInt(year, 10) : new Date().getFullYear();
+    return this.dues.getAnnualMatrix(parsedYear);
+  }
+
   @Post('dues/periods')
   @RequirePermissions('dues.create')
   createPeriod(@Body() body: any, @CurrentUser('userId') userId: string) {
@@ -211,6 +218,11 @@ export class MemberFinanceController {
   @Get('dues')
   myDues(@CurrentUser('memberId') memberId?: string) {
     return this.dues.myDues(memberId);
+  }
+
+  @Get('campaigns')
+  myCampaigns(@CurrentUser('memberId') memberId?: string) {
+    return this.dues.myCampaigns(memberId);
   }
 
   @Get('payments')

@@ -8,6 +8,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { canViewEvent } from '../../common/event-visibility';
 import {
   validateGeofence,
@@ -20,7 +21,10 @@ import {
 
 @Injectable()
 export class AttendanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async checkInMember(dto: {
     memberId: string;
@@ -68,6 +72,9 @@ export class AttendanceService {
     }
     if (meeting.status !== 'ACTIVE') {
       throw new BadRequestException('Attendance check-in is not currently open for this meeting');
+    }
+    if (meeting.startTime > serverTimestamp) {
+      throw new BadRequestException('Attendance cannot be clocked for a future event or service');
     }
     if (
       !canViewEvent(meeting.visibility, meeting.audiences, {
@@ -153,6 +160,9 @@ export class AttendanceService {
         member: true,
       },
       });
+    }).then((record) => {
+      this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
+      return record;
     }).catch((error) => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('Attendance has already been recorded for this meeting');
@@ -178,6 +188,10 @@ export class AttendanceService {
       include: { category: true },
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
+
+    if (meeting.startTime > new Date()) {
+      throw new BadRequestException('Attendance cannot be recorded for a future scheduled event or meeting');
+    }
 
     const pointsEarned = calculateAttendancePoints(
       dto.status,
@@ -228,6 +242,9 @@ export class AttendanceService {
         },
       });
 
+      return record;
+    }).then((record) => {
+      this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
       return record;
     });
   }

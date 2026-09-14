@@ -10,6 +10,7 @@ export default function CorrectionRequestPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
   const [claimedTime, setClaimedTime] = useState('08:48');
   const [reasonCategory, setReasonCategory] = useState('gps');
+  const [requestedStatus, setRequestedStatus] = useState('ON_TIME');
   const [statement, setStatement] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -29,7 +30,7 @@ export default function CorrectionRequestPage() {
         method: 'POST',
         body: JSON.stringify({
           meetingId,
-          requestedStatus: 'ON_TIME',
+          requestedStatus,
           reason: `[${reasonCategory}] Claimed arrival time: ${claimedTime}. ${statement}`.trim(),
         }),
       });
@@ -120,6 +121,30 @@ export default function CorrectionRequestPage() {
                   onChange={(e) => setClaimedTime(e.target.value)}
                   className="w-full bg-transparent border border-outline-variant rounded-lg pl-12 pr-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
+              </div>
+            </div>
+
+            {/* Requested Status Card */}
+            <div className="bg-surface-container-lowest rounded-xl p-stack-md shadow-[0px_2px_8px_rgba(0,0,0,0.05)] flex flex-col gap-stack-sm border border-outline-variant/20">
+              <label className="font-label-md text-label-md text-on-surface uppercase font-bold" htmlFor="requested-status">
+                Correct Status To
+              </label>
+              <div className="relative">
+                <select
+                  id="requested-status"
+                  required
+                  value={requestedStatus}
+                  onChange={(e) => setRequestedStatus(e.target.value)}
+                  className="w-full appearance-none bg-transparent border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  <option value="EARLY">Early</option>
+                  <option value="ON_TIME">On Time</option>
+                  <option value="GRACE_PERIOD">Grace Period</option>
+                  <option value="LATE">Late</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-outline">
+                  <span className="material-symbols-outlined">expand_more</span>
+                </div>
               </div>
             </div>
 

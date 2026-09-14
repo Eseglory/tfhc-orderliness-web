@@ -4,7 +4,9 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { isValidRecurrenceRule, describeRecurrence, RecurrenceRule } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { MailService } from '../mail/mail.service';
+import { renderReminderEmail } from '../mail/templates';
 import { AuditService } from '../../common/rbac/audit.service';
 import { occurrences } from './service-schedules';
 import { randomUUID } from 'crypto';
@@ -24,6 +26,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
     private readonly audit: AuditService,
+    private readonly cache: CacheService,
   ) {}
 
   private async configuration(): Promise<RecurringConfig | null> {
@@ -40,22 +43,24 @@ export class RecurringServicesService implements OnApplicationBootstrap {
   }
 
   async list() {
-    const schedules = await this.prisma.serviceSchedule.findMany({
-      orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }],
-      include: {
-        exceptions: { orderBy: { occurrenceStart: 'asc' } },
-        _count: { select: { meetings: true } },
-      },
-    });
-    return {
-      schedules: schedules.map((s) => ({
-        ...s,
-        recurrenceSummary: s.recurrenceRule && isValidRecurrenceRule(s.recurrenceRule)
-          ? describeRecurrence(s.recurrenceRule as RecurrenceRule)
-          : `Weekly on ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek]}`,
-      })),
-      config: await this.configuration(),
-    };
+    return this.cache.wrap('recurring_services:list', 60, async () => {
+      const schedules = await this.prisma.serviceSchedule.findMany({
+        orderBy: [{ dayOfWeek: 'asc' }, { startMinutes: 'asc' }],
+        include: {
+          exceptions: { orderBy: { occurrenceStart: 'asc' } },
+          _count: { select: { meetings: true } },
+        },
+      });
+      return {
+        schedules: schedules.map((s) => ({
+          ...s,
+          recurrenceSummary: s.recurrenceRule && isValidRecurrenceRule(s.recurrenceRule)
+            ? describeRecurrence(s.recurrenceRule as RecurrenceRule)
+            : `Weekly on ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][s.dayOfWeek]}`,
+        })),
+        config: await this.configuration(),
+      };
+    }, ['calendar', 'meetings']);
   }
 
   /** Normalise an incoming recurrence rule; default WEEKLY to the schedule weekday. */
@@ -70,6 +75,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
   async saveConfiguration(config: RecurringConfig) {
     const validated = this.validateConfiguration(config);
     await this.prisma.systemSetting.upsert({ where: { key: 'recurring_services_config' }, update: { value: JSON.stringify(validated) }, create: { key: 'recurring_services_config', value: JSON.stringify(validated) } });
+    this.cache.invalidateTags(['calendar', 'meetings']);
     return this.generateUpcoming(new Date(), true);
   }
 
@@ -107,6 +113,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
         newData: { title: saved.title, dayOfWeek: saved.dayOfWeek, enabled: saved.enabled },
       });
 
+    this.cache.invalidateTags(['calendar', 'meetings']);
     await this.generateUpcoming(new Date(), true);
     return saved;
   }
@@ -137,6 +144,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       }),
     ]);
     await this.audit.record({ actorUserId, action: 'SERIES_OCCURRENCE_CANCELLED', entity: 'Meeting', entityId: meetingId, reason: reason?.trim() || null });
+    this.cache.invalidateTags(['calendar', 'meetings']);
     return { cancelled: true };
   }
 
@@ -148,6 +156,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       this.prisma.meeting.update({ where: { id: meetingId }, data: { status: 'SCHEDULED', scheduleCancelled: false, isException: false, cancelReason: null } }),
     ]);
     await this.audit.record({ actorUserId, action: 'SERIES_OCCURRENCE_RESTORED', entity: 'Meeting', entityId: meetingId });
+    this.cache.invalidateTags(['calendar', 'meetings']);
     await this.generateUpcoming(new Date(), true);
     return { restored: true };
   }
@@ -164,8 +173,11 @@ export class RecurringServicesService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     if (process.env.DISABLE_SCHEDULED_JOBS === 'true') return;
-    try { await this.generateUpcoming(); }
-    catch { this.logger.error('Recurring service generation failed; check configuration and database migrations'); }
+    setImmediate(() => {
+      this.generateUpcoming().catch(() => {
+        this.logger.error('Recurring service generation failed; check configuration and database migrations');
+      });
+    });
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: 'Africa/Lagos', disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
@@ -196,6 +208,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
         .map(({ startTime, endTime }) => {
           const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
           return {
+            id: randomUUID(),
             serviceScheduleId: schedule.id,
             occurrenceStart: startTime,
             eventTypeId,
@@ -231,7 +244,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
           if (desired && !skipDates.has(key)) {
             await this.prisma.meeting.updateMany({
               where: { id: meeting.id, isException: false, OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }] },
-              data: { ...desired, status: 'SCHEDULED', scheduleCancelled: false },
+              data: { ...desired, id: meeting.id, status: 'SCHEDULED', scheduleCancelled: false },
             });
           } else if (meeting.startTime.getTime() < now.getTime() + schedule.horizonDays * 86400000) {
             await this.prisma.meeting.updateMany({
@@ -288,9 +301,23 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             data: { meetingId: meeting.id }, expiresAt: meeting.attendanceCloseTime,
           } });
           await this.prisma.communicationDelivery.update({ where: { idempotencyKey }, data: { notificationId: notification.id } });
+          const { subject, text, html } = renderReminderEmail({
+            recipientName: recipient.member!.firstName,
+            eventTitle: meeting.title,
+            timeAndVenue: `${format(meeting.startTime)} at ${meeting.locationName}`,
+            reminderMessage: `${meeting.title} is scheduled for ${format(meeting.startTime)} (Africa/Lagos). Orderliness expected arrival time is ${format(meeting.expectedArrivalTime)}.`,
+            details: [
+              { label: 'Event', value: meeting.title },
+              { label: 'Venue', value: meeting.locationName },
+              { label: 'Service Starts', value: format(meeting.startTime) },
+              { label: 'Expected Arrival', value: format(meeting.expectedArrivalTime) },
+            ],
+          });
           const result = await this.mail.sendEmail({
-            to: recipient.normalizedEmail, subject: `Reminder: ${meeting.title}`,
-            text: `Hello ${recipient.member!.firstName},\n\n${meeting.title} starts ${format(meeting.startTime)} (Africa/Lagos).\nVenue: ${meeting.locationName}\nOrderliness arrival time: ${format(meeting.expectedArrivalTime)} (Africa/Lagos).\n\nTFHC Orderliness`,
+            to: recipient.normalizedEmail,
+            subject,
+            text,
+            html,
           });
           await this.prisma.communicationDelivery.update({ where: { idempotencyKey }, data: { status: 'SENT', providerRef: result.messageId } });
           sent++;

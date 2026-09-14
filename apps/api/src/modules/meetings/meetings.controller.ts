@@ -66,9 +66,21 @@ export class MeetingsController {
     @Query('to') to?: string,
     @Query('search') search?: string,
     @Query('includeArchived') includeArchived?: string,
+    @Query('upcomingOnly') upcomingOnly?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
     return this.meetingsService.findAll(
-      { status, categoryId, eventTypeId, from, to, search, includeArchived: includeArchived === 'true' },
+      {
+        status,
+        categoryId,
+        eventTypeId,
+        from,
+        to,
+        search,
+        includeArchived: includeArchived === 'true',
+        upcomingOnly: upcomingOnly === 'true',
+        sortOrder,
+      },
       isStaff(role),
       memberId,
     );
@@ -103,6 +115,12 @@ export class MeetingsController {
   @RequirePermissions('events.update')
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: any, @CurrentUser('userId') userId: string) {
+    return this.meetingsService.updateMeeting(id, body, userId);
+  }
+
+  @RequirePermissions('events.update')
+  @Put(':id')
+  updatePut(@Param('id') id: string, @Body() body: any, @CurrentUser('userId') userId: string) {
     return this.meetingsService.updateMeeting(id, body, userId);
   }
 

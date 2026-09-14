@@ -10,11 +10,11 @@ import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
-import { Role, SYSTEM_ROLE } from '@tfhc/shared';
+import { Role, SYSTEM_ROLE, toPascalCase } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
 import { MailService } from '../mail/mail.service';
-import { renderBrandedEmail } from '../mail/templates';
+import { renderInvitationEmail } from '../mail/templates';
 import { hashInviteToken } from '../../common/invite-token';
 import { webBaseUrl } from '../../common/web-url';
 import { settleWithin } from '../../common/settle-within';
@@ -120,8 +120,8 @@ export class AdminTeamService {
           member: {
             create: {
               memberCode,
-              firstName: dto.firstName.trim(),
-              lastName: dto.lastName.trim(),
+              firstName: toPascalCase(dto.firstName),
+              lastName: toPascalCase(dto.lastName),
               phoneNumber: dto.phoneNumber.trim(),
               roleInUnit: 'Administrator',
             },
@@ -142,9 +142,21 @@ export class AdminTeamService {
       return created;
     });
 
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      include: { member: true },
+    });
+    const inviter = actor
+      ? {
+          name: actor.member ? `${actor.member.firstName} ${actor.member.lastName}` : undefined,
+          title: 'System Administrator',
+          email: actor.email,
+        }
+      : undefined;
+
     const inviteUrl = `${this.webBaseUrl()}/accept-invite?token=${rawToken}`;
     const emailDelivered = await settleWithin(
-      this.sendInviteEmail(email, dto.firstName.trim(), inviteUrl),
+      this.sendInviteEmail(email, dto.firstName.trim(), inviteUrl, inviter),
       INVITE_EMAIL_TIMEOUT_MS,
       false,
     );
@@ -153,22 +165,24 @@ export class AdminTeamService {
       id: user.id,
       email,
       emailDelivered,
-      // Returned so the Super Admin can share the link manually when SMTP is down.
-      inviteUrl: emailDelivered ? undefined : inviteUrl,
+      // Returned so the Super Admin can share the link manually when SMTP is down or in dev/test environment.
+      inviteUrl: !emailDelivered || this.config.get('NODE_ENV') !== 'production' ? inviteUrl : undefined,
     };
   }
 
-  private async sendInviteEmail(email: string, firstName: string, inviteUrl: string): Promise<boolean> {
-    const { subject, text, html } = renderBrandedEmail({
-      heading: 'You have been invited to TFHC Orderliness',
-      preview: 'Set your password to activate your administrator account.',
-      paragraphs: [
-        `Hello ${firstName},`,
-        'A Super Admin has created an administrator account for you on TFHC Orderliness.',
-        'Click the button below to set your password and sign in.',
-      ],
-      cta: { label: 'Set your password', url: inviteUrl },
-      footnote: 'This invitation link expires in 7 days. If it expires, ask a Super Admin to resend it.',
+  private async sendInviteEmail(
+    email: string,
+    firstName: string,
+    inviteUrl: string,
+    inviter?: { name?: string; title?: string; email?: string },
+  ): Promise<boolean> {
+    const { subject, text, html } = renderInvitationEmail({
+      recipientName: firstName,
+      recipientEmail: email,
+      inviteUrl,
+      inviterName: inviter?.name,
+      inviterTitle: inviter?.title,
+      inviterEmail: inviter?.email,
     });
     try {
       await this.mail.sendEmail({ to: email, subject, text, html });
@@ -195,9 +209,21 @@ export class AdminTeamService {
       },
     });
 
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      include: { member: true },
+    });
+    const inviter = actor
+      ? {
+          name: actor.member ? `${actor.member.firstName} ${actor.member.lastName}` : undefined,
+          title: 'System Administrator',
+          email: actor.email,
+        }
+      : undefined;
+
     const inviteUrl = `${this.webBaseUrl()}/accept-invite?token=${rawToken}`;
     const emailDelivered = await settleWithin(
-      this.sendInviteEmail(user.email, user.member?.firstName ?? 'there', inviteUrl),
+      this.sendInviteEmail(user.email, user.member?.firstName ?? 'there', inviteUrl, inviter),
       INVITE_EMAIL_TIMEOUT_MS,
       false,
     );
@@ -239,8 +265,8 @@ export class AdminTeamService {
 
     await this.prisma.$transaction(async (tx) => {
       const memberData: { firstName?: string; lastName?: string; phoneNumber?: string } = {};
-      if (dto.firstName !== undefined) memberData.firstName = dto.firstName.trim();
-      if (dto.lastName !== undefined) memberData.lastName = dto.lastName.trim();
+      if (dto.firstName !== undefined) memberData.firstName = toPascalCase(dto.firstName);
+      if (dto.lastName !== undefined) memberData.lastName = toPascalCase(dto.lastName);
       if (dto.phoneNumber !== undefined) memberData.phoneNumber = dto.phoneNumber.trim();
       if (Object.keys(memberData).length && user.member) {
         await tx.member.update({ where: { id: user.member.id }, data: memberData });

@@ -3,16 +3,16 @@ import {
   ArrayMinSize,
   ArrayUnique,
   IsArray,
-  IsEmail,
   IsOptional,
   IsString,
   IsUUID,
   Length,
   MaxLength,
 } from 'class-validator';
+import { IsDeliverableEmail } from '../../common/decorators/is-deliverable-email.decorator';
 
 export class InviteAdminDto {
-  @IsEmail() @MaxLength(254) email: string;
+  @IsDeliverableEmail() @MaxLength(254) email: string;
   @IsString() @Length(1, 80) firstName: string;
   @IsString() @Length(1, 80) lastName: string;
   @IsString() @Length(7, 32) phoneNumber: string;

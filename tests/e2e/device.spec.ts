@@ -8,14 +8,19 @@ let adminHeaders: Record<string, string>;
 test.beforeEach(async ({ page, request }) => {
   const db = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
   try {
-    const user = await db.user.findUniqueOrThrow({ where: { email: 'member-browser@example.test' } });
+    const user = await db.user.findUniqueOrThrow({ where: { email: 'member-browser@tfhc.org' } });
     await page.addInitScript(token => localStorage.setItem('tfhc_token', token), jwt.sign({ sub: user.id }, 'e2e-local-only-secret', { expiresIn: '1h' }));
   } finally { await db.$disconnect(); }
-  const login = await request.post(`${api}/auth/login`, { data: { email: 'admin-browser@example.test', password: 'E2ePassword!123' } });
+  const login = await request.post(`${api}/auth/login`, { data: { email: 'admin-browser@tfhc.org', password: 'E2ePassword!123' } });
   adminHeaders = { Authorization: `Bearer ${(await login.json()).accessToken}` };
   const categories = await (await request.get(`${api}/meetings/categories`, { headers: adminHeaders })).json();
+  let categoryId = Array.isArray(categories) && categories.length > 0 ? categories[0].id : null;
+  if (!categoryId) {
+    const catRes = await request.post(`${api}/meetings/categories`, { headers: adminHeaders, data: { name: `Test Cat ${Date.now()}` } });
+    categoryId = (await catRes.json()).id;
+  }
   const at = (m: number) => new Date(Date.now() + m * 60000).toISOString();
-  const response = await request.post(`${api}/meetings`, { headers: adminHeaders, data: { title: `Location test ${Date.now()}`, categoryId: categories[0].id, meetingDate: at(0), startTime: at(10), expectedArrivalTime: at(5), attendanceOpenTime: at(-5), attendanceCloseTime: at(60), locationName: 'Church location test', latitude: 6.6697906, longitude: 3.3581822, geofenceRadiusMeters: 100 } });
+  const response = await request.post(`${api}/meetings`, { headers: adminHeaders, data: { title: `Location test ${Date.now()}`, categoryId, meetingDate: at(0), startTime: at(-5), expectedArrivalTime: at(5), attendanceOpenTime: at(-5), attendanceCloseTime: at(60), locationName: 'Church location test', latitude: 6.6697906, longitude: 3.3581822, geofenceRadiusMeters: 100 } });
   expect(response.ok()).toBeTruthy(); meetingId = (await response.json()).id;
   expect((await request.put(`${api}/meetings/${meetingId}/status`, { headers: adminHeaders, data: { status: 'ACTIVE' } })).ok()).toBeTruthy();
 });
@@ -31,7 +36,7 @@ async function open(page: any) { await page.goto(`/member/check-in?meetingId=${m
 
 test('church location check-in succeeds without QR or camera and persists once', async ({ page, request }) => {
   await locate(page); await open(page);
-  await expect(page.getByRole('heading', { name: 'Check-In Confirmed!' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Attendance Recorded!' })).toBeVisible();
   expect(await page.evaluate(() => (window as any).__cameraCalls)).toBe(0);
   let rows = await (await request.get(`${api}/attendance/meeting/${meetingId}`, { headers: adminHeaders })).json();
   expect(rows).toHaveLength(1); expect(rows[0].method).toBe('SYSTEM_GEO');

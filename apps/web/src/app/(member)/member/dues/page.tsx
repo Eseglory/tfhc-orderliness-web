@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../../../components/Navbar';
-import { BottomNav } from '../../../../components/BottomNav';
 import { fetchApi } from '../../../../lib/api';
 
 const naira = (n: number) => `₦${Math.round(n).toLocaleString()}`;
@@ -33,6 +32,20 @@ interface Payment {
   paidOn: string;
   duesPeriod: string | null;
 }
+interface Campaign {
+  id: string;
+  periodId: string;
+  title: string;
+  description: string | null;
+  deadline: string;
+  periodStatus: string;
+  showAsAlert: boolean;
+  amountDue: number;
+  amountPaid: number;
+  balance: number;
+  status: string;
+  paymentAccount: Account | null;
+}
 
 const badge = (s: string) =>
   s === 'PAID'
@@ -47,21 +60,24 @@ const badge = (s: string) =>
 
 export default function MemberDuesPage() {
   const [dues, setDues] = useState<Dues[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [declaring, setDeclaring] = useState<Dues | null>(null);
+  const [declaring, setDeclaring] = useState<{ id: string; label: string; balance: number; purpose: 'MONTHLY_DUES' | 'SPECIAL_CONTRIBUTION' } | null>(null);
   const [message, setMessage] = useState('');
 
   const load = async () => {
     try {
-      const [d, a, p] = await Promise.all([
+      const [d, c, a, p] = await Promise.all([
         fetchApi<Dues[]>('/me/finance/dues'),
+        fetchApi<Campaign[]>('/me/finance/campaigns'),
         fetchApi<Account[]>('/me/finance/payment-accounts'),
         fetchApi<Payment[]>('/me/finance/payments'),
       ]);
       setDues(d);
+      setCampaigns(c);
       setAccounts(a);
       setPayments(p);
       setError('');
@@ -77,6 +93,7 @@ export default function MemberDuesPage() {
 
   const owing = dues.filter((d) => d.balance > 0 && !['EXEMPT', 'WAIVED'].includes(d.status));
   const totalOwed = owing.reduce((s, d) => s + d.balance, 0);
+  const owingCampaigns = campaigns.filter((c) => c.balance > 0 && !['EXEMPT', 'WAIVED'].includes(c.status));
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -136,13 +153,53 @@ export default function MemberDuesPage() {
                     <div className="flex items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge(d.status)}`}>{d.status.replace('_', ' ')}</span>
                       {d.balance > 0 && !['EXEMPT', 'WAIVED'].includes(d.status) && (
-                        <button onClick={() => setDeclaring(d)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary">I’ve paid</button>
+                        <button onClick={() => setDeclaring({ id: d.id, label: d.period, balance: d.balance, purpose: 'MONTHLY_DUES' })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary">I’ve paid</button>
                       )}
                     </div>
                   </article>
                 ))
               )}
             </section>
+
+            {campaigns.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-bold text-on-surface">Special contributions</h2>
+                {owingCampaigns.length > 0 && (
+                  <p className="text-xs text-on-surface-variant">
+                    You owe {naira(owingCampaigns.reduce((s, c) => s + c.balance, 0))} across {owingCampaigns.length} contribution{owingCampaigns.length > 1 ? 's' : ''}.
+                  </p>
+                )}
+                {campaigns.map((c) => (
+                  <article key={c.id} className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-sm space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-on-surface">{c.title}</p>
+                        {c.description && <p className="mt-0.5 text-xs text-on-surface-variant">{c.description}</p>}
+                        <p className="mt-1 text-xs text-on-surface-variant">
+                          {naira(c.amountPaid)} / {naira(c.amountDue)}
+                          {c.balance > 0 ? ` · ${naira(c.balance)} left` : ''}
+                          {' · Deadline '}{new Date(c.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge(c.status)}`}>{c.status.replace('_', ' ')}</span>
+                    </div>
+                    {c.paymentAccount && (
+                      <div className="rounded-lg bg-surface-container-low p-2.5 text-xs">
+                        <p className="font-semibold text-on-surface">{c.paymentAccount.bankName}</p>
+                        <p>{c.paymentAccount.accountName}</p>
+                        <p className="font-mono">{c.paymentAccount.accountNumber}</p>
+                        {c.paymentAccount.instructions && <p className="mt-1 text-on-surface-variant">{c.paymentAccount.instructions}</p>}
+                      </div>
+                    )}
+                    {c.balance > 0 && !['EXEMPT', 'WAIVED'].includes(c.status) && (
+                      <div className="flex justify-end">
+                        <button onClick={() => setDeclaring({ id: c.id, label: c.title, balance: c.balance, purpose: 'SPECIAL_CONTRIBUTION' })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary">I’ve paid</button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </section>
+            )}
 
             {payments.length > 0 && (
               <section className="space-y-2">
@@ -162,11 +219,10 @@ export default function MemberDuesPage() {
           </>
         )}
       </main>
-      <BottomNav />
 
       {declaring && (
         <DeclareModal
-          dues={declaring}
+          target={declaring}
           onClose={() => setDeclaring(null)}
           onDone={() => {
             setDeclaring(null);
@@ -179,8 +235,16 @@ export default function MemberDuesPage() {
   );
 }
 
-function DeclareModal({ dues, onClose, onDone }: { dues: Dues; onClose: () => void; onDone: () => void }) {
-  const [amount, setAmount] = useState(dues.balance);
+function DeclareModal({
+  target,
+  onClose,
+  onDone,
+}: {
+  target: { id: string; label: string; balance: number; purpose: 'MONTHLY_DUES' | 'SPECIAL_CONTRIBUTION' };
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [amount, setAmount] = useState(target.balance);
   const [method, setMethod] = useState('BANK_TRANSFER');
   const [payerReference, setPayerReference] = useState('');
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
@@ -195,12 +259,12 @@ function DeclareModal({ dues, onClose, onDone }: { dues: Dues; onClose: () => vo
       await fetchApi('/me/finance/payments', {
         method: 'POST',
         body: JSON.stringify({
-          purpose: 'MONTHLY_DUES',
+          purpose: target.purpose,
           amount: Number(amount),
           method,
           payerReference: payerReference.trim() || undefined,
           paidOn,
-          duesAssignmentId: dues.id,
+          duesAssignmentId: target.id,
         }),
       });
       onDone();
@@ -216,7 +280,7 @@ function DeclareModal({ dues, onClose, onDone }: { dues: Dues; onClose: () => vo
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-md rounded-t-2xl bg-surface-container-lowest p-5 shadow-xl sm:rounded-2xl">
-        <h3 className="text-lg font-bold text-on-surface">Record a payment — {dues.period}</h3>
+        <h3 className="text-lg font-bold text-on-surface">Record a payment — {target.label}</h3>
         <p className="mt-0.5 text-sm text-on-surface-variant">The finance team confirms it against the bank statement.</p>
         <div className="mt-4 space-y-3">
           <label className="block space-y-1">

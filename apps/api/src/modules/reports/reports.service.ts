@@ -1,81 +1,90 @@
 import { unitPolicy, validateUnitPolicy } from '../../common/unit-policy';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { MemberStatus } from '@tfhc/shared';
 import * as ExcelJS from 'exceljs';
 
 @Injectable()
 export class ReportsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async filterOptions() { const [members,teams,categories] = await Promise.all([this.prisma.member.findMany({select:{id:true,firstName:true,lastName:true},orderBy:{firstName:'asc'}}),this.prisma.subTeam.findMany({select:{id:true,name:true}}),this.prisma.meetingCategory.findMany({select:{id:true,name:true}})]); return {members,teams,categories}; }
 
   async settings() { return unitPolicy(this.prisma); }
-  async updateSettings(body: any) { const value = validateUnitPolicy(body); await this.prisma.systemSetting.upsert({where:{key:'unit_policy'},create:{key:'unit_policy',value:JSON.stringify(value)},update:{value:JSON.stringify(value)}}); return value; }
+  async updateSettings(body: any) { const value = validateUnitPolicy(body); await this.prisma.systemSetting.upsert({where:{key:'unit_policy'},create:{key:'unit_policy',value:JSON.stringify(value)},update:{value:JSON.stringify(value)}}); this.cache.invalidateTags(['analytics', 'dashboard', 'leaderboard']); return value; }
 
   async getAnalytics(days: number, from?: string, to?: string, filters: {categoryId?:string;memberId?:string;subTeamId?:string} = {}) {
     if (![7, 30, 90, 365].includes(days)) throw new BadRequestException('Choose 7, 30, 90 or 365 days');
-    const now = to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999+01:00` : to) : new Date();
-    const since = from ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00+01:00` : from) : new Date(now.getTime() - days * 86400000);
-    if (!Number.isFinite(now.getTime()) || !Number.isFinite(since.getTime()) || since > now) throw new BadRequestException('Choose a valid reporting date range');
-    const memberFilter = {...(filters.memberId ? {memberId:filters.memberId} : {}),...(filters.subTeamId ? {member:{subTeamId:filters.subTeamId}} : {})};
-    const meetings = await this.prisma.meeting.findMany({
-      where: { startTime: { gte: since, lte: now }, status: 'CLOSED', ...(filters.categoryId ? {categoryId:filters.categoryId} : {}) },
-      select: { id: true, title: true, startTime: true, category: { select: { name: true } }, attendanceRecords: { where:memberFilter, select: { status: true } } },
-      orderBy: { startTime: 'asc' },
-    });
-    const periodMeeting = { ...(filters.categoryId ? {categoryId:filters.categoryId} : {}), startTime: { gte: since, lte: now }, status: { not: 'CANCELLED' as const } };
-    const [responses, excuses, members] = await Promise.all([
-      this.prisma.eventResponse.groupBy({ by: ['attending'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
-      this.prisma.absenceExcuse.groupBy({ by: ['status'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
-      this.prisma.member.groupBy({ by: ['status'], where:{...(filters.memberId ? {id:filters.memberId}:{}),...(filters.subTeamId ? {subTeamId:filters.subTeamId}:{})}, _count: { _all: true } }),
-    ]);
-    const statuses: Record<string, number> = {};
-    const categories: Record<string, { name: string; attended: number; absent: number; excused: number }> = {};
-    const services = meetings.map(meeting => {
-      let attended = 0, punctual = 0, absent = 0, excused = 0;
-      for (const record of meeting.attendanceRecords) {
-        statuses[record.status] = (statuses[record.status] || 0) + 1;
-        if (['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(record.status)) attended++;
-        if (['EARLY', 'ON_TIME'].includes(record.status)) punctual++;
-        if (record.status === 'ABSENT') absent++;
-        if (record.status === 'EXCUSED') excused++;
-      }
-      const group = categories[meeting.category.name] ||= { name: meeting.category.name, attended: 0, absent: 0, excused: 0 };
-      group.attended += attended; group.absent += absent; group.excused += excused;
-      return { id: meeting.id, title: meeting.title, date: meeting.startTime, attended, punctual, absent, excused };
-    });
-    const totals = services.reduce((sum, service) => ({ attended: sum.attended + service.attended, punctual: sum.punctual + service.punctual, absent: sum.absent + service.absent, excused: sum.excused + service.excused }), { attended: 0, punctual: 0, absent: 0, excused: 0 });
-    const rate = (value: number, total: number) => total ? Math.round(value / total * 1000) / 10 : null;
-    return { days, since, until: now, services, statuses, categories: Object.values(categories), totals,
-      attendanceRate: rate(totals.attended, totals.attended + totals.absent), punctualityRate: rate(totals.punctual, totals.attended),
-      responses: { attending: responses.find(r => r.attending)?._count._all || 0, notAttending: responses.find(r => !r.attending)?._count._all || 0 },
-      excuses: Object.fromEntries(excuses.map(r => [r.status, r._count._all])), members: Object.fromEntries(members.map(r => [r.status, r._count._all])),
-    };
+    const key = JSON.stringify([days, from, to, filters]);
+    return this.cache.wrap(`reports:analytics:${key}`, 60, async () => {
+      const now = to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999+01:00` : to) : new Date();
+      const since = from ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(from) ? `${from}T00:00:00+01:00` : from) : new Date(now.getTime() - days * 86400000);
+      if (!Number.isFinite(now.getTime()) || !Number.isFinite(since.getTime()) || since > now) throw new BadRequestException('Choose a valid reporting date range');
+      const memberFilter = {...(filters.memberId ? {memberId:filters.memberId} : {}),...(filters.subTeamId ? {member:{subTeamId:filters.subTeamId}} : {})};
+      const meetings = await this.prisma.meeting.findMany({
+        where: { startTime: { gte: since, lte: now }, status: 'CLOSED', ...(filters.categoryId ? {categoryId:filters.categoryId} : {}) },
+        select: { id: true, title: true, startTime: true, category: { select: { name: true } }, attendanceRecords: { where:memberFilter, select: { status: true } } },
+        orderBy: { startTime: 'asc' },
+      });
+      const periodMeeting = { ...(filters.categoryId ? {categoryId:filters.categoryId} : {}), startTime: { gte: since, lte: now }, status: { not: 'CANCELLED' as const } };
+      const [responses, excuses, members] = await Promise.all([
+        this.prisma.eventResponse.groupBy({ by: ['attending'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
+        this.prisma.absenceExcuse.groupBy({ by: ['status'], where: { meeting: periodMeeting, ...memberFilter }, _count: { _all: true } }),
+        this.prisma.member.groupBy({ by: ['status'], where:{...(filters.memberId ? {id:filters.memberId}:{}),...(filters.subTeamId ? {subTeamId:filters.subTeamId}:{})}, _count: { _all: true } }),
+      ]);
+      const statuses: Record<string, number> = {};
+      const categories: Record<string, { name: string; attended: number; absent: number; excused: number }> = {};
+      const services = meetings.map(meeting => {
+        let attended = 0, punctual = 0, absent = 0, excused = 0;
+        for (const record of meeting.attendanceRecords) {
+          statuses[record.status] = (statuses[record.status] || 0) + 1;
+          if (['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(record.status)) attended++;
+          if (['EARLY', 'ON_TIME'].includes(record.status)) punctual++;
+          if (record.status === 'ABSENT') absent++;
+          if (record.status === 'EXCUSED') excused++;
+        }
+        const group = categories[meeting.category.name] ||= { name: meeting.category.name, attended: 0, absent: 0, excused: 0 };
+        group.attended += attended; group.absent += absent; group.excused += excused;
+        return { id: meeting.id, title: meeting.title, date: meeting.startTime, attended, punctual, absent, excused };
+      });
+      const totals = services.reduce((sum, service) => ({ attended: sum.attended + service.attended, punctual: sum.punctual + service.punctual, absent: sum.absent + service.absent, excused: sum.excused + service.excused }), { attended: 0, punctual: 0, absent: 0, excused: 0 });
+      const rate = (value: number, total: number) => total ? Math.round(value / total * 1000) / 10 : null;
+      return { days, since, until: now, services, statuses, categories: Object.values(categories), totals,
+        attendanceRate: rate(totals.attended, totals.attended + totals.absent), punctualityRate: rate(totals.punctual, totals.attended),
+        responses: { attending: responses.find(r => r.attending)?._count._all || 0, notAttending: responses.find(r => !r.attending)?._count._all || 0 },
+        excuses: Object.fromEntries(excuses.map(r => [r.status, r._count._all])), members: Object.fromEntries(members.map(r => [r.status, r._count._all])),
+      };
+    }, ['analytics', 'attendance', 'excuses', 'members']);
   }
 
   async getUnitDashboardStats() {
-    const [totalActiveMembers, meetingsHeld, summaries, activeFlagsCount, pendingExcusesCount] = await Promise.all([
-      this.prisma.member.count({ where: { status: MemberStatus.ACTIVE } }),
-      this.prisma.meeting.count({ where: { status: 'CLOSED' } }),
-      this.prisma.attendanceRecord.groupBy({by:['status'],where:{meeting:{status:'CLOSED'}},_count:{_all:true}}),
-      this.prisma.followUpFlag.count({ where: { isResolved: false } }),
-      this.prisma.absenceExcuse.count({ where: { status: 'PENDING' } }),
-    ]);
-    const count = (status: string) => summaries.find(row=>row.status===status)?._count._all ?? 0;
-    const present = count('EARLY')+count('ON_TIME')+count('GRACE_PERIOD')+count('LATE');
-    const expected = present+count('ABSENT');
-    const avgAttendance = expected ? Math.round(present/expected*1000)/10 : 0;
-    const avgPunctuality = present ? Math.round((count('EARLY')+count('ON_TIME'))/present*1000)/10 : 0;
+    return this.cache.wrap('reports:unit_dashboard', 30, async () => {
+      const [totalActiveMembers, meetingsHeld, summaries, activeFlagsCount, pendingExcusesCount] = await Promise.all([
+        this.prisma.member.count({ where: { status: MemberStatus.ACTIVE } }),
+        this.prisma.meeting.count({ where: { status: 'CLOSED' } }),
+        this.prisma.attendanceRecord.groupBy({by:['status'],where:{meeting:{status:'CLOSED'}},_count:{_all:true}}),
+        this.prisma.followUpFlag.count({ where: { isResolved: false } }),
+        this.prisma.absenceExcuse.count({ where: { status: 'PENDING' } }),
+      ]);
+      const count = (status: string) => summaries.find(row=>row.status===status)?._count._all ?? 0;
+      const present = count('EARLY')+count('ON_TIME')+count('GRACE_PERIOD')+count('LATE');
+      const expected = present+count('ABSENT');
+      const avgAttendance = expected ? Math.round(present/expected*1000)/10 : 0;
+      const avgPunctuality = present ? Math.round((count('EARLY')+count('ON_TIME'))/present*1000)/10 : 0;
 
-    return {
-      totalActiveMembers,
-      meetingsHeld,
-      avgAttendance,
-      avgPunctuality,
-      activeFlagsCount,
-      pendingExcusesCount,
-    };
+      return {
+        totalActiveMembers,
+        meetingsHeld,
+        avgAttendance,
+        avgPunctuality,
+        activeFlagsCount,
+        pendingExcusesCount,
+      };
+    }, ['analytics', 'attendance', 'excuses', 'members', 'dashboard']);
   }
 
   async generateCsvReport() {
@@ -127,7 +136,7 @@ export class ReportsService {
         memberName: `${r.member.firstName} ${r.member.lastName}`,
         subTeam: r.member.subTeam?.name || 'Unassigned',
         meetingTitle: r.meeting.title,
-        date: r.meeting.meetingDate.toISOString().split('T')[0],
+        date: (r.meeting?.meetingDate || r.meeting?.startTime) ? (r.meeting.meetingDate || r.meeting.startTime).toISOString().split('T')[0] : 'N/A',
         status: r.status,
         arrivalTime: r.actualArrivalTime ? r.actualArrivalTime.toISOString().split('T')[1].slice(0, 8) : 'N/A',
         method: r.method,

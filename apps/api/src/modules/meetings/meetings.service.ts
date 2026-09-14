@@ -1,8 +1,10 @@
-import { AbsenceProcessingJob } from '../../jobs/absence-processing.job';
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AbsenceProcessingJob } from '../../jobs/absence-processing.job';
 import { AuditService } from '../../common/rbac/audit.service';
+import { CalendarService } from '../calendar/calendar.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { MeetingStatus } from '@tfhc/shared';
 import { canViewEvent, visibilityWhere, EventViewer } from '../../common/event-visibility';
 
@@ -47,6 +49,8 @@ export class MeetingsService {
     private prisma: PrismaService,
     private absenceProcessing: AbsenceProcessingJob,
     private audit: AuditService,
+    private cache: CacheService,
+    @Optional() private calendarService?: CalendarService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -121,6 +125,9 @@ export class MeetingsService {
         data: { status: attending ? 'ACCEPTED' : 'DECLINED', respondedAt: new Date() },
       });
       return response;
+    }).then((res) => {
+      this.cache.invalidateTags(['calendar', 'meetings', 'analytics']);
+      return res;
     });
   }
 
@@ -129,36 +136,63 @@ export class MeetingsService {
   // -------------------------------------------------------------------------
 
   async findAll(
-    query: { status?: MeetingStatus; categoryId?: string; eventTypeId?: string; from?: string; to?: string; search?: string; includeArchived?: boolean } = {},
+    query: {
+      status?: MeetingStatus;
+      categoryId?: string;
+      eventTypeId?: string;
+      from?: string;
+      to?: string;
+      search?: string;
+      includeArchived?: boolean;
+      upcomingOnly?: boolean;
+      sortOrder?: 'asc' | 'desc';
+    } = {},
     isStaff = true,
     memberId?: string,
   ) {
-    const viewer = await this.viewerFor(isStaff, memberId);
-    const and: Prisma.MeetingWhereInput[] = [visibilityWhere(viewer)];
-    if (query.status) and.push({ status: query.status });
-    if (query.categoryId) and.push({ categoryId: query.categoryId });
-    if (query.eventTypeId) and.push({ eventTypeId: query.eventTypeId });
-    if (!query.includeArchived) and.push({ archivedAt: null });
-    if (query.from) and.push({ startTime: { gte: new Date(query.from) } });
-    if (query.to) and.push({ startTime: { lte: new Date(query.to) } });
-    if (query.search?.trim())
-      and.push({
-        OR: [
-          { title: { contains: query.search.trim(), mode: 'insensitive' } },
-          { locationName: { contains: query.search.trim(), mode: 'insensitive' } },
-        ],
-      });
+    const key = JSON.stringify([query, isStaff, memberId]);
+    return this.cache.wrap(`meetings:all:${key}`, 30, async () => {
+      const viewer = await this.viewerFor(isStaff, memberId);
+      const and: Prisma.MeetingWhereInput[] = [visibilityWhere(viewer)];
+      if (query.status) and.push({ status: query.status });
+      if (query.categoryId) and.push({ categoryId: query.categoryId });
+      if (query.eventTypeId) and.push({ eventTypeId: query.eventTypeId });
+      if (!query.includeArchived) and.push({ archivedAt: null });
+      if (query.upcomingOnly) and.push({ startTime: { gte: new Date() } });
+      if (query.from) and.push({ startTime: { gte: new Date(query.from) } });
+      if (query.to) and.push({ startTime: { lte: new Date(query.to) } });
+      if (query.search?.trim())
+        and.push({
+          OR: [
+            { title: { contains: query.search.trim(), mode: 'insensitive' } },
+            { locationName: { contains: query.search.trim(), mode: 'insensitive' } },
+          ],
+        });
 
-    return this.prisma.meeting.findMany({
-      where: { AND: and },
-      include: {
-        category: true,
-        eventType: true,
-        _count: { select: { attendanceRecords: true, invitations: true } },
-        ...(isStaff ? { audiences: { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } } } : {}),
-      },
-      orderBy: { startTime: 'desc' },
-    });
+      const sortDir = query.sortOrder || (query.upcomingOnly || query.from ? 'asc' : 'desc');
+
+      return this.prisma.meeting.findMany({
+        where: { AND: and },
+        include: {
+          category: true,
+          eventType: true,
+          serviceSchedule: {
+            select: {
+              id: true,
+              title: true,
+              dayOfWeek: true,
+              startMinutes: true,
+              endMinutes: true,
+              recurrenceRule: true,
+              categoryName: true,
+            },
+          },
+          _count: { select: { attendanceRecords: true, invitations: true } },
+          ...(isStaff ? { audiences: { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } } } : {}),
+        },
+        orderBy: { startTime: sortDir },
+      });
+    }, ['calendar', 'meetings']);
   }
 
   async calendar(from: string, to: string, isStaff = true, memberId?: string) {
@@ -167,28 +201,81 @@ export class MeetingsService {
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start)
       throw new BadRequestException('Provide a valid from/to range');
     if (end.getTime() - start.getTime() > 400 * 86400000) throw new BadRequestException('Range too large (max ~13 months)');
-    const viewer = await this.viewerFor(isStaff, memberId);
+    const key = JSON.stringify([from, to, isStaff, memberId]);
 
-    const meetings = await this.prisma.meeting.findMany({
-      where: {
-        AND: [visibilityWhere(viewer), { archivedAt: null }, { startTime: { gte: start, lte: end } }],
-      },
-      select: {
-        id: true,
-        title: true,
-        startTime: true,
-        endTime: true,
-        allDay: true,
-        status: true,
-        locationName: true,
-        isCompulsory: true,
-        visibility: true,
-        eventType: { select: { key: true, name: true, color: true, icon: true } },
-        category: { select: { name: true } },
-      },
-      orderBy: { startTime: 'asc' },
-    });
-    return meetings;
+    return this.cache.wrap(`meetings:calendar:${key}`, 30, async () => {
+      const viewer = await this.viewerFor(isStaff, memberId);
+
+      const [meetings, appointments] = await Promise.all([
+        this.prisma.meeting.findMany({
+          where: {
+            AND: [visibilityWhere(viewer), { archivedAt: null }, { startTime: { gte: start, lte: end } }],
+          },
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+            allDay: true,
+            status: true,
+            locationName: true,
+            isCompulsory: true,
+            visibility: true,
+            serviceScheduleId: true,
+            serviceSchedule: { select: { id: true, title: true, recurrenceRule: true } },
+            eventType: { select: { key: true, name: true, color: true, icon: true } },
+            category: { select: { name: true } },
+          },
+          orderBy: { startTime: 'asc' },
+        }),
+        this.prisma.appointment.findMany({
+          where: {
+            startTime: { gte: start, lte: end },
+            status: { not: 'CANCELLED' },
+            ...(memberId && !isStaff ? { memberId } : {}),
+          },
+          include: {
+            service: { select: { id: true, name: true, category: true } },
+          },
+          orderBy: { startTime: 'asc' },
+        }),
+      ]);
+
+      const mappedMeetings = meetings.map((m) => ({
+        ...m,
+        domainType: m.eventType?.key ? ('EVENT' as const) : ('MEETING' as const),
+      }));
+
+      const mappedAppointments = appointments.map((a) => ({
+        id: a.id,
+        title: a.title,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        allDay: false,
+        status: a.status,
+        locationName: a.location || (a.mode === 'VIDEO_CONFERENCE' ? 'Google Meet' : 'Office Suite'),
+        meetingUrl: a.meetingUrl,
+        isCompulsory: false,
+        visibility: 'RESTRICTED',
+        domainType: 'APPOINTMENT' as const,
+        clientName: a.clientName,
+        providerName: a.providerName,
+        service: a.service,
+        serviceScheduleId: null,
+        serviceSchedule: null,
+        eventType: {
+          key: 'appointment',
+          name: 'Appointment',
+          color: '#f59e0b',
+          icon: 'calendar_clock',
+        },
+        category: { name: a.service?.name || 'Appointment' },
+      }));
+
+      return [...mappedMeetings, ...mappedAppointments].sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+      );
+    }, ['calendar', 'meetings']);
   }
 
   async findOne(id: string, includeAttendance = true, memberId?: string) {
@@ -197,6 +284,7 @@ export class MeetingsService {
       include: {
         category: true,
         eventType: true,
+        serviceSchedule: true,
         meetingSummary: true,
         audiences: includeAttendance
           ? { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } }
@@ -361,7 +449,7 @@ export class MeetingsService {
       include: { category: true, eventType: true, audiences: true },
     });
 
-    if (actorUserId)
+    if (actorUserId) {
       await this.audit.record({
         actorUserId,
         action: 'EVENT_CREATED',
@@ -369,6 +457,11 @@ export class MeetingsService {
         entityId: meeting.id,
         newData: { title: meeting.title, startTime: meeting.startTime, visibility, eventTypeId },
       });
+      if (this.calendarService) {
+        this.calendarService.syncMeetingToGoogle(actorUserId, meeting.id).catch(() => {});
+      }
+    }
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return meeting;
   }
 
@@ -465,6 +558,10 @@ export class MeetingsService {
       previousData: { title: existing.title, startTime: existing.startTime, visibility: existing.visibility },
       newData: { title: updated.title, startTime: updated.startTime, visibility: updated.visibility },
     });
+    if (this.calendarService) {
+      this.calendarService.syncMeetingToGoogle(actorUserId, id).catch(() => {});
+    }
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return updated;
   }
 
@@ -516,6 +613,7 @@ export class MeetingsService {
       entityId: copy.id,
       newData: { from: id, title: copy.title },
     });
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return copy;
   }
 
@@ -535,6 +633,7 @@ export class MeetingsService {
       entityId: id,
       reason: reason?.trim() || null,
     });
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return updated;
   }
 
@@ -552,67 +651,70 @@ export class MeetingsService {
       entity: 'Meeting',
       entityId: id,
     });
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return updated;
   }
 
   async eventsDashboard() {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const weekEnd = new Date(now.getTime() + 7 * 86400000);
-    const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+    return this.cache.wrap('meetings:dashboard', 30, async () => {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weekEnd = new Date(now.getTime() + 7 * 86400000);
+      const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
 
-    const [total, upcoming, thisWeek, thisMonth, cancelled, recurring, restricted, byType, recentClosed] = await Promise.all([
-      this.prisma.meeting.count({ where: { archivedAt: null } }),
-      this.prisma.meeting.count({ where: { archivedAt: null, status: { in: ['SCHEDULED', 'ACTIVE'] }, startTime: { gte: now } } }),
-      this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: now, lte: weekEnd } } }),
-      this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: monthStart } } }),
-      this.prisma.meeting.count({ where: { archivedAt: null, status: 'CANCELLED' } }),
-      this.prisma.serviceSchedule.count({ where: { enabled: true } }),
-      this.prisma.meeting.count({ where: { archivedAt: null, visibility: 'RESTRICTED' } }),
-      this.prisma.meeting.groupBy({
-        by: ['eventTypeId'],
-        where: { archivedAt: null },
-        _count: { _all: true },
-      }),
-      this.prisma.meeting.findMany({
-        where: { status: 'CLOSED', startTime: { gte: yearAgo } },
-        select: { startTime: true, meetingSummary: { select: { attendanceRate: true } } },
-      }),
-    ]);
+      const [total, upcoming, thisWeek, thisMonth, cancelled, recurring, restricted, byType, recentClosed] = await Promise.all([
+        this.prisma.meeting.count({ where: { archivedAt: null } }),
+        this.prisma.meeting.count({ where: { archivedAt: null, status: { in: ['SCHEDULED', 'ACTIVE'] }, startTime: { gte: now } } }),
+        this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: now, lte: weekEnd } } }),
+        this.prisma.meeting.count({ where: { archivedAt: null, startTime: { gte: monthStart } } }),
+        this.prisma.meeting.count({ where: { archivedAt: null, status: 'CANCELLED' } }),
+        this.prisma.serviceSchedule.count({ where: { enabled: true } }),
+        this.prisma.meeting.count({ where: { archivedAt: null, visibility: 'RESTRICTED' } }),
+        this.prisma.meeting.groupBy({
+          by: ['eventTypeId'],
+          where: { archivedAt: null },
+          _count: { _all: true },
+        }),
+        this.prisma.meeting.findMany({
+          where: { status: 'CLOSED', startTime: { gte: yearAgo } },
+          select: { startTime: true, meetingSummary: { select: { attendanceRate: true } } },
+        }),
+      ]);
 
-    const types = await this.prisma.eventType.findMany({ select: { id: true, name: true, color: true } });
-    const typeName = new Map(types.map((t) => [t.id, t]));
-    const eventsByType = byType
-      .map((r) => ({
-        type: r.eventTypeId ? typeName.get(r.eventTypeId)?.name ?? 'Unknown' : 'Uncategorised',
-        color: r.eventTypeId ? typeName.get(r.eventTypeId)?.color ?? null : null,
-        count: r._count._all,
-      }))
-      .sort((a, b) => b.count - a.count);
+      const types = await this.prisma.eventType.findMany({ select: { id: true, name: true, color: true } });
+      const typeName = new Map(types.map((t) => [t.id, t]));
+      const eventsByType = byType
+        .map((r) => ({
+          type: r.eventTypeId ? typeName.get(r.eventTypeId)?.name ?? 'Unknown' : 'Uncategorised',
+          color: r.eventTypeId ? typeName.get(r.eventTypeId)?.color ?? null : null,
+          count: r._count._all,
+        }))
+        .sort((a, b) => b.count - a.count);
 
-    const months: Record<string, { count: number; rateSum: number; rateN: number }> = {};
-    for (const m of recentClosed) {
-      const key = `${m.startTime.getFullYear()}-${String(m.startTime.getMonth() + 1).padStart(2, '0')}`;
-      months[key] ??= { count: 0, rateSum: 0, rateN: 0 };
-      months[key].count++;
-      if (m.meetingSummary) {
-        months[key].rateSum += m.meetingSummary.attendanceRate;
-        months[key].rateN++;
+      const months: Record<string, { count: number; rateSum: number; rateN: number }> = {};
+      for (const m of recentClosed) {
+        const key = `${m.startTime.getFullYear()}-${String(m.startTime.getMonth() + 1).padStart(2, '0')}`;
+        months[key] ??= { count: 0, rateSum: 0, rateN: 0 };
+        months[key].count++;
+        if (m.meetingSummary) {
+          months[key].rateSum += m.meetingSummary.attendanceRate;
+          months[key].rateN++;
+        }
       }
-    }
-    const eventsByMonth = Object.entries(months)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, v]) => ({
-        month,
-        count: v.count,
-        avgAttendanceRate: v.rateN ? Math.round(v.rateSum / v.rateN) : null,
-      }));
+      const eventsByMonth = Object.entries(months)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, v]) => ({
+          month,
+          count: v.count,
+          avgAttendanceRate: v.rateN ? Math.round(v.rateSum / v.rateN) : null,
+        }));
 
-    return {
-      kpis: { total, upcoming, thisWeek, thisMonth, cancelled, recurringSeries: recurring, restricted },
-      eventsByType,
-      eventsByMonth,
-    };
+      return {
+        kpis: { total, upcoming, thisWeek, thisMonth, cancelled, recurringSeries: recurring, restricted },
+        eventsByType,
+        eventsByMonth,
+      };
+    }, ['calendar', 'meetings', 'dashboard']);
   }
 
   async findOpenAttendanceMeetings() {
@@ -635,8 +737,14 @@ export class MeetingsService {
   async updateStatus(id: string, status: MeetingStatus, actorUserId?: string) {
     if (!Object.values(MeetingStatus).includes(status)) throw new BadRequestException('Invalid meeting status');
     const meeting = await this.findOne(id);
-    if (meeting.status === MeetingStatus.CLOSED && status !== MeetingStatus.CLOSED)
+    if (meeting.status === MeetingStatus.CLOSED && status !== MeetingStatus.CLOSED) {
       throw new BadRequestException('Closed meetings cannot be reopened');
+    }
+    if (status === MeetingStatus.ACTIVE) {
+      if (meeting.startTime > new Date()) {
+        throw new BadRequestException('A future scheduled meeting cannot be activated before its start date and time');
+      }
+    }
     if (status === MeetingStatus.CLOSED) {
       if (meeting.status !== MeetingStatus.ACTIVE && meeting.status !== MeetingStatus.CLOSED)
         throw new BadRequestException('Only active meetings can be closed');
@@ -716,6 +824,7 @@ export class MeetingsService {
       );
       createdMeetings.push(meeting);
     }
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return createdMeetings;
   }
 }

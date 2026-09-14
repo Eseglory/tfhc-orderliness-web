@@ -10,12 +10,14 @@ export default function MyAttendancePage() {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [selectedMonth, setSelectedMonth] = useState('All History');
 
   // Modals
   const [showExcuseModal, setShowExcuseModal] = useState(false);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [reason, setReason] = useState('');
   const [correctionNote, setCorrectionNote] = useState('');
+  const [requestedStatus, setRequestedStatus] = useState('ON_TIME');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -62,7 +64,7 @@ export default function MyAttendancePage() {
         method: 'POST',
         body: JSON.stringify({
           meetingId: selectedRecord.meetingId,
-          requestedStatus: 'ON_TIME',
+          requestedStatus,
           reason: correctionNote,
         }),
       });
@@ -70,6 +72,7 @@ export default function MyAttendancePage() {
       setTimeout(() => {
         setShowCorrectionModal(false);
         setCorrectionNote('');
+        setRequestedStatus('ON_TIME');
         setMessage('');
       }, 1500);
     } catch (err: any) {
@@ -79,8 +82,18 @@ export default function MyAttendancePage() {
     }
   };
 
-  const attendedCount = history.filter((h) => ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(h.status)).length;
-  const totalCount = history.length;
+  const monthKey = (record: any) => {
+    const raw = record.actualArrivalTime || record.meeting?.startTime;
+    if (!raw) return null;
+    const d = new Date(raw);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const monthLabel = (key: string) => new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const availableMonths = Array.from(new Set(history.map(monthKey).filter((k): k is string => !!k))).sort().reverse();
+
+  const visibleHistory = selectedMonth === 'All History' ? history : history.filter((h) => monthKey(h) === selectedMonth);
+  const attendedCount = visibleHistory.filter((h) => ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(h.status)).length;
+  const totalCount = visibleHistory.length;
   const attendanceRate = ((attendedCount / (totalCount || 1)) * 100).toFixed(1);
 
   return (
@@ -110,10 +123,16 @@ export default function MyAttendancePage() {
           <div className="flex justify-between items-end">
             <h2 className="font-headline-md text-headline-md text-primary font-bold">Attendance Record</h2>
             <div className="relative inline-block text-left">
-              <button className="inline-flex justify-center w-full rounded-lg border border-outline bg-surface px-4 py-2 text-body-md font-body-md font-semibold text-on-surface hover:bg-surface-container items-center gap-2">
-                August 2026
-                <span className="material-symbols-outlined text-[20px]">arrow_drop_down</span>
-              </button>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="rounded-lg border border-outline bg-surface px-3 py-2 text-body-md font-semibold text-on-surface hover:bg-surface-container cursor-pointer focus:ring-2 focus:ring-primary focus:outline-none"
+              >
+                <option value="All History">All History</option>
+                {availableMonths.map((key) => (
+                  <option key={key} value={key}>{monthLabel(key)}</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -136,8 +155,8 @@ export default function MyAttendancePage() {
 
         {/* List Feed matching Stitch Screen 8 */}
         <section className="space-y-gutter">
-          {history.length > 0 ? (
-            history.map((record) => {
+          {visibleHistory.length > 0 ? (
+            visibleHistory.map((record) => {
               const status = record.status;
               const title = record.meeting?.title || 'Meeting';
               const dateStr = record.actualArrivalTime ? new Date(record.actualArrivalTime).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'No check-in';
@@ -210,6 +229,7 @@ export default function MyAttendancePage() {
                       <button
                         onClick={() => {
                           setSelectedRecord(record);
+                          setRequestedStatus(status === 'LATE' || status === 'GRACE_PERIOD' ? 'ON_TIME' : 'LATE');
                           setShowCorrectionModal(true);
                         }}
                         className="flex-1 py-2 px-3 rounded-lg border border-outline-variant text-on-surface-variant font-label-md text-label-md hover:bg-surface-container transition-colors flex items-center justify-center gap-2"
@@ -223,7 +243,9 @@ export default function MyAttendancePage() {
               );
             })
           ) : (
-            <p className="p-5 text-center">No attendance records yet.</p>
+            <p className="p-5 text-center">
+              {history.length === 0 ? 'No attendance records yet.' : 'No attendance records for this month.'}
+            </p>
           )}
         </section>
       </main>
@@ -277,6 +299,22 @@ export default function MyAttendancePage() {
             </p>
             {message && <div className="p-2 mb-3 bg-secondary/10 text-secondary text-sm rounded text-center">{message}</div>}
             <form onSubmit={handleSubmitCorrection} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="requested-status" className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">
+                  Correct Status To
+                </label>
+                <select
+                  id="requested-status"
+                  value={requestedStatus}
+                  onChange={(e) => setRequestedStatus(e.target.value)}
+                  className="w-full bg-surface border border-outline-variant rounded-lg p-3 text-on-surface font-body-md"
+                >
+                  <option value="EARLY">Early</option>
+                  <option value="ON_TIME">On Time</option>
+                  <option value="GRACE_PERIOD">Grace Period</option>
+                  <option value="LATE">Late</option>
+                </select>
+              </div>
               <textarea
                 required
                 rows={4}

@@ -186,7 +186,8 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   async listRooms(viewer: ChatViewer) {
-    const memberId = this.requireMember(viewer);
+    if (!viewer.memberId) return [];
+    const memberId = viewer.memberId;
     const rooms = await this.roomsForViewer(viewer);
     if (rooms.length === 0) return [];
     const roomIds = rooms.map((r) => r.id);
@@ -212,7 +213,7 @@ export class ChatService implements OnApplicationBootstrap {
       const unreadRows = await this.prisma.$queryRaw<Array<{ roomId: string; count: bigint | number }>>`
         SELECT m."roomId", COUNT(m.id)::int AS "count"
         FROM "chat_messages" m
-        LEFT JOIN "chat_room_members" crm 
+        LEFT JOIN "chat_room_members" crm
           ON crm."roomId" = m."roomId" AND crm."memberId" = ${memberId}
         WHERE m."roomId" = ANY(${roomIds}::text[])
           AND m."deletedAt" IS NULL
@@ -414,12 +415,21 @@ export class ChatService implements OnApplicationBootstrap {
   async postMessage(
     roomId: string,
     viewer: ChatViewer,
-    dto: { body?: string; type?: string; attachmentUrl?: string; attachmentMeta?: unknown; replyToId?: string },
+    dto: { body?: string; type?: string; attachmentUrl?: string; attachmentMeta?: unknown; replyToId?: string; operationId?: string },
   ) {
     const room = await this.loadRoom(roomId, viewer);
     const membership = await this.ensureMembership(room, viewer);
     const memberId = membership.memberId;
 
+    if (dto.operationId) {
+      const existing = await this.prisma.chatMessage.findUnique({ where: { clientOperationId: dto.operationId }, include: {
+        sender: { select: senderSelect }, replyTo: { include: { sender: { select: senderSelect } } },
+      } });
+      if (existing) {
+        if (existing.roomId !== roomId || existing.senderMemberId !== memberId) throw new ForbiddenException('Operation belongs to another sender');
+        return this.toMessageDto(existing, viewer);
+      }
+    }
     const body = typeof dto.body === 'string' ? dto.body.trim() : '';
     const attachmentUrl = typeof dto.attachmentUrl === 'string' ? dto.attachmentUrl : null;
     if (!body && !attachmentUrl) throw new BadRequestException('Message cannot be empty');
@@ -438,8 +448,9 @@ export class ChatService implements OnApplicationBootstrap {
       if (!parent) throw new BadRequestException('The message being replied to is not in this conversation');
     }
 
-    const created = await this.prisma.chatMessage.create({
+    const createArgs = {
       data: {
+        ...(dto.operationId ? { clientOperationId: dto.operationId } : {}),
         roomId,
         senderMemberId: memberId,
         type,
@@ -455,6 +466,20 @@ export class ChatService implements OnApplicationBootstrap {
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
+    };
+    const createMessage = () => dto.operationId
+      ? this.prisma.chatMessage.upsert({ where: { clientOperationId: dto.operationId }, create: createArgs.data, update: {}, include: createArgs.include })
+      : this.prisma.chatMessage.create(createArgs);
+    const created = await createMessage().catch(async error => {
+      // Prisma can emulate upsert when relations are included. Concurrent
+      // completions can then race at the unique index; recover the winner.
+      if (error?.code !== 'P2002' || !dto.operationId) throw error;
+      const existing = await this.prisma.chatMessage.findUnique({
+        where: { clientOperationId: dto.operationId }, include: createArgs.include,
+      });
+      if (!existing) throw error;
+      if (existing.roomId !== roomId || existing.senderMemberId !== memberId) throw new ForbiddenException('Operation belongs to another sender');
+      return existing;
     });
 
     // The author has implicitly read up to their own message.
@@ -543,6 +568,7 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   async unreadSummary(viewer: ChatViewer) {
+    if (!viewer.memberId) return { total: 0, rooms: [] };
     const rooms = await this.listRooms(viewer);
     const perRoom = rooms
       .filter((r) => r.unreadCount > 0)
@@ -555,7 +581,8 @@ export class ChatService implements OnApplicationBootstrap {
   // -------------------------------------------------------------------------
 
   async contacts(viewer: ChatViewer) {
-    const memberId = this.requireMember(viewer);
+    if (!viewer.memberId) return [];
+    const memberId = viewer.memberId;
     const members = await this.prisma.member.findMany({
       where: { status: ACTIVE_MEMBER, id: { not: memberId } },
       select: { ...senderSelect, roleInUnit: true, subTeam: { select: { name: true } } },

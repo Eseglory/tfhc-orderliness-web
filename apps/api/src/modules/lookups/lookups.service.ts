@@ -7,17 +7,23 @@ import {
   NotFoundException,
   OnApplicationBootstrap,
 } from '@nestjs/common';
-import { DEFAULT_EVENT_TYPES } from '@tfhc/shared';
+import { ConfigService } from '@nestjs/config';
+import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
+import { Prisma } from '@prisma/client';
+import { DEFAULT_EVENT_TYPES, Role, toPascalCase } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
+import { MailService } from '../mail/mail.service';
+import { renderInvitationEmail } from '../mail/templates';
+import { hashInviteToken } from '../../common/invite-token';
+import { webBaseUrl } from '../../common/web-url';
+import { settleWithin } from '../../common/settle-within';
 
-/**
- * Centralised administration of the small classification tables. Each "kind" is
- * a real table with real relationships; this service gives them one CRUD shape
- * and one set of safety rules (system rows deactivate, never delete; a row that
- * is still referenced cannot be deleted).
- */
-export type LookupKind = 'event-types' | 'meeting-categories' | 'sub-teams';
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const INVITE_EMAIL_TIMEOUT_MS = 8000;
+
+export type LookupKind = 'event-types' | 'meeting-categories' | 'sub-teams' | 'approved-members';
 
 export interface LookupRow {
   id: string;
@@ -30,13 +36,88 @@ export interface LookupRow {
   extra: Record<string, unknown>;
 }
 
+export function computeApprovedMemberInviteStatus(
+  approved: {
+    status: string;
+    inviteStatus?: string | null;
+    inviteTokenHash?: string | null;
+    inviteExpiresAt?: Date | null;
+    member?: {
+      user?: {
+        id: string;
+        isActive: boolean;
+        inviteTokenHash?: string | null;
+        inviteExpiresAt?: Date | null;
+        emailVerifiedAt?: Date | null;
+        googleSubject?: string | null;
+        passwordAuthEnabled?: boolean;
+      } | null;
+    } | null;
+  }
+): 'NOT_INVITED' | 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'FAILED' {
+  const user = approved.member?.user;
+  if (user && user.isActive && !user.inviteTokenHash && (user.emailVerifiedAt || user.googleSubject || user.passwordAuthEnabled)) {
+    return 'ACCEPTED';
+  }
+  if (approved.inviteTokenHash && approved.inviteExpiresAt) {
+    if (approved.inviteExpiresAt.getTime() > Date.now()) {
+      return 'PENDING';
+    } else {
+      return 'EXPIRED';
+    }
+  }
+  if (user && user.inviteTokenHash && user.inviteExpiresAt) {
+    if (user.inviteExpiresAt.getTime() > Date.now()) {
+      return 'PENDING';
+    } else {
+      return 'EXPIRED';
+    }
+  }
+  if (approved.inviteStatus === 'FAILED') return 'FAILED';
+  return 'NOT_INVITED';
+}
+
 @Injectable()
 export class LookupsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(LookupsService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
+    private readonly config: ConfigService,
   ) {}
+
+  private webBaseUrl(): string {
+    return webBaseUrl(this.config);
+  }
+
+  private async sendMemberInviteEmail(
+    email: string,
+    firstName: string,
+    inviteUrl: string,
+    inviter?: { name?: string; title?: string; email?: string },
+  ): Promise<boolean> {
+    const { subject, text, html } = renderInvitationEmail({
+      recipientName: firstName,
+      recipientEmail: email,
+      inviteUrl,
+      inviterName: inviter?.name,
+      inviterTitle: inviter?.title,
+      inviterEmail: inviter?.email,
+      orientationNotice: {
+        title: 'Platform Member Activation Notice',
+        description: 'You have been invited to become an active member on the TFHC Orderliness Platform. Click below to activate your account.',
+      },
+    });
+    try {
+      await this.mail.sendEmail({ to: email, subject, text, html });
+      return true;
+    } catch (error) {
+      this.logger.warn(`Member invite email to ${email} failed: ${(error as Error).message}`);
+      return false;
+    }
+  }
+
 
   async onApplicationBootstrap() {
     try {
@@ -49,22 +130,24 @@ export class LookupsService implements OnApplicationBootstrap {
   /** Ensure every system event type from the shared catalogue exists. Never
    *  overwrites admin edits to name/colour/order; only fills gaps. */
   async syncSystemEventTypes() {
-    for (const [i, def] of DEFAULT_EVENT_TYPES.entries()) {
-      await this.prisma.eventType.upsert({
-        where: { key: def.key },
-        update: { isSystem: true },
-        create: {
-          key: def.key,
-          name: def.name,
-          description: def.description,
-          icon: def.icon,
-          color: def.color,
-          defaultCompulsory: def.defaultCompulsory,
-          isSystem: true,
-          sortOrder: (i + 1) * 10,
-        },
-      });
-    }
+    await Promise.all(
+      DEFAULT_EVENT_TYPES.map((def, i) =>
+        this.prisma.eventType.upsert({
+          where: { key: def.key },
+          update: { isSystem: true },
+          create: {
+            key: def.key,
+            name: def.name,
+            description: def.description,
+            icon: def.icon,
+            color: def.color,
+            defaultCompulsory: def.defaultCompulsory,
+            isSystem: true,
+            sortOrder: (i + 1) * 10,
+          },
+        })
+      )
+    );
   }
 
   private slug(name: string): string {
@@ -256,5 +339,390 @@ export class LookupsService implements OnApplicationBootstrap {
     const row = rows.find((r) => r.id === id);
     if (!row) throw new NotFoundException('Not found');
     return row;
+  }
+
+  // =========================================================================
+  // MEMBER LOOKUP TABLE & INVITATIONS
+  // =========================================================================
+
+  async listApprovedMembers(query?: {
+    search?: string;
+    inviteStatus?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = Math.max(1, Number(query?.page ?? 1));
+    const pageSize = Math.min(500, Math.max(1, Number(query?.pageSize ?? 50)));
+    const search = (query?.search ?? '').trim().toLowerCase();
+    const inviteStatusFilter = query?.inviteStatus?.toUpperCase();
+
+    const whereClause: Prisma.ApprovedMemberWhereInput = {};
+    if (search) {
+      whereClause.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { normalizedEmail: { contains: search, mode: 'insensitive' } },
+        { member: { firstName: { contains: search, mode: 'insensitive' } } },
+        { member: { lastName: { contains: search, mode: 'insensitive' } } },
+        { member: { memberCode: { contains: search, mode: 'insensitive' } } },
+        { member: { phoneNumber: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    const rows = await this.prisma.approvedMember.findMany({
+      where: whereClause,
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        member: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                isActive: true,
+                inviteTokenHash: true,
+                inviteExpiresAt: true,
+                emailVerifiedAt: true,
+                googleSubject: true,
+                passwordAuthEnabled: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const formatted = rows.map((r) => {
+      const computedStatus = computeApprovedMemberInviteStatus(r);
+      return {
+        id: r.id,
+        email: r.email,
+        normalizedEmail: r.normalizedEmail,
+        status: r.status,
+        source: r.source,
+        importedAt: r.importedAt,
+        importedBy: r.importedBy,
+        memberId: r.memberId,
+        member: r.member
+          ? {
+              id: r.member.id,
+              memberCode: r.member.memberCode,
+              firstName: r.member.firstName,
+              lastName: r.member.lastName,
+              phoneNumber: r.member.phoneNumber,
+              roleInUnit: r.member.roleInUnit,
+              status: r.member.status,
+              user: r.member.user
+                ? {
+                    id: r.member.user.id,
+                    email: r.member.user.email,
+                    isActive: r.member.user.isActive,
+                    isRegistered: Boolean(
+                      r.member.user.emailVerifiedAt ||
+                        r.member.user.googleSubject ||
+                        r.member.user.passwordAuthEnabled,
+                    ),
+                  }
+                : null,
+            }
+          : null,
+        invitedAt: r.invitedAt,
+        invitedById: r.invitedById,
+        inviteExpiresAt: r.inviteExpiresAt,
+        inviteStatus: computedStatus,
+        inviteError: r.inviteError,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      };
+    });
+
+    const filtered =
+      inviteStatusFilter && inviteStatusFilter !== 'ALL'
+        ? formatted.filter((r) => r.inviteStatus === inviteStatusFilter)
+        : formatted;
+
+    const total = filtered.length;
+    const start = (page - 1) * pageSize;
+    const items = filtered.slice(start, start + pageSize);
+
+    const stats = {
+      total: formatted.length,
+      notInvited: formatted.filter((f) => f.inviteStatus === 'NOT_INVITED').length,
+      pending: formatted.filter((f) => f.inviteStatus === 'PENDING').length,
+      accepted: formatted.filter((f) => f.inviteStatus === 'ACCEPTED').length,
+      expired: formatted.filter((f) => f.inviteStatus === 'EXPIRED').length,
+      failed: formatted.filter((f) => f.inviteStatus === 'FAILED').length,
+    };
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize) || 1,
+      stats,
+    };
+  }
+
+  async inviteOneApprovedMember(id: string, actorUserId: string) {
+    const approved = await this.prisma.approvedMember.findUnique({
+      where: { id },
+      include: { member: { include: { user: true } } },
+    });
+
+    if (!approved) throw new NotFoundException('Lookup table record not found');
+    if (approved.status !== 'ACTIVE') {
+      throw new BadRequestException('This lookup record is deactivated or revoked.');
+    }
+
+    const currentStatus = computeApprovedMemberInviteStatus(approved);
+
+    if (currentStatus === 'ACCEPTED') {
+      return {
+        id: approved.id,
+        email: approved.email,
+        name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
+        status: 'ALREADY_MEMBER' as const,
+        message: 'Person is already an active platform member.',
+      };
+    }
+
+    if (currentStatus === 'PENDING') {
+      return {
+        id: approved.id,
+        email: approved.email,
+        name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
+        status: 'ALREADY_PENDING' as const,
+        message: 'An active invitation is already pending.',
+      };
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashInviteToken(rawToken);
+    const inviteExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        let member = approved.member;
+        if (!member) {
+          const memberCode = `TFHC-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
+          const emailPrefix = approved.email.split('@')[0].replace(/[0-9._-]+/g, ' ');
+          const firstName = toPascalCase(emailPrefix || 'Member');
+          member = await tx.member.create({
+            data: {
+              memberCode,
+              firstName,
+              lastName: '',
+              phoneNumber: '',
+              roleInUnit: 'Member',
+              status: 'ACTIVE',
+            },
+            include: { user: true },
+          });
+          await tx.approvedMember.update({
+            where: { id: approved.id },
+            data: { memberId: member.id },
+          });
+        }
+
+        const existingUser = member.user || (await tx.user.findUnique({ where: { email: approved.normalizedEmail } }));
+        let user: { id: string };
+        if (existingUser) {
+          user = await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              role: Role.MEMBER,
+              isActive: false,
+              invitedById: actorUserId,
+              invitedAt: new Date(),
+              inviteTokenHash: tokenHash,
+              inviteExpiresAt: inviteExpiresAt,
+            },
+          });
+        } else {
+          user = await tx.user.create({
+            data: {
+              email: approved.normalizedEmail,
+              passwordHash: await argon2.hash(crypto.randomUUID()),
+              role: Role.MEMBER,
+              isActive: false,
+              invitedById: actorUserId,
+              invitedAt: new Date(),
+              inviteTokenHash: tokenHash,
+              inviteExpiresAt: inviteExpiresAt,
+              passwordAuthEnabled: false,
+            },
+          });
+        }
+
+        if (member.userId !== user.id) {
+          await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
+        }
+
+        await tx.approvedMember.update({
+          where: { id: approved.id },
+          data: {
+            invitedAt: new Date(),
+            invitedById: actorUserId,
+            inviteTokenHash: tokenHash,
+            inviteExpiresAt: inviteExpiresAt,
+            inviteStatus: 'PENDING',
+            inviteError: null,
+          },
+        });
+
+        await this.audit.recordWithin(tx, {
+          actorUserId,
+          action: 'MEMBER_LOOKUP_INVITED',
+          entity: 'ApprovedMember',
+          entityId: approved.id,
+          newData: { email: approved.email, inviteStatus: 'PENDING' },
+        });
+      });
+
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorUserId },
+        include: { member: true },
+      });
+      const inviter = actor
+        ? {
+            name: actor.member ? `${actor.member.firstName} ${actor.member.lastName}` : undefined,
+            title: 'System Administrator',
+            email: actor.email,
+          }
+        : undefined;
+
+      const inviteUrl = `${this.webBaseUrl()}/accept-invite?token=${rawToken}`;
+      const recipientName = approved.member?.firstName || approved.email.split('@')[0];
+      const emailDelivered = await settleWithin(
+        this.sendMemberInviteEmail(approved.email, recipientName, inviteUrl, inviter),
+        INVITE_EMAIL_TIMEOUT_MS,
+        false,
+      );
+
+      if (!emailDelivered) {
+        this.logger.warn(`Member invite email to ${approved.email} could not be delivered`);
+      }
+
+      return {
+        id: approved.id,
+        email: approved.email,
+        name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
+        status: 'INVITED' as const,
+        emailDelivered,
+        inviteUrl: !emailDelivered || this.config.get('NODE_ENV') !== 'production' ? inviteUrl : undefined,
+      };
+    } catch (err: any) {
+      this.logger.error(`Failed to invite lookup record ${id}: ${err.message}`);
+      await this.prisma.approvedMember.update({
+        where: { id: approved.id },
+        data: { inviteStatus: 'FAILED', inviteError: err.message },
+      }).catch(() => undefined);
+
+      return {
+        id: approved.id,
+        email: approved.email,
+        name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
+        status: 'FAILED' as const,
+        message: err.message || 'Invitation processing failed.',
+      };
+    }
+  }
+
+  async inviteSelectedApprovedMembers(ids: string[], actorUserId: string) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('No lookup table records selected');
+    }
+    if (ids.length > 500) {
+      throw new BadRequestException('Cannot select more than 500 records in one request');
+    }
+
+    const results: Array<{
+      id: string;
+      email?: string;
+      name?: string;
+      status: 'INVITED' | 'ALREADY_MEMBER' | 'ALREADY_PENDING' | 'INVALID' | 'FAILED';
+      message?: string;
+      emailDelivered?: boolean;
+      inviteUrl?: string;
+    }> = [];
+
+    let invitedCount = 0;
+    let alreadyMemberCount = 0;
+    let alreadyPendingCount = 0;
+    let invalidCount = 0;
+    let failedCount = 0;
+
+    for (const id of ids) {
+      try {
+        const res = await this.inviteOneApprovedMember(id, actorUserId);
+        if (res.status === 'INVITED') invitedCount++;
+        else if (res.status === 'ALREADY_MEMBER') alreadyMemberCount++;
+        else if (res.status === 'ALREADY_PENDING') alreadyPendingCount++;
+        else if (res.status === 'FAILED') failedCount++;
+        else invalidCount++;
+        results.push(res);
+      } catch (err: any) {
+        failedCount++;
+        results.push({
+          id,
+          status: 'FAILED',
+          message: err.message || 'Processing failed',
+        });
+      }
+    }
+
+    return {
+      total: ids.length,
+      invitedCount,
+      alreadyMemberCount,
+      alreadyPendingCount,
+      invalidCount,
+      failedCount,
+      results,
+    };
+  }
+
+  async inviteAllEligibleApprovedMembers(actorUserId: string) {
+    const allApproved = await this.prisma.approvedMember.findMany({
+      where: { status: 'ACTIVE' },
+      include: { member: { include: { user: true } } },
+    });
+
+    const eligibleIds: string[] = [];
+    let skippedAlreadyMember = 0;
+    let skippedAlreadyPending = 0;
+
+    for (const record of allApproved) {
+      const status = computeApprovedMemberInviteStatus(record);
+      if (status === 'ACCEPTED') {
+        skippedAlreadyMember++;
+      } else if (status === 'PENDING') {
+        skippedAlreadyPending++;
+      } else {
+        eligibleIds.push(record.id);
+      }
+    }
+
+    if (eligibleIds.length === 0) {
+      return {
+        totalInLookupTable: allApproved.length,
+        eligibleCount: 0,
+        invitedCount: 0,
+        alreadyMemberCount: skippedAlreadyMember,
+        alreadyPendingCount: skippedAlreadyPending,
+        invalidCount: 0,
+        failedCount: 0,
+        results: [],
+        message: 'No eligible un-invited users found in the lookup table.',
+      };
+    }
+
+    const batchResult = await this.inviteSelectedApprovedMembers(eligibleIds, actorUserId);
+
+    return {
+      totalInLookupTable: allApproved.length,
+      eligibleCount: eligibleIds.length,
+      ...batchResult,
+    };
   }
 }

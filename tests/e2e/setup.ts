@@ -13,17 +13,44 @@ function weekStart(now = new Date()) {
   return date;
 }
 
+import { config } from 'dotenv';
+import * as path from 'path';
+
+config({ path: path.resolve(__dirname, '../../apps/api/.env.test'), override: true, quiet: true });
+config({ path: path.resolve(__dirname, '../../.env.test'), override: true, quiet: true });
+
 export default async function setup() {
-  const db = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
+  const url = process.env.TEST_DATABASE_URL || 'postgresql://postgres:tfhc_e2e_only@127.0.0.1:55498/tfhc_e2e';
+  if (!url || !/^postgresql:\/\/[^@]+@(127\.0\.0\.1|localhost):\d+\/tfhc_e2e(?:\?|$)/.test(url) || /supabase|aws|pooler|\.com|\.net|\.io/i.test(url)) {
+    throw new Error(`[FATAL TEST ENVIRONMENT SECURITY VIOLATION] setup() requires an isolated local tfhc_e2e database! (received: ${url.replace(/:[^:@]+@/, ':***@')})`);
+  }
+  const db = new PrismaClient({ datasources: { db: { url } } });
   try {
     const passwordHash = await argon2.hash('E2ePassword!123');
     for (const role of ['ADMIN', 'MEMBER'] as const) {
-      const email = `${role.toLowerCase()}-browser@example.test`;
-      await db.user.upsert({ where: { email }, update: { passwordHash }, create: { email, passwordHash, role, member: { create: { memberCode: `BROWSER-${role}`, firstName: 'Browser', lastName: role, phoneNumber: '08012345678' } } } });
+      const email = `${role.toLowerCase()}-browser@tfhc.org`;
+      const m = await db.member.upsert({
+        where: { memberCode: `BROWSER-${role}` },
+        update: { firstName: 'Browser', lastName: role, phoneNumber: '08012345678', status: 'ACTIVE' },
+        create: { memberCode: `BROWSER-${role}`, firstName: 'Browser', lastName: role, phoneNumber: '08012345678', status: 'ACTIVE' },
+      });
+      const user = await db.user.upsert({
+        where: { email },
+        update: { passwordHash, passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: m.id } } },
+        create: { email, passwordHash, role, passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: m.id } } },
+      });
+      await db.member.update({ where: { id: m.id }, data: { userId: user.id } });
+      await db.approvedMember.upsert({
+        where: { normalizedEmail: email },
+        update: { status: 'ACTIVE', memberId: m.id },
+        create: { email, normalizedEmail: email, status: 'ACTIVE', memberId: m.id },
+      });
     }
 
-    // --- Administrator: engreseglory@gmail.com ---
-    const adminEmail = 'engreseglory@gmail.com';
+    // Isolated administrator fixture
+    const adminEmail = 'portal-admin@tfhc.org';
+    const adminPassword = 'E2ePassword!123';
+    const adminPasswordHash = await argon2.hash(adminPassword);
     const adminMember = await db.member.upsert({
       where: { memberCode: 'ADMIN-ESE' },
       update: { firstName: 'Glory', lastName: 'Eseosa', phoneNumber: '08034441916', profession: 'Software Engineer', address: 'TFHC HQ', gender: 'Male', status: 'ACTIVE' },
@@ -31,8 +58,8 @@ export default async function setup() {
     });
     const adminUser = await db.user.upsert({
       where: { email: adminEmail },
-      update: { passwordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
-      create: { email: adminEmail, passwordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
+      update: { passwordHash: adminPasswordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
+      create: { email: adminEmail, passwordHash: adminPasswordHash, role: 'ADMIN', passwordAuthEnabled: true, emailVerifiedAt: new Date(), isActive: true, member: { connect: { id: adminMember.id } } },
     });
     await db.member.update({ where: { id: adminMember.id }, data: { userId: adminUser.id } });
     await db.approvedMember.upsert({
@@ -51,11 +78,16 @@ export default async function setup() {
       update: {},
       create: { roleId: superAdminRole.id, permission: '*' },
     });
-    await db.userAccessRole.upsert({
-      where: { userId_roleId: { userId: adminUser.id, roleId: superAdminRole.id } },
-      update: {},
-      create: { userId: adminUser.id, roleId: superAdminRole.id },
-    });
+    for (const em of [adminEmail, 'admin-browser@tfhc.org']) {
+      const u = await db.user.findUnique({ where: { email: em } });
+      if (u) {
+        await db.userAccessRole.upsert({
+          where: { userId_roleId: { userId: u.id, roleId: superAdminRole.id } },
+          update: {},
+          create: { userId: u.id, roleId: superAdminRole.id },
+        });
+      }
+    }
 
     // Chat system rooms
     for (const r of [
@@ -80,7 +112,7 @@ export default async function setup() {
     // --- Email-auth fixtures -------------------------------------------------
     // An approved member with a directory record but no account yet: the target
     // for the self-registration browser flow.
-    const registerEmail = 'register-browser@example.test';
+    const registerEmail = 'register-browser@tfhc.org';
     const regMember = await db.member.upsert({
       where: { memberCode: 'BROWSER-REGISTER' },
       update: {},
@@ -94,9 +126,9 @@ export default async function setup() {
 
     // A member with a run of absences, to trigger the "we've missed you" nudge.
     const nudgeUser = await db.user.upsert({
-      where: { email: 'nudge-browser@example.test' },
+      where: { email: 'nudge-browser@tfhc.org' },
       update: { passwordHash },
-      create: { email: 'nudge-browser@example.test', passwordHash, role: 'MEMBER', member: { create: { memberCode: 'BROWSER-NUDGE', firstName: 'Missy', lastName: 'Gone', phoneNumber: '08066660000', dateOfBirth: new Date('1990-01-01'), gender: 'Female', address: '1 Test Road' } } },
+      create: { email: 'nudge-browser@tfhc.org', passwordHash, role: 'MEMBER', member: { create: { memberCode: 'BROWSER-NUDGE', firstName: 'Missy', lastName: 'Gone', phoneNumber: '08066660000', dateOfBirth: new Date('1990-01-01'), gender: 'Female', address: '1 Test Road' } } },
       include: { member: true },
     });
     for (let i = 1; i <= 3; i++) {

@@ -37,6 +37,7 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     app.get(SchedulerRegistry).getCronJobs().forEach((j) => j.stop());
     db = app.get(PrismaService);
     await app.get(RbacService).syncSystemRoles();
+    await db.approvalWorkflow.updateMany({ where: { key: 'EXPENSE_DEFAULT' }, data: { active: true } });
     const tokens = app.get(AuthService);
     const pw = await argon2.hash('E2ePassword!123');
 
@@ -170,6 +171,86 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     // Exemption path.
     const a3 = period2.assignments.find((a: any) => a.member.id === memberId);
     await http().post(`/finance/dues/assignments/${a3.id}/status`).set(auth(financeToken)).send({ status: 'EXEMPT', reason: 'on leave' }).expect(201);
+  });
+
+  test('special contribution campaign: own payment account, own deadline, isolated from monthly dues', async () => {
+    const account = (
+      await http()
+        .post('/finance/payment-accounts')
+        .set(auth(superToken))
+        .send({ bankName: `QA Bank Campaign ${run}`, accountName: 'TFHC Campaign Fund', accountNumber: '0198765432' })
+        .expect(201)
+    ).body;
+
+    // A member cannot create dues periods or campaigns.
+    await http().post('/finance/dues/periods').set(auth(memberToken)).send({ type: 'SPECIAL' }).expect(403);
+    // A SPECIAL campaign needs a title and a deadline, unlike a monthly period.
+    await http().post('/finance/dues/periods').set(auth(financeToken)).send({ type: 'SPECIAL', defaultAmount: 50000 }).expect(400);
+
+    const campaign = (
+      await http()
+        .post('/finance/dues/periods')
+        .set(auth(financeToken))
+        .send({
+          type: 'SPECIAL',
+          label: `Christmas Party ${run}`,
+          description: 'Please make your Christmas Party contribution before the deadline.',
+          defaultAmount: 50000,
+          dueDate: '2099-11-06',
+          paymentAccountId: account.id,
+          showAsAlert: true,
+        })
+        .expect(201)
+    ).body;
+    expect(campaign.period.type).toBe('SPECIAL');
+    expect(campaign.period.paymentAccount.accountNumber).toBe('0198765432');
+    expect(campaign.assignments.length).toBeGreaterThan(0);
+
+    // A second SPECIAL campaign due the same month is allowed (unlike MONTHLY periods).
+    const campaign2 = (
+      await http()
+        .post('/finance/dues/periods')
+        .set(auth(financeToken))
+        .send({ type: 'SPECIAL', label: `Building Fund ${run}`, defaultAmount: 10000, dueDate: '2099-11-20' })
+        .expect(201)
+    ).body;
+    expect(campaign2.period.type).toBe('SPECIAL');
+
+    // Member sees it under /campaigns, not mixed into /dues.
+    const myCampaigns = (await http().get('/me/finance/campaigns').set(auth(memberToken)).expect(200)).body;
+    const mine = myCampaigns.find((c: any) => c.periodId === campaign.period.id);
+    expect(mine).toBeTruthy();
+    expect(mine.amountDue).toBe(50000);
+    expect(mine.showAsAlert).toBe(true);
+    expect(mine.paymentAccount.accountNumber).toBe('0198765432');
+
+    const myDues = (await http().get('/me/finance/dues').set(auth(memberToken)).expect(200)).body;
+    expect(myDues.find((d: any) => d.periodId === campaign.period.id)).toBeUndefined();
+
+    // The annual matrix (MONTHLY-only view) must not collide with a SPECIAL
+    // campaign sharing the same year/month.
+    const matrix = (await http().get('/finance/dues/matrix?year=2099').set(auth(financeToken)).expect(200)).body;
+    expect(matrix.periods.every((p: any) => p.month !== undefined)).toBe(true);
+
+    // Purpose must match the assignment's period type.
+    await http()
+      .post('/me/finance/payments')
+      .set(auth(memberToken))
+      .send({ purpose: 'MONTHLY_DUES', amount: 50000, method: 'BANK_TRANSFER', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
+      .expect(400);
+
+    const pay = (
+      await http()
+        .post('/me/finance/payments')
+        .set(auth(memberToken))
+        .send({ purpose: 'SPECIAL_CONTRIBUTION', amount: 50000, method: 'BANK_TRANSFER', payerReference: 'XMAS1', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
+        .expect(201)
+    ).body;
+    expect(pay.status).toBe('PENDING');
+
+    await http().post(`/finance/payments/${pay.id}/confirm`).set(auth(financeToken)).expect(201);
+    const after = (await http().get('/me/finance/campaigns').set(auth(memberToken)).expect(200)).body;
+    expect(after.find((c: any) => c.periodId === campaign.period.id).status).toBe('PAID');
   });
 
   test('finance dashboard aggregates', async () => {

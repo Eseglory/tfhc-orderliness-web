@@ -1,75 +1,107 @@
-const CACHE_NAME = 'tfhc-tracker-cache-v5';
-const STATIC_ASSETS = [
-  '/logo.svg',
-  '/logo-icon.svg',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/icon-maskable-192.png',
-  '/icons/icon-maskable-512.png',
-  '/icons/apple-touch-icon.png',
-  '/offline.html',
-  '/fonts/material-symbols-outlined.woff2'
+/* Public resources only. Bump VERSION whenever this policy or shell changes. */
+importScripts('/pwa-runtime.js');
+const VERSION = 'v9';
+const PREFIX = 'tfhc-pwa-';
+const SHELL = `${PREFIX}shell-${VERSION}`;
+const ASSETS = `${PREFIX}assets-${VERSION}`;
+const STATIC = [
+  '/offline.html', '/offline-workspace.js', '/pwa-runtime.js', '/logo.svg', '/logo-icon.svg', '/manifest.json',
+  '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',
+  '/fonts/inter-latin.woff2',
 ];
 
-// Install Event: Pre-cache static UI assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
-  );
+self.addEventListener('install', event => {
+  // An existing worker keeps control until the user chooses to update.
+  event.waitUntil(caches.open(SHELL).then(cache => cache.addAll(STATIC)));
+});
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    await Promise.all((await caches.keys()).filter(key =>
+      (key.startsWith(PREFIX) && key !== SHELL && key !== ASSETS) ||
+      key.startsWith('tfhc-tracker-cache-')
+    ).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
+});
+self.addEventListener('message', event => {
+  if (event.data?.type === 'ACTIVATE_UPDATE') event.waitUntil(self.skipWaiting());
 });
 
-// Activate Event: Cleanup old caches
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    }).then(() => self.clients.claim())
-  );
-});
-
-// Fetch Event: Cache-First for static assets, Network-First for API calls with offline fallback
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // Authenticated responses must never be cached across users or sessions.
-  if (url.origin !== self.location.origin || event.request.method !== 'GET' || event.request.headers.has('Authorization') || url.pathname.startsWith('/api/')) {
+self.addEventListener('fetch', event => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (url.origin === self.location.origin && request.method === 'POST' && url.pathname === '/share-target') {
+    event.respondWith((async () => {
+      try {
+        if (Number(request.headers.get('Content-Length') || 0) > 7 * 1024 * 1024) return new Response('Files too large', { status: 413 });
+        const form = await request.formData();
+        const files = form.getAll('files').filter(file => file instanceof File);
+        const text = ['title', 'text', 'url'].map(name => String(form.get(name) || '')).filter(Boolean).join('\n');
+        await self.TFHCPwa.receive(files, text);
+        return Response.redirect(new URL('/member/files', self.location.origin), 303);
+      } catch { return new Response('Could not receive files. Share up to three files of 2 MB each.', { status: 400 }); }
+    })());
     return;
   }
-
-  // Never cache rendered application routes or Next.js build assets. Their
-  // content hashes change between releases; serving an old route document
-  // with a new build causes an unstyled page when its CSS no longer exists.
-  // A true offline navigation still gets a branded fallback shell instead of
-  // the browser's default error page.
-  if (url.pathname.startsWith('/_next/')) {
-    event.respondWith(fetch(event.request));
+  if (url.origin !== self.location.origin || request.method !== 'GET' ||
+      request.headers.has('Authorization') || url.pathname.startsWith('/api/') ||
+      request.headers.has('RSC') || url.searchParams.has('_rsc')) return;
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).catch(async () =>
+      (await (await caches.open(SHELL)).match('/offline.html')) ||
+      new Response('Offline. Reconnect and retry.', { status: 503, headers: { 'Content-Type': 'text/plain' } })
+    ));
     return;
   }
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match('/offline.html'))
-    );
-    return;
-  }
-
-  // Static assets such as logos can safely use Cache-First.
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        if (networkResponse.status === 200 && event.request.method === 'GET') {
-          const resClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone));
+  // No arbitrary image URLs, Next image optimizer, downloads or JSON endpoints.
+  const publicAsset = (STATIC.includes(url.pathname) || url.pathname === '/fonts/material-symbols-outlined.woff2') && !url.search;
+  const immutable = url.pathname.startsWith('/_next/static/') && !url.search &&
+    ['script', 'style', 'font'].includes(request.destination);
+  if (!publicAsset && !immutable) return;
+  const response = (async () => {
+    const cache = await caches.open(publicAsset ? SHELL : ASSETS);
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    const result = await fetch(request);
+    if (result.ok && result.type === 'basic' && !result.redirected &&
+        !/no-store|private/i.test(result.headers.get('Cache-Control') || '') &&
+        !/text\/html|application\/json/i.test(result.headers.get('Content-Type') || '')) {
+      try {
+        await cache.put(request, result.clone());
+        if (immutable) {
+          const keys = await cache.keys();
+          await Promise.all(keys.slice(0, Math.max(0, keys.length - 160)).map(key => cache.delete(key)));
         }
-        return networkResponse;
-      });
-    })
-  );
+      } catch { /* Quota failure must not break the network response. */ }
+    }
+    return result;
+  })();
+  event.respondWith(response);
+});
+
+self.addEventListener('sync', event => {
+  if (event.tag === 'tfhc-notification-reads') event.waitUntil(self.TFHCPwa.sync());
+});
+self.addEventListener('periodicsync', event => {
+  if (event.tag === 'tfhc-notification-reads') event.waitUntil(self.TFHCPwa.sync());
+});
+
+// No private message bodies or arbitrary destinations on the device lock screen.
+self.addEventListener('push', event => {
+  event.waitUntil(self.registration.showNotification('TFHC Tracker', {
+    body: 'You have new activity. Open the app to view it.',
+    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+    tag: 'tfhc-activity', data: { url: '/member/notifications' },
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL('/member/notifications', self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find(client => client.url === target);
+    if (existing) return existing.focus();
+    return self.clients.openWindow(target);
+  })());
 });

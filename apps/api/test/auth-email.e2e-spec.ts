@@ -28,8 +28,8 @@ describe('Email authentication & password lifecycle (real PostgreSQL)', () => {
   // SMTP unavailable → services fall back to returning the link in the response.
   const sendEmail = jest.fn().mockRejectedValue(new Error('SMTP unavailable in tests'));
 
-  const approvedEmail = `reg-${run}@example.test`.toLowerCase();
-  const googleOnlyEmail = `goog-${run}@example.test`.toLowerCase();
+  const approvedEmail = `reg-${run}@tfhc.org`.toLowerCase();
+  const googleOnlyEmail = `goog-${run}@tfhc.org`.toLowerCase();
 
   beforeAll(async () => {
     process.env.DATABASE_URL = database;
@@ -73,7 +73,7 @@ describe('Email authentication & password lifecycle (real PostgreSQL)', () => {
 
   afterAll(async () => {
     if (db) {
-      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@example.test` } } });
+      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@tfhc.org` } } });
       await db.member.deleteMany({ where: { memberCode: { in: [`AUTH-${run}`, `GOOG-${run}`] } } });
       await db.approvedMember.deleteMany({ where: { normalizedEmail: { in: [approvedEmail, googleOnlyEmail] } } });
     }
@@ -81,8 +81,8 @@ describe('Email authentication & password lifecycle (real PostgreSQL)', () => {
   });
 
   it('rejects registration for an email that is not on the approved list', async () => {
-    const res = await http().post('/auth/register').send({ email: `stranger-${run}@example.test`, password: PASSWORD, firstName: 'No', lastName: 'One', phoneNumber: '08000000000' }).expect(403);
-    expect(res.body.code).toBe('EMAIL_NOT_APPROVED');
+    const res = await http().post('/auth/register').send({ email: `stranger-${run}@tfhc.org`, password: PASSWORD, firstName: 'No', lastName: 'One', phoneNumber: '08000000000' }).expect(403);
+    expect(res.body.code).toBe('EMAIL_NOT_IN_LOOKUP_TABLE');
   });
 
   it('runs the full journey: register → verify → login → change password → reset → login', async () => {
@@ -140,22 +140,21 @@ describe('Email authentication & password lifecycle (real PostgreSQL)', () => {
   }, 60000);
 
   it('does not reveal whether an address has an account (forgot-password)', async () => {
-    const res = await http().post('/auth/forgot-password').send({ email: `ghost-${run}@example.test` }).expect(200);
+    const res = await http().post('/auth/forgot-password').send({ email: `ghost-${run}@tfhc.org` }).expect(200);
     expect(res.body).toEqual({ ok: true });
   });
 
   it('keeps Google-only members on the Google path', async () => {
     const res = await http().post('/auth/login').send({ email: googleOnlyEmail, password: 'anything-goes-here' }).expect(403);
-    expect(res.body.code).toBe('MEMBER_GOOGLE_AUTH_REQUIRED');
+    expect(res.body.code).toBe('AUTH_METHOD_GOOGLE_ONLY');
   });
 
-  it('lets a Google-only member add a password via registration (account upgrade)', async () => {
-    const reg = await http().post('/auth/register').send({ email: googleOnlyEmail, password: PASSWORD, firstName: 'Gina', lastName: 'Google', phoneNumber: '08010000002' }).expect(201);
-    expect(reg.body.pendingVerification).toBe(true);
-    const verify = await http().post('/auth/verify-email').send({ token: tokenOf(reg.body.verifyUrl) }).expect(200);
-    expect(verify.body.user.email).toBe(googleOnlyEmail);
-    // Still exactly one user for that email.
+  it('prevents a second registration from changing a Google-only account authentication method', async () => {
+    await http().post('/auth/register').send({ email: googleOnlyEmail, password: PASSWORD, firstName: 'Gina', lastName: 'Google', phoneNumber: '08010000002' }).expect(409);
+    const user = await db.user.findUniqueOrThrow({ where: { email: googleOnlyEmail } });
+    expect(user.passwordAuthEnabled).toBe(false);
+    expect(user.googleSubject).toBeTruthy();
     expect(await db.user.count({ where: { email: googleOnlyEmail } })).toBe(1);
-    await http().post('/auth/login').send({ email: googleOnlyEmail, password: PASSWORD }).expect(201);
-  }, 60000);
+    await http().post('/auth/login').send({ email: googleOnlyEmail, password: PASSWORD }).expect(403);
+  });
 });

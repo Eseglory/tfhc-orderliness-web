@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Database,
   Plus,
@@ -12,8 +13,10 @@ import {
   Tag,
   Users,
   Award,
+  UserCheck,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
+import { ApprovedMemberLookupTable } from '../../../../../components/admin/ApprovedMemberLookupTable';
 import {
   Badge,
   Button,
@@ -28,7 +31,7 @@ import {
 import { fetchApi, ApiError } from '../../../../../lib/api';
 import { useAuth } from '../../../../../lib/auth';
 
-type Kind = 'event-types' | 'meeting-categories' | 'sub-teams';
+type Kind = 'event-types' | 'meeting-categories' | 'sub-teams' | 'approved-members';
 interface Row {
   id: string;
   name: string;
@@ -44,12 +47,15 @@ const TABS: { kind: Kind; label: string; noun: string; hint: string; icon: any }
   { kind: 'event-types', label: 'Event Types', noun: 'event type', hint: 'How gatherings are classified (Services, Vigils, Rehearsals, Conferences).', icon: Tag },
   { kind: 'meeting-categories', label: 'Scoring Categories', noun: 'category', hint: 'Attendance points & weight multipliers awarded per gathering classification.', icon: Award },
   { kind: 'sub-teams', label: 'Sub-teams & Groups', noun: 'sub-team', hint: 'Unit departments, sub-teams, and group assignments.', icon: Users },
+  { kind: 'approved-members', label: 'Member Lookup Table', noun: 'approved member', hint: 'Master directory of approved members eligible to receive platform invitations.', icon: UserCheck },
 ];
 
 export default function LookupsPage() {
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as Kind) || 'event-types';
   const { can, loading: authLoading } = useAuth();
   const { notify } = useToast();
-  const [tab, setTab] = useState<Kind>('event-types');
+  const [tab, setTab] = useState<Kind>(['event-types', 'meeting-categories', 'sub-teams', 'approved-members'].includes(initialTab) ? initialTab : 'event-types');
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -60,6 +66,7 @@ export default function LookupsPage() {
   const manage = can('lookups.manage');
 
   const load = async () => {
+    if (tab === 'approved-members') return;
     setLoading(true);
     try {
       setRows(await fetchApi<Row[]>(`/lookups/${tab}?includeInactive=true`));
@@ -96,7 +103,7 @@ export default function LookupsPage() {
             </p>
           </div>
 
-          {manage && (
+          {manage && tab !== 'approved-members' && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setEditing('new')}
@@ -134,7 +141,9 @@ export default function LookupsPage() {
           <p className="text-xs text-slate-500 dark:text-slate-400 pl-1">{meta.hint}</p>
         </div>
 
-        {loading ? (
+        {tab === 'approved-members' ? (
+          <ApprovedMemberLookupTable />
+        ) : loading ? (
           <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
         ) : error ? (
           <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />

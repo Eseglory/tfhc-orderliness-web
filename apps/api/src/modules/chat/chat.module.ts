@@ -1,3 +1,5 @@
+import { ResumableUploadsController } from './resumable-uploads.controller';
+import { ResumableUploadsService } from './resumable-uploads.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ChatService } from './chat.service';
@@ -12,8 +14,8 @@ import { ChatController } from './chat.controller';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [ChatController],
-  providers: [ChatService, ChatAttachmentsService, ChatGateway],
+  controllers: [ChatController, ResumableUploadsController],
+  providers: [ResumableUploadsService, ChatService, ChatAttachmentsService, ChatGateway],
   exports: [ChatService, ChatGateway],
 })
 export class ChatModule {}

@@ -9,7 +9,7 @@ RUN yarn workspaces focus @tfhc/api
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 RUN apk add --no-cache openssl
-RUN yarn build:shared && yarn workspace @tfhc/api prisma:generate && yarn build:api
+RUN NODE_OPTIONS=--max-old-space-size=4096 yarn build:shared && yarn workspace @tfhc/api prisma:generate && NODE_OPTIONS=--max-old-space-size=4096 yarn build:api
 
 FROM node:22-alpine AS runner
 WORKDIR /app

@@ -1,10 +1,11 @@
-import { IsEmail, IsString, Length, MaxLength } from 'class-validator';
+import { IsString, Length, MaxLength } from 'class-validator';
+import { IsDeliverableEmail } from '../../common/decorators/is-deliverable-email.decorator';
 
 /** Minimum password length shared by every password-setting flow. */
 export const MIN_PASSWORD_LENGTH = 12;
 
 export class LoginDto {
-  @IsEmail() @MaxLength(254) email: string;
+  @IsDeliverableEmail() @MaxLength(254) email: string;
   @IsString() @Length(1, 1024) password: string;
 }
 
@@ -14,7 +15,7 @@ export class LoginDto {
  * members.
  */
 export class RegisterDto {
-  @IsEmail() @MaxLength(254) email: string;
+  @IsDeliverableEmail() @MaxLength(254) email: string;
   @IsString() @Length(MIN_PASSWORD_LENGTH, 1024) password: string;
   @IsString() @Length(1, 80) firstName: string;
   @IsString() @Length(1, 80) lastName: string;
@@ -31,7 +32,7 @@ export class VerifyEmailDto {
 }
 
 export class EmailOnlyDto {
-  @IsEmail() @MaxLength(254) email: string;
+  @IsDeliverableEmail() @MaxLength(254) email: string;
 }
 
 export class ResetPasswordDto {

@@ -44,7 +44,7 @@ describe('Recurring service lifecycle with PostgreSQL', () => {
     await request(app.getHttpServer()).get('/service-schedules').expect(401);
     await request(app.getHttpServer()).put('/service-schedules/config').set(auth).send({}).expect(400);
     await request(app.getHttpServer()).put('/service-schedules/config').set(auth).send({ venue: { name: 'Test church', latitude: 6.6697906, longitude: 3.3581822, radiusMeters: 100 }, arrivalMinutesBefore: 30, reminderMinutes: [60], recipients: 'all', remindersEnabled: true }).expect(200);
-    const schedule = { title: `Children test ${run}`, dayOfWeek: 0, startMinutes: 450, endMinutes: null, categoryName: 'Sunday Service', enabled: true };
+    const schedule = { title: `Children test ${run}`, dayOfWeek: (new Date(Date.now() + 3600000).getUTCDay() + 1) % 7, startMinutes: 450, endMinutes: null, categoryName: 'Sunday Service', enabled: true };
     const created = await request(app.getHttpServer()).post('/service-schedules').set(auth).send(schedule).expect(201); scheduleId = created.body.id;
     const service = app.get(RecurringServicesService);
     await service.generateUpcoming();

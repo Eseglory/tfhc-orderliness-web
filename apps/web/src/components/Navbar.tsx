@@ -198,12 +198,14 @@ export const Navbar: React.FC = () => {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
-            {(!user || user.role !== 'MEMBER' || isAdmin) && (
+            {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
               <button
                 onClick={() => router.push(isAdmin ? '/member' : '/admin')}
-                className="whitespace-nowrap text-xs px-3 py-1.5 rounded-lg bg-surface-container text-on-surface hover:bg-surface-container-high transition-colors font-semibold border border-outline-variant/30"
+                className="whitespace-nowrap text-xs px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors font-semibold border border-primary/20 flex items-center gap-1.5 shadow-sm"
+                title={isAdmin ? 'Switch to Member App' : 'Switch to Admin App'}
               >
-                {isAdmin ? 'Member app' : 'Admin portal'}
+                <span className="material-symbols-outlined text-sm">swap_horiz</span>
+                <span>{isAdmin ? 'Switch to Member App' : 'Switch to Admin App'}</span>
               </button>
             )}
             <button

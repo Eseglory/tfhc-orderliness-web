@@ -246,7 +246,7 @@ export default function FinanceDashboardPage() {
                     <p className="text-[10px] text-slate-400">{data.dues.overdue} overdue</p>
                   </div>
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Congregants</p>
+                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active Members</p>
                     <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{data.dues.members}</p>
                     <p className="text-[10px] text-slate-400">{data.dues.paid} paid · {data.dues.exempt} exempt</p>
                   </div>
@@ -343,4 +343,3 @@ export default function FinanceDashboardPage() {
     </AdminLayoutShell>
   );
 }
-

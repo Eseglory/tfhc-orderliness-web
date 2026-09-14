@@ -9,5 +9,5 @@ export function webBaseUrl(config: ConfigService): string {
   const configured =
     config.get<string>('APP_WEB_URL') ||
     (config.get<string>('CORS_ORIGIN') || '').split(',')[0].trim();
-  return (configured || 'http://localhost:3000').replace(/\/+$/, '');
+  return (configured || 'https://tfhc-orderliness-web.vercel.app').replace(/\/+$/, '');
 }

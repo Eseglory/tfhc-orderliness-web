@@ -12,6 +12,14 @@ import {
   Sliders,
   CheckCircle2,
   AlertCircle,
+  Calendar,
+  ExternalLink,
+  Check,
+  X,
+  Radio,
+  Sparkles,
+  Link as LinkIcon,
+  Unlink,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { ChangePasswordCard } from '../../../../components/ChangePasswordCard';
@@ -27,7 +35,7 @@ const POLICY_LABELS: Record<string, { label: string; description: string; step?:
   excusedPoints: { label: 'Excused Absence Points', description: 'Points assigned when excuse request is approved' },
   attendanceWeight: { label: 'Attendance Weight (0.0 – 1.0)', description: 'Multiplier for attendance rate in leaderboard rank', step: '0.05' },
   punctualityWeight: { label: 'Punctuality Weight (0.0 – 1.0)', description: 'Multiplier for punctuality rate in leaderboard rank', step: '0.05' },
-  followUpAbsences: { label: 'Consecutive Absences For Follow-Up', description: 'Triggers welfare & pastoral care follow-up alert' },
+  followUpAbsences: { label: 'Consecutive Absences For Follow-Up', description: 'Triggers member follow-up alert' },
   warningAbsences: { label: 'Total Absences For Warning', description: 'Flags member profile for administrative attention' },
   reviewAttendanceBelow: { label: 'Attendance Review Threshold (%)', description: 'Percentage below which member is flagged for review' },
   minimumMeetings: { label: 'Minimum Meetings Before Review', description: 'Number of recorded events required before scoring evaluation' },
@@ -35,12 +43,41 @@ const POLICY_LABELS: Record<string, { label: string; description: string; step?:
   rewardPunctuality: { label: 'Recognition Punctuality Threshold (%)', description: 'Minimum punctuality percentage required for awards' },
 };
 
+interface GoogleIntegrationStatus {
+  connected: boolean;
+  id?: string;
+  googleEmail?: string;
+  calendarId?: string;
+  calendarSummary?: string;
+  syncStatus?: 'NOT_CONNECTED' | 'SYNCED' | 'SYNCING' | 'PENDING' | 'FAILED';
+  lastSyncedAt?: string;
+  lastError?: string | null;
+  autoSyncMeetings?: boolean;
+  autoSyncEvents?: boolean;
+  autoSyncAppointments?: boolean;
+  syncedEventsCount?: number;
+}
+
 export default function SettingsPage() {
   const [recognition, setRecognition] = useState<any>(null);
   const [policy, setPolicy] = useState<Record<string, number> | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<GoogleIntegrationStatus | null>(null);
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [loadingRecognition, setLoadingRecognition] = useState(false);
+
+  const loadGoogleStatus = async () => {
+    setLoadingGoogle(true);
+    try {
+      const status = await fetchApi<GoogleIntegrationStatus>('/calendar/integrations/google/status');
+      setGoogleStatus(status);
+    } catch {
+      setGoogleStatus({ connected: false, syncStatus: 'NOT_CONNECTED' });
+    } finally {
+      setLoadingGoogle(false);
+    }
+  };
 
   useEffect(() => {
     fetchApi('/scoring/recognition')
@@ -49,7 +86,64 @@ export default function SettingsPage() {
     fetchApi<Record<string, number>>('/reports/settings')
       .then(setPolicy)
       .catch((e: any) => setMessage({ type: 'error', text: e.message || 'Failed to load policy settings' }));
+
+    loadGoogleStatus();
+
+    // Check for OAuth callback in query parameters
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      if (code && window.location.search.includes('google_calendar')) {
+        handleConnectWithCode(code);
+      }
+    }
   }, []);
+
+  const handleConnectWithCode = async (code: string) => {
+    setLoadingGoogle(true);
+    setMessage({ type: 'success', text: 'Connecting Google Calendar account...' });
+    try {
+      await fetchApi('/calendar/integrations/google/connect', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      });
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setMessage({ type: 'success', text: 'Google Calendar integration connected successfully!' });
+      await loadGoogleStatus();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to connect Google Calendar' });
+    } finally {
+      setLoadingGoogle(false);
+    }
+  };
+
+  const handleStartGoogleOAuth = async () => {
+    try {
+      const { authUrl } = await fetchApi<{ authUrl: string }>('/calendar/integrations/google/auth-url');
+      if (authUrl) {
+        window.location.href = authUrl;
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to initiate Google authorization' });
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    if (!confirm('Are you sure you want to disconnect Google Calendar? Internal meetings, events, and appointments will remain intact.')) {
+      return;
+    }
+    setLoadingGoogle(true);
+    try {
+      await fetchApi('/calendar/integrations/google/disconnect', { method: 'POST' });
+      setMessage({ type: 'success', text: 'Google Calendar disconnected. Internal records have been preserved.' });
+      await loadGoogleStatus();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to disconnect Google Calendar' });
+    } finally {
+      setLoadingGoogle(false);
+    }
+  };
 
   const handleSavePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +188,7 @@ export default function SettingsPage() {
             Settings & Policies
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-            Configure visual appearance, administrative security, scoring rules, and automated pastoral follow-up thresholds.
+            Configure visual appearance, administrative security, external integrations, scoring rules, and automated follow-up thresholds.
           </p>
         </div>
 
@@ -117,7 +211,108 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Section 1: Appearance & Theme Preferences */}
+        {/* Section 1: Integrations & Google Calendar */}
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Google Calendar Integration</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Synchronize scheduled meetings, attendee invitations, and Google Meet conferences with Google Calendar.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={loadGoogleStatus}
+              disabled={loadingGoogle}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-semibold transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingGoogle ? 'animate-spin' : ''}`} />
+              <span>Refresh Status</span>
+            </button>
+          </div>
+
+          <div className="pt-2">
+            {googleStatus?.connected ? (
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <Check className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>Connected:</span>
+                        <span className="text-indigo-600 dark:text-indigo-400">{googleStatus.googleEmail}</span>
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Primary Calendar • {googleStatus.syncedEventsCount || 0} events mapped & synchronized
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200">
+                      <Radio className="w-3 h-3 animate-pulse" /> Live Synchronized
+                    </span>
+                    <button
+                      onClick={handleDisconnectGoogle}
+                      disabled={loadingGoogle}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 hover:bg-rose-100 text-xs font-bold transition-all"
+                    >
+                      <Unlink className="w-3.5 h-3.5" />
+                      <span>Disconnect</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Meeting Invites</p>
+                    <p className="text-slate-900 dark:text-white font-bold mt-0.5">Google Meet + Invites</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Last Synchronized</p>
+                    <p className="text-slate-900 dark:text-white font-bold mt-0.5">
+                      {googleStatus.lastSyncedAt ? new Date(googleStatus.lastSyncedAt).toLocaleTimeString() : 'Just now'}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <p className="text-slate-500 dark:text-slate-400 font-medium">Conflict Protection</p>
+                    <p className="text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Active</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Connect Your Google Calendar</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">Recommended</span>
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-xl">
+                    Authorize Google Calendar to automatically dispatch real calendar invitations to meeting participants and generate instant Google Meet video conference links.
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleStartGoogleOAuth}
+                  disabled={loadingGoogle}
+                  className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm shadow-sm transition-all active:scale-95 shrink-0"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>Connect Google Calendar</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Section 2: Appearance & Theme Preferences */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
@@ -137,7 +332,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Section 2: Account & Security */}
+        {/* Section 3: Account & Security */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
@@ -156,16 +351,16 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Section 3: Scoring & Follow-Up Policies Form */}
+        {/* Section 4: Scoring & Follow-Up Policies Form */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
+            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white">Scoring & Follow-Up Rules</h2>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Scoring Weights & Follow-Up Thresholds</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Point changes apply to new attendance entries. Weights and thresholds apply automatically when recalculated.
+                Configure points awarded per attendance category and consecutive absence triggers.
               </p>
             </div>
           </div>
@@ -173,29 +368,28 @@ export default function SettingsPage() {
           {policy ? (
             <form onSubmit={handleSavePolicy} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                {Object.entries(POLICY_LABELS).map(([key, meta]) => {
+                {Object.entries(POLICY_LABELS).map(([key, config]) => {
                   const val = policy[key] ?? 0;
                   return (
                     <div
                       key={key}
-                      className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-1.5"
+                      className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-800 space-y-1.5"
                     >
-                      <label htmlFor={key} className="block text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {meta.label}
+                      <label htmlFor={key} className="text-xs font-bold text-slate-900 dark:text-white block">
+                        {config.label}
                       </label>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
-                        {meta.description}
+                        {config.description}
                       </p>
                       <input
                         id={key}
                         type="number"
-                        step={meta.step || '1'}
-                        required
+                        step={config.step || '1'}
                         value={val}
                         onChange={(e) =>
                           setPolicy({
                             ...policy,
-                            [key]: Number(e.target.value),
+                            [key]: parseFloat(e.target.value) || 0,
                           })
                         }
                         className="mt-1 block w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 transition-all shadow-xs"
@@ -221,7 +415,7 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Section 4: Members Eligible for Recognition */}
+        {/* Section 5: Members Eligible for Recognition */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-3">
@@ -231,7 +425,7 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">Members Eligible For Recognition</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Congregants meeting or exceeding the recognition attendance and punctuality criteria.
+                  Members meeting or exceeding the recognition attendance and punctuality criteria.
                 </p>
               </div>
             </div>

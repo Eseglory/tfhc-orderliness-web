@@ -5,7 +5,8 @@ describe('Member profile details', () => {
   const findUniqueOrThrow = jest.fn().mockResolvedValue({ id: 'member' });
   const tx = { member: { update, findUniqueOrThrow } };
   const transaction = jest.fn((fn) => fn(tx));
-  const service = new MembersService({ $transaction: transaction } as any);
+  const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;
+  const service = new MembersService({ $transaction: transaction } as any, mockCache);
   beforeEach(() => jest.clearAllMocks());
 
   it('saves a yearless birthday and profession, clears optional details, and ignores account privileges', async () => {

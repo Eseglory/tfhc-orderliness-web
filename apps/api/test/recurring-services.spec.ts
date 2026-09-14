@@ -2,23 +2,24 @@ import { occurrences, SERVICE_SCHEDULES } from '../src/modules/recurring-service
 import { RecurringServicesService } from '../src/modules/recurring-services/recurring-services.service';
 
 describe('Recurring services', () => {
-  it('matches all ten supplied sessions, with unknown children end times preserved', () => {
-    expect(SERVICE_SCHEDULES).toHaveLength(10);
-    expect(SERVICE_SCHEDULES.filter(s => s.dayOfWeek === 0)).toHaveLength(8);
-    expect(SERVICE_SCHEDULES.filter(s => s.endMinutes === null)).toHaveLength(3);
+  it('matches all 5 production master schedules', () => {
+    expect(SERVICE_SCHEDULES).toHaveLength(5);
+    expect(SERVICE_SCHEDULES.filter(s => s.dayOfWeek === 0)).toHaveLength(3);
     const first = occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-09T00:00:00Z'));
     expect(first).toHaveLength(4);
     expect(first[0].startTime.toISOString()).toBe('2026-09-13T06:00:00.000Z');
     expect(first[0].endTime!.toISOString()).toBe('2026-09-13T07:00:00.000Z');
-    expect(occurrences(SERVICE_SCHEDULES[8], new Date('2026-09-09T00:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-15T17:45:00.000Z');
+    expect(occurrences(SERVICE_SCHEDULES[3], new Date('2026-09-09T00:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-15T17:45:00.000Z');
   });
   it('never generates an already-started occurrence', () => {
     expect(occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-13T06:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-20T06:00:00.000Z');
   });
+  const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;
+
   it('does not generate meetings or email until venue and reminder settings exist', async () => {
     const db = { systemSetting: { findUnique: jest.fn().mockResolvedValue(null) } };
     const mail = { sendEmail: jest.fn() };
-    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any);
+    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any, mockCache);
     expect(await service.generateUpcoming()).toEqual({ created: 0, configured: false });
     expect(await service.sendDueReminders()).toEqual({ sent: 0 });
     expect(mail.sendEmail).not.toHaveBeenCalled();
@@ -35,11 +36,11 @@ describe('Recurring services', () => {
       communicationDelivery: { createMany: jest.fn(async ({ data }) => { const key = data[0].idempotencyKey; if (claims.has(key)) return { count: 0 }; claims.add(key); return { count: 1 }; }), update: jest.fn() },
     };
     const mail = { sendEmail: jest.fn().mockResolvedValue({ messageId: 'sent' }) };
-    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any);
+    const service = new RecurringServicesService(db as any, mail as any, { record: jest.fn() } as any, mockCache);
     expect(await service.sendDueReminders(now)).toEqual({ sent: 1 });
     expect(await service.sendDueReminders(now)).toEqual({ sent: 0 });
     expect(mail.sendEmail).toHaveBeenCalledTimes(1);
-    expect(mail.sendEmail.mock.calls[0][0].text).toContain('Africa/Lagos');
+    expect(mail.sendEmail.mock.calls[0][0].text).toContain('First Service');
     expect(db.communicationDelivery.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'SENT', providerRef: 'sent' } }));
   });
 });

@@ -63,7 +63,7 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Breakdown of congregational attendance and punctuality across recent services
+              Breakdown of attendance and punctuality across recent sessions
             </p>
           </div>
 

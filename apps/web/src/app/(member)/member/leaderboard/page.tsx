@@ -67,7 +67,7 @@ export default function MemberLeaderboardPage() {
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#C0C0C0] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">2</div>
             </div>
-            <p className="font-label-md text-label-md text-on-surface truncate w-20 text-center font-semibold">{top2.memberName || 'Sarah M.'}</p>
+            <p className="font-label-md text-label-md text-on-surface truncate w-20 text-center font-semibold">{top2.memberName || '—'}</p>
             <div className="bg-surface-container w-20 h-24 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-3 border-t-2 border-[#C0C0C0] shadow-inner relative overflow-hidden">
               <span className="font-headline-sm text-headline-sm text-primary font-bold relative z-10">{top2.attendancePercentage}%</span>
               <span className="font-label-sm text-label-sm text-on-surface-variant relative z-10">{top2.totalPoints} pts</span>
@@ -83,7 +83,7 @@ export default function MemberLeaderboardPage() {
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#FFD700] text-tertiary-container w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm border-2 border-surface z-20">1</div>
             </div>
-            <p className="font-label-md text-label-md text-on-surface font-bold truncate w-24 text-center mt-1">{top1.memberName || 'David K.'}</p>
+            <p className="font-label-md text-label-md text-on-surface font-bold truncate w-24 text-center mt-1">{top1.memberName || '—'}</p>
             <div className="bg-[#FFD700]/10 w-24 h-32 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-4 border-t-4 border-[#FFD700] shadow-[0px_-4px_12px_rgba(255,215,0,0.15)] relative overflow-hidden">
               <span className="font-headline-md text-headline-md text-primary font-bold relative z-10">{top1.attendancePercentage}%</span>
               <span className="font-label-sm text-label-sm text-on-surface-variant relative z-10 font-bold">{top1.totalPoints} pts</span>
@@ -98,7 +98,7 @@ export default function MemberLeaderboardPage() {
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#CD7F32] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">3</div>
             </div>
-            <p className="font-label-md text-label-md text-on-surface truncate w-20 text-center font-semibold">{top3.memberName || 'Elena R.'}</p>
+            <p className="font-label-md text-label-md text-on-surface truncate w-20 text-center font-semibold">{top3.memberName || '—'}</p>
             <div className="bg-surface-container w-20 h-20 rounded-t-xl mt-2 flex flex-col items-center justify-start pt-2 border-t-2 border-[#CD7F32] shadow-inner relative overflow-hidden">
               <span className="font-headline-sm text-headline-sm text-primary font-bold relative z-10">{top3.attendancePercentage}%</span>
               <span className="font-label-sm text-label-sm text-on-surface-variant relative z-10">{top3.totalPoints} pts</span>

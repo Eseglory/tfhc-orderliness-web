@@ -3,10 +3,10 @@ node_modules
 .next
 dist
 *.log
-# Local configuration may contain API credentials. Keep the documented template.
+# Environment configuration files containing API credentials and secrets.
 .env
 .env.*
-!.env.example
+.env.local
 
 # OAuth downloads and application-signing material must never be committed.
 apps/member-mobile/credentials/
@@ -28,3 +28,14 @@ test-results/
 
 # Isolated Next.js build directories used by verification runs
 .next-*/
+.vercel
+
+# Isolated PWA validation output
+test-results-pwa/
+
+# Local member portal verification artifacts
+.validation/
+test-results-member/
+
+# Safe configuration templates contain no live credentials.
+!.env.example

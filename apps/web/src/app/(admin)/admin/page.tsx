@@ -56,6 +56,7 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<UpcomingMeetingItem | null>(null);
+  const [todayMeetings, setTodayMeetings] = useState<UpcomingMeetingItem[]>([]);
   const [upcomingMeetings, setUpcomingMeetings] = useState<UpcomingMeetingItem[]>([]);
   const [excusesCount, setExcusesCount] = useState<number>(0);
   const [correctionsCount, setCorrectionsCount] = useState<number>(0);
@@ -72,8 +73,7 @@ export default function AdminDashboardPage() {
       const [
         statsData,
         analyticsData,
-        activeData,
-        meetingsData,
+        todayUpcomingData,
         excusesData,
         correctionsData,
         approvalsData,
@@ -82,8 +82,7 @@ export default function AdminDashboardPage() {
       ] = await Promise.all([
         fetchApi<DashboardStats>('/reports/dashboard').catch(() => null),
         fetchApi<AnalyticsData>(`/reports/analytics?days=${selectedDays}`).catch(() => null),
-        fetchApi<UpcomingMeetingItem | null>('/meetings/active').catch(() => null),
-        fetchApi<UpcomingMeetingItem[]>('/meetings?limit=10').catch(() => []),
+        fetchApi<{ activeMeeting: UpcomingMeetingItem | null; today: UpcomingMeetingItem[]; upcoming: UpcomingMeetingItem[] }>('/calendar/today-upcoming').catch(() => null),
         fetchApi<any[]>('/excuses/pending').catch(() => []),
         fetchApi<any[]>('/excuses/corrections/pending').catch(() => []),
         fetchApi<any[]>('/approvals/pending').catch(() => []),
@@ -93,8 +92,11 @@ export default function AdminDashboardPage() {
 
       setStats(statsData);
       setAnalytics(analyticsData);
-      setActiveMeeting(activeData);
-      setUpcomingMeetings(meetingsData || []);
+      if (todayUpcomingData) {
+        setActiveMeeting(todayUpcomingData.activeMeeting);
+        setTodayMeetings(todayUpcomingData.today || []);
+        setUpcomingMeetings(todayUpcomingData.upcoming || []);
+      }
       setExcusesCount((excusesData || []).length);
       setCorrectionsCount((correctionsData || []).length);
       setApprovalsCount((approvalsData || []).length);
@@ -277,10 +279,10 @@ export default function AdminDashboardPage() {
               positive: flagsCount === 0,
               neutral: flagsCount === 0,
             }}
-            context="Pastoral follow-up & alerts"
+            context="Member follow-up & alerts"
             tone="amber"
             icon={CheckCircle}
-            onClick={() => window.location.assign('/admin/follow-up')}
+            onClick={() => window.location.assign('/admin/tracker')}
           />
 
           {/* 4. Upcoming Operations */}
@@ -314,7 +316,8 @@ export default function AdminDashboardPage() {
           {/* Right: Today & Upcoming Operations (5 cols) */}
           <div className="lg:col-span-5">
             <TodayOperationsPanel
-              meetings={upcomingMeetings}
+              todayMeetings={todayMeetings}
+              upcomingMeetings={upcomingMeetings}
               activeMeeting={activeMeeting}
               loading={loading}
             />

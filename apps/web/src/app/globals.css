@@ -139,3 +139,15 @@
 .confetti-piece:nth-child(7) { left: 40%; animation-delay: 0.1s; background-color: #dae2fd; }
 .confetti-piece:nth-child(8) { left: 60%; animation-delay: 0.9s; background-color: #6ffbbe; }
 .confetti-piece:nth-child(9) { left: 80%; animation-delay: 0.3s; background-color: #ffdcc3; }
+
+/* ==========================================================================
+   Logo Loader Animations
+   ========================================================================== */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

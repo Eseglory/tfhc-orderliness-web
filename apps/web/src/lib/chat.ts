@@ -123,10 +123,22 @@ export function useChatSocket(events: ChatSocketEvents) {
     const socket = io(`${API_BASE_URL}/chat`, {
       transports: ['websocket'],
       auth: { token },
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
       reconnectionDelay: 1000,
     });
     socketRef.current = socket;
+    const resume = () => {
+      if (navigator.onLine && document.visibilityState === 'visible' && !socket.connected) {
+        const currentToken = getAuthToken();
+        if (currentToken) { socket.auth = { token: currentToken }; socket.connect(); }
+      }
+    };
+    const signedOut = () => { socket.disconnect(); setConnected(false); setOnline(new Set()); };
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('tfhc:logout', signedOut);
 
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
@@ -153,6 +165,9 @@ export function useChatSocket(events: ChatSocketEvents) {
     });
 
     return () => {
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('tfhc:logout', signedOut);
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
@@ -181,7 +196,7 @@ export function useChatUnread(): number {
   useEffect(() => {
     let alive = true;
     const refresh = () => {
-      if (!getAuthToken()) return;
+      if (!getAuthToken() || !navigator.onLine || document.visibilityState !== 'visible') return;
       chatApi
         .unread()
         .then((r) => alive && setTotal(r.total))

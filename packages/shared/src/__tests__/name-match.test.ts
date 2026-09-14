@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeNameTokens, scoreNameMatch, bestNameMatch, parseYearlessBirthday } from '../name-match.js';
+import { normalizeNameTokens, scoreNameMatch, bestNameMatch, parseYearlessBirthday, toPascalCase } from '../name-match.js';
+
 
 describe('name matching', () => {
   it('normalises noisy names', () => {
@@ -50,5 +51,13 @@ describe('name matching', () => {
     expect(parseYearlessBirthday('13 September')).toBe('09-13');
     expect(parseYearlessBirthday('3rd  February')).toBe('02-03');
     expect(parseYearlessBirthday('sometime')).toBeNull();
+  });
+
+  it('formats names to Pascal Case correctly', () => {
+    expect(toPascalCase('daniel oguamanam')).toBe('Daniel Oguamanam');
+    expect(toPascalCase('martha john-williams')).toBe('Martha John-Williams');
+    expect(toPascalCase('OGBEIDE MERCY ADESUWA')).toBe('Ogbeide Mercy Adesuwa');
+    expect(toPascalCase("o'connor")).toBe("O'Connor");
+    expect(toPascalCase('   john   doe  ')).toBe('John Doe');
   });
 });

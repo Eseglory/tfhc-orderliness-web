@@ -24,6 +24,7 @@ export class PermissionsGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest();
     if (!user) throw new ForbiddenException('Authentication required');
+    if (user.isSuperAdmin || user.role === 'SUPER_ADMIN') return true;
 
     const held = new Set<string>(Array.isArray(user.permissions) ? user.permissions : []);
     if (!hasAllPermissions(held, required)) {

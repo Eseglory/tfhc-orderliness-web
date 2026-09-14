@@ -1,3 +1,13 @@
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(process.cwd(), 'apps/api/.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), 'apps/api/.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config();
+
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
@@ -16,7 +26,17 @@ async function bootstrap() {
   // invalid combination per the fetch spec and browsers reject it anyway.
   const corsOrigin = process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
-    origin: corsOrigin && corsOrigin.length > 0 ? corsOrigin : '*',
+    origin: (reqOrigin, callback) => {
+      if (corsOrigin && corsOrigin.length > 0) {
+        if (!reqOrigin || corsOrigin.includes(reqOrigin)) {
+          return callback(null, true);
+        }
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
   });
 
   app.useGlobalPipes(
@@ -31,4 +51,7 @@ async function bootstrap() {
   console.log(`🚀 TFHC Orderliness API running on port http://0.0.0.0:${port}`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('BOOTSTRAP FATAL ERROR:', err);
+  process.exit(1);
+});

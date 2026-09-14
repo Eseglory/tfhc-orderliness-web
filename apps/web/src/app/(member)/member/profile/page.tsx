@@ -4,6 +4,7 @@ import { AuthTransition } from '../../../../components/AuthTransition';
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ProfilePhoto } from '../../../../components/ProfilePhoto';
+import { BannerPhoto } from '../../../../components/BannerPhoto';
 import { useRouter } from 'next/navigation';
 import { fetchApi, logout, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
@@ -13,6 +14,7 @@ type Profile = {
   id: string;
   memberCode: string;
   profilePhotoUrl: string | null;
+  bannerPhotoUrl: string | null;
   firstName: string;
   middleName: string | null;
   lastName: string;
@@ -20,6 +22,10 @@ type Profile = {
   phoneNumber: string | null;
   alternatePhoneNumber: string | null;
   address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  postalCode: string | null;
   profession: string | null;
   gender: string | null;
   birthday: string | null;
@@ -38,6 +44,10 @@ type FormState = {
   phoneNumber: string;
   alternatePhoneNumber: string;
   address: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
   profession: string;
   gender: string;
   birthday: string;
@@ -52,6 +62,10 @@ const toForm = (p: Profile): FormState => ({
   phoneNumber: p.phoneNumber ?? '',
   alternatePhoneNumber: p.alternatePhoneNumber ?? '',
   address: p.address ?? '',
+  city: p.city ?? '',
+  state: p.state ?? '',
+  country: p.country ?? '',
+  postalCode: p.postalCode ?? '',
   profession: p.profession ?? '',
   gender: p.gender ?? '',
   birthday: p.birthday ?? '',
@@ -143,7 +157,8 @@ export default function MemberProfilePage() {
           </div>
         ) : (
           <>
-            <section className="flex flex-col items-center pt-stack-md pb-stack-lg gap-stack-md">
+            <section className="flex flex-col items-center pt-stack-md pb-stack-lg gap-stack-md w-full">
+              <BannerPhoto value={profile.bannerPhotoUrl} endpoint="/members/me/banner" onChange={url => setProfile(p => p ? { ...p, bannerPhotoUrl: url } : p)} />
               <ProfilePhoto value={profile.profilePhotoUrl} endpoint="/members/me/photo" onChange={url => setProfile(p => p ? { ...p, profilePhotoUrl: url } : p)} />
               <div className="text-center flex flex-col gap-1">
                 <h2 className="font-headline-sm text-headline-sm text-primary">{displayName}</h2>
@@ -185,6 +200,10 @@ export default function MemberProfilePage() {
                   ['phoneNumber', 'Phone number', 'tel'],
                   ['alternatePhoneNumber', 'Alternate phone', 'tel'],
                   ['address', 'Address', 'text'],
+                  ['city', 'City', 'text'],
+                  ['state', 'State / Province', 'text'],
+                  ['country', 'Country', 'text'],
+                  ['postalCode', 'Postal / ZIP Code', 'text'],
                   ['profession', 'Profession', 'text'],
                   ['gender', 'Gender', 'text'],
                   ['birthday', 'Birthday (MM-DD)', 'text'],
@@ -224,7 +243,7 @@ export default function MemberProfilePage() {
                     ['phone', 'Phone', profile.phoneNumber || '—'],
                     ['phone_iphone', 'Alternate phone', profile.alternatePhoneNumber || '—'],
                     ['mail', 'Email', profile.user?.email || '—'],
-                    ['home', 'Address', profile.address || '—'],
+                    ['home', 'Address', [profile.address, profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || '—'],
                     ['work', 'Profession', profile.profession || '—'],
                     ['person', 'Gender', profile.gender || '—'],
                     ['cake', 'Birthday', profile.birthday ? new Date(`2000-${profile.birthday}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }) : '—'],

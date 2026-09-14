@@ -45,16 +45,130 @@ export default function CheckInPage() {
     } finally { pending.current = false; if (mounted.current) setBusy(false); }
   };
   const distance = location && meeting ? Math.round(calculateHaversineDistanceMeters(location, meeting)) : null;
-  return <main className="min-h-screen max-w-xl mx-auto p-5 pb-28 space-y-5">
-    <Link href="/member" className="text-primary">← Home</Link><h1 className="text-2xl font-bold">Location check-in</h1>
-    {loading ? <p role="status">Loading services…</p> : meetings.length ? <>
-      <label htmlFor="check-in-service">Service</label><select id="check-in-service" value={meetingId} disabled={busy || !!result} onChange={e => { setMeetingId(e.target.value); setLocation(null); setError(''); }} className="w-full rounded-lg p-3 border border-outline-variant bg-surface">{!meetingId && <option value="">Choose an open service</option>}{meetings.map(m => <option key={m.id} value={m.id}>{m.title} · {new Date(m.startTime).toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' })}</option>)}</select>
-      {meeting && <><h2 className="text-xl">{meeting.title}</h2><p>{meeting.locationName}</p><p>Allow location access to confirm you are within {meeting.geofenceRadiusMeters} metres of the venue.</p></>}
-      {distance !== null && <p>{distance}m from venue · GPS accuracy: {Math.round(location!.accuracy)}m</p>}
-      {!result && <button onClick={checkIn} disabled={busy || !meeting} className="w-full rounded-lg p-4 bg-primary text-on-primary disabled:opacity-50">{busy ? 'Checking your location…' : 'Check in now'}</button>}
-    </> : <p>No active service is open for attendance. An administrator must open attendance before you can check in.</p>}
-    {!busy && !result && <button onClick={load} disabled={loading} className="underline text-primary">Refresh services</button>}
-    {error && <p role="alert" className="p-3 rounded bg-error-container text-on-error-container">{error}</p>}
-    {result && <section className="rounded-xl p-5 bg-surface-container space-y-3"><h2 className="text-xl font-bold">Check-In Confirmed!</h2><p>Status: {result.status}</p><p>Points earned: {result.pointsEarned}</p><Link href="/member/my-attendance">View attendance history</Link></section>}
-  </main>;
+  return (
+    <main className="min-h-screen max-w-xl mx-auto p-5 pb-28 space-y-5">
+      <div className="flex items-center justify-between">
+        <Link href="/member" className="inline-flex items-center gap-1 font-bold text-primary hover:underline">
+          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+          <span>Home</span>
+        </Link>
+        <span className="font-label-sm text-xs uppercase tracking-wider text-on-surface-variant font-bold">GPS Location Check</span>
+      </div>
+
+      <h1 className="text-2xl font-black text-primary">Check In</h1>
+
+      {loading ? (
+        <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-center space-y-2">
+          <p className="font-semibold text-on-surface">Finding open services...</p>
+        </div>
+      ) : meetings.length ? (
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="check-in-service" className="font-bold text-sm text-on-surface">Select Service</label>
+            <select
+              id="check-in-service"
+              value={meetingId}
+              disabled={busy || !!result}
+              onChange={(e) => {
+                setMeetingId(e.target.value);
+                setLocation(null);
+                setError('');
+              }}
+              className="w-full rounded-xl p-3.5 border border-outline-variant bg-surface font-semibold text-on-surface shadow-xs focus:ring-2 focus:ring-primary focus:outline-none"
+            >
+              {!meetingId && <option value="">Choose an open service</option>}
+              {meetings.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.title} · {new Date(m.startTime).toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' })}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {meeting && (
+            <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 space-y-3 shadow-xs">
+              <div>
+                <h2 className="text-lg font-bold text-primary">{meeting.title}</h2>
+                <p className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 mt-1">
+                  <span className="material-symbols-outlined text-primary text-[18px]">church</span>
+                  <span>{meeting.locationName || "The Father's House Church, 90 Alagbole–Akute Road"}</span>
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-surface-variant/40 border border-outline-variant/20 text-xs text-on-surface-variant space-y-1">
+                <p className="font-bold text-on-surface">📍 Location Rules</p>
+                <p>Your device GPS location must be within <strong>{meeting.geofenceRadiusMeters} meters</strong> of the church to mark attendance.</p>
+              </div>
+
+              {distance !== null && (
+                <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                  distance <= meeting.geofenceRadiusMeters
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
+                    : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
+                }`}>
+                  <span>Distance: {distance}m from church</span>
+                  <span>Accuracy: ±{Math.round(location!.accuracy)}m</span>
+                </div>
+              )}
+
+              {!result && (
+                <button
+                  aria-label="Check in now"
+                  onClick={checkIn}
+                  disabled={busy || !meeting}
+                  className="w-full rounded-xl p-4 bg-primary text-on-primary font-bold text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+                >
+                  <span className="material-symbols-outlined">my_location</span>
+                  <span>{busy ? 'Verifying GPS Location…' : 'Check In'}</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-center space-y-2">
+          <span className="material-symbols-outlined text-4xl text-outline">event_busy</span>
+          <p className="font-bold text-on-surface">No Service Open</p>
+          <p className="text-sm text-on-surface-variant">Attendance check-in opens 30 minutes before each service. Please check back when service starts.</p>
+        </div>
+      )}
+
+      {!busy && !result && (
+        <button onClick={load} disabled={loading} className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">
+          <span className="material-symbols-outlined text-[16px]">refresh</span>
+          <span>Refresh</span>
+        </button>
+      )}
+
+      {error && (
+        <div role="alert" className="p-4 rounded-xl bg-error-container text-on-error-container text-sm font-semibold space-y-1 border border-error/20">
+          <p className="font-bold flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]">error</span>
+            <span>Check In Notice</span>
+          </p>
+          <p>{error}</p>
+        </div>
+      )}
+
+      {result && (
+        <section className="rounded-2xl p-6 bg-surface-container border border-primary/20 space-y-4 shadow-md text-center">
+          <div className="w-12 h-12 rounded-full bg-emerald-600 text-white mx-auto flex items-center justify-center shadow-sm">
+            <span className="material-symbols-outlined text-2xl">check</span>
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-primary">Attendance Recorded!</h2>
+            <p className="text-sm font-semibold text-on-surface-variant mt-1">Status: <span className="font-bold text-emerald-700">{result.status}</span></p>
+            <p className="text-sm font-semibold text-on-surface-variant">Points Earned: <span className="font-bold text-primary">{result.pointsEarned}</span></p>
+          </div>
+          <Link
+            href="/member/my-attendance"
+            className="inline-flex items-center justify-center gap-1.5 w-full py-3 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-xs"
+          >
+            <span className="material-symbols-outlined text-[18px]">fact_check</span>
+            <span>View Attendance Record</span>
+          </Link>
+        </section>
+      )}
+    </main>
+  );
 }

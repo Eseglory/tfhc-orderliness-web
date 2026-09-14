@@ -30,10 +30,10 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
   const items: TrackerItem[] = trackers || [
     {
       id: 'tracker-follow-up',
-      title: 'Pastoral Care & Member Follow-Up',
+      title: 'Member Follow-Up & Check-Ins',
       subtitle: activeFlagsCount === 0
         ? 'All member follow-up queues and consecutive absence flags resolved'
-        : `${activeFlagsCount} congregant follow-up flags requiring intervention`,
+        : `${activeFlagsCount} member follow-up flags requiring intervention`,
       progressPct: activeFlagsCount === 0 ? 100 : Math.max(10, Math.round(100 - activeFlagsCount * 15)),
       targetLabel: activeFlagsCount === 0 ? 'All Clear' : `${activeFlagsCount} Pending`,
       tone: activeFlagsCount === 0 ? 'emerald' : 'amber',
@@ -42,8 +42,8 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
     },
     {
       id: 'tracker-dues',
-      title: 'Monthly Stewardship & Dues Collection',
-      subtitle: 'Congregational unit dues and welfare assignments',
+      title: 'Monthly Dues Collection',
+      subtitle: 'Member unit dues and financial tracking',
       progressPct: 100,
       targetLabel: 'Active Ledger',
       tone: 'indigo',
@@ -67,14 +67,15 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Automated operational queues, pastoral follow-up flags, and campaign milestones
+              Automated operational queues, member follow-up flags, and milestones
             </p>
           </div>
           <Link
-            href="/admin/follow-up"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            href="/admin/tracker"
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-0.5"
           >
-            Manage
+            <span>Explore Hub</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 

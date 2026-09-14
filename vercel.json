@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "yarn build:shared && yarn workspace @tfhc/web build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "corepack enable && yarn install",
+  "env": {
+    "ENABLE_EXPERIMENTAL_COREPACK": "1"
+  },
+  "build": {
+    "env": {
+      "ENABLE_EXPERIMENTAL_COREPACK": "1"
+    }
+  }
+}

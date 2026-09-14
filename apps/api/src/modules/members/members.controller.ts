@@ -50,6 +50,18 @@ export class MembersController {
     return this.membersService.createSubTeam(body);
   }
 
+  @Roles(Role.ADMIN, Role.LEADER)
+  @Put('sub-teams/:id')
+  async updateSubTeam(@Param('id') id: string, @Body() body: { name?: string; description?: string; active?: boolean }) {
+    return this.membersService.updateSubTeam(id, body);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @Delete('sub-teams/:id')
+  async deleteSubTeam(@Param('id') id: string) {
+    return this.membersService.deleteSubTeam(id);
+  }
+
   @Get('me/notifications')
   async notifications(@CurrentUser('memberId') memberId?: string) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
@@ -57,9 +69,9 @@ export class MembersController {
   }
 
   @Put('me/notifications/read')
-  async readNotifications(@CurrentUser('memberId') memberId?: string) {
+  async readNotifications(@CurrentUser('memberId') memberId: string | undefined, @Body() body?: { ids?: string[] }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
-    return this.membersService.readNotifications(memberId);
+    return this.membersService.readNotifications(memberId, body?.ids);
   }
 
   @Get('me/profile')
@@ -75,7 +87,7 @@ export class MembersController {
   }
 
   @Post('me/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadMyPhoto(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.membersService.updatePhoto(memberId, file);
@@ -87,9 +99,22 @@ export class MembersController {
     return this.membersService.removePhoto(memberId);
   }
 
+  @Post('me/banner')
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  async uploadMyBanner(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    return this.membersService.updateBanner(memberId, file);
+  }
+
+  @Delete('me/banner')
+  async removeMyBanner(@CurrentUser('memberId') memberId?: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    return this.membersService.removeBanner(memberId);
+  }
+
   @Roles(Role.ADMIN, Role.LEADER)
   @Post(':id/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadPhoto(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updatePhoto(id, file);
@@ -100,6 +125,21 @@ export class MembersController {
   async removePhoto(@Param('id') id: string) {
     await this.membersService.findOne(id);
     return this.membersService.removePhoto(id);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @Post(':id/banner')
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  async uploadBanner(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
+    await this.membersService.findOne(id);
+    return this.membersService.updateBanner(id, file);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @Delete(':id/banner')
+  async removeBanner(@Param('id') id: string) {
+    await this.membersService.findOne(id);
+    return this.membersService.removeBanner(id);
   }
 
   @Get(':id')

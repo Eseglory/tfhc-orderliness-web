@@ -36,8 +36,8 @@ export class ApprovalsController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.approvals.getById(id);
+  get(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.approvals.getByIdForUser(id, user);
   }
 
   @Post(':id/act')

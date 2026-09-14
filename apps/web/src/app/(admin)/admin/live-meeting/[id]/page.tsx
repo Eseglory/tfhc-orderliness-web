@@ -106,30 +106,51 @@ export default function AdminLiveMeetingPage() {
   const lateCount = attendanceRecords.filter((r) => r.status === 'LATE').length;
   const totalPresent = earlyCount + onTimeCount + graceCount + lateCount;
 
+  const isFutureMeeting = Boolean(meeting?.startTime && new Date(meeting.startTime) > new Date());
+
   return (
     <AdminLayoutShell activeHref="/admin/meetings">
       <div className="space-y-6 pb-16">
+        {/* Future Meeting Warning Banner */}
+        {isFutureMeeting && (
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
+              <span className="font-extrabold text-sm block">Future Scheduled Event / Service</span>
+              <p>
+                This gathering is scheduled for {new Date(meeting.startTime).toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })}. In accordance with system policy, attendance clock-in is disabled until the scheduled start time.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Page Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
-              <Link href="/admin/meetings" className="hover:text-indigo-600 transition-colors">MEETINGS</Link>
+              <Link href="/admin/meetings" className="hover:text-indigo-600 transition-colors">SERVICES &amp; EVENTS</Link>
               <span>/</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              {isFutureMeeting ? (
+                <span className="text-amber-600 dark:text-amber-400 font-extrabold flex items-center gap-1">
+                  SCHEDULED FUTURE MONITOR
                 </span>
-                LIVE ACTIVE MONITOR
-              </span>
+              ) : (
+                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  LIVE ACTIVE MONITOR
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                {meeting?.title || 'Live Gathering Monitor'}
+                {meeting?.title || 'Live Operations Monitor'}
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Venue: {meeting?.locationName ?? 'Campus Hall'} · Geofence Radius: {meeting?.geofenceRadiusMeters ?? 100}m
+              Venue: {meeting?.locationName ?? 'Main Centre'} · Geofence Radius: {meeting?.geofenceRadiusMeters ?? 100}m
             </p>
           </div>
 
@@ -144,7 +165,13 @@ export default function AdminLiveMeetingPage() {
             </button>
             <button
               onClick={() => setShowManualModal(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+              disabled={isFutureMeeting}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                isFutureMeeting
+                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              }`}
+              title={isFutureMeeting ? 'Attendance cannot be clocked for future events' : 'Record Manual Attendance'}
             >
               <Plus className="w-4 h-4" />
               Record Manual Attendance
@@ -391,4 +418,3 @@ export default function AdminLiveMeetingPage() {
     </AdminLayoutShell>
   );
 }
-

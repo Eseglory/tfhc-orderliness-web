@@ -4,8 +4,11 @@ import localFont from 'next/font/local';
 import './globals.css';
 import { AuthGate } from '../components/AuthGate';
 import { BottomNav } from '../components/BottomNav';
+import { PwaManager } from '../components/PwaManager';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { ThemeProvider } from '../lib/theme';
+import { ToastProvider } from '../components/ui';
+import { AuthProvider } from '../lib/auth';
 
 const inter = localFont({
   src: '../../public/fonts/inter-latin.woff2',
@@ -26,10 +29,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: '/favicon.ico', sizes: 'any' },
       { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
+    shortcut: ['/favicon.ico'],
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
 };
@@ -49,6 +54,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`light ${inter.variable}`} suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -73,27 +81,21 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="antialiased selection:bg-secondary-container selection:text-on-secondary-container bg-background text-on-background font-body-md min-h-screen">
+      <body
+        className="antialiased selection:bg-secondary-container selection:text-on-secondary-container bg-background text-on-background font-body-md min-h-screen"
+        suppressHydrationWarning
+      >
         <ThemeProvider>
-          <OfflineBanner />
-          <VenueSessionGuard />
-          <AuthGate>{children}</AuthGate>
-          <BottomNav />
+          <AuthProvider>
+            <ToastProvider>
+              <OfflineBanner />
+              <PwaManager />
+              <VenueSessionGuard />
+              <AuthGate>{children}</AuthGate>
+              <BottomNav />
+            </ToastProvider>
+          </AuthProvider>
         </ThemeProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                  navigator.serviceWorker.register('/sw.js').then(
-                    function() { /* Registration completed. */ },
-                    function(err) { console.log('PWA ServiceWorker registration failed: ', err); }
-                  );
-                });
-              }
-            `,
-          }}
-        />
       </body>
     </html>
   );

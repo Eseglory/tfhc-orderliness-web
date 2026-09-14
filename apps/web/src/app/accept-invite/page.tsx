@@ -21,12 +21,16 @@ function AcceptInviteForm() {
     if (password !== confirm) return setError('Passwords do not match.');
     setSubmitting(true);
     try {
-      const res = await fetchApi<{ accessToken: string }>('/auth/accept-invite', {
+      const res = await fetchApi<{ accessToken: string; user?: { role: string } }>('/auth/accept-invite', {
         method: 'POST',
         body: JSON.stringify({ token, password }),
       });
       saveAuthToken(res.accessToken, true);
-      router.replace('/admin');
+      if (res.user?.role === 'MEMBER') {
+        router.replace('/member');
+      } else {
+        router.replace('/admin');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not activate your account.');
       setSubmitting(false);

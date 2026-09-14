@@ -53,9 +53,9 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({
     },
     {
       id: 'flags',
-      title: 'Pastoral Follow-Up Flags',
+      title: 'Member Follow-Up Flags',
       count: summary.flagsCount,
-      desc: 'Congregants with consecutive absences or check-in dropouts',
+      desc: 'Members with consecutive absences or check-in dropouts',
       href: '/admin/follow-up',
       tone: 'rose',
     },
@@ -82,7 +82,7 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Review requests, excuses, and pastoral care workflows requiring authorization
+              Review requests, excuses, and follow-up workflows requiring authorization
             </p>
           </div>
 

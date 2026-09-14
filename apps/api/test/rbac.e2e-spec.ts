@@ -57,22 +57,22 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     const pw = await argon2.hash('E2ePassword!123');
     const tokens = app.get(AuthService);
 
-    const superUser = await db.user.create({ data: { email: `super-${run}@example.test`, passwordHash: pw, role: 'ADMIN' } });
+    const superUser = await db.user.create({ data: { email: `super-${run}@tfhc.org`, passwordHash: pw, role: 'ADMIN' } });
     superUserId = superUser.id;
     await grantRole(superUser.id, 'SUPER_ADMIN');
     superToken = tokens.generateToken(superUser.id, superUser.email, 'ADMIN');
 
-    const adminUser = await db.user.create({ data: { email: `admin-${run}@example.test`, passwordHash: pw, role: 'ADMIN' } });
+    const adminUser = await db.user.create({ data: { email: `admin-${run}@tfhc.org`, passwordHash: pw, role: 'ADMIN' } });
     await grantRole(adminUser.id, 'ADMINISTRATION');
     adminRoleToken = tokens.generateToken(adminUser.id, adminUser.email, 'ADMIN');
 
-    const financeUser = await db.user.create({ data: { email: `finance-${run}@example.test`, passwordHash: pw, role: 'ADMIN' } });
+    const financeUser = await db.user.create({ data: { email: `finance-${run}@tfhc.org`, passwordHash: pw, role: 'ADMIN' } });
     await grantRole(financeUser.id, 'FINANCE');
     financeToken = tokens.generateToken(financeUser.id, financeUser.email, 'ADMIN');
 
     const memberUser = await db.user.create({
       data: {
-        email: `member-${run}@example.test`,
+        email: `member-${run}@tfhc.org`,
         passwordHash: pw,
         role: 'MEMBER',
         member: { create: { memberCode: `RBAC-${run}`, firstName: 'Reg', lastName: 'Member', phoneNumber: '08010000000' } },
@@ -86,8 +86,8 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     if (db) {
       // Audit logs intentionally restrict deletion of their actor; clear the
       // test's own entries first, then the accounts it created.
-      await db.auditLog.deleteMany({ where: { actorUser: { email: { endsWith: `-${run}@example.test` } } } });
-      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@example.test` } } });
+      await db.auditLog.deleteMany({ where: { actorUser: { email: { endsWith: `-${run}@tfhc.org` } } } });
+      await db.user.deleteMany({ where: { email: { endsWith: `-${run}@tfhc.org` } } });
       await db.accessRole.deleteMany({ where: { key: { startsWith: 'EVENTS_COORDINATOR_' } } });
     }
     if (app) await app.close();
@@ -164,7 +164,7 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
       await http()
         .post('/admin/team')
         .set(auth(superToken))
-        .send({ email: `newadmin-${run}@example.test`, firstName: 'New', lastName: 'Admin', phoneNumber: '08022222222', roleIds: [adminRole.id] })
+        .send({ email: `newadmin-${run}@tfhc.org`, firstName: 'New', lastName: 'Admin', phoneNumber: '08022222222', roleIds: [adminRole.id] })
         .expect(201)
     ).body;
     expect(invited.emailDelivered).toBe(false);
@@ -172,7 +172,7 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     const token = new URL(invited.inviteUrl).searchParams.get('token')!;
 
     // Cannot sign in before accepting.
-    await http().post('/auth/login').send({ email: `newadmin-${run}@example.test`, password: 'whatever-not-set' }).expect(401);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'whatever-not-set' }).expect(403);
 
     const accepted = (await http().post('/auth/accept-invite').send({ token, password: 'BrandNewPass!234' }).expect(201)).body;
     expect(accepted.user.accessRoles).toEqual(['ADMINISTRATION']);
@@ -185,15 +185,15 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     const newAdminToken = accepted.accessToken;
     await http().get('/members').set(auth(newAdminToken)).expect(200);
     await http().get('/access-roles').set(auth(newAdminToken)).expect(403);
-    await http().post('/auth/login').send({ email: `newadmin-${run}@example.test`, password: 'BrandNewPass!234' }).expect(201);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(201);
 
     // Deactivate — the existing session must stop working immediately.
     await http().post(`/admin/team/${invited.id}/deactivate`).set(auth(superToken)).send({ reason: 'left the team' }).expect(201);
     await http().get('/members').set(auth(newAdminToken)).expect(401);
-    await http().post('/auth/login').send({ email: `newadmin-${run}@example.test`, password: 'BrandNewPass!234' }).expect(403);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(403);
 
     await http().post(`/admin/team/${invited.id}/reactivate`).set(auth(superToken)).expect(201);
-    await http().post('/auth/login').send({ email: `newadmin-${run}@example.test`, password: 'BrandNewPass!234' }).expect(201);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(201);
 
     const audit = await db.auditLog.findMany({ where: { entity: 'User', entityId: invited.id }, orderBy: { createdAt: 'asc' } });
     expect(audit.map((a) => a.action)).toEqual(
@@ -218,7 +218,7 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     expect(team.find((t: any) => t.id === superUserId).isSuperAdmin).toBe(true);
 
     // With a second Super Admin present the change is allowed, then reverted.
-    const second = await db.user.create({ data: { email: `super2-${run}@example.test`, passwordHash: await argon2.hash('x'.repeat(12)), role: 'ADMIN' } });
+    const second = await db.user.create({ data: { email: `super2-${run}@tfhc.org`, passwordHash: await argon2.hash('x'.repeat(12)), role: 'ADMIN' } });
     await grantRole(second.id, 'SUPER_ADMIN');
     const superRole = await db.accessRole.findUniqueOrThrow({ where: { key: 'SUPER_ADMIN' } });
     await http()

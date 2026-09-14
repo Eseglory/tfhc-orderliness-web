@@ -85,14 +85,6 @@ export const DEFAULT_EVENT_TYPES: readonly EventTypeDef[] = [
     defaultCompulsory: false,
   },
   {
-    key: 'FUNERAL',
-    name: 'Funeral',
-    description: 'Funeral and memorial services',
-    icon: 'local_florist',
-    color: '#475569',
-    defaultCompulsory: false,
-  },
-  {
     key: 'CELEBRATION',
     name: 'Celebration',
     description: 'Birthdays, anniversaries, parties and thanksgiving',

@@ -7,18 +7,22 @@ import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberMeetingsPage() {
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'Upcoming' | 'Past' | 'Mandatory'>('Upcoming');
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
+    setLoading(true);
     fetchApi('/meetings')
-      .then((data) => setMeetings(data))
-      .catch((err) => console.error(err));
+      .then((data) => setMeetings(Array.isArray(data) ? data : []))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
   const filteredMeetings = meetings.filter((m) => {
-    const past = ['CLOSED', 'CANCELLED'].includes(m.status) || new Date(m.endTime || m.attendanceCloseTime) < new Date();
+    const meetingTime = new Date(m.startTime || m.meetingDate);
+    const past = ['CLOSED', 'CANCELLED'].includes(m.status) || meetingTime < new Date();
     if (filter === 'Upcoming' && past) return false;
     if (filter === 'Past' && !past) return false;
     if (filter === 'Mandatory' && !m.isCompulsory) return false;
@@ -29,29 +33,29 @@ export default function MemberMeetingsPage() {
 
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
-      {/* TopAppBar matching Stitch Screen 6 */}
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
             <LogoIcon alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Meetings</h1>
+          <h1 className="min-w-0 font-headline-sm text-base sm:text-headline-sm font-bold text-primary">Meetings & Services</h1>
         </div>
-        <Link href="/member/notifications" className="text-on-surface-variant hover:opacity-80 transition-all duration-200">
-          <span className="material-symbols-outlined">notifications</span>
+        <Link href="/member/calendar" className="text-primary hover:opacity-80 transition-all font-semibold text-xs shrink-0 flex items-center gap-1">
+          <span className="material-symbols-outlined text-base">calendar_month</span>
+          <span>Calendar</span>
         </Link>
       </header>
 
-      <main className="px-edge-margin pb-32 max-w-3xl mx-auto">
-        {/* Segmented Controls matching Stitch Screen 6 */}
-        <div className="bg-surface-container-low p-1 rounded-lg flex mt-stack-md">
+      <main className="px-edge-margin pb-32 max-w-3xl mx-auto pt-4">
+        {/* Segmented Controls */}
+        <div className="bg-surface-container-low p-1 rounded-xl flex">
           {(['Upcoming', 'Past', 'Mandatory'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`flex-1 rounded font-label-md text-label-md py-2 text-center transition-all ${
+              className={`flex-1 rounded-lg font-label-md text-xs py-2 text-center transition-all ${
                 filter === tab
-                  ? 'bg-surface-container-lowest text-primary shadow-[0px_2px_8px_rgba(0,0,0,0.05)] font-bold'
+                  ? 'bg-surface-container-lowest text-primary shadow-sm font-bold'
                   : 'text-on-surface-variant hover:text-primary'
               }`}
             >
@@ -60,27 +64,27 @@ export default function MemberMeetingsPage() {
           ))}
         </div>
 
-        {/* Search & Filter matching Stitch Screen 6 */}
-        <div className="mt-stack-md space-y-stack-sm">
+        {/* Search & Filter */}
+        <div className="mt-4 space-y-3">
           <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-lg">search</span>
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search meetings..."
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-2 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-outline-variant text-on-surface"
+              placeholder="Search meetings and services…"
+              className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl pl-10 pr-4 py-2 text-sm focus:border-primary focus:outline-none placeholder:text-outline-variant text-on-surface"
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-            {['All', 'Unit Meetings', 'Services', 'Rehearsals', 'Trainings'].map((cat) => (
+            {['All', 'Sunday Service', 'Midweek Service', 'Special Programme', 'Unit Meeting', 'Training'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`whitespace-nowrap px-4 py-1.5 rounded-full font-label-sm text-label-sm transition-colors ${
+                className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                   selectedCategory === cat
-                    ? 'bg-primary text-on-primary font-bold'
-                    : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:border-primary'
+                    ? 'bg-primary text-on-primary font-bold shadow-sm'
+                    : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant/30 hover:border-primary'
                 }`}
               >
                 {cat}
@@ -89,95 +93,78 @@ export default function MemberMeetingsPage() {
           </div>
         </div>
 
-        {/* Meeting List matching Stitch Screen 6 */}
-        <div className="mt-section-gap space-y-gutter">
-          {filteredMeetings.length > 0 ? (
+        {/* Meeting List */}
+        <div className="mt-6 space-y-3">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+              <p className="text-sm">Loading services & meetings…</p>
+            </div>
+          ) : filteredMeetings.length > 0 ? (
             filteredMeetings.map((m) => {
-              const d = new Date(m.meetingDate);
-              const monthStr = d.toLocaleString('default', { month: 'short' });
-              const dayStr = d.getDate();
+              const d = new Date(m.startTime || m.meetingDate);
+              const monthStr = Number.isFinite(d.getTime()) ? d.toLocaleString('default', { month: 'short' }) : '—';
+              const dayStr = Number.isFinite(d.getTime()) ? d.getDate() : '—';
 
               return (
-                <Link key={m.id} href={`/member/meetings/${m.id}`}>
-                  <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md hover:border-primary transition-colors cursor-pointer mb-3">
-                    <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
-                      <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">{monthStr}</span>
-                      <span className="font-headline-md text-headline-md text-primary font-bold">{dayStr}</span>
+                <div
+                  key={m.id}
+                  className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:border-outline-variant/40 transition-colors"
+                >
+                  <div className="flex min-w-0 gap-4 items-center">
+                    <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-xl w-14 h-14 shrink-0">
+                      <span className="font-label-sm text-[10px] text-on-surface-variant uppercase font-bold">{monthStr}</span>
+                      <span className="font-headline-md text-xl text-primary font-black">{dayStr}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap justify-between items-start gap-2">
-                        <h3 className="font-headline-sm text-headline-sm text-primary font-bold break-words min-w-0">{m.title}</h3>
-                        <span className="shrink-0 whitespace-nowrap bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
-                          {m.pointWeight}x Weight
-                        </span>
-                      </div>
-                      <div className="mt-2 space-y-1">
-                        <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                          <span className="material-symbols-outlined text-[16px]">schedule</span>
-                          <span>
-                            Expected: {new Date(m.expectedArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | Starts: {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/member/meetings/${m.id}`} className="min-w-0 hover:underline">
+                          <h3 className="font-bold text-sm text-primary truncate">{m.title}</h3>
+                        </Link>
+                        {m.isCompulsory && (
+                          <span className="shrink-0 bg-amber-500/10 text-amber-700 font-bold text-[10px] px-1.5 py-0.5 rounded">
+                            Mandatory
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                          <span className="material-symbols-outlined text-[16px]">location_on</span>
-                          <span>{m.locationName}</span>
-                        </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">schedule</span>
+                          <span>{Number.isFinite(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">location_on</span>
+                          <span>{m.locationName || 'Church Sanctuary'}</span>
+                        </span>
                       </div>
                     </div>
                   </div>
-                </Link>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    {m.status === 'ACTIVE' && (
+                      <Link
+                        href={`/member/check-in?meetingId=${m.id}`}
+                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                      >
+                        Check In
+                      </Link>
+                    )}
+                    <Link
+                      href={`/member/submit-excuse?meetingId=${m.id}`}
+                      className="px-3 py-1.5 bg-surface-container-low text-on-surface rounded-xl text-xs font-semibold hover:bg-surface-container transition-colors"
+                    >
+                      Excuse
+                    </Link>
+                  </div>
+                </div>
               );
             })
           ) : (
-            <>
-              {/* Fallback Cards matching Stitch export */}
-              <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md">
-                <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
-                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
-                  <span className="font-headline-md text-headline-md text-primary font-bold">15</span>
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Sunday Service</h3>
-                    <span className="bg-surface-container text-on-primary-container px-2 py-0.5 rounded font-label-sm text-label-sm">
-                      Special Programme 2.0x
-                    </span>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">schedule</span>
-                      <span>Expected: 8:45 AM | Starts: 9:00 AM</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">location_on</span>
-                      <span>Main Auditorium</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-surface-container-low flex gap-stack-md opacity-70">
-                <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-lg w-16 h-16 shrink-0">
-                  <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">Aug</span>
-                  <span className="font-headline-md text-headline-md text-primary font-bold">12</span>
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-headline-sm text-headline-sm text-primary font-bold">Midweek Training</h3>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">schedule</span>
-                      <span>Expected: 6:15 PM | Starts: 6:30 PM</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                      <span className="material-symbols-outlined text-[16px]">location_on</span>
-                      <span>Hall B</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
+            <div className="text-center py-16 text-on-surface-variant bg-surface-container-lowest border border-outline-variant/10 rounded-2xl p-6">
+              <span className="material-symbols-outlined text-4xl text-outline-variant">event_busy</span>
+              <p className="font-bold text-sm mt-2">No meetings found.</p>
+              <p className="text-xs text-on-surface-variant mt-0.5">Try changing your filters or search term.</p>
+            </div>
           )}
         </div>
       </main>

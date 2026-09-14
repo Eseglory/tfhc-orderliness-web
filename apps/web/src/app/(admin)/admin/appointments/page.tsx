@@ -1,777 +1,1268 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Calendar as CalendarIcon,
   Clock,
   Users,
   Shield,
-  ShieldCheck,
   CheckCircle2,
   AlertCircle,
   Plus,
   Search,
-  Filter,
   RefreshCw,
   Download,
-  FileText,
-  Lock,
-  ChevronRight,
-  Sparkles,
-  MapPin,
-  HeartHandshake,
   Phone,
   Video,
   ExternalLink,
-  MessageSquare,
+  MapPin,
+  Tag,
+  LayoutGrid,
+  Table as TableIcon,
+  Columns,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Edit2,
+  CalendarDays,
+  XCircle,
   AlertTriangle,
   UserCheck,
-  Send,
-  SlidersHorizontal,
-  FileCheck,
-  Check,
-  Edit,
-  ArrowUpRight,
-  Activity,
-  Heart,
-  BookOpen,
+  Building2,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
+import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
+import { Modal, ConfirmDialog, useToast } from '../../../../components/ui';
 
-interface AppointmentSession {
+export type AppointmentStatus =
+  | 'SCHEDULED'
+  | 'CONFIRMED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'RESCHEDULED'
+  | 'NO_SHOW';
+
+export type AppointmentMode = 'IN_PERSON' | 'VIDEO_CONFERENCE' | 'PHONE_CALL';
+
+export interface AppointmentRecord {
   id: string;
-  timeRange: string;
-  durationLabel: string;
-  status: 'Completed' | 'In-Session Now' | 'Priority Care' | 'Virtual Tele-Care' | 'Pending Intake';
-  categoryHeader: string;
+  referenceCode: string;
   title: string;
-  badgeLabel: string;
-  badgeColor: string;
-  congregantName: string;
-  congregantId: string;
-  congregantDetail?: string;
-  pastorName: string;
-  pastorRole: string;
-  pastorLocation: string;
-  notes: string;
-  tags: { label: string; action?: boolean }[];
-  actions: { label: string; primary?: boolean; link?: string; onClick?: () => void }[];
-  remainingTimeBanner?: string;
-  virtualLink?: string;
-  urgentNote?: string;
+  serviceId: string | null;
+  service?: { id: string; name: string; category: string; durationMinutes: number } | null;
+  memberId: string | null;
+  member?: { id: string; firstName: string; lastName: string; memberCode: string; phoneNumber: string } | null;
+  clientName: string;
+  clientEmail: string | null;
+  clientPhone: string | null;
+  providerId: string | null;
+  providerName: string;
+  providerEmail: string | null;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  mode: AppointmentMode;
+  location: string | null;
+  meetingUrl: string | null;
+  status: AppointmentStatus;
+  notes: string | null;
+  intakeNotes: string | null;
+  cancellationReason: string | null;
+  createdAt: string;
 }
 
-const APPOINTMENT_SESSIONS: AppointmentSession[] = [
-  {
-    id: 'apt-1',
-    timeRange: '09:00 – 10:00 AM',
-    durationLabel: '60 Minutes',
-    status: 'Completed',
-    categoryHeader: 'PREMARITAL MENTORSHIP • MODULE 4 OF 6',
-    title: 'Covenant Foundations & Communication Styles',
-    badgeLabel: 'Clergy Restricted',
-    badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
-    congregantName: 'David & Hannah Miller',
-    congregantId: '#ORD-3174',
-    pastorName: 'Pastor David Chen',
-    pastorRole: 'Lead Pastor',
-    pastorLocation: 'Suite 101',
-    notes:
-      'Review completed on Myers-Briggs conflict triggers. Prescribed couple covenant homework in Pastoral Study Workbook Chapter 5. Session 5 confirmed for next Thursday.',
-    tags: [{ label: 'Encrypted Session Notes Vaulted' }],
-    actions: [
-      { label: 'View Notes' },
-      { label: 'Summary Sheet' },
-    ],
-  },
-  {
-    id: 'apt-2',
-    timeRange: '11:00 AM – 12:00 PM',
-    durationLabel: 'Active 42 min elapsed',
-    status: 'In-Session Now',
-    categoryHeader: 'SPIRITUAL FORMATION • DISCERNMENT',
-    title: 'Vocational Calling & Sabbatical Discernment',
-    badgeLabel: 'Historic Chapel Prayer Room',
-    badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-    congregantName: 'Sister Grace Lawson',
-    congregantId: '#ORD-1682',
-    congregantDetail: 'Deaconess',
-    pastorName: 'Pastor Sarah Jenkins',
-    pastorRole: 'Associate Pastor, Spiritual Life',
-    pastorLocation: 'Historic Chapel Nave',
-    notes:
-      'Focus on ministry transition, emotional health, and contemplative prayer rhythm.',
-    remainingTimeBanner: '18 minutes remaining in booked block',
-    tags: [],
-    actions: [
-      { label: 'Extend +15m' },
-      { label: 'Add Care Record', primary: true },
-    ],
-  },
-  {
-    id: 'apt-3',
-    timeRange: '02:00 – 03:00 PM',
-    durationLabel: 'Up Next (2h 45m)',
-    status: 'Priority Care',
-    categoryHeader: 'FAMILY CRISIS • BEREAVEMENT CARE',
-    title: 'Grief Support & Benevolence After-Care',
-    badgeLabel: 'Urgent Pastoral Attention',
-    badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-    congregantName: 'Robert & Clara Vance',
-    congregantId: '#ORD-0925',
-    pastorName: 'Pastor David & Elder Samuel Osei',
-    pastorRole: 'Co-Shepherding',
-    pastorLocation: 'Suite 3',
-    notes:
-      'Pastoral Directive: Follow-up following ICU release of child. Deacons Benevolence Committee approved $500 emergency grocery support stipend.',
-    tags: [{ label: 'Consultation Room B (Soundproofed)' }],
-    actions: [
-      { label: 'Review Intake History' },
-      { label: 'Check-in Family', primary: true },
-    ],
-  },
-  {
-    id: 'apt-4',
-    timeRange: '03:30 – 04:30 PM',
-    durationLabel: 'Virtual Tele-Care',
-    status: 'Virtual Tele-Care',
-    categoryHeader: 'LEADERSHIP SHEPHERDING',
-    title: 'Elder Mentorship & Ministry Stewardship',
-    badgeLabel: 'Encrypted Stream L4',
-    badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-    congregantName: 'Elder Marcus Sterling',
-    congregantId: '#ORD-2041',
-    congregantDetail: 'Finance Chair',
-    pastorName: 'Pastor David Chen',
-    pastorRole: 'Executive Lead Room',
-    pastorLocation: 'Executive Suite',
-    notes:
-      'Annual leadership development milestone. Reviewing committee burnout indicators and stewardship cadence for upcoming capital campaign.',
-    virtualLink: 'telecare.ordaliness.org/room/ch-8821',
-    tags: [],
-    actions: [
-      { label: 'Edit Slot' },
-      { label: 'Launch Tele-Care Link', primary: true },
-    ],
-  },
-  {
-    id: 'apt-5',
-    timeRange: '05:00 – 06:00 PM',
-    durationLabel: 'Evening Slot',
-    status: 'Pending Intake',
-    categoryHeader: 'BAPTISM • YOUTH & FAMILY INQUIRY',
-    title: 'Baptism & Youth Profession of Faith Orientation',
-    badgeLabel: 'Family Ministry Office',
-    badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-    congregantName: 'Lucas Vance & Parents',
-    congregantId: '#ORD-4318',
-    pastorName: 'Pastor Sarah Jenkins',
-    pastorRole: 'Family Discipleship Suite',
-    pastorLocation: 'Youth Wing',
-    notes:
-      'Orientation for fireside immersion baptism. Pending parent consent document upload on mobile portal.',
-    urgentNote: 'SMS Reminder queued for 3:30 PM',
-    tags: [],
-    actions: [
-      { label: 'Resend Link' },
-      { label: 'Confirm Booking', primary: true },
-    ],
-  },
-];
+type ViewMode = 'grid' | 'table' | 'cards' | 'compact';
 
-export default function AppointmentsPastoralCarePage() {
+const STATUS_BADGES: Record<AppointmentStatus, { label: string; color: string }> = {
+  SCHEDULED: {
+    label: 'Scheduled',
+    color: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  },
+  CONFIRMED: {
+    label: 'Confirmed',
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+  },
+  COMPLETED: {
+    label: 'Completed',
+    color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    color: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+  },
+  RESCHEDULED: {
+    label: 'Rescheduled',
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  },
+  NO_SHOW: {
+    label: 'No-Show',
+    color: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  },
+};
+
+export default function AppointmentsPage() {
   const { user } = useAuth();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPastor, setSelectedPastor] = useState('All');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All');
-  const [selectedRoom, setSelectedRoom] = useState('All');
-  const [viewType, setViewType] = useState<'day' | 'week' | 'registry' | 'availability'>('day');
+  const { notify } = useToast();
 
-  const filteredSessions = useMemo(() => {
-    return APPOINTMENT_SESSIONS.filter((session) => {
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matches =
-          session.title.toLowerCase().includes(q) ||
-          session.congregantName.toLowerCase().includes(q) ||
-          session.pastorName.toLowerCase().includes(q) ||
-          session.congregantId.toLowerCase().includes(q);
-        if (!matches) return false;
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([]);
+  const [servicesList, setServicesList] = useState<{ id: string; name: string; durationMinutes: number; defaultLocation: string | null }[]>([]);
+  const [membersList, setMembersList] = useState<{ id: string; firstName: string; lastName: string; memberCode: string; phoneNumber: string; email?: string }[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Filters & Search
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [modeFilter, setModeFilter] = useState<string>('ALL');
+  const [serviceFilter, setServiceFilter] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  // Modals
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentRecord | null>(null);
+  const [cancellingAppointment, setCancellingAppointment] = useState<AppointmentRecord | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // New Appointment Form State
+  const [formServiceId, setFormServiceId] = useState('');
+  const [formMemberId, setFormMemberId] = useState('');
+  const [formClientName, setFormClientName] = useState('');
+  const [formClientEmail, setFormClientEmail] = useState('');
+  const [formClientPhone, setFormClientPhone] = useState('');
+  const userName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Lead Coordinator';
+  const [formProviderName, setFormProviderName] = useState(userName);
+  const [formProviderId, setFormProviderId] = useState(user?.userId || 'lead-coord-01');
+  const [formDate, setFormDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [formTime, setFormTime] = useState('10:00');
+  const [formDuration, setFormDuration] = useState(30);
+  const [formMode, setFormMode] = useState<AppointmentMode>('IN_PERSON');
+  const [formLocation, setFormLocation] = useState('Executive Suite 201');
+  const [formMeetingUrl, setFormMeetingUrl] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+
+  // Reschedule Form State
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleTime, setRescheduleTime] = useState('');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+
+  // Load view mode preference
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tfhc_appointments_view_mode') as ViewMode;
+      if (saved && ['grid', 'table', 'cards', 'compact'].includes(saved)) {
+        setViewMode(saved);
       }
-      if (selectedPastor !== 'All' && !session.pastorName.includes(selectedPastor)) {
-        return false;
+    } catch {}
+  }, []);
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('tfhc_appointments_view_mode', mode);
+    } catch {}
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [appRes, srvRes, memRes] = await Promise.all([
+        fetchApi<{ items: AppointmentRecord[]; total: number }>('/appointments').catch(() => ({ items: [], total: 0 })),
+        fetchApi<{ items: any[] }>('/services?activeOnly=true').catch(() => ({ items: [] })),
+        fetchApi<any[]>('/members').catch(() => []),
+      ]);
+
+      setAppointments(appRes.items || []);
+      setTotalRecords(appRes.total || 0);
+      setServicesList(srvRes.items || []);
+      setMembersList(memRes || []);
+    } catch (e: any) {
+      notify(e.message || 'Could not load appointments', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // When Member is selected in create form, auto-fill client fields
+  const handleMemberSelect = (memberId: string) => {
+    setFormMemberId(memberId);
+    if (!memberId) return;
+    const m = membersList.find((mem) => mem.id === memberId);
+    if (m) {
+      setFormClientName(`${m.firstName} ${m.lastName}`);
+      setFormClientPhone(m.phoneNumber || '');
+      if (m.email) setFormClientEmail(m.email);
+    }
+  };
+
+  // When Service is selected, auto-fill duration and default location
+  const handleServiceSelect = (serviceId: string) => {
+    setFormServiceId(serviceId);
+    if (!serviceId) return;
+    const s = servicesList.find((srv) => srv.id === serviceId);
+    if (s) {
+      setFormDuration(s.durationMinutes);
+      if (s.defaultLocation) setFormLocation(s.defaultLocation);
+    }
+  };
+
+  const openCreateModal = () => {
+    setFormServiceId(servicesList[0]?.id || '');
+    if (servicesList[0]) {
+      setFormDuration(servicesList[0].durationMinutes);
+      if (servicesList[0].defaultLocation) setFormLocation(servicesList[0].defaultLocation);
+    }
+    setFormMemberId('');
+    setFormClientName('');
+    setFormClientEmail('');
+    setFormClientPhone('');
+    setFormProviderName(userName);
+    setFormProviderId(user?.userId || 'lead-coord-01');
+    setFormDate(new Date().toISOString().split('T')[0]);
+    setFormTime('10:00');
+    setFormMode('IN_PERSON');
+    setFormLocation('Executive Suite 201');
+    setFormMeetingUrl('');
+    setFormNotes('');
+    setCreateModalOpen(true);
+  };
+
+  const handleCreateAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formClientName.trim()) {
+      notify('Client name is required', 'error');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const startDateTime = new Date(`${formDate}T${formTime}:00`);
+      if (isNaN(startDateTime.getTime())) {
+        notify('Invalid date or time selected', 'error');
+        setSaving(false);
+        return;
       }
-      if (selectedStatus !== 'All' && session.status !== selectedStatus) {
-        return false;
+
+      const endDateTime = new Date(startDateTime.getTime() + Number(formDuration) * 60000);
+
+      const payload = {
+        title: formServiceId
+          ? `${servicesList.find((s) => s.id === formServiceId)?.name || 'Appointment'} with ${formClientName}`
+          : `Consultation with ${formClientName}`,
+        serviceId: formServiceId || undefined,
+        memberId: formMemberId || undefined,
+        clientName: formClientName.trim(),
+        clientEmail: formClientEmail.trim() || undefined,
+        clientPhone: formClientPhone.trim() || undefined,
+        providerId: formProviderId,
+        providerName: formProviderName.trim(),
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        durationMinutes: Number(formDuration),
+        mode: formMode,
+        location: formLocation.trim() || undefined,
+        meetingUrl: formMode === 'VIDEO_CONFERENCE' ? formMeetingUrl.trim() || undefined : undefined,
+        notes: formNotes.trim() || undefined,
+      };
+
+      await fetchApi('/appointments', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      notify('Appointment confirmed and added to calendar', 'success');
+      setCreateModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to schedule appointment. Possible provider conflict.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openRescheduleModal = (app: AppointmentRecord) => {
+    setSelectedAppointment(app);
+    const d = new Date(app.startTime);
+    setRescheduleDate(d.toISOString().split('T')[0]);
+    setRescheduleTime(
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    );
+    setRescheduleReason('');
+    setRescheduleModalOpen(true);
+  };
+
+  const handleReschedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
+
+    setSaving(true);
+    try {
+      const newStart = new Date(`${rescheduleDate}T${rescheduleTime}:00`);
+      if (isNaN(newStart.getTime())) {
+        notify('Invalid date or time selected', 'error');
+        setSaving(false);
+        return;
       }
-      return true;
+
+      await fetchApi(`/appointments/${selectedAppointment.id}/reschedule`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          startTime: newStart.toISOString(),
+          reason: rescheduleReason.trim() || undefined,
+        }),
+      });
+
+      notify('Appointment rescheduled successfully', 'success');
+      setRescheduleModalOpen(false);
+      setSelectedAppointment(null);
+      await loadData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to reschedule appointment. Check provider availability.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (appId: string, status: AppointmentStatus) => {
+    try {
+      await fetchApi(`/appointments/${appId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      notify(`Appointment marked as ${status.toLowerCase()}`, 'success');
+      await loadData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to update status', 'error');
+    }
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancellingAppointment) return;
+    try {
+      await fetchApi(`/appointments/${cancellingAppointment.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'CANCELLED',
+          cancellationReason: cancelReason.trim() || 'Cancelled by coordinator',
+        }),
+      });
+      notify('Appointment cancelled', 'success');
+      setCancellingAppointment(null);
+      setCancelReason('');
+      await loadData();
+    } catch (err: any) {
+      notify(err.message || 'Failed to cancel appointment', 'error');
+    }
+  };
+
+  // Filtered & Paginated records
+  const filteredAppointments = useMemo(() => {
+    return appointments.filter((a) => {
+      const matchesSearch =
+        !search ||
+        a.referenceCode.toLowerCase().includes(search.toLowerCase()) ||
+        a.clientName.toLowerCase().includes(search.toLowerCase()) ||
+        a.providerName.toLowerCase().includes(search.toLowerCase()) ||
+        a.title.toLowerCase().includes(search.toLowerCase()) ||
+        (a.notes && a.notes.toLowerCase().includes(search.toLowerCase()));
+
+      const matchesStatus = statusFilter === 'ALL' || a.status === statusFilter;
+      const matchesMode = modeFilter === 'ALL' || a.mode === modeFilter;
+      const matchesService = serviceFilter === 'ALL' || a.serviceId === serviceFilter;
+
+      return matchesSearch && matchesStatus && matchesMode && matchesService;
     });
-  }, [searchQuery, selectedPastor, selectedStatus]);
+  }, [appointments, search, statusFilter, modeFilter, serviceFilter]);
+
+  const totalPages = Math.ceil(filteredAppointments.length / pageSize) || 1;
+  const paginatedAppointments = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredAppointments.slice(start, start + pageSize);
+  }, [filteredAppointments, page, pageSize]);
+
+  // KPIs
+  const totalAppointmentsCount = appointments.length;
+  const confirmedCount = appointments.filter((a) => a.status === 'CONFIRMED' || a.status === 'SCHEDULED').length;
+  const completedCount = appointments.filter((a) => a.status === 'COMPLETED').length;
 
   return (
-    <AdminLayoutShell>
-      <div className="space-y-6 pb-16">
-        {/* Top Breadcrumb & Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
-              <span>CHURCH OPERATIONS</span>
-              <span>/</span>
-              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">GRACE CATHEDRAL CAMPUS</span>
-              <span>/</span>
-              <span>PASTORAL APPOINTMENTS &amp; COUNSELING</span>
+    <AdminLayoutShell activeHref="/admin/appointments">
+      <div className="space-y-6 pb-16 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-amber-600 dark:text-amber-400 uppercase">
+              <span>SCHEDULE &amp; CONSULTATIONS</span>
+              <span>•</span>
+              <span>APPOINTMENTS DIRECTORY</span>
             </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Appointments &amp; Pastoral Care Scheduling
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                STRICTLY CONFIDENTIAL
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Encrypted Clergy Vault: Active (HIPAA / RCCP Level 4)</span>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white mt-1">
+              Appointments &amp; Provider Bookings
+            </h1>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-3xl">
+              Manage one-on-one member appointments, executive consultations, advisory sessions, and provider calendars with conflict prevention.
             </p>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm">
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              Sync Calendar
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={loadData}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
+              title="Refresh appointments"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
             </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm">
-              <Download className="w-3.5 h-3.5 text-slate-400" />
-              Export Day PDF
-            </button>
-            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all">
+
+            <Link
+              href="/admin/services"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 hover:bg-indigo-100 transition-colors shadow-sm"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Services Catalog</span>
+            </Link>
+
+            <Link
+              href="/admin/calendar"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>Calendar</span>
+            </Link>
+
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 active:scale-95 transition-all shadow-sm"
+            >
               <Plus className="w-4 h-4" />
-              Book New Appointment
+              <span>+ New Appointment</span>
             </button>
           </div>
         </div>
 
-        {/* 4 KPI Scorecard Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                TODAY&apos;S SESSIONS
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                On Schedule
-              </span>
+        {/* Top KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Bookings</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{totalAppointmentsCount}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Recorded appointment sessions</p>
             </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">7 Confirmed</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>3 Completed • 4 Upcoming</span>
-              <span className="font-bold text-emerald-600">100% In-Person</span>
+            <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-100 dark:border-amber-900 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Clock className="w-6 h-6" />
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                PASTORAL AVAILABILITY
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                High Utilization
-              </span>
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Confirmed &amp; Upcoming</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{confirmedCount}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Active on provider schedules</p>
             </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">84.5%</span>
-              <span className="text-xs font-bold text-slate-400">Slotted</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>4 Clergy Active Today</span>
-              <span className="font-bold text-indigo-600">2 Open Slots</span>
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-900 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                WEEKLY MODALITIES
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
-                Privileged 14
-              </span>
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">Completed Sessions</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{completedCount}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Successfully concluded sessions</p>
             </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">18 Sessions</span>
-            </div>
-            <div className="mt-2 text-xs text-slate-500 truncate">
-              <span>10 Pastoral • 5 Premarital • 3 Crisis</span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                FOLLOW-UP ADHERENCE
-              </span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                Compliant
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">96.2%</span>
-              <span className="text-xs font-bold text-emerald-600">+3.4% MoM</span>
-            </div>
-            <div className="mt-2 text-xs text-slate-500 truncate">
-              <span>2 overdue pastoral follow-ups</span>
+            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <UserCheck className="w-6 h-6" />
             </div>
           </div>
         </div>
 
-        {/* Filter Bar & Schedule View Switcher */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-lg">
+        {/* Filters & View Switcher */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Search */}
+            <div className="relative flex-1">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search congregant, pastor, session #... (⌘K)"
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search reference code, client name, provider, notes..."
+                className="w-full pl-9 pr-3.5 py-2 text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
               />
             </div>
 
-            {/* Date and View Selectors */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200">
-                <CalendarIcon className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Today • Thursday, Nov 12, 2026</span>
-              </div>
-
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                {[
-                  { key: 'day', label: 'Day Schedule' },
-                  { key: 'week', label: 'Weekly Roster' },
-                  { key: 'registry', label: 'Registry' },
-                  { key: 'availability', label: 'Availability' },
-                ].map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => setViewType(t.key as any)}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                      viewType === t.key
-                        ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Secondary Dropdown Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            {/* Filter Dropdowns */}
             <div className="flex flex-wrap items-center gap-2">
               <select
-                value={selectedPastor}
-                onChange={(e) => setSelectedPastor(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
-              >
-                <option value="All">Pastor: All Pastors &amp; Elders (4)</option>
-                <option value="David Chen">Pastor David Chen</option>
-                <option value="Sarah Jenkins">Pastor Sarah Jenkins</option>
-                <option value="Samuel Osei">Elder Samuel Osei</option>
-                <option value="Julian Vance">Dr. Julian Vance</option>
-              </select>
-
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
-              >
-                <option value="All">Modality: All Care Categories</option>
-                <option value="Premarital">Premarital Mentorship</option>
-                <option value="Spiritual">Spiritual Formation</option>
-                <option value="Crisis">Crisis &amp; Bereavement</option>
-                <option value="Leadership">Leadership Shepherding</option>
-              </select>
-
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
-              >
-                <option value="All">Status: All Session States</option>
-                <option value="Completed">Completed</option>
-                <option value="In-Session Now">In-Session Now</option>
-                <option value="Priority Care">Priority Care</option>
-                <option value="Virtual Tele-Care">Virtual Tele-Care</option>
-                <option value="Pending Intake">Pending Intake</option>
-              </select>
-
-              <select
-                value={selectedRoom}
-                onChange={(e) => setSelectedRoom(e.target.value)}
-                className="bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
-              >
-                <option value="All">Room / Venue: All Locations &amp; Channels</option>
-                <option value="Suite 101">Suite 101</option>
-                <option value="Historic Chapel">Historic Chapel</option>
-                <option value="Suite 3">Suite 3</option>
-                <option value="Virtual">Virtual Tele-Care</option>
-              </select>
-            </div>
-
-            {(searchQuery || selectedPastor !== 'All' || selectedCategory !== 'All' || selectedStatus !== 'All' || selectedRoom !== 'All') && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedPastor('All');
-                  setSelectedCategory('All');
-                  setSelectedStatus('All');
-                  setSelectedRoom('All');
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1);
                 }}
-                className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
               >
-                Reset Filters
-              </button>
-            )}
+                <option value="ALL">All Statuses</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="RESCHEDULED">Rescheduled</option>
+                <option value="CANCELLED">Cancelled</option>
+                <option value="NO_SHOW">No-Show</option>
+              </select>
+
+              <select
+                value={modeFilter}
+                onChange={(e) => {
+                  setModeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="ALL">All Modes</option>
+                <option value="IN_PERSON">In-Person</option>
+                <option value="VIDEO_CONFERENCE">Google Meet / Video</option>
+                <option value="PHONE_CALL">Phone Call</option>
+              </select>
+
+              {/* 4 View Modes */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => handleViewModeChange('grid')}
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Schedule Grid View"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleViewModeChange('table')}
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Booking Table View"
+                >
+                  <TableIcon className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleViewModeChange('cards')}
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    viewMode === 'cards'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Detailed Client Cards View"
+                >
+                  <Columns className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => handleViewModeChange('compact')}
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    viewMode === 'compact'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Compact Ledger View"
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Master 2-Column Content Grid: 2/3 Left & 1/3 Right */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* LEFT 2/3 COLUMN: Active Daily Counseling Roster */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
-                  Active Daily Counseling Roster
-                </h3>
-                <span className="text-xs text-slate-400">
-                  {filteredSessions.length} Records Displayed • Completed • Active Now • Upcoming
-                </span>
-              </div>
-            </div>
-
-            {/* Session Cards Feed */}
-            {filteredSessions.map((session) => (
-              <div
-                key={session.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4 transition-all hover:border-indigo-200 dark:hover:border-indigo-800"
-              >
-                {/* Header Row: Time, Status, Modality, Badge */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 font-black text-slate-900 dark:text-white text-sm">
-                      <Clock className="w-4 h-4 text-indigo-600" />
-                      <span>{session.timeRange}</span>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-400">({session.durationLabel})</span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                        session.status === 'Completed'
-                          ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          : session.status === 'In-Session Now'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 animate-pulse'
-                          : session.status === 'Priority Care'
-                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                          : session.status === 'Virtual Tele-Care'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                      }`}
-                    >
-                      {session.status}
-                    </span>
-                  </div>
-
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${session.badgeColor}`}>
-                    {session.badgeLabel}
-                  </span>
-                </div>
-
-                {/* Modality Category Title & Main Title */}
-                <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
-                    {session.categoryHeader}
-                  </span>
-                  <h4 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
-                    {session.title}
-                  </h4>
-                </div>
-
-                {/* Two-Column Congregant & Pastor Identity Blocks */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-black text-xs shrink-0">
-                      {session.congregantName.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h5 className="text-xs font-black text-slate-900 dark:text-white">
-                        {session.congregantName}
-                      </h5>
-                      <p className="text-[10px] text-slate-500">
-                        Congregant ID: <strong>{session.congregantId}</strong>
-                        {session.congregantDetail && <span> • {session.congregantDetail}</span>}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-slate-200/80 dark:border-slate-800 pt-2 sm:pt-0 sm:pl-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-black text-xs shrink-0">
-                      {session.pastorName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                    </div>
-                    <div>
-                      <h5 className="text-xs font-black text-slate-900 dark:text-white">
-                        {session.pastorName}
-                      </h5>
-                      <p className="text-[10px] text-slate-500">
-                        {session.pastorRole} • {session.pastorLocation}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Session Notes & Details */}
-                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
-                  {session.notes}
-                </p>
-
-                {/* Remaining Time Banner or Urgent Tag */}
-                {session.remainingTimeBanner && (
-                  <div className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-                    <span className="font-bold">{session.remainingTimeBanner}</span>
-                  </div>
-                )}
-
-                {session.urgentNote && (
-                  <div className="bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between">
-                    <span className="font-bold">{session.urgentNote}</span>
-                  </div>
-                )}
-
-                {session.virtualLink && (
-                  <div className="bg-purple-50 dark:bg-purple-950/40 p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 text-xs font-mono text-purple-800 dark:text-purple-300 flex items-center gap-2">
-                    <Video className="w-3.5 h-3.5 text-purple-600" />
-                    <span>{session.virtualLink}</span>
-                  </div>
-                )}
-
-                {/* Footer Tags and Action Buttons */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {session.tags.map((tag, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                      >
-                        <ShieldCheck className="w-3 h-3 text-emerald-500" />
-                        <span>{tag.label}</span>
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {session.actions.map((act, idx) => (
-                      <button
-                        key={idx}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                          act.primary
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                      >
-                        {act.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
+        {/* Content Views */}
+        {loading ? (
+          <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+            <RefreshCw className="w-7 h-7 text-amber-600 animate-spin mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Loading appointments schedule...</p>
           </div>
+        ) : paginatedAppointments.length === 0 ? (
+          <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4">
+            <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
+              <Clock className="w-7 h-7" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">No appointments found</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+              No appointments matched your search and filter criteria. Schedule a new appointment session.
+            </p>
+            <button
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Schedule First Appointment</span>
+            </button>
+          </div>
+        ) : viewMode === 'grid' ? (
+          /* 1. Schedule Grid View */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {paginatedAppointments.map((a) => {
+              const statusBadge = STATUS_BADGES[a.status] || STATUS_BADGES.SCHEDULED;
+              const start = new Date(a.startTime);
+              const end = new Date(a.endTime);
+              return (
+                <div
+                  key={a.id}
+                  className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-amber-500/40 hover:shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[11px] font-mono font-bold text-slate-400">
+                        {a.referenceCode}
+                      </span>
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusBadge.color}`}>
+                        {statusBadge.label}
+                      </span>
+                    </div>
 
-          {/* RIGHT 1/3 COLUMN */}
-          <div className="space-y-6">
-            {/* 1. Clergy On-Duty Today */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Clergy On-Duty Today</h3>
-                  <span className="text-[10px] text-slate-400">Nov 12 • 4 Rostered</span>
-                </div>
-              </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white leading-snug">{a.title}</h3>
+                      {a.service && (
+                        <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                          Offering: {a.service.name}
+                        </p>
+                      )}
+                    </div>
 
-              <div className="space-y-3">
-                {[
-                  {
-                    name: 'Pastor David Chen',
-                    role: 'Lead Pastor',
-                    status: 'Available',
-                    statusColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-                    schedule: 'Office: 1:00 PM – 5:30 PM (2 of 4 Slots Booked)',
-                  },
-                  {
-                    name: 'Pastor Sarah Jenkins',
-                    role: 'Associate Pastor',
-                    status: 'In Session',
-                    statusColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300',
-                    schedule: 'Office: 10:00 AM – 4:00 PM (3 of 5 Slots Booked)',
-                  },
-                  {
-                    name: 'Elder Samuel Osei',
-                    role: 'Hospital & Home Visitation',
-                    status: 'On-Call Offsite',
-                    statusColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-                    schedule: 'Visitation: Grace Memorial & Home (2 Urgent Dispatches)',
-                  },
-                  {
-                    name: 'Dr. Julian Vance, LMFT',
-                    role: 'Clinical Pastoral Affiliate',
-                    status: 'Referral Only',
-                    statusColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-                    schedule: 'Thursdays: By Special Appointment (Next: 10:00 AM)',
-                  },
-                ].map((clergy, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-xs font-black text-slate-900 dark:text-white">{clergy.name}</h4>
-                        <p className="text-[10px] text-slate-400">{clergy.role}</p>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Client:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{a.clientName}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${clergy.statusColor}`}>
-                        {clergy.status}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Provider:</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">{a.providerName}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-800">
+                        <span className="text-slate-400">Date &amp; Time:</span>
+                        <span className="font-semibold text-amber-700 dark:text-amber-300">
+                          {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} •{' '}
+                          {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({a.durationMinutes}m)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Location:</span>
+                        <span className="text-slate-700 dark:text-slate-300 truncate max-w-[140px]">
+                          {a.mode === 'VIDEO_CONFERENCE' ? 'Google Meet' : a.location || 'Office Suite'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {a.meetingUrl && (
+                      <a
+                        href={a.meetingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 w-full justify-center text-xs font-bold rounded-xl bg-cyan-50 dark:bg-cyan-950 text-cyan-700 dark:text-cyan-300 border border-cyan-200 hover:bg-cyan-100 transition-colors"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        <span>Join Google Meet</span>
+                        <ExternalLink className="w-3 h-3 ml-1 opacity-70" />
+                      </a>
+                    )}
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => openRescheduleModal(a)}
+                      className="px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      Reschedule
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && (
+                        <button
+                          onClick={() => handleStatusChange(a.id, 'COMPLETED')}
+                          className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition-colors"
+                          title="Mark as Completed"
+                        >
+                          Complete
+                        </button>
+                      )}
+                      {a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && (
+                        <button
+                          onClick={() => setCancellingAppointment(a)}
+                          className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Cancel"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : viewMode === 'table' ? (
+          /* 2. Booking Table View */
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-4">Ref &amp; Appointment</th>
+                    <th className="py-3 px-4">Client</th>
+                    <th className="py-3 px-4">Provider</th>
+                    <th className="py-3 px-4">Date &amp; Time</th>
+                    <th className="py-3 px-4">Mode / Venue</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paginatedAppointments.map((a) => {
+                    const statusBadge = STATUS_BADGES[a.status] || STATUS_BADGES.SCHEDULED;
+                    const start = new Date(a.startTime);
+                    return (
+                      <tr key={a.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                          <div className="text-[10px] font-mono text-slate-400">{a.referenceCode}</div>
+                          <div>{a.title}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{a.clientName}</div>
+                          {a.clientPhone && <div className="text-[11px] text-slate-400">{a.clientPhone}</div>}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-slate-700 dark:text-slate-300">
+                          {a.providerName}
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                          <div className="font-bold text-amber-700 dark:text-amber-300">
+                            {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                          <div className="text-[11px] text-slate-400">
+                            {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({a.durationMinutes}m)
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center gap-1.5">
+                            {a.mode === 'VIDEO_CONFERENCE' ? (
+                              <Video className="w-3.5 h-3.5 text-cyan-500" />
+                            ) : (
+                              <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+                            )}
+                            <span className="truncate max-w-[130px]">{a.location || 'In-Person'}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusBadge.color}`}>
+                            {statusBadge.label}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              onClick={() => openRescheduleModal(a)}
+                              className="px-2 py-1 text-[11px] font-semibold rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50"
+                            >
+                              Reschedule
+                            </button>
+                            {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && (
+                              <button
+                                onClick={() => handleStatusChange(a.id, 'COMPLETED')}
+                                className="px-2 py-1 text-[11px] font-bold rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              >
+                                Done
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : viewMode === 'cards' ? (
+          /* 3. Detailed Client Cards View */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginatedAppointments.map((a) => {
+              const statusBadge = STATUS_BADGES[a.status] || STATUS_BADGES.SCHEDULED;
+              const start = new Date(a.startTime);
+              return (
+                <div
+                  key={a.id}
+                  className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400">{a.referenceCode}</span>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white">{a.title}</h3>
+                    </div>
+                    <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${statusBadge.color}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">Client / Member:</span>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">{a.clientName}</p>
+                      {a.clientPhone && <p className="text-[11px] text-slate-400">{a.clientPhone}</p>}
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">Assigned Provider:</span>
+                      <p className="font-bold text-slate-800 dark:text-slate-200">{a.providerName}</p>
+                    </div>
+
+                    <div className="col-span-2 pt-2 border-t border-slate-200/50 dark:border-slate-800 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Scheduled Date:</span>
+                        <p className="font-semibold text-amber-700 dark:text-amber-300">
+                          {start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} at{' '}
+                          {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({a.durationMinutes}m)
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Location:</span>
+                        <p className="font-semibold text-slate-700 dark:text-slate-300">{a.location || 'Office Suite'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {a.notes && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 italic">
+                      Notes: {a.notes}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      onClick={() => openRescheduleModal(a)}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50"
+                    >
+                      Reschedule
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {a.meetingUrl && (
+                        <a
+                          href={a.meetingUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-3 py-1.5 text-xs font-bold rounded-xl bg-cyan-600 text-white hover:bg-cyan-700"
+                        >
+                          Join Meet
+                        </a>
+                      )}
+                      {a.status !== 'COMPLETED' && (
+                        <button
+                          onClick={() => handleStatusChange(a.id, 'COMPLETED')}
+                          className="px-3 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
+                        >
+                          Mark Completed
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* 4. Compact Ledger View */
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+            {paginatedAppointments.map((a) => {
+              const statusBadge = STATUS_BADGES[a.status] || STATUS_BADGES.SCHEDULED;
+              const start = new Date(a.startTime);
+              return (
+                <div key={a.id} className="p-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-[10px] font-mono font-bold text-slate-400">{a.referenceCode}</span>
+                    <div className="truncate">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white mr-2">{a.clientName}</span>
+                      <span className="text-[11px] text-slate-400">
+                        w/ {a.providerName} • {start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
+                        {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                      {clergy.schedule}
-                    </p>
                   </div>
-                ))}
 
-                <button className="w-full py-2 rounded-xl text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800/80 transition-colors">
-                  Configure Pastoral Office Hours
-                </button>
-              </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${statusBadge.color}`}>
+                      {statusBadge.label}
+                    </span>
+                    <button
+                      onClick={() => openRescheduleModal(a)}
+                      className="px-2 py-1 text-[10px] font-semibold rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-50"
+                    >
+                      Reschedule
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {filteredAppointments.length > pageSize && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm text-xs text-slate-500">
+            <div>
+              Showing <strong>{(page - 1) * pageSize + 1}</strong> to{' '}
+              <strong>{Math.min(page * pageSize, filteredAppointments.length)}</strong> of{' '}
+              <strong>{filteredAppointments.length}</strong> appointments
             </div>
 
-            {/* 2. Care Intake Queue */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Heart className="w-4 h-4 text-rose-500" />
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Care Intake Queue</h3>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                  3 Pending Triage
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                <div className="p-3 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-200 text-rose-900 uppercase">
-                      Urgent – Bereavement
-                    </span>
-                    <span className="text-[10px] text-slate-400">2h ago</span>
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">Thomas Wright</h5>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                      Pastoral Care Support &amp; Funeral Planning
-                    </p>
-                    <span className="text-[10px] text-rose-700 dark:text-rose-300 font-semibold block mt-0.5">
-                      Requested: Elder Samuel
-                    </span>
-                  </div>
-                  <button className="w-full py-1.5 rounded-lg text-xs font-black bg-rose-600 text-white hover:bg-rose-700 shadow-xs">
-                    Assign Immediately
-                  </button>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900">
-                      Marriage Care
-                    </span>
-                    <span className="text-[10px] text-slate-400">2 days ago</span>
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">Elena Rostova</h5>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                      Spousal Communication Intervention
-                    </p>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">
-                      Preferred: Ps. David
-                    </span>
-                  </div>
-                  <button className="w-full py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-200">
-                    Assign Pastor
-                  </button>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-900">
-                      Spiritual Inquiry
-                    </span>
-                    <span className="text-[10px] text-slate-400">Yesterday</span>
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">Michael Chang</h5>
-                    <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                      Adult Confirmation &amp; Faith Questions
-                    </p>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">
-                      Preferred: Any Clergy
-                    </span>
-                  </div>
-                  <button className="w-full py-1.5 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-200">
-                    Assign Pastor
-                  </button>
-                </div>
-
-                <button className="w-full text-center py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
-                  Open Full Intake Registry (12 Completed) →
-                </button>
-              </div>
-            </div>
-
-            {/* 3. Clergy Privilege & HIPAA Shield */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <h3 className="text-sm font-black text-slate-900 dark:text-white">Clergy Privilege &amp; HIPAA Shield</h3>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
-                <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
-                  <Lock className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>256-Bit Hardware Keystore Active</span>
-                </div>
-                <p className="text-[11px] leading-relaxed">
-                  All session transcripts, clinical diagnostic references, and pastoral confessions are protected by constitutional clergy-penitent privilege and RCCP protocols.
-                </p>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                  <span>Audit Logs Clean (Last sync: 2m ago)</span>
-                  <button className="text-indigo-600 font-bold hover:underline">Access Vault Logs</button>
-                </div>
-              </div>
-
-              <button className="w-full py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center gap-2 shadow-sm transition-all">
-                <Phone className="w-3.5 h-3.5" />
-                Emergency On-Call Pastoral Pager
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-30"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-30"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-3 py-1 font-bold text-slate-900 dark:text-white">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-30"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-30"
+              >
+                <ChevronsRight className="w-4 h-4" />
               </button>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Schedule New Appointment Modal */}
+        <Modal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          title="Schedule New Appointment"
+        >
+          <form onSubmit={handleCreateAppointment} className="space-y-4 text-xs">
+            {/* Service & Member selector */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Service Offering</label>
+                <select
+                  value={formServiceId}
+                  onChange={(e) => handleServiceSelect(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Custom Consultation</option>
+                  {servicesList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.durationMinutes}m)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Existing Member (Optional)</label>
+                <select
+                  value={formMemberId}
+                  onChange={(e) => handleMemberSelect(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">-- Manual Client Info --</option>
+                  {membersList.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.firstName} {m.lastName} ({m.memberCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Client info */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Name *</label>
+              <input
+                type="text"
+                value={formClientName}
+                onChange={(e) => setFormClientName(e.target.value)}
+                placeholder="Full client name"
+                required
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Email</label>
+                <input
+                  type="email"
+                  value={formClientEmail}
+                  onChange={(e) => setFormClientEmail(e.target.value)}
+                  placeholder="client@example.com"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Phone</label>
+                <input
+                  type="tel"
+                  value={formClientPhone}
+                  onChange={(e) => setFormClientPhone(e.target.value)}
+                  placeholder="+234..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            {/* Provider info */}
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Assigned Provider / Staff *</label>
+              <input
+                type="text"
+                value={formProviderName}
+                onChange={(e) => setFormProviderName(e.target.value)}
+                placeholder="Staff / Coordinator Name"
+                required
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            {/* Date & Time */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Start Time *</label>
+                <input
+                  type="time"
+                  value={formTime}
+                  onChange={(e) => setFormTime(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Duration</label>
+                <select
+                  value={formDuration}
+                  onChange={(e) => setFormDuration(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value={15}>15 Mins</option>
+                  <option value={30}>30 Mins</option>
+                  <option value={45}>45 Mins</option>
+                  <option value={60}>60 Mins</option>
+                  <option value={90}>90 Mins</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Mode & Venue */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mode</label>
+                <select
+                  value={formMode}
+                  onChange={(e) => setFormMode(e.target.value as AppointmentMode)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="IN_PERSON">In-Person</option>
+                  <option value="VIDEO_CONFERENCE">Online (Google Meet)</option>
+                  <option value="PHONE_CALL">Phone Call</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Venue / Room</label>
+                <input
+                  type="text"
+                  value={formLocation}
+                  onChange={(e) => setFormLocation(e.target.value)}
+                  placeholder="e.g. Executive Suite 201"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Session Notes</label>
+              <textarea
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                placeholder="Add agenda, background, or preparation notes..."
+                rows={2}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCreateModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-sm disabled:opacity-50"
+              >
+                {saving ? 'Scheduling...' : 'Confirm Appointment'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* Reschedule Modal */}
+        <Modal
+          open={rescheduleModalOpen}
+          onClose={() => setRescheduleModalOpen(false)}
+          title={`Reschedule: ${selectedAppointment?.referenceCode || 'Appointment'}`}
+        >
+          <form onSubmit={handleReschedule} className="space-y-4 text-xs">
+            <p className="text-slate-500 dark:text-slate-400">
+              Current slot: <strong>{selectedAppointment && new Date(selectedAppointment.startTime).toLocaleString()}</strong>
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">New Date *</label>
+                <input
+                  type="date"
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">New Start Time *</label>
+                <input
+                  type="time"
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Reason for Rescheduling</label>
+              <input
+                type="text"
+                value={rescheduleReason}
+                onChange={(e) => setRescheduleReason(e.target.value)}
+                placeholder="e.g. Client requested postponement"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setRescheduleModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-sm disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save New Slot'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* Cancel Appointment Dialog */}
+        <Modal
+          open={!!cancellingAppointment}
+          onClose={() => setCancellingAppointment(null)}
+          title="Cancel Appointment"
+        >
+          <div className="space-y-4 text-xs">
+            <p className="text-slate-600 dark:text-slate-300">
+              Are you sure you want to cancel appointment <strong>{cancellingAppointment?.referenceCode}</strong> for{' '}
+              <strong>{cancellingAppointment?.clientName}</strong>?
+            </p>
+
+            <div>
+              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cancellation Reason</label>
+              <input
+                type="text"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="e.g. Schedule conflict"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setCancellingAppointment(null)}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancel}
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm"
+              >
+                Confirm Cancellation
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </AdminLayoutShell>
   );

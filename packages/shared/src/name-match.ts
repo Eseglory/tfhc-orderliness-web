@@ -139,3 +139,26 @@ export function parseYearlessBirthday(raw: string): string | null {
   if (!month || day < 1 || day > 31) return null;
   return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+/**
+ * Formats a person name into Pascal / Title Case (e.g. "Daniel Oguamanam", "Martha John-Williams", "D'Souza").
+ * Handles hyphenated names, apostrophes, and multiple space tokens cleanly.
+ */
+export function toPascalCase(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split('-')
+        .map((part) =>
+          part
+            .split("'")
+            .map((sub) => (sub ? sub.charAt(0).toUpperCase() + sub.slice(1).toLowerCase() : ''))
+            .join("'"),
+        )
+        .join('-'),
+    )
+    .join(' ');
+}

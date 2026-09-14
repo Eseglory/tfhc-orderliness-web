@@ -54,3 +54,25 @@ The application layer coordinates workflows:
 - **Open/Closed Principle (OCP):** Scoring rubrics and meeting weight multipliers are versionable and configurable without code modification.
 - **Dependency Inversion (DIP):** Shared domain logic is decoupled from HTTP controllers and database engines.
 - **Don't Repeat Yourself (DRY):** All time classification rules, distance formulas, and scoring metrics are centralized in `@tfhc/shared`.
+
+---
+
+## 3. Simple Church-Friendly Terminology System
+
+The user experience avoids complex corporate or technical jargon in favor of clear, intuitive single words that church members and leaders easily understand:
+
+- **Navigation & Modules**: `Home`, `Members`, `Attendance`, `Events`, `Finance`, `Groups`, `Prayer`, `Notices`, `Profile`, `Settings`.
+- **Action & State Labels**: `Check In`, `Present`, `Absent`, `Excused`, `Late`, `Approve`, `Reject`, `Invite`, `Search`, `Save`, `Send`, `View`, `Edit`, `Delete`.
+
+---
+
+## 4. GPS Location Check Architecture (The Father's House Church)
+
+1. **Registered Campus Coordinates**:
+   - Location: *The Father's House Church, 90 Alagbole–Akute Road, Iju, Ojodu*
+   - Coordinates: `6.6697906° N, 3.3581822° E`
+   - Default Attendance Radius: `100.0 meters`
+2. **Server-Authoritative Geofence Validation**:
+   - Device coordinates captured by browser Geolocation API (`navigator.geolocation.getCurrentPosition`) are transmitted to the backend `POST /attendance/check-in`.
+   - The backend independently recalculates distance using the Haversine formula and rejects any check-in beyond the configured venue radius (`400 Bad Request`).
+   - Duplicate check-in attempts are prevented by atomic database constraints (`409 Conflict`).

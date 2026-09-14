@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import {
   Calendar as CalendarIcon,
@@ -9,839 +9,1118 @@ import {
   Building2,
   CheckCircle2,
   AlertCircle,
-  AlertTriangle,
   Plus,
   Search,
   RefreshCw,
   Download,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   MapPin,
-  HeartHandshake,
-  Edit2,
-  Send,
-  SlidersHorizontal,
-  Volume2,
-  MoreHorizontal,
-  Layers,
-  Radio,
-  Share2,
-  Shield,
-  Activity,
   Flame,
-  Music,
-  Mic2,
-  Printer,
-  FileText,
-  Sliders,
-  Check,
-  Zap,
-  Lock,
-  Thermometer,
-  Wifi,
+  Radio,
+  Repeat,
+  Tag,
   ExternalLink,
+  Filter,
+  X,
+  Check,
+  Share2,
+  CalendarDays,
+  Layers,
+  ChevronDown,
+  Info,
+  Video,
+  Sparkles,
+  Shield,
+  HeartHandshake,
+  ArrowRight,
+  CalendarCheck,
+  Globe,
+  AlertTriangle,
+  MoveHorizontal,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
+import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
-import { useToast } from '../../../../components/ui';
+import { useToast, Modal } from '../../../../components/ui';
+import {
+  EventForm,
+  EventTypeOption,
+  CategoryOption,
+  emptyEvent,
+} from '../../../../components/EventForm';
 
-type CalendarTab = 'month' | 'gantt' | 'run-of-service' | 'conflict-matrix' | 'av-roster';
+type CalendarViewMode = 'month' | 'week' | 'day' | 'agenda';
+type DomainType = 'EVENT' | 'MEETING' | 'APPOINTMENT' | 'OPERATIONS';
+type SourceFilter = 'ALL' | 'GOOGLE_SYNCED' | 'INTERNAL_ONLY';
 
-interface CalendarEventItem {
+interface UnifiedCalendarItem {
   id: string;
-  day: number;
-  time: string;
+  originalId: string;
+  domainType: DomainType;
   title: string;
-  venue: string;
-  category: 'liturgy' | 'discipleship' | 'outreach' | 'facility' | 'conflict';
-  categoryLabel: string;
-  badgeTone: string;
-  hasConflict?: boolean;
-  lead?: string;
-  attendees?: string;
+  description?: string | null;
+  startTime: Date;
+  endTime: Date | null;
+  locationName: string;
+  meetingUrl?: string | null;
+  status: string;
+  isCompulsory?: boolean;
+  visibility?: string;
+  isRecurring: boolean;
+  categoryName: string;
+  eventTypeName?: string;
+  clientName?: string;
+  providerName?: string;
+  color: string;
+  googleSynced?: boolean;
+  googleHtmlLink?: string | null;
+  attendeesCount?: number;
+  raw: any;
 }
 
-const NOVEMBER_EVENTS: CalendarEventItem[] = [
-  { id: 'ev-1', day: 1, time: '8:00 AM', title: 'All Saints Day High Mass', venue: 'Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-2', day: 2, time: '8:00 AM', title: 'Staff Devotions & Briefing', venue: 'Conf Room B', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-3', day: 3, time: '6:30 PM', title: 'Alpha Course Session 4', venue: 'Fellowship Hall', category: 'discipleship', categoryLabel: 'Discipleship & Formation', badgeTone: 'bg-emerald-900 text-emerald-100 border-emerald-700' },
-  { id: 'ev-4', day: 4, time: '7:00 PM', title: 'Midweek Vespers & Communion', venue: 'Historic Chapel', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-5', day: 5, time: '10:30 AM', title: 'Food Pantry Distribution', venue: 'North Wing', category: 'outreach', categoryLabel: 'Community & Outreach', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-6', day: 6, time: '5:00 PM', title: 'Choral Rehearsal & Tuning', venue: 'Chancel', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-7', day: 7, time: '1:00 PM', title: 'Audio Soundcheck & Line In', venue: 'Main Stage', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-8a', day: 8, time: '8:00 AM', title: 'Traditional Liturgy', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-8b', day: 8, time: '11:00 AM', title: 'Contemporary Praise', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-9', day: 9, time: '9:00 AM', title: 'Facility HVAC & BMS Audit', venue: 'Campus Wide', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-10', day: 10, time: '6:30 PM', title: 'Alpha Cohort #2 Group', venue: 'Upper Room', category: 'discipleship', categoryLabel: 'Discipleship & Formation', badgeTone: 'bg-emerald-900 text-emerald-100 border-emerald-700' },
-  { id: 'ev-11', day: 11, time: '11:00 AM', title: 'Veterans Day Memorial', venue: 'Sanctuary Gardens', category: 'outreach', categoryLabel: 'Community & Outreach', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-12', day: 12, time: '4:30 PM', title: 'Chapel Overlap (Funeral vs Choir)', venue: 'Historic Chapel', category: 'conflict', categoryLabel: 'Conflict Warning', badgeTone: 'bg-rose-600 text-white border-rose-500 animate-pulse', hasConflict: true },
-  { id: 'ev-13', day: 13, time: '5:00 PM', title: 'Wedding Rehearsal', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-14', day: 14, time: '2:00 PM', title: 'Vance & Brooks Wedding', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-15', day: 15, time: '6:00 PM', title: 'Advent Candlelight Symphony', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-600 text-white border-indigo-400 ring-2 ring-indigo-400' },
-  { id: 'ev-16', day: 16, time: '7:00 PM', title: 'Trustees Governance Council', venue: 'Conference Suite', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-17', day: 17, time: '6:30 PM', title: 'Alpha Cohort #3 Mentorship', venue: 'Fellowship Hall', category: 'discipleship', categoryLabel: 'Discipleship & Formation', badgeTone: 'bg-emerald-900 text-emerald-100 border-emerald-700' },
-  { id: 'ev-18', day: 18, time: '7:00 PM', title: 'Youth Fellowship Rally', venue: 'Youth Pavilion', category: 'discipleship', categoryLabel: 'Discipleship & Formation', badgeTone: 'bg-emerald-900 text-emerald-100 border-emerald-700' },
-  { id: 'ev-19', day: 19, time: '9:00 AM', title: 'Food Bank Holiday Prep', venue: 'North Wing', category: 'outreach', categoryLabel: 'Community & Outreach', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-20', day: 20, time: '1:00 PM', title: 'Sanctuary Deep Cleaning', venue: 'Main Sanctuary', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-21', day: 21, time: '10:00 AM', title: 'Deacon Ordination Prep', venue: 'Historic Chapel', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-22', day: 22, time: '9:00 AM', title: 'Christ the King Sunday', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-23', day: 23, time: '2:00 PM', title: 'Pastoral Counseling Clinic', venue: 'Pastoral Suite', category: 'outreach', categoryLabel: 'Community & Outreach', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-24', day: 24, time: '6:00 PM', title: 'Outreach Steering Committee', venue: 'Conf Room A', category: 'outreach', categoryLabel: 'Community & Outreach', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-25', day: 25, time: '7:00 PM', title: 'Thanksgiving Eve Meal & Praise', venue: 'Fellowship Hall', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-amber-900 text-amber-100 border-amber-700' },
-  { id: 'ev-26', day: 26, time: '10:00 AM', title: 'Thanksgiving Ecumenical Service', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-27', day: 27, time: '8:00 AM', title: 'Campus Facilities Maintenance', venue: 'Grounds Wide', category: 'facility', categoryLabel: 'Facilities & Staff', badgeTone: 'bg-slate-700 text-slate-100 border-slate-600' },
-  { id: 'ev-28', day: 28, time: '9:00 AM', title: 'Hanging of the Greens Gala Prep', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-29', day: 29, time: '9:00 AM', title: 'First Sunday of Advent', venue: 'Main Sanctuary', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-  { id: 'ev-30', day: 30, time: '7:00 PM', title: 'St. Andrews Feast Service', venue: 'Historic Chapel', category: 'liturgy', categoryLabel: 'Worship & Liturgy', badgeTone: 'bg-indigo-900 text-indigo-100 border-indigo-700' },
-];
+const DOMAIN_STYLES: Record<
+  DomainType,
+  { bg: string; text: string; border: string; dot: string; label: string; badgeClass: string }
+> = {
+  EVENT: {
+    bg: 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    border: 'border-indigo-200 dark:border-indigo-800',
+    dot: 'bg-indigo-600',
+    label: 'Organized Event',
+    badgeClass: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 border-indigo-200',
+  },
+  MEETING: {
+    bg: 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-200 dark:border-emerald-800',
+    dot: 'bg-emerald-600',
+    label: 'Staff / Sync Meeting',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200',
+  },
+  APPOINTMENT: {
+    bg: 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300',
+    text: 'text-amber-700 dark:text-amber-300',
+    border: 'border-amber-200 dark:border-amber-800',
+    dot: 'bg-amber-500',
+    label: 'Appointment Booking',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200',
+  },
+  OPERATIONS: {
+    bg: 'bg-violet-50 dark:bg-violet-950/70 text-violet-700 dark:text-violet-300',
+    text: 'text-violet-700 dark:text-violet-300',
+    border: 'border-violet-200 dark:border-violet-800',
+    dot: 'bg-violet-600',
+    label: 'Operational Session',
+    badgeClass: 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 border-violet-200',
+  },
+};
 
-export default function ActivitiesMasterCalendarPage() {
-  const { user } = useAuth();
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const FULL_WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const HOURS_RANGE = Array.from({ length: 17 }, (_, i) => i + 6); // 6 AM to 10 PM (22:00)
+
+export default function AdvancedCalendarPage() {
+  const { user, can } = useAuth();
   const { notify } = useToast();
-  const [activeTab, setActiveTab] = useState<CalendarTab>('month');
-  const [selectedDay, setSelectedDay] = useState<number>(15);
-  const [conflictResolved, setConflictResolved] = useState(false);
-  const [facilityFilter, setFacilityFilter] = useState('All Ministries & Facilities');
-  const [isExporting, setIsExporting] = useState(false);
 
-  // November 2026 starts on Sunday (day 1 = index 0)
-  // Total 30 days
-  const calendarDays = useMemo(() => {
-    const days: { dayNumber: number; isCurrentMonth: boolean }[] = [];
-    // Previous month filler days (Oct has 31 days)
-    // Nov 1 2026 is Sunday, so 0 filler days needed
-    for (let d = 1; d <= 30; d++) {
-      days.push({ dayNumber: d, isCurrentMonth: true });
+  const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [events, setEvents] = useState<UnifiedCalendarItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  // Domain & Source filters
+  const [showEvents, setShowEvents] = useState(true);
+  const [showMeetings, setShowMeetings] = useState(true);
+  const [showAppointments, setShowAppointments] = useState(true);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('ALL');
+
+  // Google Calendar integration state
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
+  const [syncingGoogle, setSyncingGoogle] = useState(false);
+
+  // Selected item modal / drawer
+  const [selectedEvent, setSelectedEvent] = useState<UnifiedCalendarItem | null>(null);
+
+  // Reschedule & Conflict detection state
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<UnifiedCalendarItem | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleStartTime, setRescheduleStartTime] = useState('10:00');
+  const [rescheduleEndTime, setRescheduleEndTime] = useState('11:00');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [checkingConflict, setCheckingConflict] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [savingReschedule, setSavingReschedule] = useState(false);
+
+  // Create event modal
+  const [formOpen, setFormOpen] = useState(false);
+  const [eventTypes, setEventTypes] = useState<EventTypeOption[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+
+  // Mini calendar state
+  const [miniCalDate, setMiniCalDate] = useState<Date>(() => new Date());
+
+  const canCreate = can('events.create');
+
+  // Load Google integration status
+  const loadGoogleStatus = async () => {
+    try {
+      const res = await fetchApi<{ connected: boolean; googleEmail?: string }>('/calendar/integrations/google/status');
+      setGoogleConnected(Boolean(res?.connected));
+      setGoogleEmail(res?.googleEmail || null);
+    } catch {
+      setGoogleConnected(false);
     }
-    // Next month filler days (5 days to fill 5 weeks grid = 35)
-    for (let d = 1; d <= 5; d++) {
-      days.push({ dayNumber: d, isCurrentMonth: false });
+  };
+
+  const loadLookups = async () => {
+    try {
+      const [cats, types] = await Promise.all([
+        fetchApi<CategoryOption[]>('/meetings/categories').catch(() => []),
+        fetchApi<EventTypeOption[]>('/meetings/event-types').catch(() => []),
+      ]);
+      setCategories(cats || []);
+      setEventTypes(types || []);
+    } catch {}
+  };
+
+  const loadCalendarData = async (targetDate: Date) => {
+    setLoading(true);
+    try {
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
+      const from = new Date(year, month - 1, 1).toISOString();
+      const to = new Date(year, month + 2, 0).toISOString();
+
+      const items = await fetchApi<any[]>(`/calendar/feed?from=${from}&to=${to}`);
+      const parsed: UnifiedCalendarItem[] = (items || []).map((i) => ({
+        ...i,
+        startTime: new Date(i.startTime),
+        endTime: i.endTime ? new Date(i.endTime) : null,
+      }));
+      setEvents(parsed);
+    } catch (err: any) {
+      notify({ title: 'Calendar Error', description: err.message || 'Failed to load unified calendar items', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    return days;
+  };
+
+  useEffect(() => {
+    loadLookups();
+    loadGoogleStatus();
   }, []);
 
-  const handleResolveConflict = () => {
-    setConflictResolved(true);
-    notify('Conflict Resolved: Youth Choir Reassigned to Suite 204 & SMS Dispatched.', 'success');
+  useEffect(() => {
+    loadCalendarData(currentDate);
+  }, [currentDate.getFullYear(), currentDate.getMonth()]);
+
+  const handleManualSync = async () => {
+    setSyncingGoogle(true);
+    try {
+      await loadCalendarData(currentDate);
+      await loadGoogleStatus();
+      notify({ title: 'Synchronization Complete', description: 'Calendar feeds and Google Calendar status updated.', variant: 'default' });
+    } catch (err: any) {
+      notify({ title: 'Sync Failed', description: err.message || 'Could not sync with Google', variant: 'destructive' });
+    } finally {
+      setSyncingGoogle(false);
+    }
   };
 
-  const handleDispatchSMS = () => {
-    notify('Run-of-Service SMS & Digital Cue Sheets dispatched to 28 staff & volunteers.', 'success');
+  // Navigation handlers
+  const handlePrev = () => {
+    const d = new Date(currentDate);
+    if (viewMode === 'month') {
+      d.setMonth(d.getMonth() - 1);
+    } else if (viewMode === 'week') {
+      d.setDate(d.getDate() - 7);
+    } else if (viewMode === 'day') {
+      d.setDate(d.getDate() - 1);
+    } else {
+      d.setMonth(d.getMonth() - 1);
+    }
+    setCurrentDate(d);
+    setMiniCalDate(d);
   };
 
-  const handlePrintBadges = () => {
-    notify('Printing 42 Officiant & VIP Badges to Admin Workstation.', 'info');
+  const handleNext = () => {
+    const d = new Date(currentDate);
+    if (viewMode === 'month') {
+      d.setMonth(d.getMonth() + 1);
+    } else if (viewMode === 'week') {
+      d.setDate(d.getDate() + 7);
+    } else if (viewMode === 'day') {
+      d.setDate(d.getDate() + 1);
+    } else {
+      d.setMonth(d.getMonth() + 1);
+    }
+    setCurrentDate(d);
+    setMiniCalDate(d);
   };
 
-  const handleSyncPlanningCenter = () => {
-    notify('Planning Center & iCal Sync Completed • 0 discrepancies.', 'success');
+  const handleToday = () => {
+    const now = new Date();
+    setCurrentDate(now);
+    setMiniCalDate(now);
   };
+
+  // Filtered items
+  const filteredEvents = useMemo(() => {
+    return events.filter((e) => {
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchTitle = e.title.toLowerCase().includes(q);
+        const matchLocation = e.locationName.toLowerCase().includes(q);
+        const matchCategory = e.categoryName.toLowerCase().includes(q);
+        const matchClient = e.clientName?.toLowerCase().includes(q);
+        const matchProvider = e.providerName?.toLowerCase().includes(q);
+        if (!matchTitle && !matchLocation && !matchCategory && !matchClient && !matchProvider) {
+          return false;
+        }
+      }
+
+      if (!showEvents && e.domainType === 'EVENT') return false;
+      if (!showMeetings && e.domainType === 'MEETING') return false;
+      if (!showAppointments && e.domainType === 'APPOINTMENT') return false;
+
+      if (sourceFilter === 'GOOGLE_SYNCED' && !e.googleSynced) return false;
+      if (sourceFilter === 'INTERNAL_ONLY' && e.googleSynced) return false;
+
+      return true;
+    });
+  }, [events, search, showEvents, showMeetings, showAppointments, sourceFilter]);
+
+  // Month grid calculation
+  const monthData = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    const cells: { date: Date; isCurrentMonth: boolean; isToday: boolean; isSelected: boolean }[] = [];
+
+    // Prev month padding
+    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, prevMonthDays - i);
+      cells.push({
+        date: d,
+        isCurrentMonth: false,
+        isToday: d.toDateString() === new Date().toDateString(),
+        isSelected: d.toDateString() === currentDate.toDateString(),
+      });
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(year, month, d);
+      cells.push({
+        date: dateObj,
+        isCurrentMonth: true,
+        isToday: dateObj.toDateString() === new Date().toDateString(),
+        isSelected: dateObj.toDateString() === currentDate.toDateString(),
+      });
+    }
+
+    // Next month padding
+    while (cells.length % 7 !== 0 || cells.length < 35) {
+      const nextD = new Date(year, month + 1, cells.length - (firstDayOfWeek + daysInMonth) + 1);
+      cells.push({
+        date: nextD,
+        isCurrentMonth: false,
+        isToday: nextD.toDateString() === new Date().toDateString(),
+        isSelected: nextD.toDateString() === currentDate.toDateString(),
+      });
+    }
+
+    return cells;
+  }, [currentDate]);
+
+  // Week view calculation
+  const weekDays = useMemo(() => {
+    const d = new Date(currentDate);
+    const dayOfWeek = d.getDay();
+    const startOfWeek = new Date(d);
+    startOfWeek.setDate(d.getDate() - dayOfWeek);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(startOfWeek);
+      day.setDate(startOfWeek.getDate() + i);
+      return day;
+    });
+  }, [currentDate]);
+
+  const openRescheduleModal = (item: UnifiedCalendarItem) => {
+    setRescheduleTarget(item);
+    const dateStr = item.startTime.toISOString().split('T')[0];
+    const startStr = item.startTime.toTimeString().slice(0, 5);
+    const endStr = item.endTime ? item.endTime.toTimeString().slice(0, 5) : '11:00';
+    setRescheduleDate(dateStr);
+    setRescheduleStartTime(startStr);
+    setRescheduleEndTime(endStr);
+    setRescheduleReason('');
+    setConflictWarning(null);
+    setRescheduleModalOpen(true);
+  };
+
+  const handleCheckConflict = async () => {
+    if (!rescheduleDate || !rescheduleStartTime || !rescheduleEndTime || !rescheduleTarget) return;
+    setCheckingConflict(true);
+    setConflictWarning(null);
+    try {
+      const start = new Date(`${rescheduleDate}T${rescheduleStartTime}:00`);
+      const end = new Date(`${rescheduleDate}T${rescheduleEndTime}:00`);
+      const res = await fetchApi<{ hasConflict: boolean; conflictingItems: any[] }>(
+        `/calendar/conflicts?startTime=${start.toISOString()}&endTime=${end.toISOString()}&excludeId=${rescheduleTarget.id}`,
+      );
+      if (res?.hasConflict && res.conflictingItems?.length > 0) {
+        setConflictWarning(
+          `Schedule overlap detected with: "${res.conflictingItems[0].title}" (${new Date(res.conflictingItems[0].startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+        );
+      } else {
+        notify({ title: 'Slot Available', description: 'No calendar conflicts found for this requested time window.' });
+      }
+    } catch {
+    } finally {
+      setCheckingConflict(false);
+    }
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      const start = new Date(`${rescheduleDate}T${rescheduleStartTime}:00`);
+      const end = new Date(`${rescheduleDate}T${rescheduleEndTime}:00`);
+
+      await fetchApi('/calendar/reschedule', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          entityType: rescheduleTarget.domainType,
+          entityId: rescheduleTarget.id,
+          newStartTime: start.toISOString(),
+          newEndTime: end.toISOString(),
+          reason: rescheduleReason || undefined,
+        }),
+      });
+
+      notify({ title: 'Rescheduled Successfully', description: `${rescheduleTarget.title} moved and synchronized.` });
+      setRescheduleModalOpen(false);
+      setSelectedEvent(null);
+      await loadCalendarData(currentDate);
+    } catch (err: any) {
+      notify({ title: 'Reschedule Failed', description: err.message || 'Could not reschedule entity', variant: 'destructive' });
+    } finally {
+      setSavingReschedule(false);
+    }
+  };
+
+  const handleExportICS = () => {
+    if (!filteredEvents.length) {
+      notify({ title: 'No Events', description: 'No calendar entries matching filters to export.', variant: 'destructive' });
+      return;
+    }
+
+    let ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//TFHC Orderliness//Unified Calendar System//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+    ];
+
+    filteredEvents.forEach((e) => {
+      const dtStart = e.startTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      const dtEnd = (e.endTime || new Date(e.startTime.getTime() + 3600000)).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      ics.push(
+        'BEGIN:VEVENT',
+        `UID:${e.id}@orderliness.tfhc.org`,
+        `SUMMARY:[${e.domainType}] ${e.title}`,
+        `DESCRIPTION:${e.categoryName} - Status: ${e.status}${e.meetingUrl ? '\\nMeeting: ' + e.meetingUrl : ''}`,
+        `LOCATION:${e.locationName}`,
+        `DTSTART:${dtStart}`,
+        `DTEND:${dtEnd}`,
+        'END:VEVENT',
+      );
+    });
+
+    ics.push('END:VCALENDAR');
+
+    const blob = new Blob([ics.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tfhc-unified-calendar-${currentDate.toISOString().slice(0, 7)}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+    notify({ title: 'Export Generated', description: 'Universal ICS calendar file downloaded.' });
+  };
+
+  const getEventsForDate = (date: Date) => {
+    const dStr = date.toDateString();
+    return filteredEvents.filter((e) => e.startTime.toDateString() === dStr);
+  };
+
+  const formattedMonthHeader = useMemo(() => {
+    return currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+  }, [currentDate]);
 
   return (
     <AdminLayoutShell>
-      <div className="space-y-5 pb-12">
-        {/* Page Header with System Status Badges & Action Buttons */}
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                CAMPUS OPERATIONS
-              </span>
-              <span className="text-slate-300 dark:text-slate-700">•</span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
-                PRODUCTION V4.2
-              </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Sync Engine Active
-              </span>
-            </div>
-
-            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-              Master Operations Calendar &amp; Scheduling Engine
-            </h1>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Grace Cathedral Campus • Liturgical Year C • Multi-Venue Automation &amp; Conflict Arbiter
-            </p>
-          </div>
-
-          {/* Header Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            {!conflictResolved && (
-              <button
-                onClick={handleResolveConflict}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-all shadow-xs"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-                <span>Resolve Conflicts (1 Pending)</span>
-              </button>
-            )}
-
-            <button
-              onClick={handleSyncPlanningCenter}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Sync Planning Center &amp; iCal</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setIsExporting(true);
-                setTimeout(() => {
-                  setIsExporting(false);
-                  notify('Exported November Run-of-Service schedule (PDF/CSV).', 'success');
-                }, 800);
-              }}
-              disabled={isExporting}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-xs"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>{isExporting ? 'Exporting...' : 'Export Run-of-Service'}</span>
-            </button>
-
-            <Link
-              href="/admin/events"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/20 transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Booking</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* 4 Top KPI Metric Cards */}
-        <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-1 sm:pb-0">
-          {/* Card 1 */}
-          <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                BOOKED EVENTS (NOV)
-              </span>
-              <CalendarIcon className="w-4 h-4 text-indigo-500" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 dark:text-white">54</span>
-              <span className="text-xs font-bold text-emerald-600">+12% MoM</span>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>7 Major Liturgies</span>
-              <span>18 Pastoral Care</span>
-            </div>
-          </div>
-
-          {/* Card 2 */}
-          <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                VENUE SATURATION
-              </span>
-              <Building2 className="w-4 h-4 text-purple-500" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 dark:text-white">96.4%</span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                Peak Capacity
-              </span>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>9/10 Main Rooms</span>
-              <span className={conflictResolved ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
-                {conflictResolved ? '0 Alerts' : '1 Overlap Alert'}
-              </span>
-            </div>
-          </div>
-
-          {/* Card 3 */}
-          <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                STAFF &amp; VOLUNTEER SHIFTS
-              </span>
-              <HeartHandshake className="w-4 h-4 text-emerald-500" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 dark:text-white">186/194</span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                8 Unfilled
-              </span>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>95.8% Fill Rate</span>
-              <span className="text-amber-600 font-bold">A/V Tech Critical</span>
-            </div>
-          </div>
-
-          {/* Card 4 */}
-          <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                SMART BMS &amp; BROADCAST
-              </span>
-              <Zap className="w-4 h-4 text-emerald-500" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400">100% Sync</span>
-              <span className="text-[10px] font-bold text-slate-400">Live Stream Ready</span>
-            </div>
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>Smart Locks Pre-Armed</span>
-              <span>HVAC Set: 68°F</span>
-            </div>
-          </div>
-        </div>
-
-        {/* View Switcher Bar & Date/Filter Toolbar */}
-        <div className="bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          {/* View Mode Buttons */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {[
-              { key: 'month', label: 'Monthly Grid', icon: CalendarIcon },
-              { key: 'gantt', label: 'Weekly Gantt', icon: Layers },
-              { key: 'run-of-service', label: 'Daily Run-of-Service', icon: Clock },
-              { key: 'conflict-matrix', label: 'Venue Conflict Matrix', icon: AlertTriangle },
-              { key: 'av-roster', label: 'A/V Tech Roster', icon: Radio },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isSelected = activeTab === tab.key;
-              return (
+      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden bg-slate-50 dark:bg-slate-950">
+        {/* Top Control Bar */}
+        <header className="shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3.5 z-20">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* Left: Navigation & Date Header */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
                 <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key as CalendarTab)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  onClick={handlePrev}
+                  className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
+                  title="Previous"
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-              );
-            })}
-          </div>
+                <button
+                  onClick={handleToday}
+                  className="px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors shadow-2xs"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-700 dark:text-slate-300 transition-colors shadow-2xs"
+                  title="Next"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
 
-          {/* Date Selector & Facility Dropdown */}
-          <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-1 text-xs font-bold text-slate-700 dark:text-slate-200">
-              <button className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="px-2">Today</span>
-              <button className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors">
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                <span>{formattedMonthHeader}</span>
+                {googleConnected && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200">
+                    <Check className="w-3 h-3 text-emerald-600" /> Google Synced
+                  </span>
+                )}
+              </h1>
             </div>
 
-            <span className="text-xs font-black text-slate-900 dark:text-white px-2">
-              November 2026
-            </span>
+            {/* Right: Search, Filters & View Mode Selector */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Search */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search events, clients, locations..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-4 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 w-48 sm:w-64 transition-all"
+                />
+              </div>
 
-            <select
-              value={facilityFilter}
-              onChange={(e) => setFacilityFilter(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="All Ministries & Facilities">All Ministries &amp; Facilities</option>
-              <option value="Main Sanctuary">Main Sanctuary</option>
-              <option value="Historic Chapel">Historic Chapel</option>
-              <option value="Fellowship Hall">Fellowship Hall</option>
-              <option value="Youth Pavilion">Youth Pavilion</option>
-            </select>
+              {/* Source Filter Dropdown */}
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+                className="px-3 py-1.5 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+              >
+                <option value="ALL">All Sources</option>
+                <option value="GOOGLE_SYNCED">Google Synced Only</option>
+                <option value="INTERNAL_ONLY">Internal Only</option>
+              </select>
 
-            <span className="text-[11px] font-mono text-slate-400 hidden xl:inline">EST (UTC-5)</span>
-          </div>
-        </div>
-
-        {/* Main Work Area: 2-Column Responsive Layout (7-Col Calendar Grid on Left, Inspection & Conflict Sidebar on Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: Monthly Calendar Grid (Span 8) */}
-          <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4 flex flex-col justify-between">
-            {/* Day of Week Header */}
-            <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-extrabold text-slate-400 uppercase tracking-wider pb-2 border-b border-slate-100 dark:border-slate-800">
-              <span>SUN</span>
-              <span>MON</span>
-              <span>TUE</span>
-              <span>WED</span>
-              <span>THU</span>
-              <span>FRI</span>
-              <span>SAT</span>
-            </div>
-
-            {/* 35-Cell Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1.5">
-              {calendarDays.map((cell, idx) => {
-                const dayNum = cell.dayNumber;
-                const isSelected = cell.isCurrentMonth && selectedDay === dayNum;
-                const dayEvents = cell.isCurrentMonth
-                  ? NOVEMBER_EVENTS.filter((e) => e.day === dayNum)
-                  : [];
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      if (cell.isCurrentMonth) setSelectedDay(dayNum);
-                    }}
-                    className={`min-h-[88px] sm:min-h-[104px] p-1.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                      !cell.isCurrentMonth
-                        ? 'bg-slate-50/40 dark:bg-slate-950/20 border-slate-100 dark:border-slate-800/40 text-slate-300 dark:text-slate-600 pointer-events-none'
-                        : isSelected
-                        ? 'bg-indigo-50/40 dark:bg-indigo-950/30 border-indigo-500/80 ring-2 ring-indigo-500/30 shadow-xs'
-                        : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+              {/* View Switcher Tabs */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                {(['month', 'week', 'day', 'agenda'] as CalendarViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1 text-xs font-bold capitalize rounded-lg transition-all ${
+                      viewMode === mode
+                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {/* Day Number Header with Badges */}
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`text-xs font-black ${
-                          isSelected
-                            ? 'text-indigo-600 dark:text-indigo-400'
-                            : cell.isCurrentMonth
-                            ? 'text-slate-900 dark:text-slate-100'
-                            : 'text-slate-300 dark:text-slate-600'
-                        }`}
-                      >
-                        {dayNum}
-                      </span>
-
-                      {isSelected && (
-                        <span className="px-1.5 py-0.2 rounded text-[8px] font-black bg-indigo-600 text-white uppercase">
-                          Selected
-                        </span>
-                      )}
-
-                      {dayEvents.some((e) => e.hasConflict && !conflictResolved) && (
-                        <span className="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white uppercase flex items-center gap-0.5 animate-pulse">
-                          <AlertTriangle className="w-2 h-2" />
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Event Blocks inside Date Cell */}
-                    <div className="space-y-1 my-1 overflow-hidden">
-                      {dayEvents.slice(0, 2).map((ev) => (
-                        <div
-                          key={ev.id}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold border truncate transition-all ${
-                            ev.hasConflict && !conflictResolved
-                              ? 'bg-rose-600 text-white border-rose-700 font-extrabold'
-                              : ev.category === 'liturgy'
-                              ? 'bg-indigo-950 text-indigo-100 border-indigo-800'
-                              : ev.category === 'discipleship'
-                              ? 'bg-emerald-950 text-emerald-100 border-emerald-800'
-                              : ev.category === 'outreach'
-                              ? 'bg-amber-950 text-amber-100 border-amber-800'
-                              : 'bg-slate-800 text-slate-100 border-slate-700'
-                          }`}
-                          title={`${ev.time} • ${ev.title} (${ev.venue})`}
-                        >
-                          <span className="opacity-75 mr-1 font-mono">{ev.time.split(' ')[0]}</span>
-                          <span>{ev.title}</span>
-                        </div>
-                      ))}
-
-                      {dayEvents.length > 2 && (
-                        <div className="text-[8px] font-bold text-slate-400 pl-1">
-                          +{dayEvents.length - 2} more
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bottom Status Dot */}
-                    <div className="flex items-center gap-1">
-                      {dayEvents.length > 0 && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            dayEvents.some((e) => e.hasConflict && !conflictResolved)
-                              ? 'bg-rose-500'
-                              : 'bg-indigo-500'
-                          }`}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Color Legend & Instruction Bar */}
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                  COLOR LEGEND:
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-indigo-900 border border-indigo-700" />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Worship &amp; Liturgy
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-emerald-900 border border-emerald-700" />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Discipleship &amp; Formation
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-amber-900 border border-amber-700" />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Community &amp; Outreach
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-800 border border-slate-600" />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                    Facilities &amp; Staff
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-rose-600" />
-                  <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
-                    Conflict Warning
-                  </span>
-                </div>
+                    {mode}
+                  </button>
+                ))}
               </div>
 
-              <div className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
-                <span>⚡ Click any block to inspect Run-of-Service details</span>
-              </div>
-            </div>
-          </div>
+              {/* Sync / Refresh */}
+              <button
+                onClick={handleManualSync}
+                disabled={syncingGoogle || loading}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+                title="Synchronize Google Calendar"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncingGoogle ? 'animate-spin text-indigo-600' : ''}`} />
+              </button>
 
-          {/* Right Column: Inspection, Conflict Engine & Run-of-Service Sidebar (Span 4) */}
-          <div className="lg:col-span-4 space-y-4">
-            {/* 1. Smart Conflict Engine Panel */}
-            <div
-              className={`p-4 rounded-2xl border shadow-sm transition-all ${
-                conflictResolved
-                  ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
-                  : 'bg-rose-50/70 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800/80'
-              }`}
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-rose-200/60 dark:border-rose-800/60">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">⚠️</span>
-                  <h3 className="text-xs font-black text-slate-900 dark:text-white">Smart Conflict Engine</h3>
-                </div>
-                <span
-                  className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                    conflictResolved
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                      : 'bg-rose-600 text-white'
-                  }`}
+              {/* Export ICS */}
+              <button
+                onClick={handleExportICS}
+                className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+                title="Export .ICS universal calendar"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
+              {/* Schedule Action */}
+              {canCreate && (
+                <button
+                  onClick={() => setFormOpen(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs shadow-indigo-600/30 transition-all active:scale-95"
                 >
-                  {conflictResolved ? 'Resolved' : '1 Critical Overlap'}
-                </span>
-              </div>
-
-              {!conflictResolved ? (
-                <div className="space-y-3 pt-2.5 text-xs">
-                  <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium">
-                    Room overlap detected in <strong className="text-slate-900 dark:text-white">Historic Chapel</strong> on{' '}
-                    <strong>Thursday, Nov 12 (4:30 PM – 6:00 PM)</strong>.
-                  </p>
-
-                  <div className="space-y-1.5 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900 text-[11px]">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white">Miller Memorial Service</span>
-                      <span className="text-slate-500 font-mono">4:00 – 5:30 PM</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400">Officiant: Rev. David Chen</p>
-
-                    <div className="pt-1.5 mt-1 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <span className="font-bold text-rose-600">Youth Choir Vocal Warmup</span>
-                      <span className="text-rose-600 font-mono">5:00 – 6:30 PM</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400">Director: Sarah Jenkins</p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-[11px] text-indigo-900 dark:text-indigo-200">
-                    <p className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 mb-0.5">
-                      <Sparkles className="w-3 h-3 text-indigo-500" />
-                      Recommended Resolution
-                    </p>
-                    <p className="text-[10px] leading-relaxed">
-                      Relocate Youth Choir Vocal Warmup to <strong>Rehearsal Suite 204</strong> (capacity 35, acoustic piano available, HVAC pre-scheduled).
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      onClick={handleResolveConflict}
-                      className="flex-1 py-2 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all text-center flex items-center justify-center gap-1.5"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>1-Click Reassign &amp; Notify</span>
-                    </button>
-                    <button
-                      onClick={() => setConflictResolved(true)}
-                      className="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="pt-3 text-xs space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>All Venue Schedules Synchronized</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Youth Choir Vocal Warmup relocated to Rehearsal Suite 204. No further conflicts detected across all 10 campus venues.
-                  </p>
-                </div>
+                  <Plus className="w-4 h-4" />
+                  <span>Create</span>
+                </button>
               )}
             </div>
+          </div>
 
-            {/* 2. Liturgical Highlight & Selected Event Detail Panel */}
-            <div className="bg-slate-950 text-white rounded-2xl border border-slate-800 p-4 space-y-4 shadow-xl">
-              {/* Header */}
-              <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-indigo-400 pb-2 border-b border-slate-800">
-                <span>LITURGICAL HIGHLIGHT • SUNDAY, NOV 15</span>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <Share2 className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
-                  <Edit2 className="w-3.5 h-3.5 cursor-pointer hover:text-white" />
+          {/* Domain Filter Pills Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-xs">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              <span className="text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5" /> Domains:
+              </span>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showEvents}
+                  onChange={(e) => setShowEvents(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                />
+                <span className="font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-indigo-600" />
+                  Events ({events.filter((e) => e.domainType === 'EVENT').length})
+                </span>
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showMeetings}
+                  onChange={(e) => setShowMeetings(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                />
+                <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  Meetings ({events.filter((e) => e.domainType === 'MEETING').length})
+                </span>
+              </label>
+
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showAppointments}
+                  onChange={(e) => setShowAppointments(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                />
+                <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Appointments ({events.filter((e) => e.domainType === 'APPOINTMENT').length})
+                </span>
+              </label>
+            </div>
+
+            {/* Google Sync Status Link */}
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/settings"
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>{googleConnected ? `Google Account: ${googleEmail}` : 'Connect Google Calendar'}</span>
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Main Calendar Viewport */}
+          <main className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 p-2 sm:p-4">
+            {loading ? (
+              <div className="h-full flex flex-col items-center justify-center space-y-3 py-24">
+                <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Loading temporal items...</p>
+              </div>
+            ) : viewMode === 'month' ? (
+              /* ======================= MONTH VIEW ======================= */
+              <div className="h-full flex flex-col border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                {/* Weekday headers */}
+                <div className="grid grid-cols-7 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-center text-xs font-bold text-slate-600 dark:text-slate-300 py-2.5">
+                  {WEEKDAY_NAMES.map((name) => (
+                    <div key={name}>{name}</div>
+                  ))}
+                </div>
+
+                {/* Days Grid */}
+                <div className="flex-1 grid grid-cols-7 grid-rows-5 gap-px bg-slate-200 dark:bg-slate-800 overflow-y-auto">
+                  {monthData.map((cell, idx) => {
+                    const dayEvents = getEventsForDate(cell.date);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setCurrentDate(cell.date);
+                          if (dayEvents.length > 0) {
+                            setSelectedEvent(dayEvents[0]);
+                          }
+                        }}
+                        className={`min-h-[105px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors cursor-pointer ${
+                          cell.isCurrentMonth
+                            ? 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            : 'bg-slate-50/60 dark:bg-slate-950/40 text-slate-400 dark:text-slate-600'
+                        } ${cell.isToday ? 'ring-2 ring-indigo-500 ring-inset z-10' : ''}`}
+                      >
+                        {/* Day Number */}
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              cell.isToday
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : cell.isCurrentMonth
+                                ? 'text-slate-800 dark:text-slate-200'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {cell.date.getDate()}
+                          </span>
+
+                          {dayEvents.length > 3 && (
+                            <span className="text-[10px] font-bold text-slate-400 px-1 rounded bg-slate-100 dark:bg-slate-800">
+                              +{dayEvents.length - 3}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Events list inside cell */}
+                        <div className="flex-1 mt-1 space-y-1 overflow-hidden">
+                          {dayEvents.slice(0, 3).map((item) => {
+                            const style = DOMAIN_STYLES[item.domainType] || DOMAIN_STYLES.EVENT;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedEvent(item);
+                                }}
+                                className={`w-full text-left px-1.5 py-0.5 rounded-md border text-[11px] font-semibold truncate transition-transform active:scale-95 flex items-center gap-1 ${style.bg} ${style.border} ${style.text}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
+                                <span className="truncate">{item.title}</span>
+                                {item.meetingUrl && <Video className="w-2.5 h-2.5 text-blue-600 shrink-0 ml-auto" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Title & Timing */}
-              <div>
-                <h3 className="text-base font-black text-white tracking-tight leading-snug">
-                  Advent Candlelight Symphony &amp; Choral Festival
-                </h3>
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  <span>6:00 PM – 8:45 PM • Main Sanctuary</span>
-                </p>
-              </div>
-
-              {/* Capacity & Ticketing Gauge */}
-              <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-300">CAPACITY &amp; TICKETING</span>
-                  <span className="font-mono text-emerald-400 font-bold">742 / 750 (98.9%)</span>
-                </div>
-                {/* Progress Bar */}
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '98.9%' }} />
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="text-amber-300 font-bold">8 Seats Remaining</span>
-                  <span>Overflow Livestream Ready</span>
-                </div>
-              </div>
-
-              {/* Run of Service Timeline */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                  <span>RUN OF SERVICE (TIMELINE)</span>
-                  <button className="text-indigo-400 hover:underline">Edit Cue Sheet</button>
+            ) : viewMode === 'week' ? (
+              /* ======================= WEEK VIEW ======================= */
+              <div className="h-full flex flex-col border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                <div className="grid grid-cols-7 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-center py-3">
+                  {weekDays.map((d, i) => {
+                    const isToday = d.toDateString() === new Date().toDateString();
+                    return (
+                      <div key={i} className="flex flex-col items-center">
+                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          {WEEKDAY_NAMES[d.getDay()]}
+                        </span>
+                        <span
+                          className={`w-7 h-7 mt-1 rounded-full flex items-center justify-center text-sm font-bold ${
+                            isToday ? 'bg-indigo-600 text-white' : 'text-slate-900 dark:text-white'
+                          }`}
+                        >
+                          {d.getDate()}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div className="space-y-1.5 text-xs font-medium">
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-indigo-400 font-bold">4:30 PM</span>
-                      <span className="text-slate-200">Soundcheck &amp; Broadcast Line Check</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">Media Team</span>
-                  </div>
-
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-indigo-400 font-bold">5:30 PM</span>
-                      <span className="text-slate-200">Narthex Doors Open / Usher Stationing</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">24 Ushers</span>
-                  </div>
-
-                  <div className="p-2 rounded-lg bg-indigo-950/70 border border-indigo-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-emerald-400 font-bold">6:00 PM</span>
-                      <span className="text-white font-bold">Orchestral Overture &amp; Processional</span>
-                    </div>
-                    <span className="text-[10px] text-indigo-300 font-bold">Symphony</span>
-                  </div>
-
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-indigo-400 font-bold">7:15 PM</span>
-                      <span className="text-slate-200">Homily: &quot;Light in Darkness&quot;</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">Lead Pastor</span>
-                  </div>
-
-                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-indigo-400 font-bold">8:10 PM</span>
-                      <span className="text-slate-200">Candle Lighting &amp; Silent Night Choral</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">All Choir</span>
-                  </div>
+                <div className="flex-1 grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-800 overflow-y-auto">
+                  {weekDays.map((d, i) => {
+                    const dayEvents = getEventsForDate(d);
+                    return (
+                      <div key={i} className="bg-white dark:bg-slate-900 p-2 space-y-2 min-h-[300px]">
+                        {dayEvents.map((item) => {
+                          const style = DOMAIN_STYLES[item.domainType] || DOMAIN_STYLES.EVENT;
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => setSelectedEvent(item)}
+                              className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all hover:shadow-md ${style.bg} ${style.border}`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-extrabold text-[10px] uppercase tracking-wider">{style.label}</span>
+                                {item.googleSynced && <span className="text-[10px] text-emerald-600 font-bold">✓ Synced</span>}
+                              </div>
+                              <p className="font-bold text-slate-900 dark:text-white line-clamp-2">{item.title}</p>
+                              <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {item.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                              {item.meetingUrl && (
+                                <a
+                                  href={item.meetingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-600 text-white text-[10px] font-bold"
+                                >
+                                  <Video className="w-3 h-3" /> Join Google Meet
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+            ) : viewMode === 'day' ? (
+              /* ======================= DAY VIEW ======================= */
+              <div className="h-full flex flex-col border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-white dark:bg-slate-900 p-4 overflow-y-auto">
+                <div className="pb-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {FULL_WEEKDAY_NAMES[currentDate.getDay()]}, {currentDate.toLocaleDateString()}
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {getEventsForDate(currentDate).length} scheduled items for this date
+                    </p>
+                  </div>
+                </div>
 
-              {/* Duty Roster & Officiants */}
-              <div className="space-y-2 pt-1 border-t border-slate-800">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                  DUTY ROSTER &amp; OFFIDIANTS
+                <div className="space-y-3 mt-4">
+                  {getEventsForDate(currentDate).length > 0 ? (
+                    getEventsForDate(currentDate).map((item) => {
+                      const style = DOMAIN_STYLES[item.domainType] || DOMAIN_STYLES.EVENT;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedEvent(item)}
+                          className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all ${style.bg} ${style.border}`}
+                        >
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider">{style.label}</span>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white">{item.title}</h3>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-3">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" />
+                                {item.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{' '}
+                                {item.endTime ? item.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5" />
+                                {item.locationName}
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {item.meetingUrl && (
+                              <a
+                                href={item.meetingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                              >
+                                <Video className="w-4 h-4" />
+                                <span>Join Google Meet</span>
+                              </a>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRescheduleModal(item);
+                              }}
+                              className="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors"
+                            >
+                              Reschedule
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="py-16 text-center text-slate-400 text-xs">
+                      No activities scheduled for this day.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* ======================= AGENDA VIEW ======================= */
+              <div className="h-full flex flex-col border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs bg-white dark:bg-slate-900 p-4 overflow-y-auto space-y-4">
+                <div className="pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Chronological Agenda Schedule</h2>
+                  <p className="text-xs text-slate-500">Upcoming sequence of events, meetings, and client appointments</p>
+                </div>
+
+                <div className="space-y-2">
+                  {filteredEvents.map((item) => {
+                    const style = DOMAIN_STYLES[item.domainType] || DOMAIN_STYLES.EVENT;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedEvent(item)}
+                        className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:shadow-xs transition-all ${style.bg} ${style.border}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="text-center w-12 shrink-0 pr-3 border-r border-slate-200 dark:border-slate-700">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">
+                              {WEEKDAY_NAMES[item.startTime.getDay()]}
+                            </p>
+                            <p className="text-lg font-black text-slate-900 dark:text-white">
+                              {item.startTime.getDate()}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{style.label}</span>
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">{item.title}</h4>
+                            <p className="text-xs text-slate-500">
+                              {item.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {item.locationName}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.googleSynced && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                              ✓ Google Synced
+                            </span>
+                          )}
+                          {item.meetingUrl && (
+                            <a
+                              href={item.meetingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center gap-1"
+                            >
+                              <Video className="w-3.5 h-3.5" /> Meet
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {/* Selected Item Detail Drawer Modal */}
+        {selectedEvent && (
+          <Modal
+            open={Boolean(selectedEvent)}
+            onClose={() => setSelectedEvent(null)}
+            title={selectedEvent.title}
+          >
+            <div className="space-y-4 text-xs sm:text-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${DOMAIN_STYLES[selectedEvent.domainType].badgeClass}`}>
+                  {DOMAIN_STYLES[selectedEvent.domainType].label}
                 </span>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-[10px]">
-                      DC
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-200 truncate">Rev. David Chen</p>
-                      <p className="text-[10px] text-slate-400 truncate">Lead Officiant</p>
-                    </div>
-                  </div>
+                <span className="text-xs text-slate-500">
+                  Status: <strong className="text-slate-900 dark:text-white uppercase">{selectedEvent.status}</strong>
+                </span>
+              </div>
 
-                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-[10px]">
-                      JV
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-200 truncate">Dr. Julian Vance</p>
-                      <p className="text-[10px] text-slate-400 truncate">Choir Master</p>
-                    </div>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-slate-400 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">Time & Date</p>
+                    <p className="text-slate-900 dark:text-white">
+                      {selectedEvent.startTime.toLocaleString()} — {selectedEvent.endTime ? selectedEvent.endTime.toLocaleTimeString() : 'Flexible'}
+                    </p>
                   </div>
+                </div>
 
-                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px]">
-                      MT
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-200 truncate">Marcus Todd</p>
-                      <p className="text-[10px] text-slate-400 truncate">A/V Director</p>
-                    </div>
+                <div className="flex items-start gap-2">
+                  <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-slate-700 dark:text-slate-300">Location / Platform</p>
+                    <p className="text-slate-900 dark:text-white">{selectedEvent.locationName}</p>
                   </div>
+                </div>
 
-                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-[10px]">
-                      ER
+                {selectedEvent.meetingUrl && (
+                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Video className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">Google Meet Video Call</p>
+                        <p className="text-[11px] text-blue-600 dark:text-blue-400 truncate max-w-xs">{selectedEvent.meetingUrl}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-200 truncate">Elena Rostova</p>
-                      <p className="text-[10px] text-slate-400 truncate">Head Usher</p>
-                    </div>
+                    <a
+                      href={selectedEvent.meetingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                    >
+                      Join
+                    </a>
                   </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  onClick={() => openRescheduleModal(selectedEvent)}
+                  className="px-4 py-2 rounded-xl bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 font-bold text-xs hover:bg-indigo-100 transition-colors"
+                >
+                  Reschedule Slot
+                </button>
+                <Link
+                  href={
+                    selectedEvent.domainType === 'EVENT'
+                      ? '/admin/events'
+                      : selectedEvent.domainType === 'MEETING'
+                      ? '/admin/meetings'
+                      : '/admin/appointments'
+                  }
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition-colors"
+                >
+                  Manage in {selectedEvent.domainType === 'EVENT' ? 'Events' : selectedEvent.domainType === 'MEETING' ? 'Meetings' : 'Appointments'}
+                </Link>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Reschedule Modal with Conflict Detection */}
+        {rescheduleModalOpen && rescheduleTarget && (
+          <Modal
+            open={rescheduleModalOpen}
+            onClose={() => setRescheduleModalOpen(false)}
+            title={`Reschedule: ${rescheduleTarget.title}`}
+          >
+            <div className="space-y-4">
+              <p className="text-xs text-slate-500">
+                Update date and time. Conflict detection checks existing internal calendars and Google Calendar events automatically.
+              </p>
+
+              {conflictWarning && (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>{conflictWarning}</span>
+                </div>
+              )}
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">New Date</label>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Start Time</label>
+                    <input
+                      type="time"
+                      value={rescheduleStartTime}
+                      onChange={(e) => setRescheduleStartTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">End Time</label>
+                    <input
+                      type="time"
+                      value={rescheduleEndTime}
+                      onChange={(e) => setRescheduleEndTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Reason for Reschedule (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Schedule adjustment per stakeholder request"
+                    value={rescheduleReason}
+                    onChange={(e) => setRescheduleReason(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
+                  />
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
-                  onClick={handleDispatchSMS}
-                  className="w-full py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={handleCheckConflict}
+                  disabled={checkingConflict}
+                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Dispatch Run-of-Service SMS to Team</span>
+                  {checkingConflict ? 'Checking...' : 'Check Conflicts'}
                 </button>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={handlePrintBadges}
-                    className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+                    type="button"
+                    onClick={() => setRescheduleModalOpen(false)}
+                    className="px-3 py-2 rounded-xl text-slate-500 text-xs font-bold hover:bg-slate-100"
                   >
-                    <Printer className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Print Badges</span>
+                    Cancel
                   </button>
-
                   <button
-                    onClick={() => notify('Bulletin Insert (Order of Worship) rendered to PDF.', 'info')}
-                    className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+                    type="button"
+                    onClick={handleSaveReschedule}
+                    disabled={savingReschedule}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs"
                   >
-                    <FileText className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Bulletin Insert</span>
+                    {savingReschedule ? 'Saving...' : 'Confirm Reschedule'}
                   </button>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </Modal>
+        )}
 
-        {/* Bottom Venue Automation Hub Status Bar */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <h3 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
-                Grace Cathedral Venue Automation Hub
-              </h3>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">● BMS Online (BacNet IP Synced)</span>
-              <span>•</span>
-              <span>All Sensors Live</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            {/* Main Sanctuary */}
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Main Sanctuary</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Doors: <span className="text-emerald-600 font-semibold">Armed • Auto-unlock 5:00 PM</span>
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300 block">
-                  HVAC: 69°F Heating
-                </span>
-                <span className="text-[10px] text-emerald-600 font-bold">Zone 1 Active</span>
-              </div>
-            </div>
-
-            {/* Fellowship Hall */}
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                  <Building2 className="w-3.5 h-3.5 text-purple-600" />
-                  <span>Fellowship Hall</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Doors: <span className="text-slate-600 dark:text-slate-300 font-semibold">Locked • Scheduled 6:00 PM</span>
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] font-mono text-slate-500 block">HVAC: Eco Standby (64°F)</span>
-                <span className="text-[10px] text-slate-400">Zone 3 Pre-conditioning 70°F</span>
-              </div>
-            </div>
-
-            {/* Historic Chapel */}
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                  <Building2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Historic Chapel</span>
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Doors:{' '}
-                  <span className={conflictResolved ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold'}>
-                    {conflictResolved ? 'Armed • Ready' : 'Armed • Overlap Alert Flagged'}
-                  </span>
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] font-mono text-slate-500 block">HVAC: Set 68°F</span>
-                <span className={conflictResolved ? 'text-emerald-600 font-bold text-[10px]' : 'text-rose-600 font-bold text-[10px]'}>
-                  {conflictResolved ? 'Zone 2 Synced' : 'Zone 2 Conflict'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Create Event Modal */}
+        {formOpen && (
+          <EventForm
+            open={formOpen}
+            onClose={() => setFormOpen(false)}
+            onSubmit={async (payload) => {
+              await fetchApi('/meetings', { method: 'POST', body: JSON.stringify(payload) });
+              setFormOpen(false);
+              loadCalendarData(currentDate);
+              notify({ title: 'Success', description: 'New calendar entry created successfully' });
+            }}
+            eventTypes={eventTypes}
+            categories={categories}
+            initial={emptyEvent}
+          />
+        )}
       </div>
     </AdminLayoutShell>
   );

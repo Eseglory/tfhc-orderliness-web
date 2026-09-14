@@ -3,7 +3,7 @@ import { test, expect, Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import * as jwt from 'jsonwebtoken';
 
-const REGISTER_EMAIL = 'register-browser@example.test';
+const REGISTER_EMAIL = 'register-browser@tfhc.org';
 const PASSWORD = 'BrowserAuth!pw123';
 
 function db() {
@@ -67,17 +67,17 @@ test('registration is refused for an email that is not approved', async ({ page 
   await page.goto('/register', { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('First name').fill('No');
   await page.getByPlaceholder('Last name').fill('Body');
-  await page.getByPlaceholder(/approved list/).fill('not-approved@example.test');
+  await page.getByPlaceholder(/approved list/).fill('not-approved@tfhc.org');
   await page.getByPlaceholder('Phone number').fill('08000000000');
   await page.getByPlaceholder(/^Password/).fill(PASSWORD);
   await page.getByPlaceholder('Confirm password').fill(PASSWORD);
   await page.getByRole('button', { name: /Create account/ }).click();
-  await expect(page.getByText(/approved members list/)).toBeVisible();
+  await expect(page.getByText(/approved/i)).toBeVisible();
 });
 
 test('forgot password shows a neutral confirmation and never reveals accounts', async ({ page }) => {
   await page.goto('/forgot-password', { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('Your email').fill('whoever@example.test');
+  await page.getByPlaceholder('Your email').fill('whoever@tfhc.org');
   await page.getByRole('button', { name: /Send reset link/ }).click();
   await expect(page.getByText(/on its way/)).toBeVisible();
 });
@@ -131,12 +131,12 @@ test('changing the password signs other sessions out', async ({ page, context, r
 
   // The stale session is bounced to the sign-in screen.
   await otherPage.goto('/member', { waitUntil: 'domcontentloaded' });
-  await expect(otherPage).toHaveURL(/\/login$/);
+  await expect(otherPage).toHaveURL(/\/login(\?.*)?$/);
   await other.close();
 });
 
 test('idle-timeout modal warns and "Stay signed in" dismisses it', async ({ page }) => {
-  const token = await tokenFor('member-browser@example.test');
+  const token = await tokenFor('member-browser@tfhc.org');
   await page.addInitScript((t) => {
     localStorage.setItem('tfhc_token', t);
     // Shrink the idle threshold so the warning is reachable in a test.
@@ -150,7 +150,7 @@ test('idle-timeout modal warns and "Stay signed in" dismisses it', async ({ page
 });
 
 test('profile-completion reminder shows for an incomplete profile and stays dismissed', async ({ page }) => {
-  const token = await tokenFor('member-browser@example.test');
+  const token = await tokenFor('member-browser@tfhc.org');
   await page.addInitScript((t) => localStorage.setItem('tfhc_token', t), token);
   await page.goto('/member', { waitUntil: 'domcontentloaded' });
   const banner = page.getByText('Complete your profile');
@@ -162,8 +162,31 @@ test('profile-completion reminder shows for an incomplete profile and stays dism
 });
 
 test('engagement nudge appears for a member with recent absences', async ({ page }) => {
-  const token = await tokenFor('nudge-browser@example.test');
+  const token = await tokenFor('nudge-browser@tfhc.org');
   await page.addInitScript((t) => localStorage.setItem('tfhc_token', t), token);
   await page.goto('/member', { waitUntil: 'domcontentloaded' });
   await expect(page.getByText("We've missed you")).toBeVisible();
+});
+
+test('a delayed expired-session response cannot remove a newly signed-in session', async ({ page }) => {
+  const delayed: import('@playwright/test').Route[] = [];
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('tfhc_token')) localStorage.setItem('tfhc_token', 'expired-before-login');
+  });
+  await page.route('**/auth/me', async route => {
+    if (route.request().headers().authorization === 'Bearer expired-before-login') delayed.push(route);
+    else await route.continue();
+  });
+  await page.goto('/login');
+  await page.locator('form[data-hydrated="true"]').waitFor();
+  await expect.poll(() => delayed.length).toBeGreaterThan(0);
+  await page.getByLabel('Member ID / Email').fill('member-browser@tfhc.org');
+  await page.getByLabel('Password', { exact: true }).fill('E2ePassword!123');
+  await page.getByRole('button', { name: /Sign In/ }).click();
+  await expect(page).toHaveURL(/\/member$/);
+  for (const route of delayed) await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Expired session' }) }).catch(() => undefined);
+  await expect(page.getByRole('link', { name: 'My profile', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('tfhc_token') || sessionStorage.getItem('tfhc_token'))).toBeTruthy();
+  await page.reload();
+  await expect(page).toHaveURL(/\/member$/);
 });

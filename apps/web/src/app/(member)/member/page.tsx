@@ -4,9 +4,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../lib/api';
+import { useAuth } from '../../../lib/auth';
 import { LogoIcon } from '../../../components/LogoIcon';
 import { EngagementNudge } from '../../../components/activeness/EngagementNudge';
 import { ProfileCompletionReminder } from '../../../components/activeness/ProfileCompletionReminder';
+import { CampaignAlert } from '../../../components/activeness/CampaignAlert';
 
 type Performance = {
   member?: { firstName: string; profilePhotoUrl: string | null; subTeam?: { name: string } | null };
@@ -45,6 +47,7 @@ function Ring({ value, label }: { value: number; label: string }) {
 
 export default function MemberDashboard() {
   const router = useRouter();
+  const { user } = useAuth();
   const [perf, setPerf] = useState<Performance | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
   const [upcoming, setUpcoming] = useState<any[]>([]);
@@ -62,8 +65,10 @@ export default function MemberDashboard() {
     const ac = new AbortController();
     const get = <T,>(url: string) => fetchApi<T>(url, { signal: ac.signal });
     get<Performance>('/scoring/my-performance').then(setPerf).catch(() => {});
-    get('/meetings/active').then((m) => m && setActiveMeeting(m)).catch(() => {});
-    get<any[]>('/meetings').then((all) => setUpcoming((all || []).slice(0, 3))).catch(() => {});
+    get<{ activeMeeting: any; today: any[]; upcoming: any[] }>('/calendar/today-upcoming').then((res) => {
+      if (res?.activeMeeting) setActiveMeeting(res.activeMeeting);
+      if (res?.upcoming) setUpcoming(res.upcoming.slice(0, 3));
+    }).catch(() => {});
     // 404 when the weekly cycle hasn't been opened — treated as "not open".
     get<{ cycle?: { state?: string; closesAt?: string }; submitted?: boolean }>('/availability/current')
       .then((a) => setAvailabilityOpen(Boolean(
@@ -94,14 +99,28 @@ export default function MemberDashboard() {
               : <LogoIcon alt="Profile" className="h-full w-full object-contain" />}
           </Link>
           <div className="flex flex-col">
-            <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Dashboard</span>
+            <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Home</span>
             <span className="font-headline-sm text-headline-sm font-bold text-primary">Hello{firstName ? `, ${firstName}` : ''}</span>
           </div>
         </div>
-        <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface-variant">
-          <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
-          {hasUnread && <span aria-label="Unread notifications" className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-error" />}
-        </Link>
+        <div className="flex items-center gap-2">
+          {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs shrink-0"
+              title="Switch to Admin App"
+              aria-label="Switch to Admin App"
+            >
+              <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+              <span className="hidden sm:inline">Switch to Admin App</span>
+              <span className="sm:hidden">Admin App</span>
+            </button>
+          )}
+          <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface-variant">
+            <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
+            {hasUnread && <span aria-label="Unread notifications" className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-error" />}
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-stack-lg px-edge-margin py-stack-md md:max-w-2xl">
@@ -137,9 +156,48 @@ export default function MemberDashboard() {
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-label-md text-label-md font-bold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
             >
               <span className="material-symbols-outlined">location_on</span>
-              {activeMeeting ? 'Proceed to check-in' : 'No active check-in'}
+              {activeMeeting ? 'Check In' : 'No Active Check In'}
             </button>
           </div>
+        </section>
+
+        {/* Quick Church Actions */}
+        <section className="grid grid-cols-4 gap-2 text-center">
+          <Link href="/member/my-attendance" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="material-symbols-outlined text-[20px]">fact_check</span>
+            </div>
+            <span className="font-label-sm text-[11px] font-bold text-on-surface">Attendance</span>
+          </Link>
+          <Link href="/member/meetings" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/10 text-secondary">
+              <span className="material-symbols-outlined text-[20px]">event</span>
+            </div>
+            <span className="font-label-sm text-[11px] font-bold text-on-surface">Events</span>
+          </Link>
+          <Link href="/member/dues" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-tertiary/10 text-tertiary">
+              <span className="material-symbols-outlined text-[20px]">volunteer_activism</span>
+            </div>
+            <span className="font-label-sm text-[11px] font-bold text-on-surface">Finance</span>
+          </Link>
+          <Link href="/member/welfare" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+              <span className="material-symbols-outlined text-[20px]">favorite</span>
+            </div>
+            <span className="font-label-sm text-[11px] font-bold text-on-surface">Welfare</span>
+          </Link>
+          {[
+            { href: '/member/calendar', label: 'Calendar', icon: 'calendar_month' },
+            { href: '/member/files', label: 'Files', icon: 'folder_open' },
+            { href: '/member/offline', label: 'Offline', icon: 'offline_pin' },
+            { href: '/member/submit-excuse', label: 'Absence', icon: 'event_busy' },
+          ].map(action => (
+            <Link key={action.href} href={action.href} className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-sm">
+              <span aria-hidden="true" className="material-symbols-outlined flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">{action.icon}</span>
+              <span className="font-label-sm text-[11px] font-bold text-on-surface">{action.label}</span>
+            </Link>
+          ))}
         </section>
 
         {availabilityOpen && (
@@ -150,6 +208,7 @@ export default function MemberDashboard() {
           </Link>
         )}
 
+        <CampaignAlert />
         <EngagementNudge />
         <ProfileCompletionReminder />
 

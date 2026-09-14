@@ -17,6 +17,8 @@ if (database && !/^postgresql:\/\/[^@]+@(127\.0\.0\.1|localhost):\d+\/tfhc_e2e(?
 }
 if (!database) throw new Error('Set TEST_DATABASE_URL to run API integration tests');
 
+jest.setTimeout(30000);
+
 describe('Messaging Multi-User Concurrency & Stress E2E Test', () => {
   let app: INestApplication;
   let db: PrismaService;
@@ -115,9 +117,7 @@ describe('Messaging Multi-User Concurrency & Stress E2E Test', () => {
 
   test('concurrent message sending: 10 users send messages simultaneously without loss or duplication', async () => {
     // 1. Connect sockets for all 10 users
-    for (const u of users) {
-      u.socket = await connectSocket(u.token);
-    }
+    await Promise.all(users.map(async (u) => { u.socket = await connectSocket(u.token); }));
 
     // Set up message collectors for user 0
     const receivedMessages: any[] = [];
@@ -201,7 +201,7 @@ describe('Messaging Multi-User Concurrency & Stress E2E Test', () => {
 
     // Verify unread counts for recipient B
     for (let i = 0; i < dmPairs.length; i++) {
-      const [uA, uB] = dmPairs[i];
+      const [, uB] = dmPairs[i];
       const roomId = dmResults[i].room.id;
       const bRooms = (await http().get('/chat/rooms').set(auth(uB.token)).expect(200)).body;
       const bDm = bRooms.find((r: any) => r.id === roomId);

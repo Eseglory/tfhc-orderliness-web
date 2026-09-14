@@ -41,6 +41,7 @@ export enum ExcuseStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
 }
 
 export enum ExcuseCategory {
@@ -58,4 +59,12 @@ export enum RecurrenceFrequency {
   FORTNIGHTLY = 'FORTNIGHTLY',
   MONTHLY = 'MONTHLY',
   CUSTOM = 'CUSTOM',
+}
+
+export enum ApprovedMemberInviteStatus {
+  NOT_INVITED = 'NOT_INVITED',
+  PENDING = 'PENDING',
+  ACCEPTED = 'ACCEPTED',
+  EXPIRED = 'EXPIRED',
+  FAILED = 'FAILED',
 }

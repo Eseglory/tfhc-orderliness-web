@@ -1,4 +1,5 @@
 'use client';
+import { createPortal } from 'react-dom';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 /* -------------------------------------------------------------------------- */
@@ -86,6 +87,7 @@ export const inputClass =
 
 export function Modal({
   open,
+  isOpen,
   onClose,
   title,
   description,
@@ -93,7 +95,8 @@ export function Modal({
   footer,
   size = 'md',
 }: {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   title: string;
   description?: string;
@@ -101,26 +104,39 @@ export function Modal({
   footer?: React.ReactNode;
   size?: 'md' | 'lg' | 'xl';
 }) {
+  const isVisible = Boolean(open ?? isOpen);
   const ref = useRef<HTMLDivElement>(null);
 
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    if (!isVisible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current();
+      if (e.key !== 'Tab') return;
+      const elements = Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') || []).filter(el => el.getClientRects().length);
+      const first = elements[0], last = elements[elements.length - 1];
+      if (!first) { e.preventDefault(); return; }
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     const previous = document.activeElement as HTMLElement | null;
     ref.current?.focus();
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      document.body.style.overflow = previousOverflow;
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [isVisible]);
 
-  if (!open) return null;
+  if (!isVisible || typeof document === 'undefined') return null;
   const widths = { md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-end justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -131,7 +147,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-[92vh] w-full ${widths[size]} flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-xl outline-none sm:rounded-2xl`}
+        className={`flex max-h-[92dvh] w-full ${widths[size]} flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-xl outline-none sm:rounded-2xl`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-outline-variant/20 px-5 py-4">
           <div>
@@ -148,14 +164,14 @@ export function Modal({
             </svg>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
           <div className="flex justify-end gap-2 border-t border-outline-variant/20 bg-surface-container-low/50 px-5 py-3">
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>, document.body
   );
 }
 
@@ -164,13 +180,23 @@ export function Modal({
 /* -------------------------------------------------------------------------- */
 
 type Toast = { id: number; message: string; tone: 'success' | 'error' | 'info' };
-const ToastContext = createContext<{ notify: (message: string, tone?: Toast['tone']) => void } | null>(null);
+export type NotifyOptions = string | { title?: string; description?: string; variant?: string; message?: string };
+const ToastContext = createContext<{ notify: (messageOrOptions: NotifyOptions, tone?: Toast['tone']) => void } | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const notify = useCallback((message: string, tone: Toast['tone'] = 'info') => {
+  const notify = useCallback((messageOrOptions: NotifyOptions, tone: Toast['tone'] = 'info') => {
+    let msg = '';
+    let finalTone = tone;
+    if (typeof messageOrOptions === 'string') {
+      msg = messageOrOptions;
+    } else if (messageOrOptions) {
+      msg = messageOrOptions.description || messageOrOptions.message || messageOrOptions.title || '';
+      if (messageOrOptions.variant === 'destructive' || messageOrOptions.variant === 'error') finalTone = 'error';
+      else if (messageOrOptions.variant === 'success') finalTone = 'success';
+    }
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t, { id, message, tone }]);
+    setToasts((t) => [...t, { id, message: msg, tone: finalTone }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
   }, []);
 
@@ -200,7 +226,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) return { notify: (_m: string, _t?: Toast['tone']) => undefined };
+  if (!ctx) return { notify: (_m: NotifyOptions, _t?: Toast['tone']) => undefined };
   return ctx;
 }
 
@@ -269,40 +295,53 @@ export function Badge({
 
 export function ConfirmDialog({
   open,
+  isOpen,
   title,
   body,
+  message,
   confirmLabel = 'Confirm',
-  tone = 'danger',
+  tone,
+  confirmVariant,
   onConfirm,
   onCancel,
+  onClose,
   loading,
 }: {
-  open: boolean;
+  open?: boolean;
+  isOpen?: boolean;
   title: string;
-  body: string;
+  body?: string;
+  message?: string;
   confirmLabel?: string;
   tone?: ButtonVariant;
+  confirmVariant?: 'primary' | 'danger' | 'secondary';
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
+  onClose?: () => void;
   loading?: boolean;
 }) {
+  const isVisible = Boolean(open ?? isOpen);
+  const handleClose = onCancel || onClose || (() => {});
+  const finalTone = (tone || confirmVariant || 'danger') as ButtonVariant;
+  const content = body || message || '';
+
   return (
     <Modal
-      open={open}
-      onClose={onCancel}
+      open={isVisible}
+      onClose={handleClose}
       title={title}
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel}>
+          <Button variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant={tone} onClick={onConfirm} loading={loading}>
+          <Button variant={finalTone} onClick={onConfirm} loading={loading}>
             {confirmLabel}
           </Button>
         </>
       }
     >
-      <p className="text-sm text-on-surface-variant">{body}</p>
+      <p className="text-sm text-on-surface-variant">{content}</p>
     </Modal>
   );
 }

@@ -34,6 +34,12 @@ services:
         value: Africa/Lagos
       - key: GOOGLE_OAUTH_CLIENT_IDS
         sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:tfhc-orderliness@eglobalicthub.com
       # Update after first deploy if Render assigns a different subdomain
       # than the `name:` above (e.g. on a name collision).
       - key: CORS_ORIGIN
@@ -53,6 +59,8 @@ services:
       - key: PORT
         value: '3000'
       - key: NEXT_PUBLIC_API_URL
+        value: https://tfhc-orderliness-api.onrender.com
+      - key: PWA_API_URL
         value: https://tfhc-orderliness-api.onrender.com
       - key: NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID
         sync: false

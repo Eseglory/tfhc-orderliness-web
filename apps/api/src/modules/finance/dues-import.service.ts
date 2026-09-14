@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
-import { bestNameMatch, normalizeNameTokens } from '@tfhc/shared';
+import { bestNameMatch, normalizeNameTokens, toPascalCase } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
+
 import { AuditService } from '../../common/rbac/audit.service';
 import { makeReference } from './finance.util';
 
@@ -128,7 +129,8 @@ export class DuesImportService {
       }
 
       const tokens = normalizeNameTokens(row.name);
-      const names = { first: tokens[0] ? cap(tokens[0]) : row.name, last: tokens.slice(1).map(cap).join(' ') || cap(tokens[0] ?? 'Member') };
+      const names = { first: toPascalCase(tokens[0] || row.name), last: toPascalCase(tokens.slice(1).join(' ') || (tokens[0] ?? 'Member')) };
+
 
       if (!memberId && input.createUnmatchedMembers) {
         resolved.push({ row, memberId: null, create: true, names });
@@ -139,42 +141,59 @@ export class DuesImportService {
       }
     }
 
-    const work = async (tx: Prisma.TransactionClient) => {
-      // 12 periods for the year.
+    // 12 periods for the year.
+    report.periodsEnsured = 12;
+
+    if (apply) {
       const periodIds: string[] = [];
       for (let month = 1; month <= 12; month++) {
-        const period = await tx.duesPeriod.upsert({
-          where: { year_month: { year, month } },
-          update: {},
-          create: {
+        const existing = await this.prisma.duesPeriod.findFirst({ where: { year, month, type: 'MONTHLY' } });
+        const period = existing ?? (await this.prisma.duesPeriod.create({
+          data: {
             year,
             month,
+            type: 'MONTHLY',
             label: `${MONTHS[month - 1]} ${year}`,
             defaultAmount,
             dueDate: new Date(Date.UTC(year, month - 1, dueDay)),
             createdByUserId: actorUserId,
           },
-        });
+        }));
         periodIds.push(period.id);
-        report.periodsEnsured++;
       }
+
+      // Collect all assignments & payments in memory
+      const allAssignments: Prisma.MemberDuesAssignmentCreateManyInput[] = [];
+      const allPayments: Prisma.PaymentCreateManyInput[] = [];
 
       for (const item of resolved) {
         let memberId = item.memberId;
         if (item.create) {
-          const code = `TFHC-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
-          const created = await tx.member.create({
-            data: {
-              memberCode: code,
+          // Check if already created
+          const existingMember = await this.prisma.member.findFirst({
+            where: {
               firstName: item.names.first,
               lastName: item.names.last,
-              phoneNumber: 'UNVERIFIED',
-              roleInUnit: 'Member',
-              status: item.row.newMember ? 'NEW_MEMBER' : 'ACTIVE',
             },
           });
-          memberId = created.id;
-          report.createdMembers.push({ name: item.row.name, memberCode: code });
+
+          if (existingMember) {
+            memberId = existingMember.id;
+          } else {
+            const code = `TFHC-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+            const created = await this.prisma.member.create({
+              data: {
+                memberCode: code,
+                firstName: item.names.first,
+                lastName: item.names.last,
+                phoneNumber: 'UNVERIFIED',
+                roleInUnit: 'Member',
+                status: item.row.newMember ? 'NEW_MEMBER' : 'ACTIVE',
+              },
+            });
+            memberId = created.id;
+            report.createdMembers.push({ name: item.row.name, memberCode: code });
+          }
         }
         if (!memberId) continue;
 
@@ -182,53 +201,65 @@ export class DuesImportService {
         const paid = new Set(item.row.paidMonths ?? []);
         const waived = new Set(item.row.waivedMonths ?? []);
 
-        // Idempotency: clear this member's imported payments + assignments for the year.
-        await tx.payment.deleteMany({
-          where: { memberId, duesAssignment: { periodId: { in: periodIds } }, metadata: { path: ['imported'], equals: true } },
-        });
-
         for (let month = 1; month <= 12; month++) {
           const periodId = periodIds[month - 1];
           const isPaid = paid.has(month);
           const isWaived = waived.has(month);
           const status = isPaid ? 'PAID' : isWaived ? 'WAIVED' : 'OUTSTANDING';
+          const assignmentId = crypto.randomUUID();
 
-          const assignment = await tx.memberDuesAssignment.upsert({
-            where: { periodId_memberId: { periodId, memberId } },
-            update: { amountDue: amount, amountPaid: isPaid ? amount : 0, status, note: item.row.note ?? null },
-            create: { periodId, memberId, amountDue: amount, amountPaid: isPaid ? amount : 0, status, note: item.row.note ?? null },
+          allAssignments.push({
+            id: assignmentId,
+            periodId,
+            memberId,
+            amountDue: amount,
+            amountPaid: isPaid ? amount : 0,
+            status,
+            note: item.row.note ?? null,
           });
           report.assignmentsWritten++;
           if (!isWaived) report.totals.expected += amount;
 
           if (isPaid) {
             const paidOn = new Date(Date.UTC(year, month - 1, dueDay));
-            await tx.payment.create({
-              data: {
-                reference: makeReference('PMT', paidOn),
-                memberId,
-                purpose: 'MONTHLY_DUES',
-                amount,
-                method: 'OTHER',
-                description: `${MONTHS[month - 1]} ${year} dues (imported from records)`,
-                paidOn,
-                status: 'CONFIRMED',
-                duesAssignmentId: assignment.id,
-                recordedByUserId: actorUserId,
-                confirmedByUserId: actorUserId,
-                confirmedAt: new Date(),
-                metadata: { imported: true, source: 'dues-matrix', year, month },
-              },
+            allPayments.push({
+              id: crypto.randomUUID(),
+              reference: `${makeReference('PMT', paidOn)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+              memberId,
+              purpose: 'MONTHLY_DUES',
+              amount,
+              method: 'OTHER',
+              description: `${MONTHS[month - 1]} ${year} dues (imported from records)`,
+              paidOn,
+              status: 'CONFIRMED',
+              duesAssignmentId: assignmentId,
+              recordedByUserId: actorUserId,
+              confirmedByUserId: actorUserId,
+              confirmedAt: new Date(),
+              metadata: { imported: true, source: 'dues-matrix', year, month },
             });
             report.paymentsWritten++;
             report.totals.collected += amount;
           }
         }
       }
-    };
 
-    if (apply) {
-      await this.prisma.$transaction(work, { timeout: 180000 });
+      // Clear existing records for these period IDs before inserting
+      await this.prisma.payment.deleteMany({
+        where: { duesAssignment: { periodId: { in: periodIds } }, metadata: { path: ['imported'], equals: true } },
+      });
+      await this.prisma.memberDuesAssignment.deleteMany({
+        where: { periodId: { in: periodIds } },
+      });
+
+      // Bulk insert assignments and payments
+      await this.prisma.memberDuesAssignment.createMany({
+        data: allAssignments,
+      });
+      await this.prisma.payment.createMany({
+        data: allPayments,
+      });
+
       await this.audit.record({
         actorUserId,
         action: 'DUES_MATRIX_IMPORTED',
@@ -242,14 +273,26 @@ export class DuesImportService {
         },
       });
     } else {
-      await this.prisma
-        .$transaction(async (tx) => {
-          await work(tx);
-          throw new DryRunRollback();
-        })
-        .catch((e) => {
-          if (!(e instanceof DryRunRollback)) throw e;
-        });
+      // Dry-run simulation in-memory
+      for (const item of resolved) {
+        if (item.create) {
+          report.createdMembers.push({ name: item.row.name, memberCode: 'TFHC-SIMULATED' });
+        }
+        const amount = Number(item.row.amount) > 0 ? Number(item.row.amount) : defaultAmount;
+        const paid = new Set(item.row.paidMonths ?? []);
+        const waived = new Set(item.row.waivedMonths ?? []);
+
+        for (let month = 1; month <= 12; month++) {
+          const isPaid = paid.has(month);
+          const isWaived = waived.has(month);
+          report.assignmentsWritten++;
+          if (!isWaived) report.totals.expected += amount;
+          if (isPaid) {
+            report.paymentsWritten++;
+            report.totals.collected += amount;
+          }
+        }
+      }
     }
 
     report.totals.expected = Math.round(report.totals.expected * 100) / 100;
@@ -257,6 +300,3 @@ export class DuesImportService {
     return report;
   }
 }
-
-const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-class DryRunRollback extends Error {}

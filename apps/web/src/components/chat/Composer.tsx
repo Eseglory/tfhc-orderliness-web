@@ -1,10 +1,12 @@
 'use client';
+import { DraftControls } from '../OfflineStorage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
 
 export function Composer({
   disabled,
+  draftKey,
   replyTo,
   editing,
   onCancelReply,
@@ -14,6 +16,7 @@ export function Composer({
   onTyping,
 }: {
   disabled?: boolean;
+  draftKey?: string;
   replyTo: ChatMessage | null;
   editing: ChatMessage | null;
   onCancelReply: () => void;
@@ -74,7 +77,7 @@ export function Composer({
     emitTyping(false);
     setText('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    await onSend(value);
+    try { await onSend(value); } catch { setText(value); }
   };
 
   const COMMON_EMOJIS = ['😀', '😂', '😍', '🙏', '🙌', '👍', '👏', '🔥', '🎉', '❤️', '🕊️', '⛪', '✝️', '🌟', '✨', '🤝', '😇', '🥳', '💡', '📖', '💪', '😊', '🤩', '💯'];
@@ -164,6 +167,7 @@ export function Composer({
 
   return (
     <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
+      {draftKey && !editing && <DraftControls key={draftKey} name={draftKey} value={{ text }} restore={value => setText(String(value.text || ''))} />}
       {showEmojis && (
         <div
           ref={emojiRef}
@@ -294,4 +298,3 @@ export function Composer({
     </div>
   );
 }
-

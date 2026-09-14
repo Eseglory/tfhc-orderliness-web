@@ -11,6 +11,7 @@ import {
 } from '../../lib/chat';
 import { Avatar } from './Avatar';
 import { MessageBubble, SystemLine } from './MessageBubble';
+import { useUpload } from '../UploadProgress';
 import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
 
@@ -137,7 +138,22 @@ export function ChatWorkspace({
 
   // --- socket wiring -------------------------------------------------------
   const socket = useChatSocket({
-    onReady: () => void loadRooms(),
+    onReady: () => {
+      void loadRooms();
+      const roomId = activeIdRef.current;
+      if (roomId) void chatApi.messages(roomId).then(page => {
+        if (activeIdRef.current !== roomId) return;
+        // Fetch authoritative recent history after reconnect, including edits and deletions.
+        setMessages(previous => {
+          const ids = new Set(page.messages.map(message => message.id));
+          const newest = page.messages.at(-1)?.createdAt || '';
+          // Keep messages that arrived while the recovery request was in flight.
+          return [...page.messages, ...previous.filter(message => message.pending ||
+            (!ids.has(message.id) && message.createdAt > newest))];
+        });
+        setNextCursor(page.nextCursor);
+      }).catch(() => notify('Reconnected, but messages could not refresh. Reopen the conversation.', 'error'));
+    },
     onMessage: (m) => {
       if (m.roomId === activeIdRef.current) {
         setMessages((prev) => {
@@ -215,6 +231,7 @@ export function ChatWorkspace({
         setEditing(null);
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not edit the message.', 'error');
+        throw e;
       }
       return;
     }
@@ -245,23 +262,14 @@ export function ChatWorkspace({
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       notify(e instanceof Error ? e.message : 'Message failed to send.', 'error');
+      throw e;
     }
   };
 
+  const upload = useUpload(message => { mergeSaved('', message); scrollToBottom(true); });
   const handleAttach = async (file: File) => {
     const roomId = activeIdRef.current;
-    if (!roomId) return;
-    const form = new FormData();
-    form.append('file', file);
-    if (replyTo) form.append('replyToId', replyTo.id);
-    setReplyTo(null);
-    try {
-      const saved = await chatApi.attach(roomId, form);
-      mergeSaved('', saved);
-      scrollToBottom(true);
-    } catch (e) {
-      notify(e instanceof Error ? e.message : 'Attachment failed.', 'error');
-    }
+    if (roomId) await upload.start(roomId, file, replyTo?.id);
   };
 
   const handleDelete = async (m: ChatMessage) => {
@@ -505,7 +513,9 @@ export function ChatWorkspace({
               )}
             </div>
 
+            {upload.view}
             <Composer
+              draftKey={activeId ? `chat:${activeId}` : undefined}
               disabled={!activeRoom.isActive}
               replyTo={replyTo}
               editing={editing}

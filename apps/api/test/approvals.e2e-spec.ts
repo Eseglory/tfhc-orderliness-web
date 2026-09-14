@@ -41,6 +41,8 @@ describe('Approval engine + welfare + absence (real PostgreSQL)', () => {
     app.get(SchedulerRegistry).getCronJobs().forEach((j) => j.stop());
     db = app.get(PrismaService);
     await app.get(RbacService).syncSystemRoles();
+    await db.approvalWorkflow.updateMany({ where: { requestType: 'ABSENCE', key: { not: 'ABSENCE_DEFAULT' } }, data: { active: false } });
+    await db.approvalWorkflow.updateMany({ where: { key: 'ABSENCE_DEFAULT' }, data: { active: true } });
     const tokens = app.get(AuthService);
     const pw = await argon2.hash('E2ePassword!123');
 

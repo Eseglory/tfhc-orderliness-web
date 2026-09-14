@@ -10,58 +10,67 @@ import {
   Download,
   Shield,
   Edit,
+  Eye,
   Phone,
   Mail,
-  MoreVertical,
   CheckCircle2,
-  Clock,
-  UserX,
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   ExternalLink,
-  Building2,
   Copy,
   Check,
+  LayoutGrid,
+  Table as TableIcon,
+  List,
+  CreditCard,
+  Building2,
+  Calendar,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { ProfilePhoto } from '../../../../components/ProfilePhoto';
 import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
+import { useToast } from '../../../../components/ui';
+
+type MemberViewMode = 'table' | 'grid' | 'cards' | 'compact';
 
 export default function AdminMembersPage() {
   const { user } = useAuth();
+  const { notify } = useToast();
 
   const [members, setMembers] = useState<any[]>([]);
-  const [subTeams, setSubTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selectedSubTeam, setSelectedSubTeam] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedRegistration, setSelectedRegistration] = useState('');
+
+  // 4 View Modes
+  const [viewMode, setViewMode] = useState<MemberViewMode>('table');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(12);
 
   // Modals
   const [showMemberModal, setShowMemberModal] = useState(false);
-  const [showSubTeamModal, setShowSubTeamModal] = useState(false);
-  const [viewingMember, setViewingMember] = useState<any>(null);
+  const [accessMember, setAccessMember] = useState<any>(null);
+  const [accessEmail, setAccessEmail] = useState('');
+  const [accessStatus, setAccessStatus] = useState('ACTIVE');
+  const [accessError, setAccessError] = useState('');
 
   // Form states
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [accessMember, setAccessMember] = useState<any>(null);
-  const [accessEmail, setAccessEmail] = useState('');
-  const [accessStatus, setAccessStatus] = useState('ACTIVE');
-  const [accessError, setAccessError] = useState('');
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || true;
   const [phoneNumber, setPhoneNumber] = useState('');
   const [gender, setGender] = useState('Male');
-  const [subTeamId, setSubTeamId] = useState('');
   const [roleInUnit, setRoleInUnit] = useState('Member');
-  const [subTeamName, setSubTeamName] = useState('');
   const [editingMember, setEditingMember] = useState<any>(null);
   const [status, setStatus] = useState('ACTIVE');
   const [details, setDetails] = useState<Record<string, string>>({});
@@ -70,17 +79,34 @@ export default function AdminMembersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Load view mode preference
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tfhc_members_view_mode') as MemberViewMode;
+      if (saved && ['table', 'grid', 'cards', 'compact'].includes(saved)) {
+        setViewMode(saved);
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const handleSetViewMode = (mode: MemberViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('tfhc_members_view_mode', mode);
+    } catch {
+      // Ignore
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [memData, stData, meUser] = await Promise.all([
+      const [memData] = await Promise.all([
         fetchApi<any[]>('/members'),
-        fetchApi<any[]>('/members/sub-teams'),
-        fetchApi<any>('/auth/me'),
       ]);
-      setIsAdmin(meUser.role === 'ADMIN' || meUser.isSuperAdmin);
       setMembers(memData || []);
-      setSubTeams(stData || []);
       setPageError('');
     } catch (err) {
       setPageError(err instanceof Error ? err.message : 'Could not load members.');
@@ -92,6 +118,11 @@ export default function AdminMembersPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedStatus, selectedRegistration]);
 
   const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +138,6 @@ export default function AdminMembersPage() {
           phoneNumber,
           email: !editingMember && isAdmin && email.trim() ? email.trim() : undefined,
           gender,
-          subTeamId: subTeamId || (editingMember ? null : undefined),
           roleInUnit,
         }),
       });
@@ -118,6 +148,7 @@ export default function AdminMembersPage() {
       setPhoneNumber('');
       setEmail('');
       setEditingMember(null);
+      notify(editingMember ? 'Member profile updated successfully.' : 'Member registered successfully.', 'success');
       loadData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to save member');
@@ -126,41 +157,26 @@ export default function AdminMembersPage() {
     }
   };
 
-  const handleCreateSubTeam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subTeamName.trim()) return;
-    setSubmitting(true);
-    try {
-      await fetchApi('/members/sub-teams', {
-        method: 'POST',
-        body: JSON.stringify({ name: subTeamName }),
-      });
-
-      setShowSubTeamModal(false);
-      setSubTeamName('');
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to create sub-team');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   // Export CSV helper
   const handleExportCSV = () => {
     if (members.length === 0) return;
-    const headers = ['Member Code', 'First Name', 'Last Name', 'Phone', 'Email', 'Sub Team', 'Role', 'Status', 'Joined Date'];
-    const rows = filteredMembers.map((m) => [
-      `"${m.memberCode || ''}"`,
-      `"${m.firstName || ''}"`,
-      `"${m.lastName || ''}"`,
-      `"${m.phoneNumber || ''}"`,
-      `"${m.approvedMember?.email || m.user?.email || ''}"`,
-      `"${m.subTeam?.name || 'Unassigned'}"`,
-      `"${m.roleInUnit || 'Member'}"`,
-      `"${m.status || 'ACTIVE'}"`,
-      `"${m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ''}"`,
-    ]);
+    const headers = ['Member Code', 'First Name', 'Last Name', 'Phone', 'Lookup Email', 'Login Email', 'Role', 'Status', 'Registered', 'Attendance Count', 'Joined Date'];
+    const rows = filteredMembers.map((m) => {
+      const isRegistered = Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled);
+      return [
+        `"${m.memberCode || ''}"`,
+        `"${m.firstName || ''}"`,
+        `"${m.lastName || ''}"`,
+        `"${m.phoneNumber || ''}"`,
+        `"${m.approvedMember?.email || ''}"`,
+        `"${m.user?.email || ''}"`,
+        `"${m.roleInUnit || 'Member'}"`,
+        `"${m.status || 'ACTIVE'}"`,
+        `"${isRegistered ? 'Yes' : 'No'}"`,
+        `"${m._count?.attendanceRecords ?? 0}"`,
+        `"${m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ''}"`,
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -176,10 +192,9 @@ export default function AdminMembersPage() {
     setEditingMember(m);
     setFirstName(m.firstName || '');
     setLastName(m.lastName || '');
-    setPhoneNumber(m.phoneNumber || '');
+    setPhoneNumber(m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : '');
     setEmail(m.approvedMember?.email || m.user?.email || '');
     setGender(m.gender || 'Male');
-    setSubTeamId(m.subTeamId || '');
     setRoleInUnit(m.roleInUnit || 'Member');
     setStatus(m.status || 'ACTIVE');
     setDetails(
@@ -188,7 +203,6 @@ export default function AdminMembersPage() {
           'middleName',
           'preferredName',
           'alternatePhoneNumber',
-          'address',
           'profession',
           'birthday',
           'dateOfBirth',
@@ -204,42 +218,52 @@ export default function AdminMembersPage() {
     setShowMemberModal(true);
   };
 
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   // Filtered members list
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
       const q = search.trim().toLowerCase();
+      const lookupEmail = (m.approvedMember?.email || '').toLowerCase();
+      const loginEmail = (m.user?.email || '').toLowerCase();
       const matchesSearch =
         !q ||
         (m.firstName || '').toLowerCase().includes(q) ||
         (m.lastName || '').toLowerCase().includes(q) ||
+        (m.middleName || '').toLowerCase().includes(q) ||
         (m.memberCode || '').toLowerCase().includes(q) ||
         (m.phoneNumber || '').toLowerCase().includes(q) ||
-        (m.approvedMember?.email || m.user?.email || '').toLowerCase().includes(q);
+        lookupEmail.includes(q) ||
+        loginEmail.includes(q);
 
-      const matchesSubTeam = selectedSubTeam ? m.subTeamId === selectedSubTeam : true;
       const matchesStatus = selectedStatus ? m.status === selectedStatus : true;
 
-      return matchesSearch && matchesSubTeam && matchesStatus;
+      const isRegistered = Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled);
+      let matchesReg = true;
+      if (selectedRegistration === 'registered') matchesReg = isRegistered;
+      if (selectedRegistration === 'unregistered') matchesReg = !isRegistered;
+
+      return matchesSearch && matchesStatus && matchesReg;
     });
-  }, [members, search, selectedSubTeam, selectedStatus]);
+  }, [members, search, selectedStatus, selectedRegistration]);
 
   // Paginated records
+  const totalRecords = filteredMembers.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
   const paginatedMembers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredMembers.slice(start, start + pageSize);
   }, [filteredMembers, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredMembers.length / pageSize) || 1;
-
-  // Compute active velocity
+  // Compute active velocity and registered count
   const activeMembersCount = members.filter((m) => m.status === 'ACTIVE').length;
-  const activeVelocity = members.length > 0 ? `${Math.round((activeMembersCount / members.length) * 1000) / 10}%` : '100%';
+  const registeredCount = members.filter((m) => m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled).length;
+
+  const statusColors: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60',
+    NEW_MEMBER: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-800/60',
+    ON_LEAVE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
+    INACTIVE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+    SUSPENDED: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60',
+  };
 
   return (
     <AdminLayoutShell>
@@ -248,13 +272,13 @@ export default function AdminMembersPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-              CAMPUS &amp; CONGREGATIONAL REGISTRY
+              OPERATIONS DIRECTORY
             </p>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-0.5">
-              Members Management
+              Members Directory
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-              Manage church membership, pastoral records, category groups, and ministry assignments across campus bodies.
+              Verified corporate member roster with directory allowlist enforcement, attendance histories, and account status.
             </p>
           </div>
 
@@ -271,16 +295,25 @@ export default function AdminMembersPage() {
               </div>
             </div>
 
-            {/* Active Attendance Pill */}
+            {/* Registered Users Pill */}
             <div className="flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
               <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                 <CheckCircle2 className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Roster</p>
-                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{activeVelocity}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Portal Accounts</p>
+                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{registeredCount} / {members.length}</p>
               </div>
             </div>
+
+            {/* Invite from Lookup Table button */}
+            <Link
+              href="/admin/administration/lookups?tab=approved-members"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <Users className="w-4 h-4" />
+              Member Lookup &amp; Invitations &rarr;
+            </Link>
           </div>
         </div>
 
@@ -299,11 +332,8 @@ export default function AdminMembersPage() {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Search by name, email, phone, or membership ID (CMD+K)..."
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, directory email, phone, or membership ID (e.g. TFHC-)..."
                 className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-indigo-500"
               />
               {search && (
@@ -316,18 +346,11 @@ export default function AdminMembersPage() {
               )}
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons & 4 View Switcher */}
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setShowSubTeamModal(true)}
-                className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 transition-all"
-              >
-                + Add Sub-Team
-              </button>
-
-              <button
                 onClick={handleExportCSV}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 shadow-xs transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 shadow-xs transition-all cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-slate-500" />
                 <span>Export CSV</span>
@@ -340,17 +363,64 @@ export default function AdminMembersPage() {
                   setLastName('');
                   setPhoneNumber('');
                   setEmail('');
-                  setSubTeamId('');
                   setRoleInUnit('Member');
                   setGender('Male');
                   setFormError('');
                   setShowMemberModal(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white shadow-sm shadow-indigo-600/20 transition-all active:scale-95 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Member</span>
               </button>
+
+              {/* 4 VIEW MODE TOGGLE BUTTONS */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-950 rounded-xl p-0.5 border border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => handleSetViewMode('table')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Table View"
+                >
+                  <TableIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleSetViewMode('grid')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleSetViewMode('cards')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'cards'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Detailed Cards View"
+                >
+                  <CreditCard className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleSetViewMode('compact')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === 'compact'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Compact List View"
+                >
+                  <List className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -364,13 +434,10 @@ export default function AdminMembersPage() {
             {/* Status Filter */}
             <select
               value={selectedStatus}
-              onChange={(e) => {
-                setSelectedStatus(e.target.value);
-                setCurrentPage(1);
-              }}
+              onChange={(e) => setSelectedStatus(e.target.value)}
               className="bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="">All Statuses</option>
+              <option value="">Status: All</option>
               <option value="ACTIVE">Active Member</option>
               <option value="NEW_MEMBER">New Member</option>
               <option value="ON_LEAVE">On Leave</option>
@@ -378,33 +445,27 @@ export default function AdminMembersPage() {
               <option value="SUSPENDED">Suspended</option>
             </select>
 
-            {/* Sub-Team Filter */}
+            {/* Registration Status Filter */}
             <select
-              value={selectedSubTeam}
-              onChange={(e) => {
-                setSelectedSubTeam(e.target.value);
-                setCurrentPage(1);
-              }}
+              value={selectedRegistration}
+              onChange={(e) => setSelectedRegistration(e.target.value)}
               className="bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
             >
-              <option value="">All Ministries &amp; Sub-Teams</option>
-              {subTeams.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name} ({st._count?.members ?? 0})
-                </option>
-              ))}
+              <option value="">Account: All</option>
+              <option value="registered">Registered Portal Account</option>
+              <option value="unregistered">Directory Only</option>
             </select>
 
             {/* Reset Filters button */}
-            {(selectedStatus || selectedSubTeam || search) && (
+            {(selectedStatus || selectedRegistration || search) && (
               <button
                 onClick={() => {
                   setSelectedStatus('');
-                  setSelectedSubTeam('');
+                  setSelectedRegistration('');
                   setSearch('');
                   setCurrentPage(1);
                 }}
-                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline ml-auto"
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline ml-auto cursor-pointer"
               >
                 Reset Filters
               </button>
@@ -412,368 +473,503 @@ export default function AdminMembersPage() {
           </div>
         </div>
 
-        {/* High-Density Members Directory Table / Mobile Cards */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-          {/* Desktop & Tablet Table */}
-          <div className="overflow-x-auto hidden md:block">
-            <table className="w-full text-left text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-              <thead className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800">
-                <tr>
-                  <th className="px-5 py-3.5">MEMBER</th>
-                  <th className="px-5 py-3.5">CONTACT DETAILS</th>
-                  <th className="px-5 py-3.5">MINISTRY &amp; SUB-TEAM</th>
-                  <th className="px-5 py-3.5">ECCLESIASTICAL STATUS</th>
-                  <th className="px-5 py-3.5">ATTENDANCE (L30D)</th>
-                  <th className="px-5 py-3.5">JOINED DATE</th>
-                  <th className="px-5 py-3.5 text-right">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-                {paginatedMembers.length > 0 ? (
-                  paginatedMembers.map((m) => {
-                    const statusColors: Record<string, string> = {
-                      ACTIVE: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60',
-                      NEW_MEMBER: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-800/60',
-                      ON_LEAVE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
-                      INACTIVE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-                      SUSPENDED: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60',
-                    };
+        {/* ========================================================================= */}
+        {/* PRESENTATION MODES                                                        */}
+        {/* ========================================================================= */}
 
-                    const joinedDate = m.createdAt
-                      ? new Date(m.createdAt).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })
-                      : 'Established';
+        {loading ? (
+          <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
+            <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Loading member registry…</p>
+          </div>
+        ) : paginatedMembers.length === 0 ? (
+          <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <Users className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No members found</p>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              No records match your active search and filter criteria. Adjust your filters or add a new member.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* 1. TABLE VIEW */}
+            {viewMode === 'table' && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+                    <thead className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider bg-slate-50/70 dark:bg-slate-800/60 border-b border-slate-200/80 dark:border-slate-800">
+                      <tr>
+                        <th className="px-5 py-3.5">MEMBER</th>
+                        <th className="px-5 py-3.5">DIRECTORY / LOOKUP EMAIL</th>
+                        <th className="px-5 py-3.5">PHONE</th>
+                        <th className="px-5 py-3.5">STATUS</th>
+                        <th className="px-5 py-3.5">ATTENDANCE</th>
+                        <th className="px-5 py-3.5 text-right">ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                      {paginatedMembers.map((m) => {
+                        const attendanceCount = m._count?.attendanceRecords ?? (m.attendanceRecords?.length ?? 0);
+                        const lastAttendance = m.attendanceRecords?.[0]?.createdAt
+                          ? new Date(m.attendanceRecords[0].createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                          : null;
 
-                    return (
-                      <tr
-                        key={m.id}
-                        className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
-                      >
-                        {/* Member Column */}
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Link
-                              href={`/admin/members/${m.id || 'ORD-2041'}`}
-                              className="group flex items-center gap-3 hover:opacity-80 transition-opacity"
-                            >
-                              {m.profilePhotoUrl ? (
-                                <img
-                                  src={m.profilePhotoUrl}
-                                  alt={`${m.firstName} avatar`}
-                                  className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                                />
-                              ) : (
-                                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
-                                  {m.firstName?.[0] || 'M'}
-                                  {m.lastName?.[0] || ''}
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate flex items-center gap-1.5">
-                                  <span>{m.firstName} {m.lastName}</span>
-                                  <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
-                                    {m.memberCode}
-                                  </span>
-                                  {m.gender && (
-                                    <span className="text-[10px] text-slate-400">{m.gender}</span>
+                        return (
+                          <tr key={m.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                            {/* Member Column */}
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <Link
+                                  href={`/admin/members/${m.id}`}
+                                  className="group flex items-center gap-3 hover:opacity-90 transition-opacity"
+                                >
+                                  {m.profilePhotoUrl ? (
+                                    <img
+                                      src={m.profilePhotoUrl}
+                                      alt={`${m.firstName} avatar`}
+                                      className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
+                                      {m.firstName?.[0] || 'M'}
+                                      {m.lastName?.[0] || ''}
+                                    </div>
                                   )}
+                                  <div className="min-w-0">
+                                    <p className="font-extrabold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate flex items-center gap-1.5">
+                                      <span>{m.firstName} {m.middleName ? m.middleName + ' ' : ''}{m.lastName}</span>
+                                      <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
+                                        {m.memberCode}
+                                      </span>
+                                      {m.roleInUnit && (
+                                        <span className="text-[10px] text-slate-400">{m.roleInUnit}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </Link>
+                              </div>
+                            </td>
+
+                            {/* Directory Email Column */}
+                            <td className="px-5 py-3.5">
+                              <div className="space-y-0.5 min-w-[140px]">
+                                <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                                  <Mail className="w-3 h-3 text-indigo-500 shrink-0" />
+                                  <span className="font-medium text-slate-900 dark:text-white truncate max-w-[180px]">
+                                    {m.approvedMember?.email || 'Not in lookup table'}
+                                  </span>
                                 </div>
+                                {m.user?.email && m.user.email.toLowerCase() !== (m.approvedMember?.email || '').toLowerCase() && (
+                                  <p className="text-[10px] text-slate-400">Login: {m.user.email}</p>
+                                )}
                               </div>
-                            </Link>
-                          </div>
-                        </td>
+                            </td>
 
-                        {/* Contact Details Column */}
-                        <td className="px-5 py-3.5">
-                          <div className="space-y-0.5 min-w-[140px]">
-                            {m.phoneNumber && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
-                                <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="font-mono">{m.phoneNumber}</span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                              <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[160px]">
-                                {m.approvedMember?.email || m.user?.email || 'No email registered'}
+                            {/* Phone Column */}
+                            <td className="px-5 py-3.5">
+                              {m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? (
+                                <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                                  <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className="font-mono">{m.phoneNumber}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">Not provided</span>
+                              )}
+                            </td>
+
+                            {/* Member Status Column */}
+                            <td className="px-5 py-3.5">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full border ${
+                                  statusColors[m.status] || statusColors.ACTIVE
+                                }`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                {m.status?.replace('_', ' ') || 'ACTIVE'}
                               </span>
+                            </td>
+
+                            {/* Attendance Column */}
+                            <td className="px-5 py-3.5">
+                              <div>
+                                <p className="font-bold text-xs text-slate-900 dark:text-white">
+                                  {attendanceCount > 0 ? `${attendanceCount} Service${attendanceCount > 1 ? 's' : ''}` : '0 Services'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  {lastAttendance ? `Last: ${lastAttendance}` : 'Last seen: Never'}
+                                </p>
+                              </div>
+                            </td>
+
+                            {/* Actions Column */}
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Link
+                                  href={`/admin/members/${m.id}`}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                  title="View Profile Details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Link>
+
+                                <button
+                                  onClick={() => handleOpenEdit(m)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Edit Member"
+                                  aria-label={`Edit ${m.firstName} ${m.lastName}`}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => {
+                                      setAccessMember(m);
+                                      setAccessEmail(m.approvedMember?.email || m.user?.email || '');
+                                      setAccessStatus(m.approvedMember?.status || 'ACTIVE');
+                                      setAccessError('');
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                    title="Manage Google Access"
+                                    aria-label={`Manage Google access for ${m.firstName} ${m.lastName}`}
+                                  >
+                                    <Shield className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* 2. GRID VIEW */}
+            {viewMode === 'grid' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedMembers.map((m) => {
+                  const attendanceCount = m._count?.attendanceRecords ?? (m.attendanceRecords?.length ?? 0);
+                  return (
+                    <div
+                      key={m.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          {m.profilePhotoUrl ? (
+                            <img
+                              src={m.profilePhotoUrl}
+                              alt={`${m.firstName} avatar`}
+                              className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-sm ring-1 ring-indigo-200/70 dark:ring-indigo-800/60">
+                              {m.firstName?.[0] || 'M'}
+                              {m.lastName?.[0] || ''}
                             </div>
-                          </div>
-                        </td>
-
-                        {/* Ministry & Sub-Team Column */}
-                        <td className="px-5 py-3.5">
-                          <div>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/40">
-                              <Building2 className="w-3 h-3" />
-                              {m.subTeam?.name || 'General Registry'}
-                            </span>
-                            <p className="text-[10px] font-semibold text-slate-400 mt-1 capitalize">
-                              {m.roleInUnit || 'Member'}
-                            </p>
-                          </div>
-                        </td>
-
-                        {/* Ecclesiastical Status Column */}
-                        <td className="px-5 py-3.5">
+                          )}
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-full border ${
+                            className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full border ${
                               statusColors[m.status] || statusColors.ACTIVE
                             }`}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
                             {m.status?.replace('_', ' ') || 'ACTIVE'}
                           </span>
-                        </td>
-
-                        {/* Attendance Velocity Column */}
-                        <td className="px-5 py-3.5">
-                          <div>
-                            <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white">
-                              <span>92%</span>
-                              <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                                Consistent
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Last seen: Recent service</p>
-                          </div>
-                        </td>
-
-                        {/* Joined Date Column */}
-                        <td className="px-5 py-3.5 text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                          {joinedDate}
-                        </td>
-
-                        {/* Actions Column */}
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {/* Edit Button */}
-                            <button
-                              onClick={() => handleOpenEdit(m)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              title="Edit Member"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-
-                            {/* Google Access Button for Admins */}
-                            {isAdmin && (
-                              <button
-                                onClick={() => {
-                                  setAccessMember(m);
-                                  setAccessEmail(m.approvedMember?.email || m.user?.email || '');
-                                  setAccessStatus(m.approvedMember?.status || 'ACTIVE');
-                                  setAccessError('');
-                                }}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                title="Manage Google Access"
-                              >
-                                <Shield className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                      {loading ? (
-                        <div className="space-y-2">
-                          <p className="text-sm font-semibold">Loading member registry...</p>
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
-                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            No member records found matching criteria
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            Try adjusting your search query or filter selections.
-                          </p>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
 
-          {/* Mobile Card-Based Transformation (< 768px) */}
-          <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800">
-            {paginatedMembers.length > 0 ? (
-              paginatedMembers.map((m) => {
-                const statusColors: Record<string, string> = {
-                  ACTIVE: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60',
-                  NEW_MEMBER: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200/60 dark:border-indigo-800/60',
-                  ON_LEAVE: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
-                  INACTIVE: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-                  SUSPENDED: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60',
-                };
-
-                const joinedDate = m.createdAt
-                  ? new Date(m.createdAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      year: 'numeric',
-                    })
-                  : 'Established';
-
-                return (
-                  <div key={m.id} className="p-4 space-y-3 bg-white dark:bg-slate-900">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        {m.profilePhotoUrl ? (
-                          <img
-                            src={m.profilePhotoUrl}
-                            alt={`${m.firstName} avatar`}
-                            className="w-10 h-10 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-xs ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
-                            {m.firstName?.[0] || 'M'}
-                            {m.lastName?.[0] || ''}
-                          </div>
-                        )}
                         <div>
-                          <p className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          <h3 className="font-extrabold text-sm text-slate-900 dark:text-white line-clamp-1">
                             {m.firstName} {m.lastName}
+                          </h3>
+                          <p className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
+                            {m.memberCode}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
-                              {m.memberCode}
-                            </span>
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full border ${
-                                statusColors[m.status] || statusColors.ACTIVE
-                              }`}
-                            >
-                              {m.status?.replace('_', ' ') || 'ACTIVE'}
-                            </span>
+                        </div>
+
+                        <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{m.approvedMember?.email || m.user?.email || 'No email registered'}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'No phone'}</span>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/70 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Ministry</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
-                          {m.subTeam?.name || 'General Registry'}
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                        <span className="text-[11px] font-bold text-slate-400">
+                          {attendanceCount} Services
                         </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Attendance</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 block">
-                          92% Consistent
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Contact</span>
-                        <span className="font-mono text-[11px] text-slate-700 dark:text-slate-300 block truncate">
-                          {m.phoneNumber || 'No phone'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block">Joined</span>
-                        <span className="text-slate-700 dark:text-slate-300 block">
-                          {joinedDate}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/admin/members/${m.id}`}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            Profile
+                          </Link>
+                          <button
+                            onClick={() => handleOpenEdit(m)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="Edit"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-
-                    {/* Mobile Touch Actions */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => handleOpenEdit(m)}
-                        className="flex-1 min-h-[40px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit Profile</span>
-                      </button>
-
-                      {isAdmin && (
-                        <button
-                          onClick={() => {
-                            setAccessMember(m);
-                            setAccessEmail(m.approvedMember?.email || m.user?.email || '');
-                            setAccessStatus(m.approvedMember?.status || 'ACTIVE');
-                            setAccessError('');
-                          }}
-                          className="min-h-[40px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 font-bold text-xs"
-                        >
-                          <Shield className="w-3.5 h-3.5" />
-                          <span>Access</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-8 text-center text-xs text-slate-400">
-                {loading ? 'Loading member records...' : 'No members found matching criteria.'}
+                  );
+                })}
               </div>
             )}
-          </div>
 
-          {/* Pagination Controls Footer */}
-          <div className="px-5 py-3.5 bg-slate-50/70 dark:bg-slate-800/40 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-            <div className="flex items-center gap-2">
-              <span>
-                Showing {filteredMembers.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{' '}
-                {Math.min(currentPage * pageSize, filteredMembers.length)} of {filteredMembers.length} members
-              </span>
-              <span className="hidden sm:inline">•</span>
-              <label className="hidden sm:flex items-center gap-1.5">
-                <span>Per page:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-0.5 text-xs text-slate-700 dark:text-slate-200"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </label>
+            {/* 3. CARDS VIEW (Detailed) */}
+            {viewMode === 'cards' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginatedMembers.map((m) => {
+                  const attendanceCount = m._count?.attendanceRecords ?? (m.attendanceRecords?.length ?? 0);
+                  const isRegistered = Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled);
+                  return (
+                    <div
+                      key={m.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {m.profilePhotoUrl ? (
+                            <img
+                              src={m.profilePhotoUrl}
+                              alt={`${m.firstName} avatar`}
+                              className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-sm ring-1 ring-indigo-200/70 dark:ring-indigo-800/60">
+                              {m.firstName?.[0] || 'M'}
+                              {m.lastName?.[0] || ''}
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                              {m.firstName} {m.middleName ? m.middleName + ' ' : ''}{m.lastName}
+                            </h3>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                {m.memberCode}
+                              </span>
+                              {m.roleInUnit && (
+                                <span className="text-xs text-slate-400">· {m.roleInUnit}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 text-xs font-bold rounded-full border ${
+                            statusColors[m.status] || statusColors.ACTIVE
+                          }`}
+                        >
+                          {m.status?.replace('_', ' ') || 'ACTIVE'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Directory Email</span>
+                          <span className="font-semibold text-slate-900 dark:text-white block truncate">
+                            {m.approvedMember?.email || 'None'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Phone</span>
+                          <span className="font-semibold text-slate-900 dark:text-white block truncate">
+                            {m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'Not provided'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Attendance</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400 block">
+                            {attendanceCount} Services Recorded
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Portal Access</span>
+                          <span className="font-bold text-slate-900 dark:text-white block">
+                            {isRegistered ? 'Active Account' : 'Directory Only'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <Link
+                          href={`/admin/members/${m.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          <span>Full Member File</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </Link>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleOpenEdit(m)}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200"
+                          >
+                            Edit
+                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                setAccessMember(m);
+                                setAccessEmail(m.approvedMember?.email || m.user?.email || '');
+                                setAccessStatus(m.approvedMember?.status || 'ACTIVE');
+                                setAccessError('');
+                              }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                            >
+                              Access
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 4. COMPACT VIEW */}
+            {viewMode === 'compact' && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800/60 overflow-hidden">
+                {paginatedMembers.map((m) => {
+                  const attendanceCount = m._count?.attendanceRecords ?? (m.attendanceRecords?.length ?? 0);
+                  return (
+                    <div
+                      key={m.id}
+                      className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-indigo-500" />
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                              {m.firstName} {m.lastName}
+                            </span>
+                            <span className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 font-bold bg-indigo-50 dark:bg-indigo-950 px-1.5 py-0.2 rounded">
+                              {m.memberCode}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                            <span>{m.approvedMember?.email || m.user?.email || 'No email'}</span>
+                            <span>•</span>
+                            <span>{m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'No phone'}</span>
+                            <span>•</span>
+                            <span>{attendanceCount} Services</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${
+                            statusColors[m.status] || statusColors.ACTIVE
+                          }`}
+                        >
+                          {m.status?.replace('_', ' ') || 'ACTIVE'}
+                        </span>
+                        <Link
+                          href={`/admin/members/${m.id}`}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          View
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Pagination Controls Footer */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="text-slate-500 font-medium">
+                Showing{' '}
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {totalRecords === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                </span>{' '}
+                to{' '}
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {Math.min(currentPage * pageSize, totalRecords)}
+                </span>{' '}
+                of <span className="font-bold text-slate-900 dark:text-white">{totalRecords}</span> members
+              </div>
+
+              <div className="flex items-center gap-3 self-end sm:self-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px]">Per Page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  >
+                    <option value={6}>6</option>
+                    <option value={12}>12</option>
+                    <option value={24}>24</option>
+                    <option value={48}>48</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <span className="px-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {currentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
-
-            {/* Page buttons */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              <span className="px-3 py-1 font-bold text-slate-900 dark:text-white">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="p-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 disabled:opacity-40"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-        </div>
+        )}
 
         {/* Google Access Modal */}
         {accessMember && (
@@ -793,6 +989,7 @@ export default function AdminMembersPage() {
                     body: JSON.stringify({ email: accessEmail, status: accessStatus }),
                   });
                   setAccessMember(null);
+                  notify('Google access updated successfully.', 'success');
                   await loadData();
                 } catch (error: any) {
                   setAccessError(error.message);
@@ -802,7 +999,7 @@ export default function AdminMembersPage() {
               }}
             >
               <h2 id="google-access-title" className="text-lg font-bold text-slate-900 dark:text-white">
-                Manage Google Sign-In Access
+                Manage Sign-In Access
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Authorized identity for {accessMember.firstName} {accessMember.lastName} ({accessMember.memberCode})
@@ -810,7 +1007,7 @@ export default function AdminMembersPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1" htmlFor="access-email">
-                  Google Email Address
+                  Google / Corporate Email Address
                 </label>
                 <input
                   id="access-email"
@@ -845,13 +1042,14 @@ export default function AdminMembersPage() {
                   type="button"
                   disabled={submitting}
                   onClick={() => setAccessMember(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
+                  type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 cursor-pointer"
                 >
                   {submitting ? 'Saving...' : 'Save Access'}
                 </button>
@@ -866,11 +1064,11 @@ export default function AdminMembersPage() {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto shadow-2xl">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {editingMember ? 'Edit Congregant Profile' : 'Register New Member'}
+                  {editingMember ? 'Edit Member Profile' : 'Register New Member'}
                 </h2>
                 <button
                   onClick={() => setShowMemberModal(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -937,7 +1135,7 @@ export default function AdminMembersPage() {
                 {isAdmin && (
                   <div>
                     <label htmlFor="member-google-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Google Email Address
+                      Directory / Email Address
                     </label>
                     <input
                       id="member-google-email"
@@ -953,20 +1151,14 @@ export default function AdminMembersPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Sub-Team / Ministry
-                    </label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Gender</label>
                     <select
-                      value={subTeamId}
-                      onChange={(e) => setSubTeamId(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none"
                     >
-                      <option value="">Unassigned</option>
-                      {subTeams.map((st) => (
-                        <option key={st.id} value={st.id}>
-                          {st.name}
-                        </option>
-                      ))}
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
                     </select>
                   </div>
                   <div>
@@ -978,97 +1170,43 @@ export default function AdminMembersPage() {
                       id="roleInUnit"
                       value={roleInUnit}
                       onChange={(e) => setRoleInUnit(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {editingMember && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Gender</label>
+                    <label htmlFor="member-status-select" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status</label>
                     <select
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
+                      id="member-status-select"
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
                       className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none"
                     >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
+                      {['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'SUSPENDED', 'EXEMPT', 'NEW_MEMBER'].map((v) => (
+                        <option key={v} value={v}>
+                          {v.replace('_', ' ')}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  {editingMember && (
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status</label>
-                      <select
-                        value={status}
-                        onChange={(e) => setStatus(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none"
-                      >
-                        {['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'SUSPENDED', 'EXEMPT', 'NEW_MEMBER'].map((v) => (
-                          <option key={v} value={v}>
-                            {v.replace('_', ' ')}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
+                )}
 
                 <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => setShowMemberModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs text-white shadow-sm shadow-indigo-600/20"
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs text-white shadow-sm shadow-indigo-600/20 cursor-pointer"
                   >
                     {submitting ? 'Saving...' : 'Save Member Record'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Create Sub-Team Modal */}
-        {showSubTeamModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Create New Sub-Team</h2>
-
-              <form onSubmit={handleCreateSubTeam} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Sub-Team Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={subTeamName}
-                    onChange={(e) => setSubTeamName(e.target.value)}
-                    placeholder="e.g. Protocol Team B"
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowSubTeamModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-bold text-xs text-white shadow-sm shadow-indigo-600/20"
-                  >
-                    {submitting ? 'Saving...' : 'Create Sub-Team'}
                   </button>
                 </div>
               </form>

@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
-import { MemberStatus } from '@tfhc/shared';
+import { MemberStatus, toPascalCase } from '@tfhc/shared';
 
 // sharp 0.35 is a CommonJS module whose export is the callable factory. With
 // esModuleInterop disabled a plain `require` keeps both the runtime value and
@@ -12,34 +13,90 @@ const sharp: typeof import('sharp').default = require('sharp');
 
 @Injectable()
 export class MembersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async findAll(query?: { status?: MemberStatus; subTeamId?: string; search?: string }) {
-    const where: any = {};
-    if (query?.status && !Object.values(MemberStatus).includes(query.status)) throw new BadRequestException('Invalid member status');
-    if (query?.status) where.status = query.status;
-    if (query?.subTeamId) where.subTeamId = query.subTeamId;
-    if (query?.search) {
-      where.OR = [
-        { firstName: { contains: query.search, mode: 'insensitive' } },
-        { lastName: { contains: query.search, mode: 'insensitive' } },
-        { memberCode: { contains: query.search, mode: 'insensitive' } },
-      ];
-    }
+    const key = JSON.stringify([query?.status, query?.subTeamId, query?.search]);
+    return this.cache.wrap(`members:all:${key}`, 30, async () => {
+      const where: any = {
+        // Only show members whose email is in the approved member directory / lookup table
+        approvedMember: {
+          isNot: null,
+          is: {
+            status: 'ACTIVE',
+          },
+        },
+      };
+      if (query?.status && !Object.values(MemberStatus).includes(query.status)) throw new BadRequestException('Invalid member status');
+      if (query?.status) where.status = query.status;
+      if (query?.subTeamId) where.subTeamId = query.subTeamId;
+      if (query?.search) {
+        where.OR = [
+          { firstName: { contains: query.search, mode: 'insensitive' } },
+          { lastName: { contains: query.search, mode: 'insensitive' } },
+          { middleName: { contains: query.search, mode: 'insensitive' } },
+          { preferredName: { contains: query.search, mode: 'insensitive' } },
+          { memberCode: { contains: query.search, mode: 'insensitive' } },
+        ];
+      }
 
-    return this.prisma.member.findMany({
-      where,
-      include: { subTeam: true, approvedMember: { select: { email: true, status: true } }, user: { select: { id: true, email: true, role: true } } },
-      orderBy: { lastName: 'asc' },
-    });
+      return this.prisma.member.findMany({
+        where,
+        include: {
+          approvedMember: { select: { email: true, status: true, source: true } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              googleSubject: true,
+              passwordAuthEnabled: true,
+              emailVerifiedAt: true,
+              lastLoginAt: true,
+            },
+          },
+          attendanceRecords: {
+            select: {
+              id: true,
+              status: true,
+              createdAt: true,
+              meeting: { select: { id: true, title: true, startTime: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          _count: {
+            select: {
+              attendanceRecords: true,
+              duesAssignments: true,
+              payments: true,
+            },
+          },
+        },
+        orderBy: { firstName: 'asc' },
+      });
+    }, ['members']);
   }
 
   async findOne(id: string) {
     const member = await this.prisma.member.findUnique({
       where: { id },
       include: {
-        subTeam: true,
-        user: { select: { id: true, email: true, role: true } },
+        approvedMember: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            googleSubject: true,
+            passwordAuthEnabled: true,
+            emailVerifiedAt: true,
+            lastLoginAt: true,
+          },
+        },
         attendanceRecords: {
           include: { meeting: { include: { category: true } } },
           orderBy: { createdAt: 'desc' },
@@ -47,6 +104,14 @@ export class MembersService {
         },
         excuseRequests: true,
         followUpFlags: true,
+        duesAssignments: {
+          include: { period: true },
+          orderBy: [{ period: { year: 'desc' } }, { period: { month: 'desc' } }],
+        },
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
       },
     });
 
@@ -57,9 +122,10 @@ export class MembersService {
     return member;
   }
 
+
   async updatePhoto(id: string, file?: { buffer: Buffer; size: number }) {
     if (!file?.buffer?.length) throw new BadRequestException('Choose a JPEG, PNG or WebP image');
-    if (file.size > 2 * 1024 * 1024 || file.buffer.length > 2 * 1024 * 1024) throw new PayloadTooLargeException('Profile picture must be 2 MB or smaller');
+    if (file.size > 1024 * 1024 || file.buffer.length > 1024 * 1024) throw new PayloadTooLargeException('Profile picture must be 1 MB or smaller');
     let output: Buffer;
     try {
       const image = sharp(file.buffer, { limitInputPixels: 25000000, animated: false });
@@ -80,12 +146,37 @@ export class MembersService {
     return { profilePhotoUrl: null };
   }
 
+  async updateBanner(id: string, file?: { buffer: Buffer; size: number }) {
+    if (!file?.buffer?.length) throw new BadRequestException('Choose a JPEG, PNG or WebP image');
+    if (file.size > 1024 * 1024 || file.buffer.length > 1024 * 1024) throw new PayloadTooLargeException('Banner must be 1 MB or smaller');
+    let output: Buffer;
+    try {
+      const image = sharp(file.buffer, { limitInputPixels: 25000000, animated: false });
+      const metadata = await image.metadata();
+      if (!['jpeg', 'png', 'webp'].includes(metadata.format) || (metadata.pages ?? 1) > 1) throw new Error('Unsupported image');
+      output = await image.rotate().resize(1200, 400, { fit: 'cover', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+    } catch {
+      throw new BadRequestException('Choose a valid, non-animated JPEG, PNG or WebP image (up to 25 megapixels)');
+    }
+    const bannerPhotoUrl = `data:image/webp;base64,${output.toString('base64')}`;
+    await this.prisma.member.update({ where: { id }, data: { bannerPhotoUrl } });
+    return { bannerPhotoUrl };
+  }
+
+  async removeBanner(id: string) {
+    await this.prisma.member.update({ where: { id }, data: { bannerPhotoUrl: null } });
+    return { bannerPhotoUrl: null };
+  }
+
   async notifications(memberId: string) {
     return this.prisma.memberNotification.findMany({ where: { memberId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, orderBy: { createdAt: 'desc' }, take: 100 });
   }
 
-  async readNotifications(memberId: string) {
-    return this.prisma.memberNotification.updateMany({ where: { memberId, status: 'UNREAD' }, data: { status: 'READ', readAt: new Date() } });
+  async readNotifications(memberId: string, ids?: string[]) {
+    if (ids !== undefined && (!Array.isArray(ids) || ids.length > 100 || ids.some(id => typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)))) {
+      throw new BadRequestException('ids must contain at most 100 notification IDs');
+    }
+    return this.prisma.memberNotification.updateMany({ where: { memberId, status: 'UNREAD', ...(ids !== undefined ? { id: { in: ids } } : {}) }, data: { status: 'READ', readAt: new Date() } });
   }
 
   async findProfile(id: string) {
@@ -140,13 +231,17 @@ export class MembersService {
         where: { id },
         data: {
           ...assignments,
-          firstName: text(dto.firstName, 80, 'first name') ?? undefined,
-          middleName: text(dto.middleName, 80, 'middle name'),
-          lastName: text(dto.lastName, 80, 'last name') ?? undefined,
-          preferredName: text(dto.preferredName, 80, 'preferred name'),
+          firstName: dto.firstName !== undefined ? toPascalCase(text(dto.firstName, 80, 'first name')) : undefined,
+          middleName: dto.middleName !== undefined ? (text(dto.middleName, 80, 'middle name') ? toPascalCase(text(dto.middleName, 80, 'middle name')) : null) : undefined,
+          lastName: dto.lastName !== undefined ? toPascalCase(text(dto.lastName, 80, 'last name')) : undefined,
+          preferredName: dto.preferredName !== undefined ? (text(dto.preferredName, 80, 'preferred name') ? toPascalCase(text(dto.preferredName, 80, 'preferred name')) : null) : undefined,
           phoneNumber: phone ?? undefined,
           alternatePhoneNumber: alternatePhone,
           address: text(dto.address, 300, 'address'),
+          city: text(dto.city, 100, 'city'),
+          state: text(dto.state, 100, 'state'),
+          country: text(dto.country, 100, 'country'),
+          postalCode: text(dto.postalCode, 20, 'postal code'),
           profession: text(dto.profession, 120, 'profession'),
           gender: text(dto.gender, 40, 'gender'),
           birthday,
@@ -182,7 +277,7 @@ export class MembersService {
       throw new ConflictException('This Google email is already assigned to an account');
     }
     try {
-      return await this.prisma.member.create({
+      const created = await this.prisma.member.create({
         data: {
           memberCode,
           ...(email ? { approvedMember: { create: { email, normalizedEmail: email, status: 'ACTIVE' } } } : {}),
@@ -196,6 +291,8 @@ export class MembersService {
         },
         include: { subTeam: true },
       });
+      this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
+      return created;
     } catch (error: any) {
       if (error.code === 'P2002') throw new ConflictException('Member code or Google email already exists; please retry with a unique email');
       throw error;
@@ -220,6 +317,9 @@ export class MembersService {
         });
         await tx.auditLog.create({ data: { actorUserId: actorId, action: 'GOOGLE_ACCESS_UPDATED', entity: 'ApprovedMember', entityId: saved.id, previousData: member.approvedMember ? { email: member.approvedMember.email, status: member.approvedMember.status } : {}, newData: { email, status: dto.status } } });
         return { email: saved.email, status: saved.status };
+      }).then((res) => {
+        this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
+        return res;
       });
     } catch (error: any) {
       if (error.code === 'P2002') throw new ConflictException('This email is already approved for another member');
@@ -232,22 +332,56 @@ export class MembersService {
     if (member.user && member.user.role !== 'MEMBER' && dto.status && dto.status !== 'ACTIVE') {
       throw new BadRequestException('Administrator and leader accounts cannot be deactivated through member management');
     }
-    return this.updateSelfProfile(id, { ...dto }, { subTeamId: dto.subTeamId, roleInUnit: dto.roleInUnit, status: dto.status });
+    const updated = await this.updateSelfProfile(id, { ...dto }, { subTeamId: dto.subTeamId, roleInUnit: dto.roleInUnit, status: dto.status });
+    this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
+    return updated;
   }
 
   async createSubTeam(dto: { name: string; description?: string }) {
+    const name = dto.name?.trim();
+    if (!name || name.length < 2) throw new BadRequestException('Sub-team name must be at least 2 characters');
     const existing = await this.prisma.subTeam.findUnique({
-      where: { name: dto.name },
+      where: { name },
     });
     if (existing) {
       throw new ConflictException('Sub-team with this name already exists');
     }
 
-    return this.prisma.subTeam.create({ data: dto });
+    return this.prisma.subTeam.create({ data: { name, description: dto.description?.trim() || null } });
+  }
+
+  async updateSubTeam(id: string, dto: { name?: string; description?: string; active?: boolean }) {
+    const subTeam = await this.prisma.subTeam.findUnique({ where: { id } });
+    if (!subTeam) throw new NotFoundException('Sub-team not found');
+
+    const data: any = {};
+    if (typeof dto.name === 'string' && dto.name.trim()) {
+      const name = dto.name.trim();
+      const existing = await this.prisma.subTeam.findUnique({ where: { name } });
+      if (existing && existing.id !== id) throw new ConflictException('A sub-team with this name already exists');
+      data.name = name;
+    }
+    if (typeof dto.description === 'string') data.description = dto.description.trim() || null;
+    if (typeof dto.active === 'boolean') data.active = dto.active;
+
+    return this.prisma.subTeam.update({ where: { id }, data });
+  }
+
+  async deleteSubTeam(id: string) {
+    const subTeam = await this.prisma.subTeam.findUnique({
+      where: { id },
+      include: { _count: { select: { members: true } } },
+    });
+    if (!subTeam) throw new NotFoundException('Sub-team not found');
+    if (subTeam.isSystem) throw new BadRequestException('System sub-teams cannot be deleted');
+    if (subTeam._count.members > 0) throw new BadRequestException('Cannot delete sub-team with active assigned members');
+
+    return this.prisma.subTeam.delete({ where: { id } });
   }
 
   async getSubTeams() {
     return this.prisma.subTeam.findMany({
+      orderBy: { name: 'asc' },
       include: { _count: { select: { members: true } } },
     });
   }

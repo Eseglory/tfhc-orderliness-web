@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { Prisma } from '@prisma/client';
-import { parseYearlessBirthday } from '@tfhc/shared';
+import { parseYearlessBirthday, toPascalCase, bestNameMatch, validateEmail } from '@tfhc/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
 
@@ -33,11 +33,12 @@ export class MemberImportService {
   ) {}
 
   private clean(row: DirectoryRow) {
-    const email = (row.email || '').trim().toLowerCase();
-    const firstName = (row.firstName || '').trim();
-    const lastName = (row.lastName || '').trim();
+    const validation = validateEmail(row.email, { allowTestDomains: process.env.NODE_ENV === 'test' });
+    if (!validation.isValid) throw new BadRequestException(`Invalid email: ${validation.reason}`);
+    const email = validation.normalizedEmail;
+    const firstName = toPascalCase(row.firstName);
+    const lastName = toPascalCase(row.lastName);
     const phoneNumber = (row.phoneNumber || '').replace(/[^+0-9]/g, '');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('Invalid email');
     if (firstName.length < 2 || lastName.length < 2) throw new BadRequestException('First and last name are required');
     if (phoneNumber.replace(/\D/g, '').length < 7) throw new BadRequestException('A phone number is required');
     const birthday = row.birthday ? parseYearlessBirthday(row.birthday) : null;
@@ -127,6 +128,45 @@ export class MemberImportService {
           continue;
         }
 
+        // Check for existing unlinked member using fuzzy/LIKE name comparison
+        const unlinkedMembers = await tx.member.findMany({
+          where: { approvedMember: null },
+          select: { id: true, firstName: true, lastName: true, middleName: true, preferredName: true, phoneNumber: true, birthday: true, profession: true },
+        });
+        const matchRes = bestNameMatch(
+          `${profile.firstName} ${profile.lastName}`,
+          unlinkedMembers,
+          (c) => [
+            `${c.firstName} ${c.lastName}`,
+            `${c.lastName} ${c.firstName}`,
+            c.middleName ? `${c.firstName} ${c.middleName} ${c.lastName}` : '',
+            c.preferredName ? `${c.preferredName} ${c.lastName}` : '',
+          ].filter(Boolean),
+          0.65,
+        );
+
+        if (matchRes.match) {
+          if (apply) {
+            await tx.approvedMember.upsert({
+              where: { normalizedEmail: email },
+              update: { memberId: matchRes.match.id, status: 'ACTIVE' },
+              create: { email, normalizedEmail: email, status: 'ACTIVE', source: 'DIRECTORY_IMPORT', memberId: matchRes.match.id, importedBy: actorUserId, importedAt: new Date() },
+            });
+            await tx.member.update({
+              where: { id: matchRes.match.id },
+              data: {
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                phoneNumber: matchRes.match.phoneNumber?.length >= 7 ? matchRes.match.phoneNumber : profile.phoneNumber,
+                birthday: matchRes.match.birthday || profile.birthday,
+                profession: matchRes.match.profession || profile.profession,
+              },
+            });
+          }
+          report.updated.push({ email, name, changed: ['linked_existing_member'] });
+          continue;
+        }
+
         if (apply) {
           const memberCode = await this.uniqueMemberCode(tx);
           const member = await tx.member.create({
@@ -155,12 +195,17 @@ export class MemberImportService {
         newData: { created: report.created.length, updated: report.updated.length, errors: report.errors.length },
       });
     } else {
-      await this.prisma.$transaction(async (tx) => {
-        await run(tx);
-        throw new DryRunRollback();
-      }).catch((e) => {
-        if (!(e instanceof DryRunRollback)) throw e;
-      });
+      await this.prisma
+        .$transaction(
+          async (tx) => {
+            await run(tx);
+            throw new DryRunRollback();
+          },
+          { timeout: 120000 },
+        )
+        .catch((e) => {
+          if (!(e instanceof DryRunRollback)) throw e;
+        });
     }
 
     return report;

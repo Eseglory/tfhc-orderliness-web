@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ApprovalDecision, ApprovalRequestType, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService } from '../../common/cache/cache.service';
 import { AuditService } from '../../common/rbac/audit.service';
 import { SYSTEM_ROLE, LEGACY_ROLE_FALLBACK } from '@tfhc/shared';
 
@@ -47,6 +48,7 @@ export class ApprovalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly cache: CacheService,
   ) {}
 
   /** Domain modules register a callback for their entity type on module init. */
@@ -69,7 +71,7 @@ export class ApprovalsService {
     const workflow = await this.activeWorkflow(input.requestType, input.workflowKey);
     if (!workflow || workflow.steps.length === 0) return null;
 
-    return this.prisma.approvalRequest.create({
+    const req = await this.prisma.approvalRequest.create({
       data: {
         workflowId: workflow.id,
         requestType: input.requestType,
@@ -83,16 +85,25 @@ export class ApprovalsService {
       },
       include: { workflow: { include: { steps: { orderBy: { order: 'asc' } } } }, actions: true },
     });
+    this.cache.invalidateTags(['approvals', 'excuses', 'finance', 'dashboard']);
+    return req;
   }
 
   private async approverUserIds(step: {
     approverMode: string;
     roleKey: string | null;
     approverUserId: string | null;
+    approverMemberId?: string | null;
     permission: string | null;
   }): Promise<Set<string>> {
     if (step.approverMode === 'SPECIFIC_USER') {
-      return new Set(step.approverUserId ? [step.approverUserId] : []);
+      const set = new Set<string>();
+      if (step.approverUserId) set.add(step.approverUserId);
+      if (step.approverMemberId) {
+        const mem = await this.prisma.member.findUnique({ where: { id: step.approverMemberId }, select: { userId: true } });
+        if (mem?.userId) set.add(mem.userId);
+      }
+      return set;
     }
     if (step.approverMode === 'ROLE' && step.roleKey) {
       const grants = await this.prisma.userAccessRole.findMany({
@@ -213,6 +224,7 @@ export class ApprovalsService {
       }
     }
 
+    this.cache.invalidateTags(['approvals', 'excuses', 'finance', 'dashboard']);
     return this.getById(requestId);
   }
 
@@ -227,7 +239,39 @@ export class ApprovalsService {
     await this.audit.record({ actorUserId, action: 'APPROVAL_CANCELLED', entity: 'ApprovalRequest', entityId: requestId });
     const finalizer = this.finalizers.get(request.entityType);
     if (finalizer) await finalizer({ entityId: request.entityId, approved: false, requestId, actorUserId, comment: null }).catch(() => undefined);
+    this.cache.invalidateTags(['approvals', 'excuses', 'finance', 'dashboard']);
     return this.getById(requestId);
+  }
+
+  async getByIdForUser(requestId: string, user: { userId: string; memberId?: string; role?: string; isSuperAdmin?: boolean }) {
+    const request = await this.prisma.approvalRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        workflow: { include: { steps: { orderBy: { order: 'asc' } } } },
+        actions: { orderBy: { createdAt: 'asc' } },
+        requestedByMember: { select: { firstName: true, lastName: true, memberCode: true } },
+      },
+    });
+    if (!request) throw new NotFoundException('Approval request not found');
+
+    const isOwner =
+      (user?.memberId && request.requestedByMemberId === user.memberId) ||
+      (user?.userId && request.requestedByUserId === user.userId);
+
+    if (isOwner || user?.role === Role.ADMIN || user?.isSuperAdmin || user?.role === (SYSTEM_ROLE.SUPER_ADMIN as any)) {
+      return this.shape(request);
+    }
+
+    if (user?.userId) {
+      for (const step of request.workflow.steps) {
+        const approvers = await this.approverUserIds(step);
+        if (approvers.has(user.userId)) {
+          return this.shape(request);
+        }
+      }
+    }
+
+    throw new ForbiddenException('You are not authorized to view this approval request');
   }
 
   async getById(requestId: string) {
@@ -298,25 +342,28 @@ export class ApprovalsService {
 
   /** Pending requests the given user can currently act on. */
   async pendingFor(actorUserId: string, requestType?: ApprovalRequestType) {
-    const pending = await this.prisma.approvalRequest.findMany({
-      where: { status: 'PENDING', ...(requestType ? { requestType } : {}) },
-      include: {
-        workflow: { include: { steps: { orderBy: { order: 'asc' } } } },
-        actions: { orderBy: { createdAt: 'asc' } },
-        requestedByMember: { select: { firstName: true, lastName: true, memberCode: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+    const key = `approvals:pending:${actorUserId}:${requestType ?? 'all'}`;
+    return this.cache.wrap(key, 30, async () => {
+      const pending = await this.prisma.approvalRequest.findMany({
+        where: { status: 'PENDING', ...(requestType ? { requestType } : {}) },
+        include: {
+          workflow: { include: { steps: { orderBy: { order: 'asc' } } } },
+          actions: { orderBy: { createdAt: 'asc' } },
+          requestedByMember: { select: { firstName: true, lastName: true, memberCode: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
 
-    const out = [];
-    for (const r of pending) {
-      const step = r.workflow.steps.find((s) => s.order === r.currentStepOrder);
-      if (!step) continue;
-      const approvers = await this.approverUserIds(step);
-      const alreadyActed = r.actions.some((a) => a.stepOrder === step.order && a.actorUserId === actorUserId);
-      if (approvers.has(actorUserId) && !alreadyActed) out.push(this.shape(r));
-    }
-    return out;
+      const out = [];
+      for (const r of pending) {
+        const step = r.workflow.steps.find((s) => s.order === r.currentStepOrder);
+        if (!step) continue;
+        const approvers = await this.approverUserIds(step);
+        const alreadyActed = r.actions.some((a) => a.stepOrder === step.order && a.actorUserId === actorUserId);
+        if (approvers.has(actorUserId) && !alreadyActed) out.push(this.shape(r));
+      }
+      return out;
+    }, ['approvals']);
   }
 
   async listForRequester(memberId: string) {

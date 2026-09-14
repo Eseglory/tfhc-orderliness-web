@@ -10,6 +10,9 @@ const jwtService = { sign: jest.fn(() => 'signed.jwt.token') } as any;
 const rbac = { resolveAccess: jest.fn(async () => ({ roleKeys: [], permissions: [], isSuperAdmin: false })) } as any;
 
 function makeService(prisma: any, mail: any = { sendEmail: jest.fn(async () => ({ messageId: 'm' })) }) {
+  if (!prisma.$transaction) {
+    prisma.$transaction = jest.fn(async (fn: any) => fn(prisma));
+  }
   return new AuthService(prisma, jwtService, rbac, mail, config);
 }
 
@@ -25,18 +28,25 @@ beforeEach(() => jest.clearAllMocks());
 describe('AuthService.registerUser', () => {
   it('rejects an email that is not on the approved list', async () => {
     const prisma = { approvedMember: { findUnique: jest.fn(async () => null) } };
-    await expect(makeService(prisma as any).registerUser({ email: 'x@y.com', password: 'longenough12', firstName: 'A', lastName: 'B', phoneNumber: '08000000000' }))
-      .rejects.toMatchObject({ response: { code: 'EMAIL_NOT_APPROVED' } });
+    await expect(makeService(prisma as any).registerUser({ email: 'x@tfhc.org', password: 'longenough12', firstName: 'A', lastName: 'B', phoneNumber: '08000000000' }))
+      .rejects.toMatchObject({ response: { code: 'EMAIL_NOT_IN_LOOKUP_TABLE' } });
   });
 
-  it('rejects an approved email with no linked member record', async () => {
-    const prisma = { approvedMember: { findUnique: jest.fn(async () => ({ status: 'ACTIVE', member: null })) } };
+  it('rejects an approved email with an inactive linked member record', async () => {
+    const prisma = {
+      approvedMember: { findUnique: jest.fn(async () => ({ status: 'ACTIVE', member: { id: 'mem1', status: 'INACTIVE' } })) },
+      user: { findUnique: jest.fn(async () => null) },
+    };
     await expect(makeService(prisma as any).registerUser({ email: 'jane@tfhc.org', password: 'longenough12', firstName: 'A', lastName: 'B', phoneNumber: '08000000000' }))
       .rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('creates and links a user for an approved member, sends verification, and returns no session', async () => {
-    const tx = { user: { create: jest.fn(async () => ({ id: 'u1' })), update: jest.fn() }, member: { update: jest.fn() } };
+    const tx = {
+      approvedMember: { findUnique: jest.fn(async () => activeApproved()), update: jest.fn() },
+      user: { create: jest.fn(async () => ({ id: 'u1' })), update: jest.fn(), findUnique: jest.fn(async () => null) },
+      member: { update: jest.fn() },
+    };
     const mail = { sendEmail: jest.fn(async () => ({ messageId: 'm' })) };
     const prisma = {
       approvedMember: { findUnique: jest.fn(async () => activeApproved()) },
@@ -51,21 +61,17 @@ describe('AuthService.registerUser', () => {
     expect(res).not.toHaveProperty('accessToken');
   });
 
-  it('upgrades an existing Google-only member instead of creating a second account', async () => {
-    const existingUser = { id: 'u9', role: 'MEMBER', passwordAuthEnabled: false, emailVerifiedAt: null };
-    const tx = { user: { update: jest.fn(), create: jest.fn() }, member: { update: jest.fn() } };
+  it('refuses registration for an existing Google-registered member', async () => {
+    const existingUser = { id: 'u9', role: 'MEMBER', passwordAuthEnabled: false, googleSubject: 'g123', emailVerifiedAt: null };
     const prisma = {
       approvedMember: { findUnique: jest.fn(async () => activeApproved({ member: { id: 'mem1', status: 'ACTIVE', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801', userId: 'u9', user: existingUser } })) },
       user: { findUnique: jest.fn(async () => existingUser) },
-      $transaction: jest.fn(async (fn: any) => fn(tx)),
     };
-    const res = await makeService(prisma as any).registerUser({ email: 'jane@tfhc.org', password: 'longenough12', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801' });
-    expect(tx.user.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'u9' } }));
-    expect(tx.user.create).not.toHaveBeenCalled();
-    expect(res).toMatchObject({ pendingVerification: true });
+    await expect(makeService(prisma as any).registerUser({ email: 'jane@tfhc.org', password: 'longenough12', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801' }))
+      .rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('refuses a duplicate when a verified password account already exists', async () => {
+  it('refuses duplicate registration when an account already exists', async () => {
     const existingUser = { id: 'u9', role: 'MEMBER', passwordAuthEnabled: true, emailVerifiedAt: new Date() };
     const prisma = {
       approvedMember: { findUnique: jest.fn(async () => activeApproved({ member: { id: 'mem1', status: 'ACTIVE', firstName: 'J', lastName: 'D', phoneNumber: '0801', userId: 'u9', user: existingUser } })) },
@@ -159,7 +165,7 @@ describe('AuthService.loginUser member rules', () => {
   it('directs Google-only members to Google sign-in', async () => {
     const prisma = { user: { findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: false, member: {} })) } };
     await expect(makeService(prisma as any).loginUser({ email: 'm@tfhc.org', password: 'whatever12345' }))
-      .rejects.toMatchObject({ response: { code: 'MEMBER_GOOGLE_AUTH_REQUIRED' } });
+      .rejects.toMatchObject({ response: { code: 'PASSWORD_AUTH_DISABLED' } });
   });
 
   it('blocks login until the email is verified', async () => {
@@ -170,10 +176,12 @@ describe('AuthService.loginUser member rules', () => {
 });
 
 describe('JwtStrategy password-change invalidation', () => {
+  const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;
   const strategy = (user: any) => new JwtStrategy(
     { getOrThrow: () => 'secret', get: () => undefined } as any,
     { user: { findUnique: jest.fn(async () => user) } } as any,
     rbac,
+    mockCache,
   );
 
   it('rejects a token issued before the last password change', async () => {

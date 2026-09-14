@@ -1,6 +1,6 @@
 const https = require('node:https');
 
-const apiKey = process.env.RENDER_API_KEY || 'rnd_fKeDwED3Tnd0Kv9Cw2uHVvR7cKY0';
+const apiKey = process.env.RENDER_API_KEY;
 const ownerId = process.env.RENDER_OWNER_ID || 'tea-cspppb56l47c73f6skmg';
 
 function renderRequest(method, path, body = null) {
@@ -41,7 +41,7 @@ function renderRequest(method, path, body = null) {
 
 async function main() {
   console.log('🚀 Starting Render deployment sync...');
-  
+
   if (!apiKey) {
     console.error('❌ RENDER_API_KEY is missing!');
     process.exit(1);

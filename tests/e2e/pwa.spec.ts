@@ -82,3 +82,69 @@ test.describe('PWA service worker', () => {
     } finally { await proxy.close(); }
   });
 });
+
+test.describe('PWA cache boundaries', () => {
+  test.use({ serviceWorkers: 'allow' });
+  test('caches public build assets without persisting routes, API data or arbitrary GET responses', async ({ page }) => {
+    await page.goto('/login');
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+    await page.reload();
+    await page.evaluate(async () => {
+      await Promise.allSettled([
+        fetch('/api/private'), fetch('/unknown-sensitive-data'), fetch('/login?_rsc=private', { headers: { RSC: '1' } }),
+        fetch('/logo.png'), fetch('/logo.svg', { headers: { Authorization: 'Bearer private' } }),
+      ]);
+    });
+    const urls = await page.evaluate(async () => {
+      const keys = await caches.keys();
+      return (await Promise.all(keys.map(async key => (await (await caches.open(key)).keys()).map(request => new URL(request.url).pathname)))).flat();
+    });
+    expect(urls).toContain('/offline.html');
+    expect(urls.some(url => url.startsWith('/_next/static/'))).toBe(true);
+    expect(urls).not.toContain('/login');
+    expect(urls).not.toContain('/api/private');
+    expect(urls).not.toContain('/unknown-sensitive-data');
+    expect(urls).not.toContain('/logo.png');
+  });
+  test('worker and manifest are revalidated by the browser', async ({ request }) => {
+    expect((await request.get('/sw.js')).headers()['cache-control']).toContain('no-store');
+    const manifest = await (await request.get('/manifest.json')).json();
+    expect(manifest.id).toBe('/');
+    expect(manifest.shortcuts.map((shortcut: any) => shortcut.url)).toContain('/member/notifications');
+  });
+});
+
+test.describe('Activity queue UI', () => {
+  // WebKit service workers bypass Playwright route mocks after taking control.
+  // Real worker replay is covered separately against an actual HTTP fixture.
+  test.use({ serviceWorkers: 'block' });
+ test('Activity queues offline reads and refreshes after reconnect', async ({ page, context }) => {
+  const user = { userId: 'member-user', memberId: 'member', role: 'MEMBER', permissions: [], accessRoles: [] };
+  let read = false;
+  let submitted: unknown;
+  await page.addInitScript(() => {
+    (window as any).__NEXT_PUBLIC_API_URL__ = location.origin + '/test-api';
+    localStorage.setItem('tfhc_token', `header.${btoa(JSON.stringify({ sub: 'member-user', exp: Date.now() / 1000 + 3600 }))}.test`);
+  });
+  await page.route('**/auth/me', route => route.fulfill({ json: user }));
+  await page.route('**/push/config', route => route.fulfill({ json: { enabled: false, publicKey: null } }));
+  await page.route('**/chat/unread', route => route.fulfill({ json: { total: 0, rooms: [] } }));
+  await page.route('**/members/me/notifications', route => route.fulfill({ json: [{ id: 'notification-1', title: 'Test activity', body: 'An update', status: read ? 'READ' : 'UNREAD', createdAt: new Date().toISOString() }] }));
+  await page.route('**/members/me/notifications/read', route => {
+    submitted = route.request().postDataJSON(); read = true; return route.fulfill({ json: { count: 1 } });
+  });
+  await page.goto('/member/notifications');
+  await expect(page.getByRole('heading', { name: 'Test activity · Unread' })).toBeVisible();
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Mark all as read' }).click();
+  await expect(page.getByText('Changes pending. These notifications will be marked read when the app reconnects.')).toBeVisible();
+  expect(read).toBe(false);
+  await context.setOffline(false);
+  // WebKit can dispatch online before its network process is ready. Allow the
+  // documented 15-second foreground retry to recover that first failed request.
+  await expect(page.getByRole('heading', { name: 'Test activity', exact: true })).toBeVisible({ timeout: 20000 });
+  expect(submitted).toEqual({ ids: ['notification-1'] });
+});
+
+});

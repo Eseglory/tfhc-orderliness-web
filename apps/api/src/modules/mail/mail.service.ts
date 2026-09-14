@@ -1,9 +1,11 @@
-import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { validateEmail, normalizeEmail } from '@tfhc/shared';
 
 @Injectable()
 export class MailService implements OnModuleDestroy {
+  private readonly logger = new Logger(MailService.name);
   private transport?: nodemailer.Transporter;
   constructor(private readonly config: ConfigService) {}
 
@@ -35,17 +37,37 @@ export class MailService implements OnModuleDestroy {
   }
 
   // Shared by system jobs and administrator-triggered email workflows.
-  // Callers choose recipients explicitly; no email is sent during startup.
+  // Callers choose recipients explicitly; validates recipient before any dispatch.
   async sendEmail(message: { to: string; subject: string; text: string; html?: string }) {
+    const recipient = message?.to;
+    const validation = validateEmail(recipient);
+    if (!validation.isValid) {
+      this.logger.warn(
+        `[BLOCKED EMAIL DISPATCH] Refusing to dispatch email to invalid/placeholder recipient: '${recipient}'. Reason: ${validation.reason}`
+      );
+      throw new BadRequestException(
+        `Invalid or undeliverable email recipient: ${validation.reason || 'Invalid email address'}`
+      );
+    }
+
     try {
+      const fromAddress = this.config.get<string>('SMTP_FROM') || this.config.get<string>('SMTP_USER');
       const result = await this.getTransport().sendMail({
-        from: this.config.get<string>('SMTP_FROM') || this.config.get<string>('SMTP_USER'),
-        to: message.to, subject: message.subject, text: message.text, html: message.html,
+        from: fromAddress,
+        to: validation.normalizedEmail,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
       });
       if (!result.accepted?.length) throw new Error('Recipient rejected');
       return { messageId: result.messageId };
-    } catch { throw new ServiceUnavailableException('Email delivery failed'); }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      this.logger.error(`Email delivery to ${validation.normalizedEmail} failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Email delivery failed');
+    }
   }
 
   onModuleDestroy() { this.transport?.close(); }
 }
+

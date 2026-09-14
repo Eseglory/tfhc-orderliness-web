@@ -1,0 +1,15 @@
+.git
+.validation
+node_modules
+**/node_modules
+**/.next*
+**/dist
+**/.env
+**/.env.*
+**/*.log
+**/*.tsbuildinfo
+playwright-report
+test-results*
+docs
+TFHC_Project_Documents
+stitch_tfhc_orderliness_tracker

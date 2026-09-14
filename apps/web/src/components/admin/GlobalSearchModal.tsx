@@ -16,15 +16,16 @@ interface SearchResultItem {
 
 const STATIC_NAV_RESULTS: SearchResultItem[] = [
   { id: 'nav-dashboard', title: 'Dashboard Overview', subtitle: 'Main executive operations and live metrics', category: 'navigation', href: '/admin' },
-  { id: 'nav-members', title: 'Members Registry', subtitle: 'Congregational directory and sub-teams', category: 'navigation', href: '/admin/members' },
+  { id: 'nav-members', title: 'Members Registry', subtitle: 'Member directory and team rosters', category: 'navigation', href: '/admin/members' },
   { id: 'nav-reports', title: 'Attendance Analytics & Trends', subtitle: 'Detailed service analytics and reports', category: 'navigation', href: '/admin/reports' },
   { id: 'nav-calendar', title: 'Events Calendar', subtitle: 'Church calendar, services, and gatherings', category: 'navigation', href: '/admin/calendar' },
   { id: 'nav-meetings', title: 'All Meetings & Services', subtitle: 'List of all church meetings and events', category: 'navigation', href: '/admin/meetings' },
   { id: 'nav-ops-board', title: 'Operations & Feature Board', subtitle: 'Kanban view of operational tasks', category: 'navigation', href: '/admin/meetings/dashboard' },
+  { id: 'nav-tracker', title: 'Attendance & Goal Tracker', subtitle: 'Real-time operational tracking, absence alerts, and SLA queues', category: 'navigation', href: '/admin/tracker' },
   { id: 'nav-approvals', title: 'Pending Approvals & Excuses', subtitle: 'Absence excuses, corrections, welfare requests', category: 'navigation', href: '/admin/approvals' },
-  { id: 'nav-finance', title: 'Finance & Stewardship', subtitle: 'Monthly dues, collections, and expenses', category: 'navigation', href: '/admin/finance' },
-  { id: 'nav-follow-up', title: 'Follow-Up & Alerts', subtitle: 'Member follow-up flags and pastoral care', category: 'navigation', href: '/admin/follow-up' },
-  { id: 'nav-chat', title: 'Team Messages & Chat', subtitle: 'Unit and sub-team communications', category: 'navigation', href: '/admin/chat' },
+  { id: 'nav-finance', title: 'Finance & Dues', subtitle: 'Monthly dues, collections, and expenses', category: 'navigation', href: '/admin/finance' },
+  { id: 'nav-follow-up', title: 'Follow-Up & Alerts', subtitle: 'Member follow-up flags and check-ins', category: 'navigation', href: '/admin/follow-up' },
+  { id: 'nav-chat', title: 'Team Messages & Chat', subtitle: 'Unit and team communications', category: 'navigation', href: '/admin/chat' },
   { id: 'nav-settings', title: 'Admin Settings', subtitle: 'System policies and configuration', category: 'navigation', href: '/admin/settings' },
 ];
 
@@ -159,7 +160,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder="Search congregants, meetings, reports, rosters (or jump to page)..."
+            placeholder="Search members, meetings, reports, rosters (or jump to page)..."
             className="w-full bg-transparent text-sm sm:text-base text-on-surface dark:text-slate-100 placeholder:text-on-surface-variant/60 dark:placeholder:text-slate-500 focus:outline-none"
           />
           {query && (

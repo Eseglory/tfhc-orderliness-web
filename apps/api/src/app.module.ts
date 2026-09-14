@@ -1,6 +1,9 @@
+import { PwaModule } from './modules/pwa/pwa.module';
+import { PushModule } from './modules/push/push.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ResponseSecretsInterceptor } from './common/interceptors/response-secrets.interceptor';
 import { Module } from '@nestjs/common';
+import { CacheModule } from './common/cache/cache.module';
 import { RbacModule } from './common/rbac/rbac.module';
 import { AccessRolesModule } from './modules/access-roles/access-roles.module';
 import { AdminTeamModule } from './modules/admin-team/admin-team.module';
@@ -29,9 +32,18 @@ import { AvailabilityModule } from './modules/availability/availability.module';
 import { AbsenceProcessingModule } from './jobs/absence-processing.module';
 import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
 
+import { ServicesModule } from './modules/services/services.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
+
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: process.env.NODE_ENV === 'test'
+        ? ['apps/api/.env.test', '.env.test']
+        : ['apps/api/.env.local', 'apps/api/.env', '.env.local', '.env'],
+    }),
     ScheduleModule.forRoot(),
     // Generous global ceiling for normal app traffic; auth endpoints apply a
     // much stricter per-route @Throttle() limit against credential guessing.
@@ -39,10 +51,14 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     // across far more requests per minute than any real user would issue.
     ThrottlerModule.forRoot([{ ttl: 60000, limit: process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : 300 }]),
     PrismaModule,
+    CacheModule,
     RbacModule,
     ApprovalsModule,
     MailModule,
     RecurringServicesModule,
+    ServicesModule,
+    AppointmentsModule,
+    CalendarModule,
     AbsenceProcessingModule,
     AuthModule,
     AccessRolesModule,
@@ -60,6 +76,8 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
     ReportsModule,
     AvailabilityModule,
     ChatModule,
+    PushModule,
+    PwaModule,
   ],
   controllers: [AppController],
   providers: [

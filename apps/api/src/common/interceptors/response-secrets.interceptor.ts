@@ -7,7 +7,17 @@ export function removeResponseSecrets(value: any): any {
   if (value === null || typeof value !== 'object' || value instanceof Date || Buffer.isBuffer(value)) return value;
   if (Array.isArray(value)) return value.map(removeResponseSecrets);
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !['passwordHash', 'qrSecret', 'googleSubject'].includes(key))
+    .filter(([key]) => ![
+      'passwordHash',
+      'qrSecret',
+      'googleSubject',
+      'refreshToken',
+      'clientSecret',
+      'passwordResetTokenHash',
+      'emailVerifyTokenHash',
+      'inviteTokenHash',
+      'inviteToken',
+    ].includes(key))
     .map(([key, nested]) => [key, removeResponseSecrets(nested)]));
 }
 

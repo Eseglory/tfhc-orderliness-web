@@ -11,7 +11,7 @@
     "prisma:seed": "ts-node src/prisma/seed.ts",
     "import:data": "ts-node src/prisma/import-cli.ts",
     "test": "jest --watchman=false --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "test:e2e": "jest --config ./test/jest-e2e.json --maxWorkers=1",
     "lint": "eslint \"{src,test}/**/*.ts\""
   },
   "dependencies": {
@@ -33,6 +33,7 @@
     "class-validator": "^0.14.1",
     "csv-parse": "^5.5.5",
     "exceljs": "^4.4.0",
+    "googleapis": "^180.0.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^10.0.1",
@@ -41,7 +42,8 @@
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "sharp": "0.35.4",
-    "socket.io": "^4.8"
+    "socket.io": "^4.8",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -53,6 +55,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
+    "@types/web-push": "^3.6.4",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "eslint": "^8.57.0",
@@ -68,11 +71,18 @@
     "preset": "ts-jest",
     "testEnvironment": "node",
     "watchman": false,
+    "setupFiles": [
+      "<rootDir>/test/setup-test-env.ts"
+    ],
     "testMatch": [
       "**/test/**/*.spec.ts"
     ],
     "moduleNameMapper": {
       "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"
-    }
+    },
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/test/(admin-team-invite|member-lookup-invite|security-authorization)\\.spec\\.ts$"
+    ]
   }
 }

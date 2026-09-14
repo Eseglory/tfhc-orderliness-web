@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RbacService } from '../../common/rbac/rbac.service';
+import { CacheService } from '../../common/cache/cache.service';
 
 export interface JwtPayload {
   sub: string;
@@ -35,6 +36,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private prisma: PrismaService,
     private rbac: RbacService,
+    private cache: CacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -44,6 +46,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+    // Revocation must be checked on every request, including after password
+    // changes and across API instances with independent memory caches.
+    return this.resolveUser(payload);
+  }
+
+  private async resolveUser(payload: JwtPayload): Promise<AuthenticatedUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: { member: { include: { approvedMember: true } } },
@@ -72,9 +80,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) {
       throw new UnauthorizedException('Member access has been revoked');
     }
-    // Staff (non-member) accounts can be deactivated by a Super Admin; the block
+    // Any account can be deactivated by an administrator; the block
     // must take effect immediately, not only at next login.
-    if (user.role !== 'MEMBER' && !user.isActive) {
+    if (user.isActive === false) {
       throw new UnauthorizedException('This account has been deactivated');
     }
 

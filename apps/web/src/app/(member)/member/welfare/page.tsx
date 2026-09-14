@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../../../../components/Navbar';
-import { BottomNav } from '../../../../components/BottomNav';
 import { ApprovalTimeline, ApprovalStepView } from '../../../../components/ApprovalTimeline';
 import { fetchApi } from '../../../../lib/api';
 
@@ -142,7 +141,6 @@ export default function MemberWelfarePage() {
           )}
         </div>
       </main>
-      <BottomNav />
     </div>
   );
 }

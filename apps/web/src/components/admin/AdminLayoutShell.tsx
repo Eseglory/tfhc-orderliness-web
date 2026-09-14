@@ -36,6 +36,7 @@ import {
   PanelLeftOpen,
   Layers,
   HeartHandshake,
+  Target,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { logout } from '../../lib/api';
@@ -67,86 +68,87 @@ interface NavParent {
 const NAVIGATION_TREE: NavParent[] = [
   {
     key: 'dashboard',
-    label: 'Dashboard',
+    label: 'Home',
     icon: LayoutDashboard,
     href: '/admin',
     exact: true,
   },
   {
     key: 'people',
-    label: 'People & Congregation',
+    label: 'Members',
     icon: Users,
     anyOf: ['members.read'],
     children: [
-      { href: '/admin/members', label: 'Members Directory', icon: Users, anyOf: ['members.read'] },
-      { href: '/admin/leaderboard', label: 'Leaderboard & Points', icon: Trophy, anyOf: ['scoring.read'] },
+      { href: '/admin/members', label: 'Members', icon: Users, anyOf: ['members.read'] },
+      { href: '/admin/leaderboard', label: 'Leaderboard', icon: Trophy, anyOf: ['scoring.read'] },
     ],
   },
   {
     key: 'events',
-    label: 'Events & Gatherings',
+    label: 'Events',
     icon: Calendar,
     anyOf: ['events.read', 'attendance.read', 'attendance.mark'],
     children: [
-      { href: '/admin/calendar', label: 'Activities & Master Calendar', icon: Calendar, anyOf: ['events.read'] },
-      { href: '/admin/events', label: 'Events Management & Ticketing', icon: Sparkles, anyOf: ['events.read'] },
-      { href: '/admin/appointments', label: 'Appointments & Pastoral Care', icon: HeartHandshake, anyOf: ['events.read'] },
-      { href: '/admin/meetings', label: 'All Meetings & Services', icon: Clock, anyOf: ['events.read'] },
-      { href: '/admin/services', label: 'Recurring Service Series', icon: Layers, anyOf: ['events.read'] },
-      { href: '/admin/meetings/dashboard', label: 'Operations & Feature Board', icon: Kanban, anyOf: ['events.read'] },
-      { href: '/admin/live-meeting', label: 'Live Roster Session', icon: Flame, anyOf: ['attendance.mark'] },
+      { href: '/admin/calendar', label: 'Calendar', icon: Calendar, anyOf: ['events.read'] },
+      { href: '/admin/events', label: 'Events', icon: Sparkles, anyOf: ['events.read'] },
+      { href: '/admin/appointments', label: 'Appointments', icon: HeartHandshake, anyOf: ['events.read'] },
+      { href: '/admin/meetings', label: 'Meetings', icon: Clock, anyOf: ['events.read'] },
+      { href: '/admin/services', label: 'Services', icon: Layers, anyOf: ['events.read'] },
+      { href: '/admin/meetings/dashboard', label: 'Operations', icon: Kanban, anyOf: ['events.read'] },
+      { href: '/admin/live-meeting', label: 'Live Attendance', icon: Flame, anyOf: ['attendance.mark'] },
     ],
   },
   {
     key: 'attendance',
-    label: 'Attendance & Analytics',
+    label: 'Attendance',
     icon: BarChart3,
     anyOf: ['reports.view', 'attendance.read'],
     children: [
-      { href: '/admin/reports', label: 'Overview & Trends', icon: BarChart3, anyOf: ['reports.view'] },
+      { href: '/admin/reports', label: 'Reports', icon: BarChart3, anyOf: ['reports.view'] },
     ],
   },
   {
     key: 'tracking',
-    label: 'Tracking & Approvals',
+    label: 'Approvals',
     icon: CheckSquare,
     anyOf: ['approvals.read', 'approvals.act', 'excuses.review'],
     children: [
-      { href: '/admin/approvals', label: 'Approvals Center', icon: CheckSquare, anyOf: ['approvals.read', 'approvals.act'] },
+      { href: '/admin/tracker', label: 'Tracker', icon: Target, anyOf: ['attendance.read', 'reports.view', 'approvals.read'] },
+      { href: '/admin/approvals', label: 'Approvals', icon: CheckSquare, anyOf: ['approvals.read', 'approvals.act'] },
       { href: '/admin/absence-requests', label: 'Absence Requests', icon: FileText, anyOf: ['excuses.review'] },
-      { href: '/admin/follow-up', label: 'Follow-Up & Flags', icon: AlertTriangle, anyOf: ['excuses.review'] },
+      { href: '/admin/follow-up', label: 'Follow-Up', icon: AlertTriangle, anyOf: ['excuses.review'] },
     ],
   },
   {
     key: 'finance',
-    label: 'Finance & Stewardship',
+    label: 'Finance',
     icon: DollarSign,
     anyOf: ['dues.read', 'payments.read', 'expenses.read'],
     children: [
-      { href: '/admin/finance', label: 'Finance Overview', icon: DollarSign, anyOf: ['dues.read', 'payments.read'] },
-      { href: '/admin/finance/dues', label: 'Monthly Dues', icon: Calendar, anyOf: ['dues.read'] },
-      { href: '/admin/finance/payments', label: 'Payments & Receipts', icon: CheckSquare, anyOf: ['payments.read'] },
-      { href: '/admin/finance/expenses', label: 'Expenses & Budget', icon: FileText, anyOf: ['expenses.read'] },
-      { href: '/admin/finance/accounts', label: 'Payment Accounts', icon: Building2, anyOf: ['payments.configure'] },
+      { href: '/admin/finance', label: 'Overview', icon: DollarSign, anyOf: ['dues.read', 'payments.read'] },
+      { href: '/admin/finance/dues', label: 'Dues', icon: Calendar, anyOf: ['dues.read'] },
+      { href: '/admin/finance/payments', label: 'Payments', icon: CheckSquare, anyOf: ['payments.read'] },
+      { href: '/admin/finance/expenses', label: 'Expenses', icon: FileText, anyOf: ['expenses.read'] },
+      { href: '/admin/finance/accounts', label: 'Accounts', icon: Building2, anyOf: ['payments.configure'] },
     ],
   },
   {
     key: 'chat',
-    label: 'Team Messages & Chat',
+    label: 'Messages',
     icon: MessageSquare,
     href: '/admin/chat',
   },
   {
     key: 'administration',
-    label: 'Administration',
+    label: 'Settings',
     icon: Shield,
     anyOf: ['users.read', 'roles.read', 'settings.read', 'audit.read', 'lookups.read'],
     children: [
-      { href: '/admin/administration/team', label: 'Admin Team', icon: Users, anyOf: ['users.read'] },
-      { href: '/admin/administration/roles', label: 'Roles & Permissions', icon: Shield, anyOf: ['roles.read'] },
-      { href: '/admin/administration/lookups', label: 'Lookup Tables', icon: FolderTree, anyOf: ['lookups.read'] },
-      { href: '/admin/settings', label: 'System Settings', icon: Settings, anyOf: ['settings.read'] },
-      { href: '/admin/audit', label: 'Audit Logs', icon: History, anyOf: ['audit.read'] },
+      { href: '/admin/administration/team', label: 'Team', icon: Users, anyOf: ['users.read'] },
+      { href: '/admin/administration/roles', label: 'Roles', icon: Shield, anyOf: ['roles.read'] },
+      { href: '/admin/administration/lookups', label: 'Lookups', icon: FolderTree, anyOf: ['lookups.read'] },
+      { href: '/admin/settings', label: 'Settings', icon: Settings, anyOf: ['settings.read'] },
+      { href: '/admin/audit', label: 'Audit', icon: History, anyOf: ['audit.read'] },
     ],
   },
 ];
@@ -159,7 +161,7 @@ interface AdminLayoutShellProps {
 export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, canAny } = useAuth();
+  const { user, canAny, loading } = useAuth();
 
   // Navigation states
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -231,6 +233,10 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
   // Filter navigation tree by permissions
   const authorizedTree = useMemo(() => {
+    // During cold start while loading and no profile is loaded, keep all sections visible for instant render
+    if (loading && !user) {
+      return NAVIGATION_TREE;
+    }
     return NAVIGATION_TREE.filter((parent) => {
       if (parent.anyOf && !canAny(...parent.anyOf)) return false;
       if (parent.children) {
@@ -245,15 +251,15 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         children: parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf)),
       };
     });
-  }, [canAny]);
+  }, [canAny, loading, user]);
 
   return (
     <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">
       <GlobalSearchModal isOpen={searchModalOpen} onClose={() => setSearchModalOpen(false)} />
 
       {/* Top Navbar Header */}
-      <header className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-4 lg:px-6 shadow-xs">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between px-2 sm:px-4 lg:px-6 shadow-xs">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {/* Mobile & Tablet Hamburger Toggle */}
           <button
             onClick={() => setMobileDrawerOpen(true)}
@@ -296,33 +302,49 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         </div>
 
         {/* Center / Right controls */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           {/* Breadcrumb Trail on larger screens */}
-          <div className="hidden md:block mr-2">
+          <div className="hidden 2xl:block mr-2">
             <AdminBreadcrumb />
           </div>
 
           {/* Omni Search Button */}
           <button
+            aria-label="Search"
             onClick={() => setSearchModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-all border border-slate-200/70 dark:border-slate-700/70 text-xs sm:text-sm font-medium w-32 sm:w-56"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-all border border-slate-200/70 dark:border-slate-700/70 text-xs sm:text-sm font-medium w-9 justify-center px-2 xl:w-56 xl:justify-start"
           >
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
-            <span className="truncate hidden sm:inline">Search (CMD+K)...</span>
-            <span className="truncate sm:hidden">Search...</span>
-            <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 ml-auto">
+            <span className="truncate hidden xl:inline">Search (CMD+K)...</span>
+            <span className="hidden">Search...</span>
+            <kbd className="hidden xl:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 ml-auto">
               ⌘K
             </kbd>
           </button>
 
+          {/* Switch to Member App Button */}
+          {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
+            <button
+              onClick={() => router.push('/member')}
+              aria-label="Switch to Member App"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20 text-xs sm:text-sm font-bold transition-all active:scale-95 shrink-0"
+              title="Switch to Member App"
+            >
+              <Users className="w-4 h-4" />
+              <span className="hidden xl:inline">Switch to Member App</span>
+              <span className="hidden">Member App</span>
+            </button>
+          )}
+
           {/* Quick Action Dropdown */}
           <div className="relative" ref={quickActionRef}>
             <button
+              aria-label="Quick Action"
               onClick={() => setQuickActionOpen((prev) => !prev)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 text-xs sm:text-sm font-semibold transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Quick Action</span>
+              <span className="hidden xl:inline">Quick Action</span>
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${quickActionOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -381,6 +403,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
           {/* Admin Profile Dropdown */}
           <div className="relative" ref={profileMenuRef}>
             <button
+              aria-label="User profile menu"
               onClick={() => setProfileMenuOpen((prev) => !prev)}
               className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
@@ -406,7 +429,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
                 </div>
-                
+
                 {/* Theme Selector inside Profile Menu */}
                 <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Theme Preference</p>
@@ -419,7 +442,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   className="flex items-center gap-2.5 px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <Users className="w-4 h-4 text-slate-400" />
-                  <span>Switch to Member Portal</span>
+                  <span>Switch to Member App</span>
                 </Link>
                 <Link
                   href="/admin/settings"
@@ -432,6 +455,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                 <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                   <button
                     onClick={handleLogout}
+                    title="Logout"
                     className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-left font-medium"
                   >
                     <LogOut className="w-4 h-4" />

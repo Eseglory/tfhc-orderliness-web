@@ -22,7 +22,7 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User session invalid or role missing');
     }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    const hasRole = requiredRoles.some((role) => user.role === role || user.role === 'SUPER_ADMIN' || user.isSuperAdmin);
     if (!hasRole) {
       throw new ForbiddenException(
         `Insufficient permissions. Required role(s): ${requiredRoles.join(', ')}`

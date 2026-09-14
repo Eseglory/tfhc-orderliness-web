@@ -23,6 +23,12 @@ export class AdminTeamController {
     return this.service.invite(dto, userId);
   }
 
+  @Post('invite')
+  @RequirePermissions('users.create')
+  inviteAlias(@Body() dto: InviteAdminDto, @CurrentUser('userId') userId: string) {
+    return this.service.invite(dto, userId);
+  }
+
   @Post(':id/resend-invite')
   @RequirePermissions('users.create')
   resend(@Param('id') id: string, @CurrentUser('userId') userId: string) {

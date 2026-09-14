@@ -8,7 +8,7 @@ export function ProfilePhoto({ value, endpoint, onChange }: { value?: string | n
   async function upload(file?: File) {
     if (!file) return;
     setError('');
-    if (file.size > 2 * 1024 * 1024) { setError('Profile picture must be 2 MB or smaller.'); return; }
+    if (file.size > 1024 * 1024) { setError('Profile picture must be 1 MB or smaller.'); return; }
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setError('Choose a JPEG, PNG or WebP image.'); return; }
     setBusy(true);
     try {
@@ -23,7 +23,7 @@ export function ProfilePhoto({ value, endpoint, onChange }: { value?: string | n
     <label className="text-sm font-semibold">{busy ? 'Saving photo…' : 'Upload profile picture'}
       <input aria-label="Upload profile picture" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} className="block mt-2 max-w-full text-sm" onChange={e => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
     </label>
-    <p className="text-xs">JPEG, PNG or WebP. Maximum 2 MB.</p>
+    <p className="text-xs">JPEG, PNG or WebP. Maximum 1 MB.</p>
     {value && <button type="button" disabled={busy} className="text-sm underline" onClick={async () => {
       setBusy(true); setError('');
       try { await fetchApi(endpoint, { method: 'DELETE' }); onChange(null); }

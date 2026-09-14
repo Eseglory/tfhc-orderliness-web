@@ -1,4 +1,26 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    if ((window as any).__NEXT_PUBLIC_API_URL__) {
+      return (window as any).__NEXT_PUBLIC_API_URL__;
+    }
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      // Honor explicitly configured local API ports (including isolated E2E servers).
+      const configured = process.env.NEXT_PUBLIC_API_URL;
+      if (configured) {
+        try { if (['localhost', '127.0.0.1'].includes(new URL(configured, window.location.origin).hostname)) return configured; } catch { /* Use the local fallback. */ }
+      }
+      const port = (window as any).__E2E_API_PORT__ || (window.location.port === '3100' ? '4100' : '4000');
+      return `${window.location.protocol}//${host}:${port}`;
+    }
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  return 'http://localhost:4000';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -12,6 +34,9 @@ export async function fetchApi<T = any>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getAuthToken();
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new ApiError('You are offline. This action needs an internet connection.', 0);
+  }
 
   const headers: Record<string, string> = {
     ...(typeof FormData !== 'undefined' && options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -22,8 +47,9 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     ...options,
+    cache: 'no-store',
     headers,
   });
 
@@ -50,10 +76,19 @@ export async function fetchApi<T = any>(
   }
 }
 
+function tokenSubject(token: string | null): string | null {
+  try {
+    const part = token?.split('.')[1];
+    return part ? JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))).sub ?? null : null;
+  } catch { return null; }
+}
+
 export function saveAuthToken(token: string, remember = true) {
   if (typeof window !== 'undefined') {
-    removeAuthToken();
+    const previousAccount = tokenSubject(getAuthToken());
+    removeAuthToken(false);
     (remember ? localStorage : sessionStorage).setItem('tfhc_token', token);
+    if (previousAccount !== tokenSubject(token)) window.dispatchEvent(new Event('tfhc:account-change'));
   }
 }
 
@@ -64,11 +99,51 @@ export function getAuthToken(): string | null {
   return null;
 }
 
-export function removeAuthToken() {
+export function saveAuthUser(user: any, remember = true) {
+  if (typeof window !== 'undefined') {
+    try {
+      const payload = JSON.stringify(user);
+      if (remember) {
+        localStorage.setItem('tfhc_user_profile', payload);
+      } else {
+        sessionStorage.setItem('tfhc_user_profile', payload);
+      }
+    } catch {
+      // storage unavailable / quota exceeded
+    }
+  }
+}
+
+export function getCachedUser(): any | null {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('tfhc_user_profile') || sessionStorage.getItem('tfhc_user_profile');
+      if (raw) return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+export function removeAuthToken(notify = true) {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('tfhc_venue_session');
     localStorage.removeItem('tfhc_token');
     sessionStorage.removeItem('tfhc_token');
+    localStorage.removeItem('tfhc_user_profile');
+    sessionStorage.removeItem('tfhc_user_profile');
+    if (notify) {
+      window.dispatchEvent(new Event('tfhc:logout'));
+      if ('serviceWorker' in navigator) {
+        void navigator.serviceWorker.getRegistration().then(async registration => {
+          const subscription = await registration?.pushManager?.getSubscription();
+          await subscription?.unsubscribe();
+          const notifications = await registration?.getNotifications();
+          notifications?.forEach(notification => notification.close());
+        }).catch(() => undefined);
+      }
+    }
   }
 }
 
@@ -78,7 +153,7 @@ export function removeAuthToken() {
  */
 export async function logout() {
   try {
-    await fetchApi('/auth/logout', { method: 'POST' });
+    await fetchApi('/auth/logout', { method: 'POST', signal: AbortSignal.timeout(5000) });
   } catch {
     // Stateless sessions — a failed call must never block sign-out.
   }

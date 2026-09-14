@@ -50,11 +50,20 @@ enum ExcuseStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 enum ApprovedMemberStatus {
   ACTIVE
   REVOKED
+}
+
+enum ApprovedMemberInviteStatus {
+  NOT_INVITED
+  PENDING
+  ACCEPTED
+  EXPIRED
+  FAILED
 }
 
 enum NotificationStatus {
@@ -137,6 +146,10 @@ model User {
   accessRoles  UserAccessRole[]  @relation("UserAccessRoleUser")
   rolesAssigned UserAccessRole[] @relation("UserAccessRoleAssignedBy")
   expensesCreated Expense[]      @relation("ExpenseCreatedBy")
+  googleCalendarIntegration GoogleCalendarIntegration?
+  pushSubscriptions PushSubscription[]
+  pwaDevices PwaDeviceSession[]
+  resumableUploads ResumableUpload[]
 
   @@index([isActive])
   @@map("users")
@@ -208,9 +221,14 @@ model Member {
   lastName           String
   preferredName      String?
   profilePhotoUrl    String?
+  bannerPhotoUrl     String?
   phoneNumber        String
   alternatePhoneNumber String?
   address            String?
+  city               String?
+  state              String?
+  country            String?
+  postalCode         String?
   dateOfBirth        DateTime?            @db.Date
   profession         String?
   birthday           String?             // MM-DD; birth year is optional and stored in dateOfBirth
@@ -236,6 +254,7 @@ model Member {
   welfareRequests    WelfareRequest[]
   duesAssignments    MemberDuesAssignment[]
   payments           Payment[]
+  appointments       Appointment[]
   chatMemberships    ChatRoomMember[]
   chatMessages       ChatMessage[]
   createdAt          DateTime            @default(now())
@@ -248,19 +267,26 @@ model Member {
 }
 
 model ApprovedMember {
-  id              String               @id @default(uuid())
+  id              String                     @id @default(uuid())
   email           String
-  normalizedEmail String               @unique
-  status          ApprovedMemberStatus @default(ACTIVE)
-  source          String               @default("MANUAL")
+  normalizedEmail String                     @unique
+  status          ApprovedMemberStatus       @default(ACTIVE)
+  source          String                     @default("MANUAL")
   importedAt      DateTime?
   importedBy      String?
-  memberId        String?              @unique
-  member          Member?              @relation(fields: [memberId], references: [id], onDelete: SetNull)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  memberId        String?                    @unique
+  member          Member?                    @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  invitedAt       DateTime?
+  invitedById     String?
+  inviteTokenHash String?                    @unique
+  inviteExpiresAt DateTime?
+  inviteStatus    ApprovedMemberInviteStatus @default(NOT_INVITED)
+  inviteError     String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
 
   @@index([status])
+  @@index([inviteStatus])
   @@map("approved_members")
 }
 
@@ -422,6 +448,10 @@ model Meeting {
 
   @@index([status])
   @@index([startTime])
+  @@index([archivedAt, startTime])
+  @@index([status, startTime])
+  @@index([categoryId, startTime])
+  @@index([eventTypeId, startTime])
   @@index([status, attendanceOpenTime, attendanceCloseTime])
   @@index([eventTypeId])
   @@index([visibility, startTime])
@@ -500,29 +530,40 @@ model AttendanceRecord {
   @@index([memberId])
   @@index([meetingId])
   @@index([status])
+  @@index([meetingId, status])
   @@index([memberId, status])
   @@index([actualArrivalTime])
+  @@index([status, actualArrivalTime])
   @@map("attendance_records")
 }
 
 model AbsenceExcuse {
-  id                String       @id @default(uuid())
+  id                String           @id @default(uuid())
   memberId          String
-  member            Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  meetingId         String
-  meeting           Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member            Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId         String?
+  meeting           Meeting?         @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  startDate         DateTime?
+  endDate           DateTime?
+  requestType       String           @default("MEETING")
+  supportingDocUrl  String?
   reason            String
   category          String
-  status            ExcuseStatus @default(PENDING)
+  status            ExcuseStatus     @default(PENDING)
   reviewedBy        String?
   reviewNote        String?
-  approvalRequestId String?      @unique
+  approvalRequestId String?          @unique
   approvalRequest   ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@unique([memberId, meetingId])
   @@index([status])
+  @@index([status, createdAt])
+  @@index([memberId])
+  @@index([memberId, status])
+  @@index([meetingId])
+  @@index([startDate, endDate])
   @@map("absence_excuses")
 }
 
@@ -575,16 +616,17 @@ model ApprovalWorkflow {
 }
 
 model ApprovalStep {
-  id           String           @id @default(uuid())
-  workflowId   String
-  workflow     ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  order        Int
-  name         String
-  approverMode ApproverMode
-  roleKey      String?
+  id             String           @id @default(uuid())
+  workflowId     String
+  workflow       ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  order          Int
+  name           String
+  approverMode   ApproverMode
+  roleKey        String?
   approverUserId String?
-  permission   String?
-  createdAt    DateTime         @default(now())
+  approverMemberId String?
+  permission     String?
+  createdAt      DateTime         @default(now())
 
   @@unique([workflowId, order])
   @@index([workflowId])
@@ -860,6 +902,7 @@ enum PaymentStatus {
 
 enum PaymentPurpose {
   MONTHLY_DUES
+  SPECIAL_CONTRIBUTION
   OFFERING
   PLEDGE
   WELFARE_CONTRIBUTION
@@ -905,39 +948,58 @@ model Expense {
   @@index([status])
   @@index([incurredOn])
   @@index([categoryId])
+  @@index([status, paidOn])
+  @@index([status, incurredOn])
+  @@index([categoryId, status])
   @@map("expenses")
 }
 
 model PaymentAccount {
-  id            String   @id @default(uuid())
+  id            String       @id @default(uuid())
   bankName      String
   accountName   String
   accountNumber String
   instructions  String?
-  isActive      Boolean  @default(true)
-  sortOrder     Int      @default(100)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean      @default(true)
+  sortOrder     Int          @default(100)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  duesPeriods   DuesPeriod[]
 
   @@map("payment_accounts")
 }
 
 model DuesPeriod {
-  id              String                 @id @default(uuid())
-  year            Int
-  month           Int
-  label           String
-  defaultAmount   Float
-  dueDate         DateTime               @db.Date
-  status          DuesPeriodStatus       @default(OPEN)
-  createdByUserId String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  assignments     MemberDuesAssignment[]
+  id               String                 @id @default(uuid())
+  year             Int
+  month            Int
+  label            String
+  description      String?
+  type             DuesPeriodType         @default(MONTHLY)
+  defaultAmount    Float
+  dueDate          DateTime               @db.Date
+  status           DuesPeriodStatus       @default(OPEN)
+  // Whether a member with an outstanding balance sees a daily dismissible dashboard alert for this due.
+  showAsAlert      Boolean                @default(false)
+  paymentAccountId String?
+  paymentAccount   PaymentAccount?        @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  createdByUserId  String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  assignments      MemberDuesAssignment[]
 
-  @@unique([year, month])
+  // Only MONTHLY periods are constrained to one per calendar month; SPECIAL
+  // (one-off) campaigns like a Christmas contribution are not — enforced in
+  // DuesService.createPeriod rather than a DB constraint.
+  @@index([year, month])
   @@index([status])
+  @@index([type, status])
   @@map("dues_periods")
+}
+
+enum DuesPeriodType {
+  MONTHLY
+  SPECIAL
 }
 
 model MemberDuesAssignment {
@@ -956,6 +1018,8 @@ model MemberDuesAssignment {
   payments     Payment[]
 
   @@unique([periodId, memberId])
+  @@index([periodId])
+  @@index([periodId, status])
   @@index([memberId, status])
   @@index([status])
   @@map("member_dues_assignments")
@@ -1051,6 +1115,7 @@ model ChatRoomMember {
 }
 
 model ChatMessage {
+  clientOperationId String? @unique
   id             String          @id @default(uuid())
   roomId         String
   room           ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
@@ -1073,3 +1138,205 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
+// ---------------------------------------------------------------------------
+// Organization Services & Appointments Domain
+// ---------------------------------------------------------------------------
+
+enum ServiceCategory {
+  ADVISORY
+  CONSULTATION
+  COUNSELING
+  TECHNICAL
+  FACILITY
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+  NO_SHOW
+}
+
+enum AppointmentMode {
+  IN_PERSON
+  VIDEO_CONFERENCE
+  PHONE_CALL
+}
+
+model OrganizationService {
+  id               String          @id @default(uuid())
+  name             String
+  slug             String          @unique
+  description      String?
+  category         ServiceCategory @default(CONSULTATION)
+  durationMinutes  Int             @default(30)
+  price            Float           @default(0)
+  currency         String          @default("NGN")
+  capacity         Int             @default(1)
+  isBookable       Boolean         @default(true)
+  active           Boolean         @default(true)
+  locationType     AppointmentMode @default(IN_PERSON)
+  defaultLocation  String?
+  instructions     String?
+  assignedStaffIds String[]        @default([])
+  createdById      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  appointments     Appointment[]
+
+  @@index([active])
+  @@index([category])
+  @@map("organization_services")
+}
+
+model Appointment {
+  id                  String            @id @default(uuid())
+  referenceCode       String            @unique
+  title               String
+  serviceId           String?
+  service             OrganizationService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  memberId            String?
+  member              Member?           @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  clientName          String
+  clientEmail         String?
+  clientPhone         String?
+  providerId          String?
+  providerName        String
+  providerEmail       String?
+  startTime           DateTime
+  endTime             DateTime
+  durationMinutes     Int               @default(30)
+  mode                AppointmentMode   @default(IN_PERSON)
+  location            String?
+  meetingUrl          String?
+  status              AppointmentStatus @default(SCHEDULED)
+  notes               String?
+  intakeNotes         String?
+  cancellationReason  String?
+  rescheduledFromId   String?
+  createdById         String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([startTime])
+  @@index([providerId, startTime])
+  @@index([status])
+  @@index([memberId])
+  @@index([serviceId])
+  @@map("appointments")
+}
+
+enum CalendarSyncStatus {
+  NOT_CONNECTED
+  SYNCED
+  SYNCING
+  PENDING
+  FAILED
+}
+
+model GoogleCalendarIntegration {
+  id                    String                         @id @default(uuid())
+  userId                String                         @unique
+  user                  User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleEmail           String
+  calendarId            String                         @default("primary")
+  calendarSummary       String?
+  accessToken           String
+  refreshToken          String?
+  tokenExpiresAt        DateTime
+  scope                 String
+  syncStatus            CalendarSyncStatus             @default(SYNCED)
+  lastSyncedAt          DateTime?
+  lastError             String?
+  channelId             String?
+  channelResourceId     String?
+  channelExpiresAt      DateTime?
+  syncToken             String?
+  autoSyncMeetings      Boolean                        @default(true)
+  autoSyncEvents        Boolean                        @default(false)
+  autoSyncAppointments  Boolean                        @default(false)
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  eventMappings         ExternalCalendarEventMapping[]
+
+  @@index([userId])
+  @@map("google_calendar_integrations")
+}
+
+model ExternalCalendarEventMapping {
+  id               String                    @id @default(uuid())
+  integrationId    String
+  integration      GoogleCalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  entityType       String                    // 'MEETING' | 'EVENT' | 'APPOINTMENT'
+  entityId         String
+  externalEventId  String
+  externalHtmlLink String?
+  meetingUrl       String?                   // Google Meet conference link
+  etag             String?
+  lastSyncedAt     DateTime                  @default(now())
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@unique([integrationId, entityType, entityId])
+  @@unique([integrationId, externalEventId])
+  @@index([entityId])
+  @@map("external_calendar_event_mappings")
+}
+
+
+// Device subscriptions contain no notification text. Expire with their JWT session.
+model PushSubscription {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint String @unique
+  p256dh String
+  auth String
+  sessionExpiresAt DateTime
+  lastNotifiedAt DateTime @default(now())
+  nextAttemptAt DateTime @default(now())
+  failures Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nextAttemptAt, sessionExpiresAt])
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model PwaDeviceSession {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  issuedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("pwa_device_sessions")
+}
+
+model ResumableUpload {
+  replyToId String?
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId String
+  name String
+  mime String
+  size Int
+  sha256 String
+  offset Int @default(0)
+  data Bytes
+  messageId String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId, roomId, sha256])
+  @@index([expiresAt])
+  @@map("resumable_uploads")
+}

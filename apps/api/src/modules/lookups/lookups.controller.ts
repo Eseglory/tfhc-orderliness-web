@@ -16,6 +16,51 @@ function assertKind(kind: string): LookupKind {
 export class LookupsController {
   constructor(private readonly service: LookupsService) {}
 
+  // =========================================================================
+  // MEMBER LOOKUP TABLE & INVITATIONS (Options A, B, C)
+  // =========================================================================
+
+  @Get('approved-members')
+  @RequirePermissions('lookups.read')
+  listApprovedMembers(
+    @Query('search') search?: string,
+    @Query('inviteStatus') inviteStatus?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.service.listApprovedMembers({
+      search,
+      inviteStatus,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
+  }
+
+  @Post('approved-members/invite-selected')
+  @RequirePermissions('lookups.manage')
+  inviteSelected(
+    @Body() body: { ids: string[] },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.service.inviteSelectedApprovedMembers(body?.ids ?? [], userId);
+  }
+
+  @Post('approved-members/invite-all-eligible')
+  @RequirePermissions('lookups.manage')
+  inviteAllEligible(@CurrentUser('userId') userId: string) {
+    return this.service.inviteAllEligibleApprovedMembers(userId);
+  }
+
+  @Post('approved-members/:id/invite')
+  @RequirePermissions('lookups.manage')
+  inviteOne(@Param('id') id: string, @CurrentUser('userId') userId: string) {
+    return this.service.inviteOneApprovedMember(id, userId);
+  }
+
+  // =========================================================================
+  // STANDARD CLASSIFICATION LOOKUP TABLES
+  // =========================================================================
+
   @Get(':kind')
   @RequirePermissions('lookups.read')
   list(@Param('kind') kind: string, @Query('includeInactive') includeInactive?: string) {

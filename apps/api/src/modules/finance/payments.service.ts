@@ -31,12 +31,14 @@ export class PaymentsService {
   }
 
   private async validateDuesLink(duesAssignmentId: string | null, memberId: string, purpose: PaymentPurpose) {
-    if (purpose === 'MONTHLY_DUES') {
-      if (!duesAssignmentId) throw new BadRequestException('Select the dues period this payment is for');
-      const assignment = await this.prisma.memberDuesAssignment.findUnique({ where: { id: duesAssignmentId } });
+    if (purpose === 'MONTHLY_DUES' || purpose === 'SPECIAL_CONTRIBUTION') {
+      if (!duesAssignmentId) throw new BadRequestException('Select the dues record this payment is for');
+      const assignment = await this.prisma.memberDuesAssignment.findUnique({ where: { id: duesAssignmentId }, include: { period: true } });
       if (!assignment || assignment.memberId !== memberId) throw new BadRequestException('That dues record is not yours');
+      const expectedType = purpose === 'MONTHLY_DUES' ? 'MONTHLY' : 'SPECIAL';
+      if (assignment.period.type !== expectedType) throw new BadRequestException('Payment purpose does not match this dues record');
     } else if (duesAssignmentId) {
-      throw new BadRequestException('Only monthly dues payments link to a dues period');
+      throw new BadRequestException('Only dues payments link to a dues period');
     }
   }
 

@@ -2,14 +2,14 @@
 import React, { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { fetchApi, saveAuthToken } from '../../lib/api';
+import { fetchApi, saveAuthToken, saveAuthUser } from '../../lib/api';
 import { AuthShell, AuthError, AuthSubmit, authInputClass } from '../../components/AuthShell';
 
 const MIN_PASSWORD = 12;
 
 function ResetPassword() {
   const router = useRouter();
-  const token = useSearchParams().get('token') ?? '';
+  const token = (useSearchParams().get('token') ?? '').trim();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,11 +25,25 @@ function ResetPassword() {
     if (password !== confirm) return setError('Passwords do not match.');
     setLoading(true);
     try {
-      const res = await fetchApi<{ accessToken: string; user: { role: string } }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
+      const res = await fetchApi<{ accessToken: string; user: any }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) });
       saveAuthToken(res.accessToken, true);
+      if (res.user) {
+        saveAuthUser({
+          userId: res.user.id,
+          email: res.user.email,
+          role: res.user.role,
+          memberId: res.user.member?.id,
+          memberCode: res.user.member?.memberCode,
+          firstName: res.user.member?.firstName,
+          lastName: res.user.member?.lastName,
+          permissions: res.user.permissions ?? [],
+          accessRoles: res.user.accessRoles ?? [],
+          isSuperAdmin: Boolean(res.user.isSuperAdmin),
+        }, true);
+      }
       router.replace(['ADMIN', 'LEADER'].includes(res.user.role) ? '/admin' : '/member');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'This reset link is invalid or has expired.');
+    } catch (err: any) {
+      setError(err.message || 'This reset link is invalid or has expired.');
       setLoading(false);
     }
   };

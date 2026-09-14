@@ -7,9 +7,14 @@
     "<rootDir>/test/e2e-env.ts"
   ],
   "testMatch": [
-    "**/test/**/*.e2e-spec.ts"
+    "**/test/**/*.e2e-spec.ts",
+    "**/test/admin-team-invite.spec.ts",
+    "**/test/member-lookup-invite.spec.ts",
+    "**/test/security-authorization.spec.ts"
   ],
   "moduleNameMapper": {
     "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"
-  }
+  },
+  "globalSetup": "<rootDir>/test/e2e-seed.ts",
+  "workerIdleMemoryLimit": "512MB"
 }

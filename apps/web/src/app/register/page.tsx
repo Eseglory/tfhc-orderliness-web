@@ -36,11 +36,9 @@ export default function RegisterPage() {
       });
       setDevUrl(res.verifyUrl);
       setDone(true);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setError("This email isn't on the approved members list. Ask your unit administrator to add you, then try again.");
-      } else if (err instanceof ApiError && err.status === 409) {
-        setError('You already have an account. Try signing in, or use “Forgot password”.');
+    } catch (err: any) {
+      if (err instanceof ApiError && err.message) {
+        setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : 'Could not create your account.');
       }
