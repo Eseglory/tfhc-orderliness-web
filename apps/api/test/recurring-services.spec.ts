@@ -11,8 +11,9 @@ describe('Recurring services', () => {
     expect(first[0].endTime!.toISOString()).toBe('2026-09-13T07:00:00.000Z');
     expect(occurrences(SERVICE_SCHEDULES[3], new Date('2026-09-09T00:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-15T17:45:00.000Z');
   });
-  it('never generates an already-started occurrence', () => {
-    expect(occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-13T06:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-20T06:00:00.000Z');
+  it('generates occurrences for today starting from local start of day', () => {
+    const occ = occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-13T10:00:00Z'));
+    expect(occ[0].startTime.toISOString()).toBe('2026-09-13T06:00:00.000Z');
   });
   const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;
 

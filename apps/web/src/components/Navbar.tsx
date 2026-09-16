@@ -24,7 +24,7 @@ const MEMBER_NAV: NavItem[] = [
   { href: '/member/my-attendance', label: 'My Attendance', icon: 'calendar_today' },
   { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
   { href: '/member/dues', label: 'Dues', icon: 'payments' },
-  { href: '/member/welfare', label: 'Welfare', icon: 'volunteer_activism' },
+  { href: '/member/welfare', label: 'Request & Complaint', icon: 'rate_review' },
   { href: '/member/chat', label: 'Messages', icon: 'forum' },
 ];
 

@@ -806,7 +806,7 @@ export class CalendarService {
                   visibilityWhere(viewer),
                   { archivedAt: null },
                   { status: { not: 'CANCELLED' } },
-                  { OR: [{ startTime: { gte: todayStart, lte: todayEnd } }, { status: 'ACTIVE' }] },
+                  { startTime: { gte: todayStart, lte: todayEnd } },
                 ],
               },
               include: {
@@ -860,7 +860,17 @@ export class CalendarService {
 
             this.prisma.meeting.findFirst({
               where: {
-                AND: [visibilityWhere(viewer), { archivedAt: null }, { status: 'ACTIVE' }],
+                AND: [
+                  visibilityWhere(viewer),
+                  { archivedAt: null },
+                  { status: 'ACTIVE' },
+                  {
+                    OR: [
+                      { attendanceOpenTime: { lte: now }, attendanceCloseTime: { gte: now } },
+                      { startTime: { gte: todayStart, lte: todayEnd } },
+                    ],
+                  },
+                ],
               },
               include: {
                 category: { select: { name: true } },

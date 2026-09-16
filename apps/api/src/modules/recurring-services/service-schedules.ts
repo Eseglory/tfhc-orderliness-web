@@ -42,7 +42,6 @@ export function occurrences(schedule: ScheduleShape, now: Date, days?: number) {
     const date = new Date(midnight + day * 86400000);
     if (date.getUTCDay() !== schedule.dayOfWeek) continue;
     const startTime = new Date(date.getTime() + (schedule.startMinutes - 60) * 60000);
-    if (startTime <= now) continue;
     results.push({
       startTime,
       endTime: schedule.endMinutes === null ? null : new Date(date.getTime() + (schedule.endMinutes - 60) * 60000),
@@ -54,14 +53,13 @@ export function occurrences(schedule: ScheduleShape, now: Date, days?: number) {
 function recurrenceOccurrences(schedule: ScheduleShape, rule: RecurrenceRule, now: Date, days: number) {
   // Anchor dtStart to "today" at the schedule's local start time.
   const local = new Date(now.getTime() + LAGOS_OFFSET_MIN * 60000);
-  const startUtc = new Date(
-    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + (schedule.startMinutes - 60) * 60000,
-  );
+  const midnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  const from = new Date(midnightUtc - LAGOS_OFFSET_MIN * 60000);
+  const startUtc = new Date(midnightUtc + (schedule.startMinutes - 60) * 60000);
   const to = new Date(now.getTime() + days * 86400000);
   const durationMs = schedule.endMinutes === null ? null : (schedule.endMinutes - schedule.startMinutes) * 60000;
 
-  return expandRecurrence(rule, startUtc, { from: now, to, zoneOffsetMinutes: LAGOS_OFFSET_MIN, max: 200 })
-    .filter((start) => start > now)
+  return expandRecurrence(rule, startUtc, { from, to, zoneOffsetMinutes: LAGOS_OFFSET_MIN, max: 200 })
     .map((start) => ({
       startTime: start,
       endTime: durationMs === null ? null : new Date(start.getTime() + durationMs),

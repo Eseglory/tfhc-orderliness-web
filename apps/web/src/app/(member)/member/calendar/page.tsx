@@ -32,6 +32,15 @@ function activityType(item: CalendarItem): 'SERVICE' | 'EVENT' | 'MEETING' {
   return 'EVENT';
 }
 
+function getLocalDayKey(dateInput: Date | string): string {
+  const d = new Date(dateInput);
+  if (!Number.isFinite(d.getTime())) return 'unknown';
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export default function MemberCalendarPage() {
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,13 +87,18 @@ export default function MemberCalendarPage() {
 
   // Group items by day
   const groupedByDay = filteredItems.reduce((acc, item) => {
-    const dayKey = item.startTime.split('T')[0];
+    const dayKey = getLocalDayKey(item.startTime);
     if (!acc[dayKey]) acc[dayKey] = [];
     acc[dayKey].push(item);
     return acc;
   }, {} as Record<string, CalendarItem[]>);
 
-  const sortedDays = Object.keys(groupedByDay).sort();
+  // Sort each day's items chronologically
+  for (const dayKey of Object.keys(groupedByDay)) {
+    groupedByDay[dayKey].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }
+
+  const sortedDays = Object.keys(groupedByDay).filter((k) => k !== 'unknown').sort();
 
   return (
     <div className="bg-background text-on-background min-h-screen p-6 max-w-4xl mx-auto pb-32 font-body-md">
@@ -159,9 +173,10 @@ export default function MemberCalendarPage() {
       ) : (
         <div className="space-y-6">
           {sortedDays.map((dayKey) => {
-            const dayDate = new Date(dayKey + 'T00:00:00');
+            const [y, m, d] = dayKey.split('-').map(Number);
+            const dayDate = new Date(y, m - 1, d);
             const dayItems = groupedByDay[dayKey];
-            const isToday = new Date().toISOString().split('T')[0] === dayKey;
+            const isToday = getLocalDayKey(new Date()) === dayKey;
 
             return (
               <div key={dayKey} className="space-y-3">

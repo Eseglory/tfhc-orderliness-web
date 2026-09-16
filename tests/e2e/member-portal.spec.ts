@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
 
 for (const [path, heading, endpoint] of [
   ['dues', 'Monthly Dues', '/me/finance/dues'],
-  ['welfare', 'Welfare Fund', '/welfare-requests/mine'],
+  ['welfare', 'Request and Complaint', '/welfare-requests/mine'],
   ['calendar', 'Member Calendar', '/calendar/feed'],
   ['files', 'File inbox', '/auth/me'],
   ['offline', 'Offline and device settings', '/auth/me'],

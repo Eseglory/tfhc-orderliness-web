@@ -153,4 +153,34 @@ describe('Today & Upcoming Classification & Ordering Suite', () => {
     expect(result.upcoming).toHaveLength(2);
     expect(result.upcoming[0].id).toBe('meet-tomorrow');
   });
+
+  it('should only accept an active meeting when it matches active meeting criteria for today/open window', async () => {
+    const activeToday = {
+      id: 'meet-active-today',
+      title: 'Active Mid-Week Service',
+      startTime: new Date(`${todayStr}T17:45:00Z`),
+      endTime: new Date(`${todayStr}T19:15:00Z`),
+      attendanceOpenTime: new Date(`${todayStr}T17:15:00Z`),
+      attendanceCloseTime: new Date(`${todayStr}T19:15:00Z`),
+      status: 'ACTIVE',
+      locationName: 'Main Sanctuary',
+      eventType: { key: 'SERVICE', name: 'Church Service', color: '#10b981' },
+      category: { name: 'Midweek Service' },
+      _count: { invitations: 20, attendanceRecords: 5 },
+    };
+
+    mockPrisma.meeting.findMany
+      .mockResolvedValueOnce([activeToday])
+      .mockResolvedValueOnce([tomorrowMeeting]);
+
+    mockPrisma.meeting.findFirst.mockResolvedValueOnce(activeToday);
+
+    const result = await service.getTodayUpcoming();
+
+    expect(result.activeMeeting).toBeDefined();
+    expect(result.activeMeeting?.id).toBe('meet-active-today');
+    expect(result.activeMeeting?.status).toBe('ACTIVE');
+    expect(result.today).toHaveLength(1);
+    expect(result.today[0].id).toBe('meet-active-today');
+  });
 });

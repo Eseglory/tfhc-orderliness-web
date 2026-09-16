@@ -20,16 +20,34 @@ export default function MemberMeetingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filteredMeetings = meetings.filter((m) => {
-    const meetingTime = new Date(m.startTime || m.meetingDate);
-    const past = ['CLOSED', 'CANCELLED'].includes(m.status) || meetingTime < new Date();
-    if (filter === 'Upcoming' && past) return false;
-    if (filter === 'Past' && !past) return false;
-    if (filter === 'Mandatory' && !m.isCompulsory) return false;
-    if (search && !m.title.toLowerCase().includes(search.toLowerCase())) return false;
-    if (selectedCategory !== 'All' && m.category?.name !== selectedCategory) return false;
-    return true;
-  });
+  const now = new Date();
+  const filteredMeetings = meetings
+    .filter((m) => {
+      const meetingTime = new Date(m.startTime || m.meetingDate);
+      const isClosedOrCancelled = ['CLOSED', 'CANCELLED'].includes(m.status);
+      const isPast =
+        isClosedOrCancelled ||
+        (m.status !== 'ACTIVE' &&
+          ((m.endTime && new Date(m.endTime) < now) ||
+            (m.attendanceCloseTime && new Date(m.attendanceCloseTime) < now) ||
+            (!m.endTime && !m.attendanceCloseTime && new Date(meetingTime.getTime() + 2 * 3600000) < now)));
+
+      if (filter === 'Upcoming' && isPast) return false;
+      if (filter === 'Past' && !isPast) return false;
+      if (filter === 'Mandatory' && (!m.isCompulsory || isPast)) return false;
+      if (search && !m.title.toLowerCase().includes(search.toLowerCase())) return false;
+      const catName = m.category?.name || m.categoryName;
+      if (selectedCategory !== 'All' && catName !== selectedCategory) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.startTime || a.meetingDate).getTime();
+      const timeB = new Date(b.startTime || b.meetingDate).getTime();
+      if (filter === 'Past') {
+        return timeB - timeA; // Most recent past first
+      }
+      return timeA - timeB; // Chronological ascending for upcoming & mandatory
+    });
 
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">

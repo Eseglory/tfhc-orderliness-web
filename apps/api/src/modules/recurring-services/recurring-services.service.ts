@@ -189,11 +189,14 @@ export class RecurringServicesService implements OnApplicationBootstrap {
     const typeByKey = new Map(eventTypes.map((t) => [t.key, t.id]));
     let created = 0;
 
+    const local = new Date(now.getTime() + 60 * 60000);
+    const todayStartUtc = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 60 * 60000);
+
     for (const schedule of schedules) {
       if (!schedule.enabled) {
         if (reconcile)
           await this.prisma.meeting.updateMany({
-            where: { serviceScheduleId: schedule.id, startTime: { gt: now }, status: 'SCHEDULED', isException: false },
+            where: { serviceScheduleId: schedule.id, startTime: { gte: todayStartUtc }, status: 'SCHEDULED', isException: false },
             data: { status: 'CANCELLED', scheduleCancelled: true },
           });
         continue;
@@ -233,7 +236,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
         const upcoming = await this.prisma.meeting.findMany({
           where: {
             serviceScheduleId: schedule.id,
-            startTime: { gt: now },
+            startTime: { gte: todayStartUtc },
             isException: false,
             OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }],
           },

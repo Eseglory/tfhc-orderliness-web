@@ -82,15 +82,15 @@ export default function MemberWelfarePage() {
         <nav className="text-xs text-on-surface-variant">
           <Link href="/member" className="hover:text-primary">Home</Link>
           <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Welfare fund</span>
+          <span className="text-on-surface">Request and complaint</span>
         </nav>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-on-surface">Welfare Fund</h1>
-          <p className="mt-1 text-sm text-on-surface-variant">Request support from the unit welfare fund. Each request is reviewed by leadership.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-on-surface">Request and Complaint</h1>
+          <p className="mt-1 text-sm text-on-surface-variant">Submit a request, welfare assistance, or complaint. Each submission is reviewed by leadership.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm">
-          <h2 className="text-base font-bold text-on-surface">New request</h2>
+          <h2 className="text-base font-bold text-on-surface">New request or complaint</h2>
           <label className="block space-y-1.5">
             <span className="text-sm font-semibold text-on-surface">Amount (₦) <span className="text-error">*</span></span>
             <input className={field} type="number" min="1" step="any" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />

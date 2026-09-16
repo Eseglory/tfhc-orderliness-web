@@ -157,9 +157,19 @@ export class MeetingsService {
       if (query.status) and.push({ status: query.status });
       if (query.categoryId) and.push({ categoryId: query.categoryId });
       if (query.eventTypeId) and.push({ eventTypeId: query.eventTypeId });
-      if (!query.includeArchived) and.push({ archivedAt: null });
-      if (query.upcomingOnly) and.push({ startTime: { gte: new Date() } });
-      if (query.from) and.push({ startTime: { gte: new Date(query.from) } });
+      if (query.upcomingOnly) {
+        const now = new Date();
+        const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
+        and.push({
+          status: { notIn: ['CANCELLED', 'CLOSED'] },
+          OR: [
+            { status: 'ACTIVE' },
+            { endTime: { gte: now } },
+            { endTime: null, attendanceCloseTime: { gte: now } },
+            { endTime: null, attendanceCloseTime: null, startTime: { gte: twoHoursAgo } },
+          ],
+        });
+      }
       if (query.to) and.push({ startTime: { lte: new Date(query.to) } });
       if (query.search?.trim())
         and.push({

@@ -50,6 +50,7 @@ export default function MemberDashboard() {
   const { user } = useAuth();
   const [perf, setPerf] = useState<Performance | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
+  const [nextTodayService, setNextTodayService] = useState<any>(null);
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
@@ -67,7 +68,31 @@ export default function MemberDashboard() {
     get<Performance>('/scoring/my-performance').then(setPerf).catch(() => {});
     get<{ activeMeeting: any; today: any[]; upcoming: any[] }>('/calendar/today-upcoming').then((res) => {
       if (res?.activeMeeting) setActiveMeeting(res.activeMeeting);
-      if (res?.upcoming) setUpcoming(res.upcoming.slice(0, 3));
+      const todayList = Array.isArray(res?.today) ? res.today : [];
+      const upcomingList = Array.isArray(res?.upcoming) ? res.upcoming : [];
+      const now = new Date();
+      const todayPending = todayList.filter((m) => {
+        if (['CANCELLED', 'CLOSED'].includes(m.status)) return false;
+        if (m.status === 'ACTIVE') return true;
+        const endTime = m.endTime ? new Date(m.endTime) : (m.startTime ? new Date(new Date(m.startTime).getTime() + 2 * 3600000) : null);
+        return !endTime || endTime > now;
+      });
+      const nextScheduled = todayPending.find((m) => m.status === 'SCHEDULED');
+      if (nextScheduled) setNextTodayService(nextScheduled);
+
+      // Deduplicate by ID
+      const seenIds = new Set<string>();
+      const combined: any[] = [];
+      for (const item of [...todayPending, ...upcomingList]) {
+        if (item.id && !seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          combined.push(item);
+        }
+      }
+      combined.sort(
+        (a, b) => new Date(a.startTime || a.meetingDate).getTime() - new Date(b.startTime || b.meetingDate).getTime()
+      );
+      setUpcoming(combined.slice(0, 5));
     }).catch(() => {});
     // 404 when the weekly cycle hasn't been opened — treated as "not open".
     get<{ cycle?: { state?: string; closesAt?: string }; submitted?: boolean }>('/availability/current')
@@ -126,12 +151,16 @@ export default function MemberDashboard() {
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-stack-lg px-edge-margin py-stack-md md:max-w-2xl">
         {/* Primary action */}
         <section className="relative overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
-          <div className={`absolute left-0 top-0 h-full w-1 ${activeMeeting ? 'bg-tertiary-container' : 'bg-outline-variant'}`} />
+          <div className={`absolute left-0 top-0 h-full w-1 ${activeMeeting ? 'bg-tertiary-container' : nextTodayService ? 'bg-primary' : 'bg-outline-variant'}`} />
           <div className="flex flex-col gap-4 p-4">
             <div>
               <h2 className="font-headline-sm text-headline-sm font-bold text-primary">
-                {activeMeeting ? activeMeeting.title : 'No service is open right now'}
-                {activeMeeting?.isCompulsory && (
+                {activeMeeting
+                  ? activeMeeting.title
+                  : nextTodayService
+                  ? `Today’s Service: ${nextTodayService.title}`
+                  : 'No service is open right now'}
+                {(activeMeeting?.isCompulsory || (!activeMeeting && nextTodayService?.isCompulsory)) && (
                   <span className="ml-2 align-middle rounded-full bg-error-container px-2 py-0.5 font-label-sm text-label-sm text-error">Compulsory</span>
                 )}
               </h2>
@@ -139,24 +168,32 @@ export default function MemberDashboard() {
                 <span className="material-symbols-outlined text-[16px]">schedule</span>
                 {activeMeeting
                   ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
+                  : nextTodayService
+                  ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName}`
                   : 'You’re all caught up. Check back when your next gathering begins.'}
               </p>
             </div>
-            {activeMeeting && (
+            {activeMeeting ? (
               <div className="flex items-center justify-between rounded-lg border border-surface-variant bg-surface-variant/50 p-3">
                 <span className="flex items-center gap-2 font-label-md text-label-md font-semibold text-on-surface">
-                  <span className="h-3 w-3 rounded-full bg-on-tertiary-container" /> Attendance window open
+                  <span className="h-3 w-3 rounded-full bg-on-tertiary-container animate-pulse" /> Attendance window open
                 </span>
                 {closesLabel && <span className="rounded bg-surface-container-high px-2 py-1 font-label-sm text-label-sm text-on-surface-variant">{closesLabel}</span>}
               </div>
-            )}
+            ) : nextTodayService ? (
+              <div className="flex items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-low p-3">
+                <span className="flex items-center gap-2 font-label-md text-xs font-semibold text-on-surface">
+                  <span className="material-symbols-outlined text-base text-primary">event_upcoming</span> Scheduled for today • Attendance opens before service
+                </span>
+              </div>
+            ) : null}
             <button
-              onClick={() => router.push('/member/check-in')}
-              disabled={!activeMeeting}
+              onClick={() => router.push(activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/meetings')}
+              disabled={!activeMeeting && !nextTodayService}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-label-md text-label-md font-bold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
             >
-              <span className="material-symbols-outlined">location_on</span>
-              {activeMeeting ? 'Check In' : 'No Active Check In'}
+              <span className="material-symbols-outlined">{activeMeeting ? 'location_on' : 'event'}</span>
+              {activeMeeting ? 'Check In' : nextTodayService ? 'View Today’s Service Details' : 'No Active Check In'}
             </button>
           </div>
         </section>
@@ -183,9 +220,9 @@ export default function MemberDashboard() {
           </Link>
           <Link href="/member/welfare" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-              <span className="material-symbols-outlined text-[20px]">favorite</span>
+              <span className="material-symbols-outlined text-[20px]">rate_review</span>
             </div>
-            <span className="font-label-sm text-[11px] font-bold text-on-surface">Welfare</span>
+            <span className="font-label-sm text-[11px] font-bold text-on-surface text-center">Requests</span>
           </Link>
           {[
             { href: '/member/calendar', label: 'Calendar', icon: 'calendar_month' },
