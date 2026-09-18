@@ -310,8 +310,8 @@ export function ChatWorkspace({
 
   return (
     <div
-      className="mx-auto flex max-w-6xl overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
-      style={{ height: `calc(100vh - 4rem - ${bottomInset})` }}
+      className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
+      style={bottomInset !== '0rem' ? { height: `calc(100vh - 4rem - ${bottomInset})` } : undefined}
     >
       {/* Room list */}
       <aside

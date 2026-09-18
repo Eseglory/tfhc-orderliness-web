@@ -1,5 +1,4 @@
 'use client';
-import { DraftControls } from '../OfflineStorage';
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
@@ -36,6 +35,23 @@ export function Composer({
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Restore draft from localStorage
+  useEffect(() => {
+    if (draftKey && typeof window !== 'undefined' && !editing) {
+      const saved = localStorage.getItem(`chat_draft:${draftKey}`);
+      if (saved) {
+        setText(saved);
+        setTimeout(() => {
+          const el = textareaRef.current;
+          if (el) {
+            el.style.height = 'auto';
+            el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+          }
+        }, 0);
+      }
+    }
+  }, [draftKey, editing]);
+
   useEffect(() => {
     if (editing) {
       setText(editing.body ?? '');
@@ -57,6 +73,13 @@ export function Composer({
 
   const handleChange = (v: string) => {
     setText(v);
+    if (draftKey && typeof window !== 'undefined' && !editing) {
+      if (v.trim()) {
+        localStorage.setItem(`chat_draft:${draftKey}`, v);
+      } else {
+        localStorage.removeItem(`chat_draft:${draftKey}`);
+      }
+    }
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
@@ -76,6 +99,9 @@ export function Composer({
     if (!value) return;
     emitTyping(false);
     setText('');
+    if (draftKey && typeof window !== 'undefined') {
+      localStorage.removeItem(`chat_draft:${draftKey}`);
+    }
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     try { await onSend(value); } catch { setText(value); }
   };
@@ -167,7 +193,6 @@ export function Composer({
 
   return (
     <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
-      {draftKey && !editing && <DraftControls key={draftKey} name={draftKey} value={{ text }} restore={value => setText(String(value.text || ''))} />}
       {showEmojis && (
         <div
           ref={emojiRef}

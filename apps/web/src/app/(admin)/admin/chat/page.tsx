@@ -9,7 +9,7 @@ function AdminChatContent() {
   const room = searchParams.get('room');
 
   return (
-    <div className="h-[calc(100vh-10rem)] rounded-2xl border border-outline-variant/30 bg-surface-container-lowest overflow-hidden shadow-sm">
+    <div className="h-[calc(100vh-12rem)] min-h-[550px] rounded-2xl border border-outline-variant/30 bg-surface-container-lowest overflow-hidden shadow-sm flex flex-col">
       <ChatWorkspace deepLinkRoomId={room} />
     </div>
   );
