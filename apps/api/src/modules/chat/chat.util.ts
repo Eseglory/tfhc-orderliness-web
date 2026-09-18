@@ -7,6 +7,7 @@ import { isExecutiveRole } from '../../common/event-visibility';
  */
 export interface ChatViewer {
   userId: string;
+  email?: string | null;
   memberId?: string | null;
   role: string;
   roleInUnit?: string | null;

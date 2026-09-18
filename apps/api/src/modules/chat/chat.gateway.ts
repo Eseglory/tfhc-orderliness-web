@@ -124,6 +124,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
     return {
       userId: user.id,
+      email: user.email,
       memberId: user.member?.id ?? null,
       role: user.role,
       roleInUnit: user.member?.roleInUnit ?? null,

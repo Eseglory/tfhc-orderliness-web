@@ -25,6 +25,7 @@ import { ChatViewer } from './chat.util';
 function viewerFrom(user: AuthenticatedUser): ChatViewer {
   return {
     userId: user.userId,
+    email: user.email,
     memberId: user.memberId,
     role: user.role,
     permissions: user.permissions ?? [],

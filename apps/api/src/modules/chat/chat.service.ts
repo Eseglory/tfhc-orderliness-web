@@ -605,6 +605,9 @@ export class ChatService implements OnApplicationBootstrap {
     viewer: ChatViewer,
     dto: { name?: string; description?: string; imageUrl?: string; memberIds?: string[] },
   ) {
+    if (viewer.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to create chat rooms');
+    }
     const creatorMemberId = this.requireMember(viewer);
     const name = (dto.name ?? '').trim();
     if (!name) throw new BadRequestException('Room name is required');

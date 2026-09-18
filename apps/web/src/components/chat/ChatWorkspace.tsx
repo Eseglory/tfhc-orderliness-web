@@ -34,10 +34,11 @@ export function ChatWorkspace({
   deepLinkRoomId?: string | null;
   bottomInset?: string;
 }) {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const { notify } = useToast();
-  const canManage = can('messages.manage_rooms');
-  const canModerate = can('messages.moderate');
+  const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
+  const canManage = isSuperOwner;
+  const canModerate = isSuperOwner || can('messages.moderate');
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [activeId, setActiveId] = useState<string | null>(deepLinkRoomId ?? null);
