@@ -84,8 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const can = useCallback(
     (...permissions: string[]) => {
       if (!user) return false;
-      if (user.isSuperAdmin || user.permissions.includes('*')) return true;
-      return permissions.every((p) => user.permissions.includes(p));
+      const perms = Array.isArray(user.permissions) ? user.permissions : [];
+      if (user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'SUPERADMIN' || perms.includes('*')) return true;
+      return permissions.every((p) => perms.includes(p));
     },
     [user],
   );
@@ -93,8 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canAny = useCallback(
     (...permissions: string[]) => {
       if (!user) return false;
-      if (user.isSuperAdmin || user.permissions.includes('*')) return true;
-      return permissions.some((p) => user.permissions.includes(p));
+      const perms = Array.isArray(user.permissions) ? user.permissions : [];
+      if (user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'SUPERADMIN' || perms.includes('*')) return true;
+      return permissions.some((p) => perms.includes(p));
     },
     [user],
   );
