@@ -32,6 +32,7 @@ type Profile = {
   dateOfBirth: string | null;
   dateJoined: string | null;
   status: string;
+  roleInUnit?: string | null;
   subTeam?: { name: string } | null;
   user?: { email: string | null } | null;
 };
@@ -163,7 +164,7 @@ export default function MemberProfilePage() {
               <div className="text-center flex flex-col gap-1">
                 <h2 className="font-headline-sm text-headline-sm text-primary">{displayName}</h2>
                 <p className="font-body-md text-body-md text-on-surface-variant">
-                  {profile.preferredName ? `“${profile.preferredName}” · ` : ''}{profile.subTeam?.name || 'No sub-team'}
+                  {profile.preferredName ? `“${profile.preferredName}” · ` : ''}{profile.roleInUnit || 'Member'}{profile.subTeam?.name ? ` · ${profile.subTeam.name}` : ''}
                 </p>
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <span className="font-label-sm text-label-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant">
@@ -236,19 +237,21 @@ export default function MemberProfilePage() {
             ) : (
               <section className="bg-surface-container-lowest rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] overflow-hidden">
                 <h3 className="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">
-                  Personal Information
+                  Unit &amp; Personal Information
                 </h3>
                 <div className="flex flex-col">
                   {([
+                    ['badge', 'Role in Unit', profile.roleInUnit || 'Member'],
+                    ['groups', 'Sub-Team', profile.subTeam?.name || 'No sub-team assigned'],
                     ['phone', 'Phone', profile.phoneNumber || '—'],
                     ['phone_iphone', 'Alternate phone', profile.alternatePhoneNumber || '—'],
                     ['mail', 'Email', profile.user?.email || '—'],
-                    ['home', 'Address', [profile.address, profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || '—'],
+                    ['home', 'Residential Address', [profile.address, profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || '—'],
                     ['work', 'Profession', profile.profession || '—'],
                     ['person', 'Gender', profile.gender || '—'],
                     ['cake', 'Birthday', profile.birthday ? new Date(`2000-${profile.birthday}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }) : '—'],
                     ['cake', 'Date of birth', fmtDate(profile.dateOfBirth)],
-                    ['event', 'Joined', fmtDate(profile.dateJoined)],
+                    ['event', 'Joined Unit', fmtDate(profile.dateJoined)],
                   ] as [string, string, string][]).map(([icon, label, value], i, arr) => (
                     <div key={label} className={`flex items-center gap-3 p-4 ${i < arr.length - 1 ? 'border-b border-outline-variant/30' : ''}`}>
                       <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
