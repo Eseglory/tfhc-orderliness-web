@@ -179,7 +179,7 @@ export class MeetingsService {
           ],
         });
 
-      const sortDir = query.sortOrder || (query.upcomingOnly || query.from ? 'asc' : 'desc');
+      const sortDir = query.sortOrder || (query.status === 'CLOSED' ? 'desc' : 'asc');
 
       return this.prisma.meeting.findMany({
         where: { AND: and },

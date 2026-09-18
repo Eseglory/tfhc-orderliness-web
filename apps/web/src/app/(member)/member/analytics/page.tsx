@@ -92,8 +92,49 @@ export default function PerformanceAnalyticsPage() {
               <span className="font-body-md text-body-md text-on-surface">Punctuality Bonus</span>
               <span className="font-label-md text-label-md font-bold text-secondary">{((profile?.punctualityRate ?? 0) * (profile?.scoringWeights?.punctuality ?? 0.4)).toFixed(1)} pts</span>
             </div>
-
           </div>
+        </section>
+
+        {/* Cross-navigation links */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            href="/member/leaderboard"
+            className="flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest hover:bg-surface-container-low transition-colors shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">emoji_events</span>
+              </div>
+              <span className="font-label-md font-bold text-primary text-xs">Leaderboard</span>
+            </div>
+            <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+          </Link>
+
+          <Link
+            href="/member/rewards"
+            className="flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest hover:bg-surface-container-low transition-colors shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-yellow-500/10 text-yellow-600 flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">workspace_premium</span>
+              </div>
+              <span className="font-label-md font-bold text-primary text-xs">Milestones</span>
+            </div>
+            <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+          </Link>
+
+          <Link
+            href="/member/my-attendance"
+            className="flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest hover:bg-surface-container-low transition-colors shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">fact_check</span>
+              </div>
+              <span className="font-label-md font-bold text-primary text-xs">History</span>
+            </div>
+            <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+          </Link>
         </section>
       </main>
     </div>

@@ -90,6 +90,10 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   { key: 'reports.view', group: 'Reports', label: 'View reports & dashboards' },
   { key: 'reports.export', group: 'Reports', label: 'Export reports' },
 
+  // Wardrobe Management
+  { key: 'wardrobe.read', group: 'Wardrobe', label: 'View wardrobe timetable & outfits' },
+  { key: 'wardrobe.manage', group: 'Wardrobe', label: 'Manage clothing catalogue, outfits, and schedules' },
+
   // Administration
   { key: 'users.read', group: 'Administration', label: 'View admin team' },
   { key: 'users.create', group: 'Administration', label: 'Invite / create admins' },
@@ -134,6 +138,7 @@ export const SYSTEM_ROLE = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   ADMINISTRATION: 'ADMINISTRATION',
   FINANCE: 'FINANCE',
+  SECRETARY: 'SECRETARY',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
@@ -147,37 +152,45 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
 > = {
   SUPER_ADMIN: {
     name: 'Super Admin',
-    description: 'Full, unrestricted access to every module and configuration.',
+    description: 'Full, unrestricted root access to every module and configuration (Platform Owner).',
     permissions: [PERMISSION_WILDCARD],
   },
   ADMINISTRATION: {
-    name: 'Administration',
+    name: 'Administrator',
     description:
-      'Day-to-day church administration: members, events, attendance, approvals, communication and non-financial reports.',
+      'Full administrative and operational control: members, events, attendance, communications, settings, lookups, and financial operations (dues, expenses, payments, welfare).',
     permissions: [
-      ...NON_FINANCE_KEYS.filter(
-        (k) =>
-          !k.startsWith('roles.') &&
-          !['users.create', 'users.deactivate', 'settings.update', 'audit.read', 'messages.moderate'].includes(k),
+      ...ALL_PERMISSION_KEYS.filter(
+        (k) => !['roles.create', 'roles.delete'].includes(k),
       ),
-      // Administration can see the team roster but not mint or disable admins.
-      'users.read',
     ],
   },
   FINANCE: {
     name: 'Finance',
     description:
-      'Financial operations: expenses, monthly dues, payments, welfare fund and financial reports.',
+      'Financial operations: dues creation & management, payment verification, accounts, expenses, welfare fund, member roster lookup, and financial reports.',
     permissions: [
       ...FINANCE_KEYS,
       'members.read',
       'reports.view',
       'reports.export',
       'lookups.read',
-      'lookups.manage',
       'approvals.read',
       'approvals.act',
       'settings.read',
+    ],
+  },
+  SECRETARY: {
+    name: 'Secretary',
+    description:
+      'Secretarial & operational management: members roster, event scheduling, attendance tracking, absence review, messaging, and reporting. Strictly no access to create or manage dues and financial activities.',
+    permissions: [
+      ...NON_FINANCE_KEYS.filter(
+        (k) =>
+          !k.startsWith('roles.') &&
+          !['users.create', 'users.deactivate', 'settings.update', 'audit.read'].includes(k),
+      ),
+      'users.read',
     ],
   },
 };

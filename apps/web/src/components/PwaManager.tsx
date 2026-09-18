@@ -3,6 +3,7 @@
 import { prepareDevice, clearDevice } from '../lib/pwa/device';
 import { startMetrics, recordPwaMetric } from '../lib/pwa/metrics';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { clearOperations, discardFailed, flushQueue, QUEUE_EVENT, queueStatus, QueueStatus } from '../lib/pwa/queue';
 
 type InstallPrompt = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -116,22 +117,89 @@ export function PwaManager() {
     waiting?.postMessage({ type: 'ACTIVATE_UPDATE' });
   };
 
-  return <aside aria-label="App status" className="bg-surface-container text-on-surface px-4 py-2 text-sm flex flex-wrap items-center justify-center gap-3 border-b border-outline-variant/20">
-    <a href="/member/offline" className="underline min-h-11 inline-flex items-center">Offline and device settings</a>
-    <span role="status" aria-live="polite">{issue || (queue.syncing ? 'Syncing notification reads…' : queue.message)}
-      {queue.pending > 0 && ` ${queue.pending} changes pending.`}
-      {queue.failed > 0 && ` ${queue.failed} changes need review.`}
-      {poor && ' Limited connection. Media may take longer to load.'}
-    </span>
-    {(queue.pending > 0 || queue.failed > 0) && <>
-      <button className="underline min-h-11" disabled={!online || queue.syncing} onClick={() => void flushQueue()}>Retry sync</button>
-      <a className="underline min-h-11 inline-flex items-center" href="/member/notifications">Review Activity</a>
-      {queue.failed > 0 && <button className="underline min-h-11" onClick={() => void discardFailed().catch(() => setIssue('Could not clear failed changes.'))}>Discard failed reads</button>}
-    </>}
-    {waiting && <><span>Update available. Save your work before reloading.</span><button className="underline min-h-11" disabled={queue.syncing} onClick={update}>Update and reload</button></>}
-    {install && <button className="underline min-h-11" onClick={async () => {
-      try { await install.prompt(); await install.userChoice; } catch { /* Dismissal is harmless. */ }
-      setInstall(null);
-    }}>Install app</button>}
-  </aside>;
+  return (
+    <aside aria-label="App status" className="bg-surface-container/70 dark:bg-slate-900/80 backdrop-blur-md text-on-surface px-4 py-2 border-b border-outline-variant/15 text-xs">
+      <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+        {/* Left: Device & Offline Navigation Button */}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/member/offline"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-lowest dark:bg-slate-800 text-xs font-bold text-on-surface border border-outline-variant/30 hover:border-primary hover:text-primary transition-all shadow-xs active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[16px] text-primary">phonelink_setup</span>
+            <span>Offline &amp; Device Settings</span>
+          </Link>
+
+          {/* Status Message */}
+          {(issue || queue.syncing || queue.message || queue.pending > 0 || queue.failed > 0 || poor) && (
+            <span role="status" aria-live="polite" className="text-on-surface-variant font-medium text-[11px] truncate max-w-xs sm:max-w-md">
+              {issue || (queue.syncing ? 'Syncing changes…' : queue.message)}
+              {queue.pending > 0 && ` (${queue.pending} pending)`}
+              {queue.failed > 0 && ` (${queue.failed} need review)`}
+              {poor && ' • Limited connection'}
+            </span>
+          )}
+        </div>
+
+        {/* Right: Actions (Install, Sync, Update) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(queue.pending > 0 || queue.failed > 0) && (
+            <>
+              <button
+                disabled={!online || queue.syncing}
+                onClick={() => void flushQueue()}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-bold hover:bg-amber-500/25 transition-all active:scale-95 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[15px]">sync</span>
+                <span>Retry Sync</span>
+              </button>
+              <Link
+                href="/member/notifications"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container-lowest text-xs font-bold border border-outline-variant/30 text-on-surface hover:text-primary transition-all active:scale-95 shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[15px]">notifications</span>
+                <span>Review Activity</span>
+              </Link>
+              {queue.failed > 0 && (
+                <button
+                  onClick={() => void discardFailed().catch(() => setIssue('Could not clear failed changes.'))}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 text-xs font-semibold hover:bg-rose-500/20 active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
+                  <span>Discard Failed</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {waiting && (
+            <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-2.5 py-1">
+              <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Update available</span>
+              <button
+                disabled={queue.syncing}
+                onClick={update}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700 active:scale-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                <span>Update &amp; Reload</span>
+              </button>
+            </div>
+          )}
+
+          {install && (
+            <button
+              onClick={async () => {
+                try { await install.prompt(); await install.userChoice; } catch { /* Dismissal is harmless. */ }
+                setInstall(null);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+            >
+              <span className="material-symbols-outlined text-[16px]">install_mobile</span>
+              <span>Install App</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
 }

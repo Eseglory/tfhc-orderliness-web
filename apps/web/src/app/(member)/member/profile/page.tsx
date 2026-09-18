@@ -268,12 +268,30 @@ export default function MemberProfilePage() {
               <h3 className="font-label-md text-label-md text-on-surface-variant uppercase px-4 py-3 bg-surface-container-low border-b border-outline-variant/30">
                 Settings &amp; Preferences
               </h3>
-              <Link href="/member/availability" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+              <Link href="/member/availability" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
                     <span className="material-symbols-outlined text-[18px]">event_available</span>
                   </div>
                   <span className="font-body-md text-body-md text-primary font-medium">Weekly Availability</span>
+                </div>
+                <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+              </Link>
+              <Link href="/member/rewards" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
+                  </div>
+                  <span className="font-body-md text-body-md text-primary font-medium">My Milestones &amp; Rewards</span>
+                </div>
+                <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+              </Link>
+              <Link href="/member/offline" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[18px]">offline_pin</span>
+                  </div>
+                  <span className="font-body-md text-body-md text-primary font-medium">Offline &amp; Device Settings</span>
                 </div>
                 <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
               </Link>

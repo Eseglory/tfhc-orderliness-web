@@ -63,7 +63,7 @@ export const ActivityFeedPanel: React.FC<ActivityFeedPanelProps> = ({
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Recent Ministry Activity Feed
               </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400">
                 Live Stream
               </span>
             </div>
@@ -73,7 +73,7 @@ export const ActivityFeedPanel: React.FC<ActivityFeedPanelProps> = ({
           </div>
           <Link
             href="/admin/audit"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="text-xs font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08]"
           >
             View Master Log
           </Link>
@@ -131,7 +131,7 @@ export const ActivityFeedPanel: React.FC<ActivityFeedPanelProps> = ({
         <span>Immutable audit tracking active</span>
         <Link
           href="/admin/audit"
-          className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+          className="font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-1"
         >
           <span>Audit Log</span>
           <ArrowUpRight className="w-3.5 h-3.5" />

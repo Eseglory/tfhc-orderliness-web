@@ -37,6 +37,8 @@ import {
   Layers,
   HeartHandshake,
   Target,
+  Shirt,
+  Tag,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { logout } from '../../lib/api';
@@ -84,10 +86,22 @@ const NAVIGATION_TREE: NavParent[] = [
     ],
   },
   {
+    key: 'wardrobe',
+    label: 'Wardrobe',
+    icon: Shirt,
+    anyOf: ['wardrobe.read', 'events.read'],
+    children: [
+      { href: '/admin/wardrobe', label: 'Overview', icon: LayoutDashboard, anyOf: ['wardrobe.read', 'events.read'] },
+      { href: '/admin/wardrobe/schedule', label: 'Timetable & Schedule', icon: Calendar, anyOf: ['wardrobe.read', 'events.read'] },
+      { href: '/admin/wardrobe/outfits', label: 'Outfit Builder', icon: Sparkles, anyOf: ['wardrobe.read', 'events.read'] },
+      { href: '/admin/wardrobe/catalogue', label: 'Clothing Catalogue', icon: Tag, anyOf: ['wardrobe.read', 'events.read'] },
+    ],
+  },
+  {
     key: 'events',
     label: 'Events',
     icon: Calendar,
-    anyOf: ['events.read', 'attendance.read', 'attendance.mark'],
+    anyOf: ['events.read', 'attendance.read', 'attendance.manage'],
     children: [
       { href: '/admin/calendar', label: 'Calendar', icon: Calendar, anyOf: ['events.read'] },
       { href: '/admin/events', label: 'Events', icon: Sparkles, anyOf: ['events.read'] },
@@ -95,7 +109,7 @@ const NAVIGATION_TREE: NavParent[] = [
       { href: '/admin/meetings', label: 'Meetings', icon: Clock, anyOf: ['events.read'] },
       { href: '/admin/services', label: 'Services', icon: Layers, anyOf: ['events.read'] },
       { href: '/admin/meetings/dashboard', label: 'Operations', icon: Kanban, anyOf: ['events.read'] },
-      { href: '/admin/live-meeting', label: 'Live Attendance', icon: Flame, anyOf: ['attendance.mark'] },
+      { href: '/admin/live-meeting', label: 'Live Attendance', icon: Flame, anyOf: ['attendance.manage'] },
     ],
   },
   {
@@ -191,6 +205,13 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
     });
   }, [pathname]);
 
+  // Protect Admin Portal: Redirect pure members to /member
+  useEffect(() => {
+    if (!loading && user && user.role === 'MEMBER' && !user.isSuperAdmin) {
+      router.replace('/member');
+    }
+  }, [loading, user, router]);
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
@@ -280,13 +301,13 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
           {/* Brand Logo & Name */}
           <Link href="/admin" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold shadow-md shadow-slate-900/10 dark:shadow-none group-hover:scale-105 transition-transform">
-              <LogoIcon alt="TFHC Orderliness logo" className="w-5 h-5 text-emerald-400" />
+            <div className="w-9 h-9 rounded-xl bg-[#0b1c30] text-white flex items-center justify-center font-bold shadow-md shadow-[#0b1c30]/20 dark:shadow-none group-hover:scale-105 transition-transform border border-red-500/20">
+              <LogoIcon alt="TFHC Orderliness logo" className="w-5 h-5 text-[#f2320c]" />
             </div>
             <div className="hidden sm:block">
               <span className="font-extrabold text-sm tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
                 TFHC Orderliness
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-md bg-red-100 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400">
                   ADMIN
                 </span>
               </span>
@@ -296,7 +317,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
           {/* Campus Switcher Badge */}
           <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 ml-2 border border-slate-200/60 dark:border-slate-700/60">
-            <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            <Building2 className="w-3.5 h-3.5 text-[#f2320c]" />
             <span className="font-medium truncate max-w-[150px]">{selectedCampus}</span>
           </div>
         </div>
@@ -327,10 +348,10 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
             <button
               onClick={() => router.push('/member')}
               aria-label="Switch to Member App"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-600/20 text-xs sm:text-sm font-bold transition-all active:scale-95 shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0b1c30] hover:bg-[#13253b] text-white shadow-sm shadow-[#0b1c30]/20 text-xs sm:text-sm font-bold transition-all active:scale-95 shrink-0 border border-slate-700/50"
               title="Switch to Member App"
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-4 h-4 text-[#f2320c]" />
               <span className="hidden xl:inline">Switch to Member App</span>
               <span className="hidden">Member App</span>
             </button>
@@ -341,7 +362,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
             <button
               aria-label="Quick Action"
               onClick={() => setQuickActionOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 text-xs sm:text-sm font-semibold transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f2320c] text-white hover:bg-[#d82a08] shadow-sm shadow-red-600/25 text-xs sm:text-sm font-semibold transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden xl:inline">Quick Action</span>
@@ -360,7 +381,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <Flame className="w-4 h-4 text-amber-500" />
+                  <Flame className="w-4 h-4 text-[#f2320c]" />
                   <span>Record Live Attendance</span>
                 </button>
                 <button
@@ -370,7 +391,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <Users className="w-4 h-4 text-emerald-500" />
+                  <Users className="w-4 h-4 text-[#0b1c30] dark:text-slate-300" />
                   <span>Add New Member</span>
                 </button>
                 <button
@@ -380,7 +401,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <Calendar className="w-4 h-4 text-indigo-500" />
+                  <Calendar className="w-4 h-4 text-[#f2320c]" />
                   <span>Create Meeting / Service</span>
                 </button>
                 <button
@@ -390,7 +411,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
-                  <BarChart3 className="w-4 h-4 text-purple-500" />
+                  <BarChart3 className="w-4 h-4 text-[#0b1c30] dark:text-slate-300" />
                   <span>Export Report (Excel/CSV)</span>
                 </button>
               </div>
@@ -407,9 +428,17 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
               onClick={() => setProfileMenuOpen((prev) => !prev)}
               className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs ring-2 ring-indigo-500/20">
-                {user?.firstName ? user.firstName[0] : 'A'}
-              </div>
+              {user?.profilePhotoUrl || user?.photoUrl ? (
+                <img
+                  src={user.profilePhotoUrl || user.photoUrl!}
+                  alt={user.firstName || 'Administrator'}
+                  className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500/30"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#0b1c30] text-white flex items-center justify-center font-bold text-xs ring-2 ring-red-500/20">
+                  {user?.firstName ? user.firstName[0] : 'A'}
+                </div>
+              )}
               <div className="hidden xl:block text-left">
                 <p className="text-xs font-bold leading-tight text-slate-900 dark:text-white">
                   {user?.firstName ? `${user.firstName} ${user.lastName || ''}` : 'Administrator'}
@@ -442,7 +471,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   className="flex items-center gap-2.5 px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   <Users className="w-4 h-4 text-slate-400" />
-                  <span>Switch to Member App</span>
+                  <span>Member Portal View</span>
                 </Link>
                 <Link
                   href="/admin/settings"
@@ -521,7 +550,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                     href={item.href}
                     className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
                       isDirectActive
-                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20'
+                        ? 'bg-[#f2320c] text-white shadow-sm shadow-red-600/25'
                         : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
                     }`}
                     title={sidebarCollapsed ? item.label : undefined}
@@ -529,7 +558,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon
                         className={`w-4 h-4 shrink-0 transition-transform ${
-                          isDirectActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-indigo-600'
+                          isDirectActive ? 'text-white' : 'text-slate-400 dark:text-slate-400 group-hover:text-[#f2320c]'
                         }`}
                       />
                       {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
@@ -551,7 +580,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                     onClick={() => toggleParent(item.key)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all group ${
                       isChildActive
-                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300'
+                        ? 'bg-red-50/80 dark:bg-red-950/30 text-[#f2320c] dark:text-red-400'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
                     }`}
                     title={sidebarCollapsed ? item.label : undefined}
@@ -559,7 +588,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon
                         className={`w-4 h-4 shrink-0 ${
-                          isChildActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-400 group-hover:text-indigo-600'
+                          isChildActive ? 'text-[#f2320c] dark:text-red-400' : 'text-slate-400 dark:text-slate-400 group-hover:text-[#f2320c]'
                         }`}
                       />
                       {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
@@ -594,10 +623,10 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                           <Link
                             key={child.href}
                             href={child.href}
-                            className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all group ${
                               isChildActiveCurrent
-                                ? 'bg-indigo-600 text-white shadow-xs font-bold'
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-100'
+                                ? 'bg-red-50 text-[#f2320c] font-bold dark:bg-red-950/40 dark:text-red-400'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/40'
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">

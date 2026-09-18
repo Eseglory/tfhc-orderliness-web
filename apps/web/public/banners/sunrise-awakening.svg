@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="100%" height="100%">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1e1b4b" />
+          <stop offset="35%" stop-color="#4338ca" />
+          <stop offset="65%" stop-color="#ec4899" />
+          <stop offset="100%" stop-color="#fb923c" />
+        </linearGradient>
+        <radialGradient id="dawn" cx="80%" cy="80%" r="70%">
+          <stop offset="0%" stop-color="#fed7aa" stop-opacity="0.9" />
+          <stop offset="40%" stop-color="#f472b6" stop-opacity="0.4" />
+          <stop offset="80%" stop-color="#312e81" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="1600" height="500" fill="url(#bg)" />
+      <circle cx="1280" cy="400" r="500" fill="url(#dawn)" />
+      <g stroke="#ffffff" stroke-width="1.2" fill="none" opacity="0.25">
+        <circle cx="1280" cy="400" r="160" />
+        <circle cx="1280" cy="400" r="260" stroke-dasharray="10 6" />
+        <circle cx="1280" cy="400" r="360" />
+      </g>
+      <path d="M0,430 Q450,360 900,445 T1600,400 L1600,500 L0,500 Z" fill="#0f0e26" opacity="0.75" />
+      <path d="M0,465 Q550,420 1100,475 T1600,445 L1600,500 L0,500 Z" fill="#060512" opacity="0.95" />
+    </svg>

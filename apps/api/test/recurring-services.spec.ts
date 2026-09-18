@@ -2,17 +2,20 @@ import { occurrences, SERVICE_SCHEDULES } from '../src/modules/recurring-service
 import { RecurringServicesService } from '../src/modules/recurring-services/recurring-services.service';
 
 describe('Recurring services', () => {
-  it('matches all 5 production master schedules', () => {
-    expect(SERVICE_SCHEDULES).toHaveLength(5);
-    expect(SERVICE_SCHEDULES.filter(s => s.dayOfWeek === 0)).toHaveLength(3);
-    const first = occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-09T00:00:00Z'));
+  it('matches all production master schedules', () => {
+    expect(SERVICE_SCHEDULES.length).toBeGreaterThanOrEqual(5);
+    expect(SERVICE_SCHEDULES.filter(s => s.dayOfWeek === 0 && s.eventTypeKey === 'SERVICE')).toHaveLength(3);
+    const sundayFirst = SERVICE_SCHEDULES.find(s => s.id === 'sunday-first')!;
+    const first = occurrences(sundayFirst, new Date('2026-09-09T00:00:00Z'));
     expect(first).toHaveLength(4);
     expect(first[0].startTime.toISOString()).toBe('2026-09-13T06:00:00.000Z');
     expect(first[0].endTime!.toISOString()).toBe('2026-09-13T07:00:00.000Z');
-    expect(occurrences(SERVICE_SCHEDULES[3], new Date('2026-09-09T00:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-15T17:45:00.000Z');
+    const tuesday = SERVICE_SCHEDULES.find(s => s.id === 'tuesday-midweek')!;
+    expect(occurrences(tuesday, new Date('2026-09-09T00:00:00Z'))[0].startTime.toISOString()).toBe('2026-09-15T17:45:00.000Z');
   });
   it('generates occurrences for today starting from local start of day', () => {
-    const occ = occurrences(SERVICE_SCHEDULES[0], new Date('2026-09-13T10:00:00Z'));
+    const sundayFirst = SERVICE_SCHEDULES.find(s => s.id === 'sunday-first')!;
+    const occ = occurrences(sundayFirst, new Date('2026-09-13T10:00:00Z'));
     expect(occ[0].startTime.toISOString()).toBe('2026-09-13T06:00:00.000Z');
   });
   const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;

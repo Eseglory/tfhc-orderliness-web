@@ -14,7 +14,7 @@ interface AdminKpiCardProps {
   };
   context?: string;
   sparkline?: number[];
-  tone?: 'indigo' | 'emerald' | 'amber' | 'purple' | 'slate';
+  tone?: 'indigo' | 'emerald' | 'amber' | 'purple' | 'slate' | 'red' | 'navy';
   icon?: LucideIcon;
   onClick?: () => void;
 }
@@ -26,17 +26,31 @@ export const AdminKpiCard: React.FC<AdminKpiCardProps> = ({
   change,
   context,
   sparkline,
-  tone = 'indigo',
+  tone = 'red',
   icon: Icon,
   onClick,
 }) => {
   const toneStyles = {
+    red: {
+      bg: 'bg-red-50/40 dark:bg-red-950/20',
+      border: 'border-red-100 dark:border-red-900/40',
+      iconBg: 'bg-red-100 dark:bg-red-950/60 text-[#f2320c] dark:text-red-400',
+      stroke: '#f2320c',
+      fill: 'rgba(242, 50, 12, 0.12)',
+    },
+    navy: {
+      bg: 'bg-slate-50/50 dark:bg-slate-800/20',
+      border: 'border-slate-200 dark:border-slate-800',
+      iconBg: 'bg-slate-100 dark:bg-slate-800 text-[#0b1c30] dark:text-slate-200',
+      stroke: '#0b1c30',
+      fill: 'rgba(11, 28, 48, 0.12)',
+    },
     indigo: {
-      bg: 'bg-indigo-50/50 dark:bg-indigo-950/20',
-      border: 'border-indigo-100 dark:border-indigo-900/40',
-      iconBg: 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400',
-      stroke: '#6366f1',
-      fill: 'rgba(99, 102, 241, 0.12)',
+      bg: 'bg-red-50/40 dark:bg-red-950/20',
+      border: 'border-red-100 dark:border-red-900/40',
+      iconBg: 'bg-red-100 dark:bg-red-950/60 text-[#f2320c] dark:text-red-400',
+      stroke: '#f2320c',
+      fill: 'rgba(242, 50, 12, 0.12)',
     },
     emerald: {
       bg: 'bg-emerald-50/50 dark:bg-emerald-950/20',
@@ -53,16 +67,16 @@ export const AdminKpiCard: React.FC<AdminKpiCardProps> = ({
       fill: 'rgba(245, 158, 11, 0.12)',
     },
     purple: {
-      bg: 'bg-purple-50/50 dark:bg-purple-950/20',
-      border: 'border-purple-100 dark:border-purple-900/40',
-      iconBg: 'bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400',
-      stroke: '#a855f7',
-      fill: 'rgba(168, 85, 247, 0.12)',
+      bg: 'bg-slate-50/50 dark:bg-slate-800/20',
+      border: 'border-slate-200 dark:border-slate-800',
+      iconBg: 'bg-slate-100 dark:bg-slate-800 text-[#0b1c30] dark:text-slate-200',
+      stroke: '#0b1c30',
+      fill: 'rgba(11, 28, 48, 0.12)',
     },
     slate: {
-      bg: 'bg-slate-50/50 dark:bg-slate-900/40',
-      border: 'border-slate-200/80 dark:border-slate-800',
-      iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300',
+      bg: 'bg-slate-50/50 dark:bg-slate-800/20',
+      border: 'border-slate-200 dark:border-slate-800',
+      iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
       stroke: '#64748b',
       fill: 'rgba(100, 116, 139, 0.12)',
     },

@@ -29,7 +29,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
   const onLeavePct = total > 0 ? Math.round((onLeaveCount / total) * 100) : 0;
   const inactivePct = total > 0 ? Math.max(0, 100 - activePct - newPct - onLeavePct) : 0;
 
-  const retentionScore = attendanceRate != null ? `${attendanceRate.toFixed(1)}%` : total > 0 ? `${activePct}%` : '0%';
+  const retentionScore = attendanceRate != null ? `${attendanceRate.toFixed(1)}%` : '0%';
 
   return (
     <div className="rounded-2xl p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col justify-between">
@@ -51,7 +51,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
           </div>
           <Link
             href="/admin/members"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="text-xs font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08]"
           >
             Directory
           </Link>
@@ -62,7 +62,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
           {/* Active Regulars */}
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Users className="w-3 h-3 text-indigo-500" />
+              <Users className="w-3 h-3 text-[#f2320c]" />
               Active
             </p>
             <p className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
@@ -90,10 +90,10 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
           {/* Retention Rate */}
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Award className="w-3 h-3 text-amber-500" />
+              <Award className="w-3 h-3 text-[#f2320c]" />
               Consistency
             </p>
-            <p className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1">
+            <p className="text-xl sm:text-2xl font-extrabold text-[#f2320c] dark:text-red-400 mt-1">
               {retentionScore}
             </p>
             <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Active engagement</p>
@@ -117,7 +117,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
               {activePct > 0 && (
                 <div
                   style={{ width: `${activePct}%` }}
-                  className="bg-indigo-600 transition-all"
+                  className="bg-[#f2320c] transition-all"
                   title={`Active Regulars: ${activeCount} (${activePct}%)`}
                 />
               )}
@@ -131,7 +131,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
               {onLeavePct > 0 && (
                 <div
                   style={{ width: `${onLeavePct}%` }}
-                  className="bg-amber-400 transition-all"
+                  className="bg-[#0b1c30] transition-all"
                   title={`On Leave: ${onLeaveCount} (${onLeavePct}%)`}
                 />
               )}
@@ -150,7 +150,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
           {/* Legend row */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[11px] text-slate-600 dark:text-slate-400">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-[#f2320c] shrink-0" />
               <span>Active Regulars ({activeCount})</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -158,7 +158,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
               <span>New Members ({newCount})</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-[#0b1c30] dark:bg-slate-400 shrink-0" />
               <span>On Leave ({onLeaveCount})</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -174,7 +174,7 @@ export const MemberRetentionCard: React.FC<MemberRetentionCardProps> = ({
         <span>Updated continuously from check-in logs</span>
         <Link
           href="/admin/members"
-          className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+          className="font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-1"
         >
           <span>Manage Members</span>
           <ArrowUpRight className="w-3.5 h-3.5" />

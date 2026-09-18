@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('calendar')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -130,6 +131,7 @@ export class CalendarController {
   }
 
   @Post('integrations/google/webhook')
+  @Public()
   async handleWebhook() {
     // Idempotent webhook receiver for Google push notifications
     return { received: true, timestamp: new Date() };

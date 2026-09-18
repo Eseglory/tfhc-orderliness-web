@@ -10,7 +10,7 @@ export interface TrackerItem {
   subtitle: string;
   progressPct: number;
   targetLabel: string;
-  tone: 'indigo' | 'emerald' | 'amber' | 'purple';
+  tone: 'red' | 'emerald' | 'amber' | 'navy' | 'indigo' | 'purple';
   href: string;
   statusBadge?: string;
 }
@@ -46,7 +46,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
       subtitle: 'Member unit dues and financial tracking',
       progressPct: 100,
       targetLabel: 'Active Ledger',
-      tone: 'indigo',
+      tone: 'red',
       href: '/admin/finance/dues',
       statusBadge: 'Active',
     },
@@ -62,7 +62,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Active Trackers &amp; Goals
               </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400">
                 Live Status
               </span>
             </div>
@@ -72,7 +72,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
           </div>
           <Link
             href="/admin/tracker"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-0.5"
+            className="text-xs font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-0.5"
           >
             <span>Explore Hub</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -96,10 +96,12 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
           ) : (
             items.map((tracker) => {
               const barColors = {
-                indigo: 'bg-indigo-600',
+                red: 'bg-[#f2320c]',
+                navy: 'bg-[#0b1c30] dark:bg-slate-500',
+                indigo: 'bg-[#f2320c]',
                 emerald: 'bg-emerald-500',
                 amber: 'bg-amber-500',
-                purple: 'bg-purple-600',
+                purple: 'bg-[#0b1c30]',
               }[tracker.tone];
 
               return (
@@ -110,7 +112,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
                 >
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-[#f2320c] dark:group-hover:text-red-400 transition-colors truncate">
                         {tracker.title}
                       </p>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
@@ -128,7 +130,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
                               ? 'text-emerald-600 dark:text-emerald-400'
                               : tracker.tone === 'amber'
                               ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-indigo-600 dark:text-indigo-400'
+                              : 'text-[#f2320c] dark:text-red-400'
                           }`}
                         >
                           {tracker.statusBadge}
@@ -156,7 +158,7 @@ export const ActiveTrackersPanel: React.FC<ActiveTrackersPanelProps> = ({
         <span>Continuous automated milestone calculation</span>
         <Link
           href="/admin/follow-up"
-          className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+          className="font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-1"
         >
           <span>View Flags Queue</span>
           <ArrowUpRight className="w-3.5 h-3.5" />

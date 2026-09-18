@@ -14,10 +14,10 @@ export interface ServiceDataPoint {
   excused: number;
 }
 
-interface AttendanceTrendsChartProps {
-  services: ServiceDataPoint[];
-  days: number;
-  onDaysChange: (days: number) => void;
+export interface AttendanceTrendsChartProps {
+  services?: ServiceDataPoint[];
+  days?: number;
+  onDaysChange?: (days: number) => void;
   loading?: boolean;
 }
 
@@ -29,18 +29,21 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
+  const effectiveServices = useMemo(() => {
+    return Array.isArray(services) ? services : [];
+  }, [services]);
+
   // Identify peak service
   const peakService = useMemo(() => {
-    if (!services || services.length === 0) return null;
-    return services.reduce((max, curr) => (curr.attended > max.attended ? curr : max), services[0]);
-  }, [services]);
+    if (!effectiveServices || effectiveServices.length === 0) return null;
+    return effectiveServices.reduce((max, curr) => (curr.attended > max.attended ? curr : max), effectiveServices[0]);
+  }, [effectiveServices]);
 
   // Aggregate by service or date
   const chartData = useMemo(() => {
-    if (!services || services.length === 0) return [];
-    // Take up to latest 8 services to keep chart clean and readable
-    return services.slice(-8);
-  }, [services]);
+    if (!effectiveServices || effectiveServices.length === 0) return [];
+    return effectiveServices.slice(-7);
+  }, [effectiveServices]);
 
   const maxAttended = useMemo(() => {
     if (chartData.length === 0) return 100;
@@ -58,7 +61,7 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Attendance Trends by Service
               </h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400">
                 Live Roster Data
               </span>
             </div>
@@ -72,10 +75,10 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
             {[7, 30, 90].map((d) => (
               <button
                 key={d}
-                onClick={() => onDaysChange(d)}
+                onClick={() => onDaysChange?.(d)}
                 className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
                   days === d
-                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    ? 'bg-[#0b1c30] text-white shadow-xs dark:bg-slate-700'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
@@ -88,11 +91,11 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
         {/* Legend Indicators */}
         <div className="flex items-center gap-4 mt-3 text-xs text-slate-600 dark:text-slate-400">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600 shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#f2320c] shrink-0" />
             <span>Attended (Punctual)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-indigo-400 shrink-0" />
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#0b1c30] dark:bg-slate-400 shrink-0" />
             <span>Late / Grace</span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -142,11 +145,11 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
                   >
                     {/* Hover Tooltip */}
                     {isHovered && (
-                      <div className="absolute -top-20 z-20 bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-100 text-[11px] p-2.5 rounded-xl shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-100 border border-slate-700">
+                      <div className="absolute -top-20 z-20 bg-[#0b1c30] text-white text-[11px] p-2.5 rounded-xl shadow-xl whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-100 border border-slate-700">
                         <p className="font-bold text-xs">{item.title}</p>
                         <p className="text-slate-400 text-[10px] mb-1">{formattedDate}</p>
                         <div className="flex items-center justify-between gap-3 text-[10px]">
-                          <span className="text-indigo-300 font-medium">Attended: {item.attended}</span>
+                          <span className="text-red-400 font-medium">Attended: {item.attended}</span>
                           <span className="text-emerald-300 font-medium">Punctual: {item.punctual}</span>
                           <span className="text-slate-400">Absent: {item.absent}</span>
                         </div>
@@ -158,12 +161,12 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
                       {/* Punctual bar */}
                       <div
                         style={{ height: `${Math.max(punctualPct, 4)}%` }}
-                        className="w-1/2 bg-indigo-600 dark:bg-indigo-500 rounded-t-md transition-all group-hover:brightness-110"
+                        className="w-1/2 bg-[#f2320c] rounded-t-md transition-all group-hover:brightness-110"
                       />
                       {/* Late / Other Attended bar */}
                       <div
                         style={{ height: `${Math.max(attendedPct - punctualPct, 4)}%` }}
-                        className="w-1/3 bg-indigo-400 dark:bg-indigo-400/80 rounded-t-md transition-all group-hover:brightness-110"
+                        className="w-1/3 bg-[#0b1c30] dark:bg-slate-400 rounded-t-md transition-all group-hover:brightness-110"
                       />
                       {/* Absent bar */}
                       <div
@@ -189,7 +192,7 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
         <div className="flex items-center gap-2">
           {peakService ? (
             <p className="text-slate-700 dark:text-slate-300 font-medium">
-              <span className="font-bold text-indigo-600 dark:text-indigo-400">Peak Service:</span>{' '}
+              <span className="font-bold text-[#f2320c] dark:text-red-400">Peak Service:</span>{' '}
               {peakService.title} with {peakService.attended} attendees on{' '}
               {new Date(peakService.date).toLocaleDateString(undefined, {
                 month: 'short',
@@ -205,7 +208,7 @@ export const AttendanceTrendsChart: React.FC<AttendanceTrendsChartProps> = ({
 
         <Link
           href="/admin/reports"
-          className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+          className="inline-flex items-center gap-1 font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] transition-colors"
         >
           <span>View Roster Analytics</span>
           <ArrowUpRight className="w-3.5 h-3.5" />

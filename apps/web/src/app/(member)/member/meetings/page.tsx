@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberMeetingsPage() {
+  const router = useRouter();
   const [meetings, setMeetings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'Upcoming' | 'Past' | 'Mandatory'>('Upcoming');
@@ -51,15 +53,18 @@ export default function MemberMeetingsPage() {
 
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
-      <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
+      <header className="bg-background flex justify-between items-center w-full px-4 h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
-            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="min-w-0 font-headline-sm text-base sm:text-headline-sm font-bold text-primary">Meetings & Services</h1>
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80 shrink-0"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
+          <h1 className="min-w-0 font-headline-sm text-base sm:text-headline-sm font-bold text-primary truncate">Services</h1>
         </div>
-        <Link href="/member/calendar" className="text-primary hover:opacity-80 transition-all font-semibold text-xs shrink-0 flex items-center gap-1">
-          <span className="material-symbols-outlined text-base">calendar_month</span>
+        <Link href="/member/calendar" className="text-primary hover:opacity-80 transition-all font-semibold text-xs shrink-0 flex items-center gap-1 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline-variant/20">
+          <span className="material-symbols-outlined text-sm">calendar_month</span>
           <span>Calendar</span>
         </Link>
       </header>
@@ -130,14 +135,14 @@ export default function MemberMeetingsPage() {
                   className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:border-outline-variant/40 transition-colors"
                 >
                   <div className="flex min-w-0 gap-4 items-center">
-                    <div className="flex flex-col items-center justify-center bg-surface-container-low rounded-xl w-14 h-14 shrink-0">
-                      <span className="font-label-sm text-[10px] text-on-surface-variant uppercase font-bold">{monthStr}</span>
-                      <span className="font-headline-md text-xl text-primary font-black">{dayStr}</span>
+                    <div className="flex flex-col items-center justify-center bg-[#0b1c30]/5 dark:bg-slate-800 rounded-xl w-14 h-14 shrink-0 border border-[#0b1c30]/10 dark:border-slate-700">
+                      <span className="font-label-sm text-[10px] text-[#0b1c30]/75 dark:text-slate-300 uppercase font-bold">{monthStr}</span>
+                      <span className="font-headline-md text-xl text-[#0b1c30] dark:text-white font-black">{dayStr}</span>
                     </div>
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
                         <Link href={`/member/meetings/${m.id}`} className="min-w-0 hover:underline">
-                          <h3 className="font-bold text-sm text-primary truncate">{m.title}</h3>
+                          <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white truncate">{m.title}</h3>
                         </Link>
                         {m.isCompulsory && (
                           <span className="shrink-0 bg-amber-500/10 text-amber-700 font-bold text-[10px] px-1.5 py-0.5 rounded">
@@ -159,14 +164,23 @@ export default function MemberMeetingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    {m.status === 'ACTIVE' && (
-                      <Link
-                        href={`/member/check-in?meetingId=${m.id}`}
-                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                      >
-                        Check In
-                      </Link>
-                    )}
+                    {(() => {
+                      const now = new Date();
+                      const start = new Date(m.startTime || m.meetingDate);
+                      const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(start.getTime() - 30 * 60000);
+                      const closeTime = m.attendanceCloseTime ? new Date(m.attendanceCloseTime) : (m.endTime ? new Date(m.endTime) : new Date(start.getTime() + 60 * 60000));
+                      const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
+                      const isEligible = now >= openTime && now <= cutoffTime && ['ACTIVE', 'SCHEDULED'].includes(m.status);
+                      return isEligible ? (
+                        <Link
+                          href={`/member/check-in?meetingId=${m.id}`}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 active:scale-95"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">location_on</span>
+                          <span>Check In</span>
+                        </Link>
+                      ) : null;
+                    })()}
                     <Link
                       href={`/member/submit-excuse?meetingId=${m.id}`}
                       className="px-3 py-1.5 bg-surface-container-low text-on-surface rounded-xl text-xs font-semibold hover:bg-surface-container transition-colors"

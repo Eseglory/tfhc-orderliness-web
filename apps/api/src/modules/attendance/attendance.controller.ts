@@ -2,11 +2,13 @@ import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/rbac/permissions.guard';
+import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '@tfhc/shared';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('attendance')
 export class AttendanceController {
   constructor(private attendanceService: AttendanceService) {}
@@ -26,6 +28,7 @@ export class AttendanceController {
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.manage')
   @Post('manual')
   async manualAttendance(@CurrentUser('userId') adminUserId: string, @Body() body: any) {
     return this.attendanceService.recordManualAttendance({
@@ -40,6 +43,7 @@ export class AttendanceController {
 
   @Get('meeting/:meetingId')
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.read')
   async getMeetingAttendance(@Param('meetingId') meetingId: string) {
     return this.attendanceService.getMeetingAttendance(meetingId);
   }
@@ -51,6 +55,7 @@ export class AttendanceController {
 
   @Get('member/:memberId')
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.read')
   async getMemberAttendance(@Param('memberId') memberId: string) {
     return this.attendanceService.getMemberAttendance(memberId);
   }

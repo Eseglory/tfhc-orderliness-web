@@ -1,0 +1,62 @@
+[
+  {
+    "id": "divine-glory",
+    "name": "Divine Glory",
+    "category": "Spiritual & Warm",
+    "url": "/banners/divine-glory.svg"
+  },
+  {
+    "id": "midnight-celestial",
+    "name": "Midnight Celestial",
+    "category": "Dark Luxury",
+    "url": "/banners/midnight-celestial.svg"
+  },
+  {
+    "id": "grace-emerald",
+    "name": "Grace & Truth",
+    "category": "Vibrant Green",
+    "url": "/banners/grace-emerald.svg"
+  },
+  {
+    "id": "royal-sapphire",
+    "name": "Royal Sanctuary",
+    "category": "Classic Navy & Sapphire",
+    "url": "/banners/royal-sapphire.svg"
+  },
+  {
+    "id": "holy-fire",
+    "name": "Holy Fire",
+    "category": "Crimson & Amber",
+    "url": "/banners/holy-fire.svg"
+  },
+  {
+    "id": "kingdom-royalty",
+    "name": "Kingdom Royalty",
+    "category": "Velvet Purple & Gold",
+    "url": "/banners/kingdom-royalty.svg"
+  },
+  {
+    "id": "oceanic-teal",
+    "name": "Living Waters",
+    "category": "Turquoise & Mint",
+    "url": "/banners/oceanic-teal.svg"
+  },
+  {
+    "id": "sunrise-awakening",
+    "name": "Sunrise Awakening",
+    "category": "Dawn & Sky Azure",
+    "url": "/banners/sunrise-awakening.svg"
+  },
+  {
+    "id": "fathers-love",
+    "name": "Father’s Love",
+    "category": "Coral Rose & Warm Glow",
+    "url": "/banners/fathers-love.svg"
+  },
+  {
+    "id": "modern-slate",
+    "name": "Obsidian Lattice",
+    "category": "Modern Minimalist",
+    "url": "/banners/modern-slate.svg"
+  }
+]

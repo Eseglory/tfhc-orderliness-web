@@ -55,7 +55,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
 
           <Link
             href="/admin/meetings"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="text-xs font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08]"
           >
             All Events
           </Link>
@@ -63,22 +63,22 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
 
         {/* Live Active Meeting Banner if active */}
         {activeMeeting && (
-          <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-indigo-50 to-indigo-100/50 dark:from-indigo-950/40 dark:to-slate-900 border border-indigo-200/70 dark:border-indigo-800/60 flex items-center justify-between gap-3">
+          <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/40 dark:to-slate-900 border border-red-200/70 dark:border-red-800/60 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                <p className="text-xs font-bold text-indigo-950 dark:text-indigo-200 truncate">
+                <p className="text-xs font-bold text-slate-950 dark:text-slate-100 truncate">
                   {activeMeeting.title}
                 </p>
               </div>
-              <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 flex items-center gap-1.5 mt-0.5">
+              <p className="text-[11px] text-red-700/80 dark:text-red-300/80 flex items-center gap-1.5 mt-0.5">
                 <MapPin className="w-3 h-3" />
                 <span className="truncate">{activeMeeting.locationName || 'Main Sanctuary'}</span>
               </p>
             </div>
             <Link
               href="/admin/live-meeting"
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 shrink-0"
+              className="px-3 py-1.5 rounded-lg bg-[#f2320c] text-white text-xs font-bold hover:bg-[#d82a08] shadow-sm shadow-red-600/25 shrink-0"
             >
               Take Roster
             </Link>
@@ -103,7 +103,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
 
               {todayMeetings.length === 0 ? (
                 <div className="p-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                  No events today.
+                  No further services or unit meetings scheduled today.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -118,7 +118,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                     return (
                       <div
                         key={m.id}
-                        className="p-3 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 flex items-center justify-between gap-3"
+                        className="p-3 rounded-xl bg-amber-50/40 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between gap-3"
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                               {timeString}
                             </span>
                             {catName && (
-                              <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-amber-200/50 dark:bg-amber-800/50 text-amber-800 dark:text-amber-200">
+                              <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-amber-100/70 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200">
                                 {catName}
                               </span>
                             )}
@@ -134,18 +134,19 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                           <p className="text-xs font-bold text-slate-900 dark:text-white truncate mt-0.5">
                             {m.title}
                           </p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                            <MapPin className="w-3 h-3 text-slate-400" />
-                            <span className="truncate">{m.locationName || 'Main Sanctuary'}</span>
-                          </p>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            <span className="flex items-center gap-1 truncate">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              {m.locationName || 'Main Sanctuary'}
+                            </span>
+                          </div>
                         </div>
 
                         <Link
-                          href={`/admin/meetings/${m.id}`}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-amber-100/50 shrink-0"
-                          title="Manage Gathering"
+                          href={`/admin/live-meeting?meetingId=${m.id}`}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold shadow-xs shrink-0"
                         >
-                          <ArrowUpRight className="w-4 h-4" />
+                          Check-in
                         </Link>
                       </div>
                     );
@@ -157,11 +158,11 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
             {/* UPCOMING SECTION */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-[#0b1c30] dark:text-slate-300 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#f2320c]" />
                   <span>Upcoming</span>
                 </h3>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                   {upcomingMeetings.length}
                 </span>
               </div>
@@ -188,7 +189,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            <span className="text-[11px] font-bold text-[#f2320c] dark:text-red-400">
                               {dateString}
                             </span>
                             {catName && (
@@ -230,7 +231,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
         <span>Showing upcoming scheduled gatherings</span>
         <Link
           href="/admin/calendar"
-          className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+          className="font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-1"
         >
           <span>Open Full Calendar</span>
           <ArrowUpRight className="w-3.5 h-3.5" />

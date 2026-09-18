@@ -96,6 +96,7 @@ export default function AdminMeetingsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
   // Pagination
@@ -253,19 +254,25 @@ export default function AdminMeetingsPage() {
 
   // Filtered & Paginated records
   const filteredMeetings = useMemo(() => {
-    return meetings.filter((m) => {
-      const matchesSearch =
-        !search ||
-        m.title.toLowerCase().includes(search.toLowerCase()) ||
-        m.locationName.toLowerCase().includes(search.toLowerCase()) ||
-        (m.organizerName && m.organizerName.toLowerCase().includes(search.toLowerCase()));
+    return meetings
+      .filter((m) => {
+        const matchesSearch =
+          !search ||
+          m.title.toLowerCase().includes(search.toLowerCase()) ||
+          m.locationName.toLowerCase().includes(search.toLowerCase()) ||
+          (m.organizerName && m.organizerName.toLowerCase().includes(search.toLowerCase()));
 
-      const matchesStatus = statusFilter === 'ALL' || m.status === statusFilter;
-      const matchesCat = categoryFilter === 'ALL' || m.category?.id === categoryFilter;
+        const matchesStatus = statusFilter === 'ALL' || m.status === statusFilter;
+        const matchesCat = categoryFilter === 'ALL' || m.category?.id === categoryFilter;
 
-      return matchesSearch && matchesStatus && matchesCat;
-    });
-  }, [meetings, search, statusFilter, categoryFilter]);
+        return matchesSearch && matchesStatus && matchesCat;
+      })
+      .sort((a, b) => {
+        const timeA = new Date(a.startTime).getTime();
+        const timeB = new Date(b.startTime).getTime();
+        return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
+      });
+  }, [meetings, search, statusFilter, categoryFilter, sortOrder]);
 
   const totalPages = Math.ceil(filteredMeetings.length / pageSize) || 1;
   const paginatedMeetings = useMemo(() => {
@@ -398,10 +405,40 @@ export default function AdminMeetingsPage() {
                 className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="ALL">All Statuses</option>
-                <option value="SCHEDULED">Scheduled</option>
+                <option value="SCHEDULED">Upcoming / Scheduled</option>
                 <option value="ACTIVE">Live Active</option>
-                <option value="CLOSED">Concluded</option>
+                <option value="CLOSED">Concluded (Completed)</option>
                 <option value="CANCELLED">Cancelled</option>
+              </select>
+
+              {categories.length > 0 && (
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => {
+                    setCategoryFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">All Categories</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <select
+                value={sortOrder}
+                onChange={(e) => {
+                  setSortOrder(e.target.value as 'asc' | 'desc');
+                  setPage(1);
+                }}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="asc">Earliest Upcoming First</option>
+                <option value="desc">Latest Date First</option>
               </select>
 
               {/* 4 View Modes */}

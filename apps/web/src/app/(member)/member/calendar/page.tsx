@@ -3,6 +3,7 @@
 import { pwaRuntime } from '../../../../lib/pwa/runtime';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { ShareEvent } from '../../../../components/ShareEvent';
 import { LogoIcon } from '../../../../components/LogoIcon';
@@ -15,6 +16,8 @@ type CalendarItem = {
   eventType?: { key?: string } | null;
   startTime: string;
   endTime: string | null;
+  attendanceOpenTime?: string | null;
+  attendanceCloseTime?: string | null;
   locationName: string | null;
   status: string;
   meetingUrl?: string | null;
@@ -42,6 +45,7 @@ function getLocalDayKey(dateInput: Date | string): string {
 }
 
 export default function MemberCalendarPage() {
+  const router = useRouter();
   const [items, setItems] = useState<CalendarItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -101,40 +105,85 @@ export default function MemberCalendarPage() {
   const sortedDays = Object.keys(groupedByDay).filter((k) => k !== 'unknown').sort();
 
   return (
-    <div className="bg-background text-on-background min-h-screen p-6 max-w-4xl mx-auto pb-32 font-body-md">
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/10 pb-6 mb-8">
+    <div className="bg-background text-on-background min-h-screen pb-32 font-body-md">
+      {/* Top App Bar */}
+      <header className="flex justify-between items-center w-full px-4 h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
-            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
-          </div>
-          <div>
-            <h1 className="font-headline-md text-2xl font-bold text-primary">Member Calendar</h1>
-            <p className="text-on-surface-variant text-xs mt-0.5">Your schedule of upcoming services, meetings, and special events.</p>
-          </div>
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80 shrink-0"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
+          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary truncate">Calendar</h1>
         </div>
-
         <div className="flex items-center gap-2">
           <input
             type="month"
             aria-label="Calendar month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-1.5 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm font-semibold text-on-surface focus:outline-none focus:border-primary"
+            className="px-2.5 py-1.5 bg-surface-container-low border border-outline-variant/30 rounded-xl text-xs font-semibold text-on-surface focus:outline-none focus:border-primary"
           />
         </div>
       </header>
 
-      <div className="mb-4 space-y-2">
-        <button className="underline min-h-11" onClick={async () => {
-          try {
-            const store = await pwaRuntime();
-            await store.save(`schedule:${selectedMonth}`, items.map(({ id, title, startTime, endTime, locationName, status }) => ({ id, title, startTime, endTime, locationName, status })), undefined, 'schedule', 86400000);
-            setOfflineStatus('Schedule saved for 24 hours. Open the offline workspace to view it without a connection.');
-          } catch (error) { setOfflineStatus(error instanceof Error ? error.message : 'Could not save schedule.'); }
-        }} disabled={loading || !items.length}>Save schedule for offline</button>
-        <p role="status">{offlineStatus}</p>
-        <a className="underline" href="/offline.html">Open offline workspace</a>
+      <main className="p-4 max-w-4xl mx-auto space-y-4">
+
+      <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary text-xl">offline_pin</span>
+          <div>
+            <p className="text-xs font-bold text-on-surface">Offline Schedule</p>
+            <p className="text-[11px] text-on-surface-variant">Save this month&apos;s schedule for offline viewing without data.</p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={async () => {
+              try {
+                const store = await pwaRuntime();
+                await store.save(
+                  `schedule:${selectedMonth}`,
+                  items.map(({ id, title, startTime, endTime, locationName, status }) => ({
+                    id,
+                    title,
+                    startTime,
+                    endTime,
+                    locationName,
+                    status,
+                  })),
+                  undefined,
+                  'schedule',
+                  86400000,
+                );
+                setOfflineStatus('Schedule saved for 24 hours. Open the offline workspace to view it without a connection.');
+              } catch (error) {
+                setOfflineStatus(error instanceof Error ? error.message : 'Could not save schedule.');
+              }
+            }}
+            disabled={loading || !items.length}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            <span>Save for Offline</span>
+          </button>
+
+          <Link
+            href="/member/offline"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-low text-on-surface border border-outline-variant/30 text-xs font-semibold hover:border-primary transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-sm">tune</span>
+            <span>Offline Settings</span>
+          </Link>
+        </div>
       </div>
+      {offlineStatus && (
+        <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800">
+          {offlineStatus}
+        </p>
+      )}
       {/* Filter Tabs */}
       <div className="flex gap-2 pb-4 overflow-x-auto mb-6">
         {(['ALL', 'SERVICE', 'EVENT', 'MEETING'] as const).map((type) => (
@@ -211,7 +260,7 @@ export default function MemberCalendarPage() {
                           </span>
                         </div>
 
-                        <h3 className="font-bold text-base text-primary">{item.title}</h3>
+                        <h3 className="font-bold text-base text-[#0b1c30] dark:text-white">{item.title}</h3>
 
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">
                           <span className="flex items-center gap-1">
@@ -229,14 +278,23 @@ export default function MemberCalendarPage() {
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
                         <ShareEvent event={item} />
-                        {item.status === 'ACTIVE' && (
-                          <Link
-                            href={`/member/check-in?meetingId=${item.id}`}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                          >
-                            Mark Attendance
-                          </Link>
-                        )}
+                        {(() => {
+                          const now = new Date();
+                          const start = new Date(item.startTime);
+                          const openTime = item.attendanceOpenTime ? new Date(item.attendanceOpenTime) : new Date(start.getTime() - 30 * 60000);
+                          const closeTime = item.attendanceCloseTime ? new Date(item.attendanceCloseTime) : (item.endTime ? new Date(item.endTime) : new Date(start.getTime() + 60 * 60000));
+                          const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
+                          const isEligible = now >= openTime && now <= cutoffTime && ['ACTIVE', 'SCHEDULED'].includes(item.status);
+                          return isEligible ? (
+                            <Link
+                              href={`/member/check-in?meetingId=${item.id}`}
+                              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-sm">location_on</span>
+                              <span>Check In</span>
+                            </Link>
+                          ) : null;
+                        })()}
                         <Link
                           href={`/member/submit-excuse?meetingId=${item.id}`}
                           className="px-3 py-2 bg-surface-container-low text-on-surface rounded-xl text-xs font-semibold hover:bg-surface-container transition-colors"
@@ -252,6 +310,7 @@ export default function MemberCalendarPage() {
           })}
         </div>
       )}
+      </main>
     </div>
   );
 }

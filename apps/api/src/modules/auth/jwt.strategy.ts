@@ -23,6 +23,7 @@ export interface AuthenticatedUser {
   memberCode?: string;
   firstName?: string;
   lastName?: string;
+  profilePhotoUrl?: string | null;
   /** Effective RBAC permissions (wildcard already expanded). */
   permissions: string[];
   /** Access-role keys held, e.g. ['SUPER_ADMIN']. */
@@ -99,6 +100,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       memberCode: user.member?.memberCode,
       firstName: user.member?.firstName,
       lastName: user.member?.lastName,
+      profilePhotoUrl: user.member?.profilePhotoUrl ?? null,
       permissions: access.permissions,
       accessRoles: access.roleKeys,
       isSuperAdmin: access.isSuperAdmin,

@@ -6,7 +6,7 @@ describe('Member profile details', () => {
   const tx = { member: { update, findUniqueOrThrow } };
   const transaction = jest.fn((fn) => fn(tx));
   const mockCache = { wrap: jest.fn((k, t, fn) => fn()), invalidateTag: jest.fn(), invalidateTags: jest.fn() } as any;
-  const service = new MembersService({ $transaction: transaction } as any, mockCache);
+  const service = new MembersService({ $transaction: transaction } as any, mockCache, {} as any);
   beforeEach(() => jest.clearAllMocks());
 
   it('saves a yearless birthday and profession, clears optional details, and ignores account privileges', async () => {

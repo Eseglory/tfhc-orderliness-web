@@ -9,6 +9,8 @@ export interface CurrentUser {
   memberId?: string;
   firstName?: string;
   lastName?: string;
+  profilePhotoUrl?: string | null;
+  photoUrl?: string | null;
   permissions: string[];
   accessRoles: string[];
   isSuperAdmin: boolean;

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="100%" height="100%">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#022c22" />
+          <stop offset="45%" stop-color="#064e3b" />
+          <stop offset="80%" stop-color="#047857" />
+          <stop offset="100%" stop-color="#10b981" />
+        </linearGradient>
+        <radialGradient id="aurora" cx="30%" cy="10%" r="70%">
+          <stop offset="0%" stop-color="#6ee7b7" stop-opacity="0.5" />
+          <stop offset="50%" stop-color="#10b981" stop-opacity="0.15" />
+          <stop offset="100%" stop-color="#022c22" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="1600" height="500" fill="url(#bg)" />
+      <circle cx="480" cy="50" r="600" fill="url(#aurora)" />
+      <g stroke="#34d399" stroke-width="1.2" fill="none" opacity="0.25">
+        <path d="M0,200 Q400,80 800,240 T1600,160" />
+        <path d="M0,250 Q400,130 800,290 T1600,210" />
+        <path d="M0,300 Q400,180 800,340 T1600,260" />
+        <path d="M0,350 Q400,230 800,390 T1600,310" />
+      </g>
+      <path d="M0,430 Q450,360 900,440 T1600,390 L1600,500 L0,500 Z" fill="#011913" opacity="0.75" />
+      <path d="M0,465 Q550,420 1100,470 T1600,445 L1600,500 L0,500 Z" fill="#010d0a" opacity="0.95" />
+    </svg>

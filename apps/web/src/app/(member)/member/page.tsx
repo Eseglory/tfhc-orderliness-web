@@ -9,6 +9,9 @@ import { LogoIcon } from '../../../components/LogoIcon';
 import { EngagementNudge } from '../../../components/activeness/EngagementNudge';
 import { ProfileCompletionReminder } from '../../../components/activeness/ProfileCompletionReminder';
 import { CampaignAlert } from '../../../components/activeness/CampaignAlert';
+import { MonthlyDuesAlert } from '../../../components/activeness/MonthlyDuesAlert';
+import { MemberAttendanceTrendChart } from '../../../components/member/MemberAttendanceTrendChart';
+import { MemberAttendancePieChart } from '../../../components/member/MemberAttendancePieChart';
 
 type Performance = {
   member?: { firstName: string; profilePhotoUrl: string | null; subTeam?: { name: string } | null };
@@ -26,24 +29,6 @@ type Performance = {
   recognition?: { eligible: boolean };
 };
 
-/** Circular progress ring for the headline attendance figure. */
-function Ring({ value, label }: { value: number; label: string }) {
-  const r = 46, c = 2 * Math.PI * r;
-  const off = c - (Math.min(100, Math.max(0, value)) / 100) * c;
-  const tone = value >= 90 ? '#059669' : value >= 75 ? '#d97706' : '#e11d48';
-  return (
-    <div className="relative flex h-32 w-32 items-center justify-center">
-      <svg viewBox="0 0 110 110" className="h-full w-full -rotate-90">
-        <circle cx="55" cy="55" r={r} fill="none" stroke="currentColor" strokeWidth="9" className="text-surface-container" />
-        <circle cx="55" cy="55" r={r} fill="none" stroke={tone} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} />
-      </svg>
-      <div className="absolute text-center">
-        <p className="font-headline-md text-headline-md font-extrabold text-primary">{value.toFixed(0)}%</p>
-        <p className="font-label-sm text-label-sm text-on-surface-variant">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 export default function MemberDashboard() {
   const router = useRouter();
@@ -51,6 +36,7 @@ export default function MemberDashboard() {
   const [perf, setPerf] = useState<Performance | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<any>(null);
   const [nextTodayService, setNextTodayService] = useState<any>(null);
+  const [nextWardrobe, setNextWardrobe] = useState<any>(null);
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
@@ -66,18 +52,30 @@ export default function MemberDashboard() {
     const ac = new AbortController();
     const get = <T,>(url: string) => fetchApi<T>(url, { signal: ac.signal });
     get<Performance>('/scoring/my-performance').then(setPerf).catch(() => {});
+    get<any>('/wardrobe/next').then((res) => setNextWardrobe(res?.data || res || null)).catch(() => {});
     get<{ activeMeeting: any; today: any[]; upcoming: any[] }>('/calendar/today-upcoming').then((res) => {
-      if (res?.activeMeeting) setActiveMeeting(res.activeMeeting);
+      if (res?.activeMeeting) {
+        const now = new Date();
+        const m = res.activeMeeting;
+        const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(new Date(m.startTime).getTime() - 30 * 60000);
+        const closeTime = m.attendanceCloseTime ? new Date(m.attendanceCloseTime) : (m.endTime ? new Date(m.endTime) : new Date(new Date(m.startTime).getTime() + 60 * 60000));
+        const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
+        if (now >= openTime && now <= cutoffTime && !['CANCELLED', 'CLOSED'].includes(m.status)) {
+          setActiveMeeting(m);
+        } else {
+          setActiveMeeting(null);
+        }
+      }
       const todayList = Array.isArray(res?.today) ? res.today : [];
       const upcomingList = Array.isArray(res?.upcoming) ? res.upcoming : [];
       const now = new Date();
       const todayPending = todayList.filter((m) => {
         if (['CANCELLED', 'CLOSED'].includes(m.status)) return false;
-        if (m.status === 'ACTIVE') return true;
-        const endTime = m.endTime ? new Date(m.endTime) : (m.startTime ? new Date(new Date(m.startTime).getTime() + 2 * 3600000) : null);
-        return !endTime || endTime > now;
+        const closeTime = m.attendanceCloseTime ? new Date(m.attendanceCloseTime) : (m.endTime ? new Date(m.endTime) : new Date(new Date(m.startTime).getTime() + 60 * 60000));
+        const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
+        return cutoffTime > now;
       });
-      const nextScheduled = todayPending.find((m) => m.status === 'SCHEDULED');
+      const nextScheduled = todayPending.find((m) => m.status === 'SCHEDULED' || m.status === 'ACTIVE');
       if (nextScheduled) setNextTodayService(nextScheduled);
 
       // Deduplicate by ID
@@ -94,7 +92,7 @@ export default function MemberDashboard() {
       );
       setUpcoming(combined.slice(0, 5));
     }).catch(() => {});
-    // 404 when the weekly cycle hasn't been opened — treated as "not open".
+
     get<{ cycle?: { state?: string; closesAt?: string }; submitted?: boolean }>('/availability/current')
       .then((a) => setAvailabilityOpen(Boolean(
         a?.cycle?.state === 'OPEN' && !a.submitted && (!a.cycle.closesAt || new Date(a.cycle.closesAt) > new Date()),
@@ -107,219 +105,358 @@ export default function MemberDashboard() {
     if (!activeMeeting?.attendanceCloseTime) return null;
     const mins = Math.round((new Date(activeMeeting.attendanceCloseTime).getTime() - Date.now()) / 60000);
     if (mins <= 0) return 'Closing now';
-    if (mins < 60) return `Closes in ${mins} min${mins === 1 ? '' : 's'}`;
+    if (mins < 60) return `Closes in ${mins}m`;
     return `Closes ${new Date(activeMeeting.attendanceCloseTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }, [activeMeeting]);
 
-  const firstName = perf?.member?.firstName;
-  const month = new Date().toLocaleString([], { month: 'long' });
+  const firstName = perf?.member?.firstName || user?.firstName;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  // Cohesive, curated Church Tools icons and colors
+  const churchTools = [
+    { href: '/member/wardrobe', label: 'Wardrobe', icon: 'apparel', iconColor: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/50' },
+    { href: '/member/my-attendance', label: 'Attendance', icon: 'fact_check', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
+    { href: '/member/meetings', label: 'Events', icon: 'event', iconColor: 'text-[#0b1c30] dark:text-blue-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events', iconColor: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/50' },
+    { href: '/member/dues', label: 'Finance', icon: 'payments', iconColor: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
+    { href: '/member/welfare', label: 'Requests', icon: 'rate_review', iconColor: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950/50' },
+    { href: '/member/availability', label: 'Availability', icon: 'event_available', iconColor: 'text-[#0b1c30] dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/calendar', label: 'Calendar', icon: 'calendar_month', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
+    { href: '/member/submit-excuse', label: 'Absence', icon: 'event_busy', iconColor: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/50' },
+    { href: '/member/analytics', label: 'Analytics', icon: 'monitoring', iconColor: 'text-[#0b1c30] dark:text-blue-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/rewards', label: 'Milestones', icon: 'workspace_premium', iconColor: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/50' },
+    { href: '/member/files', label: 'Files', icon: 'folder_open', iconColor: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/offline', label: 'Offline', icon: 'offline_pin', iconColor: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/50' },
+  ];
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background font-body-md text-on-background pb-28">
-      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-outline-variant/10 bg-background px-edge-margin">
+    <div className="relative flex min-h-screen flex-col bg-slate-50/60 dark:bg-slate-950 text-slate-900 dark:text-white pb-28 antialiased">
+      {/* Executive Portal Header */}
+      <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 px-4 sm:px-6 backdrop-blur-xl">
         <div className="flex items-center gap-3">
-          <Link href="/member/profile" aria-label="My profile" className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-outline-variant bg-surface-container p-1">
+          <Link href="/member/profile" aria-label="My profile" className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-[#f2320c]/20 bg-slate-100 dark:bg-slate-800 p-0.5 shadow-xs transition-transform active:scale-95">
             {perf?.member?.profilePhotoUrl
               ? <img src={perf.member.profilePhotoUrl} alt="Profile" className="h-full w-full rounded-full object-cover" />
-              : <LogoIcon alt="Profile" className="h-full w-full object-contain" />}
+              : <LogoIcon alt="Profile" className="h-full w-full object-contain p-1" />}
+            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
           </Link>
           <div className="flex flex-col">
-            <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Home</span>
-            <span className="font-headline-sm text-headline-sm font-bold text-primary">Hello{firstName ? `, ${firstName}` : ''}</span>
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-none">{greeting}</span>
+            <span className="text-base font-extrabold text-[#0b1c30] dark:text-white leading-tight mt-0.5">{firstName || 'Member'}</span>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
           {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
             <button
               onClick={() => router.push('/admin')}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0b1c30] hover:bg-[#162a42] text-white font-bold text-xs transition-all shadow-xs shrink-0 active:scale-95"
               title="Switch to Admin App"
               aria-label="Switch to Admin App"
             >
-              <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
-              <span className="hidden sm:inline">Switch to Admin App</span>
-              <span className="sm:hidden">Admin App</span>
+              <span className="material-symbols-outlined text-sm text-amber-300">admin_panel_settings</span>
+              <span>Admin</span>
             </button>
           )}
-          <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface-variant">
-            <span className="material-symbols-outlined text-on-surface-variant">notifications</span>
-            {hasUnread && <span aria-label="Unread notifications" className="absolute right-2.5 top-2 h-2 w-2 rounded-full bg-error" />}
+          <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors active:scale-95">
+            <span className="material-symbols-outlined text-[22px]">notifications</span>
+            {hasUnread && (
+              <span aria-label="Unread notifications" className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#f2320c] ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+            )}
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-stack-lg px-edge-margin py-stack-md md:max-w-2xl">
-        {/* Primary action */}
-        <section className="relative overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
-          <div className={`absolute left-0 top-0 h-full w-1 ${activeMeeting ? 'bg-tertiary-container' : nextTodayService ? 'bg-primary' : 'bg-outline-variant'}`} />
-          <div className="flex flex-col gap-4 p-4">
-            <div>
-              <h2 className="font-headline-sm text-headline-sm font-bold text-primary">
-                {activeMeeting
-                  ? activeMeeting.title
-                  : nextTodayService
-                  ? `Today’s Service: ${nextTodayService.title}`
-                  : 'No service is open right now'}
-                {(activeMeeting?.isCompulsory || (!activeMeeting && nextTodayService?.isCompulsory)) && (
-                  <span className="ml-2 align-middle rounded-full bg-error-container px-2 py-0.5 font-label-sm text-label-sm text-error">Compulsory</span>
-                )}
-              </h2>
-              <p className="mt-1 flex items-center gap-1 font-body-md text-body-md text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px]">schedule</span>
-                {activeMeeting
-                  ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName}`
-                  : nextTodayService
-                  ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName}`
-                  : 'You’re all caught up. Check back when your next gathering begins.'}
-              </p>
+      <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 py-4 max-w-4xl mx-auto">
+        {/* Dynamic Gathering / Check-in Hero Widget */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="flex flex-col gap-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  {activeMeeting ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                      Live Check-In Open
+                    </span>
+                  ) : nextTodayService ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400 px-2.5 py-0.5 text-xs font-bold">
+                      <span className="material-symbols-outlined text-xs">event_upcoming</span>
+                      Today&apos;s Service
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2.5 py-0.5 text-xs font-semibold">
+                      <span className="material-symbols-outlined text-xs">done_all</span>
+                      All Caught Up
+                    </span>
+                  )}
+                  {(activeMeeting?.isCompulsory || (!activeMeeting && nextTodayService?.isCompulsory)) && (
+                    <span className="rounded-md bg-red-100 dark:bg-red-950 text-[#f2320c] dark:text-red-300 px-2 py-0.5 text-[10px] font-extrabold">Compulsory</span>
+                  )}
+                </div>
+
+                <h2 className="text-lg sm:text-xl font-extrabold text-[#0b1c30] dark:text-white leading-snug truncate">
+                  {activeMeeting
+                    ? activeMeeting.title
+                    : nextTodayService
+                    ? nextTodayService.title
+                    : 'No Active Gathering'}
+                </h2>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                  <span className="material-symbols-outlined text-sm text-slate-400">schedule</span>
+                  {activeMeeting
+                    ? `${new Date(activeMeeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${activeMeeting.locationName || 'Main Sanctuary'}`
+                    : nextTodayService
+                    ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName || 'Main Sanctuary'}`
+                    : 'Check the upcoming schedule below for the next service.'}
+                </p>
+              </div>
+
+              {closesLabel && (
+                <span className="rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 shrink-0">
+                  {closesLabel}
+                </span>
+              )}
             </div>
-            {activeMeeting ? (
-              <div className="flex items-center justify-between rounded-lg border border-surface-variant bg-surface-variant/50 p-3">
-                <span className="flex items-center gap-2 font-label-md text-label-md font-semibold text-on-surface">
-                  <span className="h-3 w-3 rounded-full bg-on-tertiary-container animate-pulse" /> Attendance window open
-                </span>
-                {closesLabel && <span className="rounded bg-surface-container-high px-2 py-1 font-label-sm text-label-sm text-on-surface-variant">{closesLabel}</span>}
-              </div>
-            ) : nextTodayService ? (
-              <div className="flex items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-low p-3">
-                <span className="flex items-center gap-2 font-label-md text-xs font-semibold text-on-surface">
-                  <span className="material-symbols-outlined text-base text-primary">event_upcoming</span> Scheduled for today • Attendance opens before service
-                </span>
-              </div>
-            ) : null}
-            <button
-              onClick={() => router.push(activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/meetings')}
-              disabled={!activeMeeting && !nextTodayService}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-label-md text-label-md font-bold text-on-primary transition-transform active:scale-[0.98] disabled:opacity-50"
+
+            <Link
+              href={activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/calendar'}
+              className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 px-4 text-sm font-extrabold transition-all active:scale-[0.98] shadow-sm ${
+                activeMeeting
+                  ? 'bg-[#f2320c] hover:bg-[#d82a08] text-white shadow-red-600/25'
+                  : nextTodayService
+                  ? 'bg-[#0b1c30] hover:bg-[#162a42] text-white'
+                  : 'bg-[#0b1c30] hover:bg-[#162a42] text-white shadow-slate-900/10'
+              }`}
             >
-              <span className="material-symbols-outlined">{activeMeeting ? 'location_on' : 'event'}</span>
-              {activeMeeting ? 'Check In' : nextTodayService ? 'View Today’s Service Details' : 'No Active Check In'}
-            </button>
+              <span className="material-symbols-outlined text-lg">{activeMeeting ? 'location_on' : 'calendar_month'}</span>
+              {activeMeeting ? 'Check In Now' : nextTodayService ? 'View Gathering Details' : 'View Calendar & Events'}
+            </Link>
           </div>
         </section>
 
-        {/* Quick Church Actions */}
-        <section className="grid grid-cols-4 gap-2 text-center">
-          <Link href="/member/my-attendance" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <span className="material-symbols-outlined text-[20px]">fact_check</span>
-            </div>
-            <span className="font-label-sm text-[11px] font-bold text-on-surface">Attendance</span>
-          </Link>
-          <Link href="/member/meetings" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary/10 text-secondary">
-              <span className="material-symbols-outlined text-[20px]">event</span>
-            </div>
-            <span className="font-label-sm text-[11px] font-bold text-on-surface">Events</span>
-          </Link>
-          <Link href="/member/dues" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-tertiary/10 text-tertiary">
-              <span className="material-symbols-outlined text-[20px]">volunteer_activism</span>
-            </div>
-            <span className="font-label-sm text-[11px] font-bold text-on-surface">Finance</span>
-          </Link>
-          <Link href="/member/welfare" className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 transition-transform active:scale-95 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-              <span className="material-symbols-outlined text-[20px]">rate_review</span>
-            </div>
-            <span className="font-label-sm text-[11px] font-bold text-on-surface text-center">Requests</span>
-          </Link>
-          {[
-            { href: '/member/calendar', label: 'Calendar', icon: 'calendar_month' },
-            { href: '/member/files', label: 'Files', icon: 'folder_open' },
-            { href: '/member/offline', label: 'Offline', icon: 'offline_pin' },
-            { href: '/member/submit-excuse', label: 'Absence', icon: 'event_busy' },
-          ].map(action => (
-            <Link key={action.href} href={action.href} className="flex flex-col items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-sm">
-              <span aria-hidden="true" className="material-symbols-outlined flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">{action.icon}</span>
-              <span className="font-label-sm text-[11px] font-bold text-on-surface">{action.label}</span>
-            </Link>
-          ))}
-        </section>
+        {/* Next Expected Wardrobe Hero Card */}
+        {nextWardrobe ? (
+          <section className="relative overflow-hidden rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-slate-900 via-[#0e1e38] to-[#081324] p-5 sm:p-6 text-white shadow-xl shadow-slate-950/20">
+            <div className="absolute top-0 right-0 -mt-6 -mr-6 w-48 h-48 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
-        {availabilityOpen && (
-          <Link href="/member/availability" className="flex items-center gap-3 rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-on-surface">
-            <span className="material-symbols-outlined text-secondary">event_available</span>
-            <span className="flex-1 text-sm font-medium">This week’s availability is open — let your team know when you can serve.</span>
-            <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
-          </Link>
-        )}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/15 pb-4">
+              <div className="flex items-center gap-2">
+                <span className="flex h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-red-400">
+                  This Sunday&apos;s Dress Code
+                </span>
+                <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-white/15 text-white font-black uppercase tracking-wider ml-1">
+                  {nextWardrobe.eventType.replace('_', ' ')}
+                </span>
+              </div>
 
+              <div className="flex items-center gap-2 text-xs text-white/90 font-bold bg-white/10 px-3.5 py-1.5 rounded-xl backdrop-blur-md border border-white/15">
+                <span className="material-symbols-outlined text-sm text-amber-300">calendar_today</span>
+                <span>
+                  {new Date(nextWardrobe.scheduledDate).toLocaleDateString('default', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC'
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/10 border border-white/20 text-amber-300 flex items-center justify-center flex-shrink-0 shadow-inner">
+                  <span className="material-symbols-outlined text-3xl">apparel</span>
+                </div>
+
+                <div className="min-w-0 space-y-1">
+                  <p className="text-xs text-slate-300 font-bold truncate">{nextWardrobe.title}</p>
+                  <h3 className="text-base sm:text-xl font-black text-white truncate leading-tight">
+                    {nextWardrobe.outfit?.title || 'Prescribed Uniform'}
+                  </h3>
+
+                  {/* Swatches & Pieces count */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {nextWardrobe.outfit?.items?.slice(0, 5).map((layer: any, idx: number) => (
+                      <span
+                        key={idx}
+                        title={layer.variant?.colorName || layer.item?.name}
+                        className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-xs"
+                        style={{ backgroundColor: layer.variant?.colorCode || layer.variant?.colorHex || '#D97706' }}
+                      />
+                    ))}
+                    <span className="text-[11px] text-white/80 font-bold ml-1">
+                      {nextWardrobe.outfit?.items?.length || 0} Pieces Prescribed
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Link
+                href="/member/wardrobe"
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white text-slate-950 hover:bg-amber-100 font-black text-xs transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <span>View Full Uniform Guide</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
+        {/* In-Flow Action Alerts & Reminders */}
+        <MonthlyDuesAlert />
         <CampaignAlert />
         <EngagementNudge />
         <ProfileCompletionReminder />
 
-        {/* Performance snapshot */}
-        <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4 shadow-[0px_2px_8px_rgba(0,0,0,0.05)]">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">Your standing</h3>
-            {perf?.recognition?.eligible && (
-              <span className="rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm font-bold text-on-secondary-container">Recognition eligible</span>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <Ring value={perf?.attendanceRate ?? 0} label="attendance" />
-            <div className="flex-1 space-y-2">
-              {[
-                ['Punctuality', `${(perf?.punctualityRate ?? 0).toFixed(0)}%`],
-                ['Points', `${perf?.totalPoints ?? 0}`],
-                ['Rank', perf?.rankPosition ? `#${perf.rankPosition}` : '—'],
-                ['Streak', `${perf?.currentAttendanceStreak ?? 0} in a row`],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between border-b border-outline-variant/20 pb-1.5 last:border-0">
-                  <span className="font-body-md text-body-md text-on-surface-variant">{k}</span>
-                  <span className="font-label-md text-label-md font-bold text-primary">{v}</span>
-                </div>
-              ))}
+        {availabilityOpen && (
+          <Link href="/member/availability" className="flex items-center gap-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/80 dark:bg-blue-950/40 px-4 py-3 text-slate-900 dark:text-white hover:bg-blue-100/80 transition-colors shadow-xs">
+            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">event_available</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-extrabold text-blue-950 dark:text-blue-200">Weekly Availability Open</p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300 truncate">Let your team know when you can serve this week.</p>
             </div>
+            <span className="material-symbols-outlined text-blue-400 text-base">chevron_right</span>
+          </Link>
+        )}
+
+        {/* Top KPI Metrics Bar */}
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {/* Rank */}
+          <Link
+            href="/member/leaderboard"
+            className="flex flex-col p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-amber-400 transition-colors"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Unit Rank</span>
+            <span className="text-lg font-black text-amber-600 dark:text-amber-400 leading-tight flex items-center justify-between mt-0.5">
+              {perf?.rankPosition ? `#${perf.rankPosition}` : '—'}
+              <span className="material-symbols-outlined text-xs text-slate-400">chevron_right</span>
+            </span>
+          </Link>
+
+          {/* Attendance Rate */}
+          <Link
+            href="/member/analytics"
+            className="flex flex-col p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-[#0b1c30] transition-colors"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Attendance</span>
+            <span className="text-lg font-black text-[#0b1c30] dark:text-white leading-tight mt-0.5">
+              {(perf?.attendanceRate ?? 0).toFixed(0)}%
+            </span>
+          </Link>
+
+          {/* Points */}
+          <Link
+            href="/member/rewards"
+            className="flex flex-col p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-[#f2320c] transition-colors"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Points</span>
+            <span className="text-lg font-black text-[#f2320c] leading-tight mt-0.5">
+              {perf?.totalPoints ?? 0}
+            </span>
+          </Link>
+
+          {/* Streak */}
+          <Link
+            href="/member/rewards"
+            className="flex flex-col p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-emerald-500 transition-colors"
+          >
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Active Streak</span>
+            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-tight mt-0.5 flex items-center gap-1">
+              <span className="material-symbols-outlined text-base text-[#f2320c]">local_fire_department</span>
+              <span>{perf?.currentAttendanceStreak ?? 0} <span className="text-xs font-bold text-slate-400">wks</span></span>
+            </span>
+          </Link>
+        </section>
+
+        {/* Member Analytics Row: Graph (Activity & Attendance Trends) + Pie Chart (Standing & Distribution) */}
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Left: Attendance & Activity Trend Graph (7 cols on desktop) */}
+          <div className="lg:col-span-7 flex flex-col">
+            <MemberAttendanceTrendChart
+              attendanceRate={perf?.attendanceRate}
+              punctualityRate={perf?.punctualityRate}
+            />
+          </div>
+
+          {/* Right: Standing & Status Distribution Pie Chart (5 cols on desktop) */}
+          <div className="lg:col-span-5 flex flex-col">
+            <MemberAttendancePieChart
+              attendedCount={perf?.attendedCount}
+              onTimeCount={perf?.onTimeCount}
+              absentCount={perf?.absentCount}
+              excusedCount={perf?.excusedCount}
+              attendanceRate={perf?.attendanceRate}
+              punctualityRate={perf?.punctualityRate}
+              rankPosition={typeof perf?.rankPosition === 'number' ? perf.rankPosition : undefined}
+            />
           </div>
         </section>
 
-        {/* This month */}
-        <section>
-          <h3 className="mb-3 font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">{month} so far</h3>
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              ['Present', perf?.attendedCount ?? 0, 'text-emerald-600'],
-              ['On time', perf?.onTimeCount ?? 0, 'text-emerald-600'],
-              ['Absent', perf?.absentCount ?? 0, 'text-rose-600'],
-              ['Excused', perf?.excusedCount ?? 0, 'text-on-surface-variant'],
-            ].map(([label, value, tone]) => (
-              <div key={label as string} className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-3 text-center shadow-[0px_2px_8px_rgba(0,0,0,0.03)]">
-                <p className={`font-headline-sm text-headline-sm font-extrabold ${tone as string}`}>{value as number}</p>
-                <p className="font-label-sm text-label-sm text-on-surface-variant">{label as string}</p>
-              </div>
+        {/* Native App Launcher Grid (12 Tools) */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Church Tools
+            </h3>
+            <span className="text-xs font-bold text-[#f2320c] dark:text-red-400">12 Modules</span>
+          </div>
+
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2.5 sm:gap-3 text-center">
+            {churchTools.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="group flex flex-col items-center gap-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm hover:border-[#f2320c]/40 active:scale-95"
+              >
+                <div className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl ${action.bg} ${action.iconColor} transition-transform group-hover:scale-105`}>
+                  <span className="material-symbols-outlined text-[22px] sm:text-[24px]">{action.icon}</span>
+                </div>
+                <span className="text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 truncate w-full tracking-tight">
+                  {action.label}
+                </span>
+              </Link>
             ))}
           </div>
         </section>
 
-        {/* Upcoming */}
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <h3 className="font-label-md text-label-md font-bold uppercase tracking-wider text-on-surface-variant">Upcoming schedule</h3>
-            <Link href="/member/meetings" className="font-label-sm text-label-sm font-bold text-primary hover:underline">View all</Link>
+        {/* Upcoming Gathering Cards */}
+        <section className="space-y-3">
+          <div className="flex items-end justify-between px-1">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Upcoming Schedule
+            </h3>
+            <Link href="/member/meetings" className="text-xs font-bold text-[#0b1c30] dark:text-slate-300 hover:text-[#f2320c] hover:underline">
+              View all
+            </Link>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {upcoming.length > 0 ? (
               upcoming.map((m, i) => (
-                <Link key={m.id || i} href={`/member/meetings/${m.id}`} className="flex items-center justify-between rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-3 shadow-[0px_2px_8px_rgba(0,0,0,0.02)]">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-col items-center justify-center rounded bg-surface-container text-primary">
-                      <span className="font-label-sm text-label-sm font-bold leading-none">{new Date(m.startTime || m.meetingDate).getDate()}</span>
-                      <span className="text-[9px] uppercase leading-none">{new Date(m.startTime || m.meetingDate).toLocaleString([], { month: 'short' })}</span>
+                <Link
+                  key={m.id || i}
+                  href={`/member/meetings/${m.id}`}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 transition-all hover:border-[#0b1c30]/40 hover:shadow-xs active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="flex h-12 w-12 flex-col items-center justify-center rounded-xl bg-[#0b1c30] text-white shrink-0 shadow-xs">
+                      <span className="text-sm font-black leading-none">{new Date(m.startTime || m.meetingDate).getDate()}</span>
+                      <span className="text-[9px] uppercase font-bold leading-none mt-1 text-slate-300">{new Date(m.startTime || m.meetingDate).toLocaleString([], { month: 'short' })}</span>
                     </div>
-                    <div>
-                      <p className="font-label-md text-label-md font-bold text-primary">{m.title}</p>
-                      <p className="text-[13px] text-on-surface-variant">
-                        {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.locationName}
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold text-[#0b1c30] dark:text-white truncate leading-tight">{m.title}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {new Date(m.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {m.locationName || 'Main Sanctuary'}
                       </p>
                     </div>
                   </div>
-                  <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+                  <span className="material-symbols-outlined text-slate-400 text-base">chevron_right</span>
                 </Link>
               ))
             ) : (
-              <div className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-4 text-center font-body-md text-body-md text-on-surface-variant">
+              <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
                 No gatherings scheduled yet.
               </div>
             )}

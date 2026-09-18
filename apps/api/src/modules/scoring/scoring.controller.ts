@@ -3,15 +3,18 @@ import { ScoringService } from './scoring.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/rbac/permissions.guard';
+import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '@tfhc/shared';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('scoring')
 export class ScoringController {
   constructor(private scoringService: ScoringService) {}
 
   @Get('recognition')
+  @RequirePermissions('scoring.read')
   async recognition(@CurrentUser('role') role: string) {
     if (!['ADMIN', 'LEADER', 'SUPER_ADMIN'].includes(role)) throw new ForbiddenException('Leadership access required');
     return this.scoringService.recognition();
@@ -47,6 +50,7 @@ export class ScoringController {
 
   @Get('attendance-analytics')
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('scoring.read')
   async getAttendanceAnalytics(
     @Query('days') days?: string,
     @Query('startDate') startDate?: string,

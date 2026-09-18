@@ -3,33 +3,42 @@ import { Response } from 'express';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/rbac/permissions.guard';
+import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '@tfhc/shared';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Roles(Role.ADMIN, Role.LEADER)
 @Controller('reports')
 export class ReportsController {
   constructor(private reportsService: ReportsService) {}
 
   @Get('settings')
+  @RequirePermissions('settings.read')
   async settings() { return this.reportsService.settings(); }
+
   @Roles(Role.ADMIN)
+  @RequirePermissions('settings.update')
   @Put('settings')
   async updateSettings(@Body() body: any) { return this.reportsService.updateSettings(body); }
 
   @Get('filter-options')
+  @RequirePermissions('reports.view')
   async filterOptions() { return this.reportsService.filterOptions(); }
 
   @Get('analytics')
+  @RequirePermissions('reports.view')
   async analytics(@Query() query: {days?:string;from?:string;to?:string;categoryId?:string;memberId?:string;subTeamId?:string}) { return this.reportsService.getAnalytics(query.days === undefined ? 30 : Number(query.days), query.from, query.to, query); }
 
   @Get('dashboard')
+  @RequirePermissions('reports.view')
   async getDashboard() {
     return this.reportsService.getUnitDashboardStats();
   }
 
   @Get('export/csv')
+  @RequirePermissions('reports.export')
   async exportCsv(@Res() res: Response) {
     const csv = await this.reportsService.generateCsvReport();
     res.setHeader('Content-Type','text/csv; charset=utf-8');
@@ -38,6 +47,7 @@ export class ReportsController {
   }
 
   @Get('export/excel')
+  @RequirePermissions('reports.export')
   async exportExcel(@Res() res: Response) {
     const buffer = await this.reportsService.generateExcelReport();
     res.setHeader(

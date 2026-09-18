@@ -5,6 +5,8 @@ import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
 import { MemberStatus, toPascalCase } from '@tfhc/shared';
 
+import { LookupsService } from '../lookups/lookups.service';
+
 // sharp 0.35 is a CommonJS module whose export is the callable factory. With
 // esModuleInterop disabled a plain `require` keeps both the runtime value and
 // the call-signature typing correct.
@@ -16,6 +18,7 @@ export class MembersService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
+    private lookupsService: LookupsService,
   ) {}
 
   async findAll(query?: { status?: MemberStatus; subTeamId?: string; search?: string }) {
@@ -161,6 +164,14 @@ export class MembersService {
     const bannerPhotoUrl = `data:image/webp;base64,${output.toString('base64')}`;
     await this.prisma.member.update({ where: { id }, data: { bannerPhotoUrl } });
     return { bannerPhotoUrl };
+  }
+
+  async setBannerUrl(id: string, bannerUrl: string) {
+    if (!bannerUrl || typeof bannerUrl !== 'string' || bannerUrl.length > 10000) {
+      throw new BadRequestException('Invalid banner URL');
+    }
+    await this.prisma.member.update({ where: { id }, data: { bannerPhotoUrl: bannerUrl } });
+    return { bannerPhotoUrl: bannerUrl };
   }
 
   async removeBanner(id: string) {
@@ -384,5 +395,106 @@ export class MembersService {
       orderBy: { name: 'asc' },
       include: { _count: { select: { members: true } } },
     });
+  }
+
+  async inviteMember(memberId: string, actorUserId: string) {
+    const member = await this.prisma.member.findUnique({
+      where: { id: memberId },
+      include: { approvedMember: true, user: true },
+    });
+    if (!member) throw new NotFoundException('Member not found');
+
+    let approvedMemberId = member.approvedMember?.id;
+    if (!approvedMemberId) {
+      const email = member.user?.email;
+      if (!email) {
+        throw new BadRequestException('Member does not have an email address on file. Please update their profile email to send an invite.');
+      }
+      const normalizedEmail = email.trim().toLowerCase();
+      let approved = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail } });
+      if (!approved) {
+        approved = await this.prisma.approvedMember.create({
+          data: {
+            email: email.trim(),
+            normalizedEmail,
+            status: 'ACTIVE',
+            source: 'ADMIN_INVITE',
+            memberId: member.id,
+          },
+        });
+      } else if (!approved.memberId) {
+        await this.prisma.approvedMember.update({
+          where: { id: approved.id },
+          data: { memberId: member.id, status: 'ACTIVE' },
+        });
+      }
+      approvedMemberId = approved.id;
+    }
+
+    return this.lookupsService.inviteOneApprovedMember(approvedMemberId, actorUserId);
+  }
+
+  async inviteNewMember(
+    dto: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber?: string;
+      subTeamId?: string;
+      roleInUnit?: string;
+      gender?: string;
+    },
+    actorUserId: string,
+  ) {
+    const email = dto.email?.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      throw new BadRequestException('A valid email address is required to send an invitation.');
+    }
+    const firstName = toPascalCase(dto.firstName?.trim() || 'Member');
+    const lastName = toPascalCase(dto.lastName?.trim() || '');
+
+    let approved = await this.prisma.approvedMember.findUnique({
+      where: { normalizedEmail: email },
+      include: { member: { include: { user: true } } },
+    });
+
+    if (approved && approved.member) {
+      return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
+    }
+
+    const memberCode = `TFHC-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
+    const member = await this.prisma.member.create({
+      data: {
+        memberCode,
+        firstName,
+        lastName,
+        phoneNumber: dto.phoneNumber?.trim() || '',
+        subTeamId: dto.subTeamId || undefined,
+        roleInUnit: dto.roleInUnit?.trim() || 'Member',
+        gender: dto.gender?.trim() || undefined,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!approved) {
+      approved = await this.prisma.approvedMember.create({
+        data: {
+          email: dto.email.trim(),
+          normalizedEmail: email,
+          status: 'ACTIVE',
+          source: 'ADMIN_INVITE',
+          memberId: member.id,
+        },
+        include: { member: { include: { user: true } } },
+      });
+    } else {
+      await this.prisma.approvedMember.update({
+        where: { id: approved.id },
+        data: { memberId: member.id, status: 'ACTIVE' },
+      });
+    }
+
+    this.cache.invalidateTag('members');
+    return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
   }
 }

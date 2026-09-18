@@ -1,35 +1,10 @@
 import { PrismaClient } from '@prisma/client';
+import { SERVICE_SCHEDULES, occurrences } from '../src/modules/recurring-services/service-schedules';
 
 const prisma = new PrismaClient();
-const LAGOS_OFFSET_MIN = 60;
-
-const SERVICE_SCHEDULES = [
-  { id: 'sunday-first', title: 'First Service', dayOfWeek: 0, startMinutes: 420, endMinutes: 480, categoryName: 'Sunday Service' },
-  { id: 'sunday-second', title: 'Second Service', dayOfWeek: 0, startMinutes: 510, endMinutes: 600, categoryName: 'Sunday Service' },
-  { id: 'sunday-third', title: 'Third Service', dayOfWeek: 0, startMinutes: 630, endMinutes: 720, categoryName: 'Sunday Service' },
-  { id: 'tuesday-midweek', title: 'Mid-Week Service', dayOfWeek: 2, startMinutes: 1125, endMinutes: 1215, categoryName: 'Midweek Service' },
-  { id: 'thursday-divine', title: 'Divine Intervention Service', dayOfWeek: 4, startMinutes: 480, endMinutes: 600, categoryName: 'Midweek Service' },
-];
-
-function occurrences(schedule: typeof SERVICE_SCHEDULES[number], now: Date, days = 28) {
-  const local = new Date(now.getTime() + LAGOS_OFFSET_MIN * 60000);
-  const midnight = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
-  const results: { startTime: Date; endTime: Date | null }[] = [];
-  for (let day = 0; day < days; day++) {
-    const date = new Date(midnight + day * 86400000);
-    if (date.getUTCDay() !== schedule.dayOfWeek) continue;
-    const startTime = new Date(date.getTime() + (schedule.startMinutes - 60) * 60000);
-    if (startTime <= now) continue;
-    results.push({
-      startTime,
-      endTime: schedule.endMinutes === null ? null : new Date(date.getTime() + (schedule.endMinutes - 60) * 60000),
-    });
-  }
-  return results;
-}
 
 async function main() {
-  console.log('Seeding production recurring service schedules...');
+  console.log('Seeding church recurring service schedules...');
 
   // 1. Ensure Categories exist
   const sundayCat = await prisma.meetingCategory.upsert({
@@ -42,15 +17,27 @@ async function main() {
     update: {},
     create: { name: 'Midweek Service', basePoints: 5, pointWeight: 1.0, isSystem: true },
   });
+  const unitCat = await prisma.meetingCategory.upsert({
+    where: { name: 'Unit Meeting' },
+    update: {},
+    create: { name: 'Unit Meeting', basePoints: 10, pointWeight: 1.0, isSystem: true },
+  });
+  const specialCat = await prisma.meetingCategory.upsert({
+    where: { name: 'Special Programme' },
+    update: {},
+    create: { name: 'Special Programme', basePoints: 15, pointWeight: 2.0, isSystem: true },
+  });
 
   const catMap: Record<string, string> = {
     'Sunday Service': sundayCat.id,
     'Midweek Service': midweekCat.id,
+    'Unit Meeting': unitCat.id,
+    'Special Programme': specialCat.id,
   };
 
-  // 2. Ensure EventType SERVICE exists
-  const eventType = await prisma.eventType.findUnique({ where: { key: 'SERVICE' } });
-  const eventTypeId = eventType?.id ?? null;
+  // 2. Ensure EventTypes exist
+  const eventTypes = await prisma.eventType.findMany({ select: { id: true, key: true } });
+  const typeByKey = new Map(eventTypes.map((t) => [t.key, t.id]));
 
   // 3. Upsert Venue / Recurring config
   const config = {
@@ -63,7 +50,7 @@ async function main() {
     arrivalMinutesBefore: 30,
     reminderMinutes: [60],
     recipients: 'all',
-    remindersEnabled: true,
+    remindersEnabled: false,
   };
 
   await prisma.systemSetting.upsert({
@@ -72,7 +59,7 @@ async function main() {
     create: { key: 'recurring_services_config', value: JSON.stringify(config) },
   });
 
-  // 4. Upsert the 5 Service Schedules
+  // 4. Upsert all 9 Service Schedules with Google Calendar style RFC 5545 recurrence rules
   for (const s of SERVICE_SCHEDULES) {
     await prisma.serviceSchedule.upsert({
       where: { id: s.id },
@@ -83,7 +70,8 @@ async function main() {
         endMinutes: s.endMinutes,
         categoryName: s.categoryName,
         enabled: true,
-        eventTypeKey: 'SERVICE',
+        eventTypeKey: s.eventTypeKey,
+        recurrenceRule: s.recurrenceRule as any,
       },
       create: {
         id: s.id,
@@ -93,7 +81,8 @@ async function main() {
         endMinutes: s.endMinutes,
         categoryName: s.categoryName,
         enabled: true,
-        eventTypeKey: 'SERVICE',
+        eventTypeKey: s.eventTypeKey,
+        recurrenceRule: s.recurrenceRule as any,
         horizonDays: 28,
       },
     });
@@ -106,7 +95,8 @@ async function main() {
 
   for (const schedule of SERVICE_SCHEDULES) {
     const occs = occurrences(schedule, now, 28);
-    const categoryId = catMap[schedule.categoryName];
+    const categoryId = catMap[schedule.categoryName] || sundayCat.id;
+    const eventTypeId = schedule.eventTypeKey ? typeByKey.get(schedule.eventTypeKey) ?? null : null;
 
     const meetingsData = occs.map(({ startTime, endTime }) => {
       const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
@@ -136,18 +126,19 @@ async function main() {
       skipDuplicates: true,
     });
     totalCreated += res.count;
-    console.log(`✓ ${schedule.title}: generated ${res.count} occurrence(s) (window total: ${occs.length})`);
+    console.log(`✓ ${schedule.title}: created ${res.count} new occurrence(s) (window count: ${occs.length})`);
   }
 
   const allMeetings = await prisma.meeting.findMany({
-    where: { serviceScheduleId: { in: SERVICE_SCHEDULES.map(s => s.id) } },
+    where: { serviceScheduleId: { in: SERVICE_SCHEDULES.map((s) => s.id) } },
     orderBy: { startTime: 'asc' },
     select: { id: true, title: true, startTime: true, endTime: true, status: true },
   });
 
   console.log(`\n🎉 Total scheduled recurring meetings in DB: ${allMeetings.length}`);
   for (const m of allMeetings) {
-    console.log(`  - ${m.title} | ${m.startTime.toISOString()} -> ${m.endTime?.toISOString()} | Status: ${m.status}`);
+    const lagosStr = new Date(m.startTime.getTime() + 60 * 60000).toISOString().replace('Z', '+01:00');
+    console.log(`  - ${m.title} | Lagos Time: ${lagosStr} | Status: ${m.status}`);
   }
 }
 

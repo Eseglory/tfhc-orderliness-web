@@ -30,6 +30,7 @@ export class MembersController {
 
   @Get()
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
   async getAll(
     @Query('status') status?: MemberStatus,
     @Query('subTeamId') subTeamId?: string,
@@ -40,23 +41,27 @@ export class MembersController {
 
   @Get('sub-teams')
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
   async getSubTeams() {
     return this.membersService.getSubTeams();
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.create')
   @Post('sub-teams')
   async createSubTeam(@Body() body: { name: string; description?: string }) {
     return this.membersService.createSubTeam(body);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Put('sub-teams/:id')
   async updateSubTeam(@Param('id') id: string, @Body() body: { name?: string; description?: string; active?: boolean }) {
     return this.membersService.updateSubTeam(id, body);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.delete')
   @Delete('sub-teams/:id')
   async deleteSubTeam(@Param('id') id: string) {
     return this.membersService.deleteSubTeam(id);
@@ -87,7 +92,7 @@ export class MembersController {
   }
 
   @Post('me/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadMyPhoto(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.membersService.updatePhoto(memberId, file);
@@ -100,7 +105,7 @@ export class MembersController {
   }
 
   @Post('me/banner')
-  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadMyBanner(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.membersService.updateBanner(memberId, file);
@@ -112,15 +117,23 @@ export class MembersController {
     return this.membersService.removeBanner(memberId);
   }
 
+  @Post('me/banner-preset')
+  async setMyBannerPreset(@CurrentUser('memberId') memberId: string | undefined, @Body() body: { bannerUrl: string }) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    return this.membersService.setBannerUrl(memberId, body.bannerUrl);
+  }
+
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Post(':id/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadPhoto(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updatePhoto(id, file);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Delete(':id/photo')
   async removePhoto(@Param('id') id: string) {
     await this.membersService.findOne(id);
@@ -128,14 +141,24 @@ export class MembersController {
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Post(':id/banner')
-  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 1 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
   async uploadBanner(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updateBanner(id, file);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
+  @Post(':id/banner-preset')
+  async setBannerPreset(@Param('id') id: string, @Body() body: { bannerUrl: string }) {
+    await this.membersService.findOne(id);
+    return this.membersService.setBannerUrl(id, body.bannerUrl);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Delete(':id/banner')
   async removeBanner(@Param('id') id: string) {
     await this.membersService.findOne(id);
@@ -144,11 +167,13 @@ export class MembersController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
   async getOne(@Param('id') id: string) {
     return this.membersService.findOne(id);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.create')
   @Post()
   async create(@Body() body: CreateMemberDto, @CurrentUser() user: any) {
     if (body.email && user.role !== Role.ADMIN) throw new ForbiddenException("Only administrators can approve Google access");
@@ -156,12 +181,42 @@ export class MembersController {
   }
 
   @Roles(Role.ADMIN)
+  @RequirePermissions('members.update')
   @Put(':id/google-access')
   async googleAccess(@Param('id') id: string, @Body() body: GoogleAccessDto, @CurrentUser('userId') actorId: string) {
     return this.membersService.setGoogleAccess(id, body, actorId);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.create')
+  @Post(':id/invite')
+  async inviteExistingMember(
+    @Param('id') id: string,
+    @CurrentUser('userId') actorId: string,
+  ) {
+    return this.membersService.inviteMember(id, actorId);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.create')
+  @Post('invite')
+  async inviteNewMember(
+    @Body() body: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phoneNumber?: string;
+      subTeamId?: string;
+      roleInUnit?: string;
+      gender?: string;
+    },
+    @CurrentUser('userId') actorId: string,
+  ) {
+    return this.membersService.inviteNewMember(body, actorId);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.update')
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: UpdateMemberDto) {
     return this.membersService.updateMember(id, body);

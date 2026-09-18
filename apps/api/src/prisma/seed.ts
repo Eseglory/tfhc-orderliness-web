@@ -3,13 +3,15 @@ import { config } from 'dotenv';
 import { syncSystemRoles } from '../common/rbac/sync-system-roles';
 import { DEFAULT_EVENT_TYPES } from '@tfhc/shared';
 import { SERVICE_SCHEDULES } from '../modules/recurring-services/service-schedules';
+import { seedWardrobeLookups } from './seed-wardrobe-lookups';
+import { seedWardrobeSeptemberRoster } from './seed-wardrobe-roster';
 
 config();
 const prisma = new PrismaClient();
 
 /**
  * Seeds real definitions and lookups only — RBAC roles, event types, meeting
- * categories, the recurring service schedules + venue config, and a single
+ * categories, wardrobe categories and colors, September uniform roster, the recurring service schedules + venue config, and a single
  * bootstrap Super Admin. It does NOT create sample members or attendance;
  * the real membership comes from `yarn workspace @tfhc/api import:data`.
  */
@@ -20,6 +22,10 @@ async function main() {
   }
 
   await syncSystemRoles(prisma);
+  await seedWardrobeLookups(prisma);
+  await seedWardrobeSeptemberRoster(prisma);
+
+
 
   for (const [i, t] of DEFAULT_EVENT_TYPES.entries()) {
     await prisma.eventType.upsert({
@@ -87,7 +93,16 @@ async function main() {
   for (const s of SERVICE_SCHEDULES) {
     await prisma.serviceSchedule.upsert({
       where: { id: s.id },
-      update: {},
+      update: {
+        title: s.title,
+        dayOfWeek: s.dayOfWeek,
+        startMinutes: s.startMinutes,
+        endMinutes: s.endMinutes,
+        categoryName: s.categoryName,
+        enabled: true,
+        eventTypeKey: s.eventTypeKey,
+        recurrenceRule: s.recurrenceRule as any,
+      },
       create: {
         id: s.id,
         title: s.title,
@@ -96,7 +111,8 @@ async function main() {
         endMinutes: s.endMinutes,
         categoryName: s.categoryName,
         enabled: true,
-        eventTypeKey: s.categoryName === 'Special Programme' ? 'SPECIAL_SERVICE' : 'SERVICE',
+        eventTypeKey: s.eventTypeKey,
+        recurrenceRule: s.recurrenceRule as any,
       },
     });
   }

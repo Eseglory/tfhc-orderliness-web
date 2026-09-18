@@ -76,6 +76,17 @@ export async function fetchApi<T = any>(
   }
 }
 
+export async function apiRequest<T = any>(
+  endpoint: string,
+  options: { method?: string; body?: any; headers?: Record<string, string> } = {}
+): Promise<T> {
+  const { body, ...rest } = options;
+  return fetchApi<T>(endpoint, {
+    ...rest,
+    body: body !== undefined ? (typeof body === 'string' || (typeof FormData !== 'undefined' && body instanceof FormData) ? body : JSON.stringify(body)) : undefined,
+  });
+}
+
 function tokenSubject(token: string | null): string | null {
   try {
     const part = token?.split('.')[1];

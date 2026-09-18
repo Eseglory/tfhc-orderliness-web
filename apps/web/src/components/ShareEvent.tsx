@@ -1,28 +1,177 @@
 'use client';
-import { useState } from 'react';
+
+import { useState, useRef, useEffect } from 'react';
 import { calendarFile, ShareableEvent } from '../lib/pwa/calendar';
 
 export function ShareEvent({ event }: { event: ShareableEvent }) {
-  const [status, setStatus] = useState('');
-  const share = async () => {
-    try {
-      const file = new File([calendarFile(event)], 'tfhc-event.ics', { type: 'text/calendar' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ title: event.title, files: [file] });
-      } else if (navigator.share) {
-        await navigator.share({ title: event.title, text: `${event.title}\n${new Date(event.startTime).toLocaleString()}\n${event.locationName || ''}` });
-      } else {
-        const url = URL.createObjectURL(file);
-        const link = document.createElement('a'); link.href = url; link.download = file.name;
-        document.body.appendChild(link); link.click(); link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        setStatus('Calendar file downloaded.');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
       }
-    } catch (error) {
-      if (error instanceof Error && error.name !== 'AbortError') setStatus('Sharing is unavailable. Try again in a supported browser.');
+    }
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const getGoogleCalendarUrl = () => {
+    const startIso = new Date(event.startTime).toISOString().replace(/-|:|\.\d+/g, '');
+    const endIso = event.endTime
+      ? new Date(event.endTime).toISOString().replace(/-|:|\.\d+/g, '')
+      : new Date(new Date(event.startTime).getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d+/g, '');
+
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title,
+      dates: `${startIso}/${endIso}`,
+      details: `${event.title} - The Father’s House Church Orderliness Unit`,
+      location: event.locationName || 'The Father’s House Church',
+    });
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  };
+
+  const downloadIcs = () => {
+    try {
+      const icsContent = calendarFile(event);
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${event.title.toLowerCase().replace(/[^a-z0-9]/g, '-')}.ics`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('✓ Calendar file (.ics) downloaded');
+      setMenuOpen(false);
+    } catch {
+      showToast('Failed to download calendar file');
     }
   };
-  return <div><button onClick={share} className="px-3 py-2 min-h-11 rounded-xl bg-surface-container text-xs font-semibold" aria-label={`Share ${event.title}`}>Share event</button>
-    {status && <p role="status" className="text-xs max-w-48">{status}</p>}
-  </div>;
+
+  const copyDetails = async () => {
+    const timeStr = new Date(event.startTime).toLocaleString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const text = `📌 ${event.title}\n🕒 ${timeStr}\n📍 ${event.locationName || 'The Father’s House Church'}`;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        showToast('✓ Event details copied to clipboard!');
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+        showToast('✓ Event details copied!');
+      }
+      setMenuOpen(false);
+    } catch {
+      showToast('Could not copy to clipboard');
+    }
+  };
+
+  const handleNativeShareOrMenu = async () => {
+    // If mobile with native share support, try native share first
+    const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile && typeof navigator.share === 'function') {
+      try {
+        const timeStr = new Date(event.startTime).toLocaleString('en-GB', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        await navigator.share({
+          title: event.title,
+          text: `📌 ${event.title}\n🕒 ${timeStr}\n📍 ${event.locationName || 'The Father’s House Church'}`,
+          url: window.location.href,
+        });
+        return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return; // User dismissed share sheet
+        }
+        // Fall back to opening menu if native share fails
+        setMenuOpen(true);
+      }
+    } else {
+      // On desktop or when native share is unavailable, toggle the options menu
+      setMenuOpen((prev) => !prev);
+    }
+  };
+
+  return (
+    <div className="relative inline-block" ref={menuRef}>
+      <button
+        onClick={handleNativeShareOrMenu}
+        className="flex items-center gap-1.5 px-3 py-2 min-h-10 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/30 text-xs font-semibold transition-all duration-150 active:scale-95 shadow-xs"
+        aria-label={`Share ${event.title}`}
+        aria-expanded={menuOpen}
+      >
+        <span className="material-symbols-outlined text-[16px] text-primary">share</span>
+        <span>Share</span>
+      </button>
+
+      {/* Dropdown Menu for Desktop & Fallbacks */}
+      {menuOpen && (
+        <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-xl p-1.5 animate-in fade-in zoom-in-95 duration-100">
+          <a
+            href={getGoogleCalendarUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-on-surface rounded-xl hover:bg-surface-container-high transition-colors"
+          >
+            <span className="material-symbols-outlined text-sm text-blue-600">event</span>
+            <span>Add to Google Calendar</span>
+          </a>
+
+          <button
+            onClick={downloadIcs}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-on-surface rounded-xl hover:bg-surface-container-high transition-colors text-left"
+          >
+            <span className="material-symbols-outlined text-sm text-emerald-600">download</span>
+            <span>Download iCal (.ics)</span>
+          </button>
+
+          <button
+            onClick={copyDetails}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-on-surface rounded-xl hover:bg-surface-container-high transition-colors text-left"
+          >
+            <span className="material-symbols-outlined text-sm text-amber-600">content_copy</span>
+            <span>Copy Event Details</span>
+          </button>
+        </div>
+      )}
+
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-20 right-4 z-50 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          {toastMessage}
+        </div>
+      )}
+    </div>
+  );
 }

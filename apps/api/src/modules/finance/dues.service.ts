@@ -109,7 +109,10 @@ export class DuesService {
     if (period.status === 'CLOSED') throw new BadRequestException('This period is closed');
 
     const members = await this.prisma.member.findMany({
-      where: { status: { in: ['ACTIVE', 'NEW_MEMBER'] } },
+      where: {
+        approvedMember: { status: 'ACTIVE' },
+        status: { in: ['ACTIVE', 'NEW_MEMBER'] },
+      },
       select: { id: true, status: true },
     });
     const existing = new Set(
@@ -324,13 +327,11 @@ export class DuesService {
 
       const periodIds = periods.map((p) => p.id);
 
-      // 2. Get all members who have an approved directory entry or active ecclesiastical status
+      // 2. Get all members who are active in the approved lookup table
       const members = await this.prisma.member.findMany({
         where: {
-          OR: [
-            { approvedMember: { isNot: null } },
-            { status: { in: ['ACTIVE', 'NEW_MEMBER'] } },
-          ],
+          approvedMember: { status: 'ACTIVE' },
+          status: { in: ['ACTIVE', 'NEW_MEMBER'] },
         },
         include: {
           approvedMember: { select: { email: true } },

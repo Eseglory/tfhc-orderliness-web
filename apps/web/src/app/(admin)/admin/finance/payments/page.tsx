@@ -10,6 +10,10 @@ import {
   Search,
   Filter,
   RefreshCw,
+  Eye,
+  FileText,
+  ExternalLink,
+  Download,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import { Badge, Button, EmptyState, Field, Modal, Spinner, inputClass, useToast } from '../../../../../components/ui';
@@ -32,6 +36,8 @@ interface Payment {
   status: string;
   rejectionReason: string | null;
   duesPeriod: string | null;
+  receiptUrl?: string | null;
+  receiptName?: string | null;
   createdAt: string;
 }
 
@@ -52,6 +58,7 @@ export default function PaymentsPage() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState('');
   const [rejecting, setRejecting] = useState<Payment | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<Payment | null>(null);
   const manage = can('payments.manage');
 
   const load = async () => {
@@ -76,7 +83,7 @@ export default function PaymentsPage() {
     setBusy(p.id);
     try {
       await fetchApi(`/finance/payments/${p.id}/confirm`, { method: 'POST', body: '{}' });
-      notify('Payment confirmed', 'success');
+      notify('Payment confirmed & credited to member dues', 'success');
       load();
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not confirm', 'error');
@@ -220,6 +227,7 @@ export default function PaymentsPage() {
                     <th className="px-5 py-3.5">Member</th>
                     <th className="px-4 py-3.5">Purpose &amp; Period</th>
                     <th className="px-4 py-3.5">Amount</th>
+                    <th className="px-4 py-3.5">Proof / Receipt</th>
                     <th className="px-4 py-3.5">Reference</th>
                     <th className="px-4 py-3.5">Status</th>
                     {manage && <th className="px-4 py-3.5 text-right">Actions</th>}
@@ -237,6 +245,19 @@ export default function PaymentsPage() {
                         {p.duesPeriod && <span className="block text-[11px] text-slate-400">{p.duesPeriod}</span>}
                       </td>
                       <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white text-sm">{naira(p.amount)}</td>
+                      <td className="px-4 py-3.5">
+                        {p.receiptUrl ? (
+                          <button
+                            onClick={() => setViewingReceipt(p)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 transition-all shadow-xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Proof</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">No receipt attached</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3.5 text-slate-500">
                         <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{p.reference}</span>
                         {p.payerReference && <span className="block text-[11px] text-slate-400">Payer: {p.payerReference}</span>}
@@ -275,6 +296,23 @@ export default function PaymentsPage() {
         )}
       </div>
 
+      {viewingReceipt && (
+        <ReceiptModal
+          payment={viewingReceipt}
+          manage={manage}
+          onClose={() => setViewingReceipt(null)}
+          onConfirm={async () => {
+            await confirm(viewingReceipt);
+            setViewingReceipt(null);
+          }}
+          onReject={() => {
+            const p = viewingReceipt;
+            setViewingReceipt(null);
+            setRejecting(p);
+          }}
+        />
+      )}
+
       {rejecting && (
         <RejectModal
           payment={rejecting}
@@ -287,6 +325,112 @@ export default function PaymentsPage() {
         />
       )}
     </AdminLayoutShell>
+  );
+}
+
+function ReceiptModal({
+  payment,
+  manage,
+  onClose,
+  onConfirm,
+  onReject,
+}: {
+  payment: Payment;
+  manage: boolean;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  onReject: () => void;
+}) {
+  const isPdf = payment.receiptUrl?.startsWith('data:application/pdf') || payment.receiptName?.toLowerCase().endsWith('.pdf');
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Payment Receipt &amp; Proof"
+      description={`${payment.member} (${payment.memberCode}) — ${naira(payment.amount)}`}
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <div>
+            {payment.receiptUrl && (
+              <a
+                href={payment.receiptUrl}
+                download={payment.receiptName || `receipt-${payment.reference}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Receipt
+              </a>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={onClose}>Close</Button>
+            {manage && payment.status === 'PENDING' && (
+              <>
+                <Button variant="danger" onClick={onReject}>
+                  Reject
+                </Button>
+                <Button variant="primary" onClick={onConfirm}>
+                  Confirm &amp; Credit
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        {/* Payment Summary Box */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 dark:bg-slate-950/70 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Purpose</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200 capitalize">{payment.purpose.replace('_', ' ').toLowerCase()}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Period</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{payment.duesPeriod || 'N/A'}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payer Ref / Name</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{payment.payerReference || 'N/A'}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reference</span>
+            <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{payment.reference}</span>
+          </div>
+        </div>
+
+        {/* Receipt Image / PDF Preview */}
+        {payment.receiptUrl ? (
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/5 dark:bg-black/30 p-2 overflow-hidden flex flex-col items-center justify-center min-h-[260px] max-h-[460px]">
+            {isPdf ? (
+              <div className="text-center p-8 space-y-3">
+                <FileText className="w-16 h-16 text-indigo-500 mx-auto" />
+                <p className="text-sm font-bold text-slate-900 dark:text-white">PDF Document Attached</p>
+                <p className="text-xs text-slate-400">{payment.receiptName || 'receipt.pdf'}</p>
+                <a
+                  href={payment.receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-all"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Open PDF in New Tab
+                </a>
+              </div>
+            ) : (
+              <img
+                src={payment.receiptUrl}
+                alt="Payment proof receipt"
+                className="max-h-[420px] w-auto max-w-full rounded-xl object-contain shadow-md"
+              />
+            )}
+          </div>
+        ) : (
+          <p className="text-center py-12 text-xs text-slate-400">No receipt file was attached for this declaration.</p>
+        )}
+      </div>
+    </Modal>
   );
 }
 

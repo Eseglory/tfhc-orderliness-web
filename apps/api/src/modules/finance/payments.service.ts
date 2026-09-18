@@ -17,8 +17,20 @@ export class PaymentsService {
   ) {}
 
   private parse(dto: Record<string, unknown>) {
-    if (!PURPOSES.includes(dto.purpose as PaymentPurpose)) throw new BadRequestException('Invalid payment purpose');
-    if (!METHODS.includes(dto.method as FinancePaymentMethod)) throw new BadRequestException('Invalid payment method');
+    if (!dto || typeof dto !== 'object') throw new BadRequestException('Invalid payload');
+    if (!dto.purpose || !PURPOSES.includes(dto.purpose as PaymentPurpose)) {
+      throw new BadRequestException(`Purpose must be one of: ${PURPOSES.join(', ')}`);
+    }
+    if (!dto.method || !METHODS.includes(dto.method as FinancePaymentMethod)) {
+      throw new BadRequestException(`Method must be one of: ${METHODS.join(', ')}`);
+    }
+
+    const metadata = dto.metadata && typeof dto.metadata === 'object'
+      ? dto.metadata
+      : dto.receiptUrl
+      ? { receiptUrl: String(dto.receiptUrl), receiptName: dto.receiptName ? String(dto.receiptName) : 'Receipt' }
+      : undefined;
+
     return {
       purpose: dto.purpose as PaymentPurpose,
       method: dto.method as FinancePaymentMethod,
@@ -27,6 +39,7 @@ export class PaymentsService {
       payerReference: dto.payerReference ? String(dto.payerReference).slice(0, 200) : null,
       description: dto.description ? String(dto.description).slice(0, 1000) : null,
       duesAssignmentId: dto.duesAssignmentId ? String(dto.duesAssignmentId) : null,
+      ...(metadata !== undefined ? { metadata: metadata as Prisma.InputJsonValue } : {}),
     };
   }
 
@@ -160,11 +173,13 @@ export class PaymentsService {
     paidOn: Date;
     status: string;
     rejectionReason: string | null;
+    metadata?: Prisma.JsonValue | null;
     createdAt: Date;
     confirmedAt: Date | null;
     member: { firstName: string; lastName: string; memberCode: string };
     duesAssignment: { period: { label: string } } | null;
   }) {
+    const meta = p.metadata && typeof p.metadata === 'object' ? (p.metadata as Record<string, unknown>) : null;
     return {
       id: p.id,
       reference: p.reference,
@@ -179,6 +194,9 @@ export class PaymentsService {
       status: p.status,
       rejectionReason: p.rejectionReason,
       duesPeriod: p.duesAssignment?.period.label ?? null,
+      receiptUrl: (meta?.receiptUrl as string) || null,
+      receiptName: (meta?.receiptName as string) || null,
+      metadata: p.metadata ?? null,
       createdAt: p.createdAt,
       confirmedAt: p.confirmedAt,
     };

@@ -88,7 +88,7 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({
 
           <Link
             href="/admin/approvals"
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+            className="text-xs font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08]"
           >
             Review All
           </Link>
@@ -146,7 +146,7 @@ export const PendingActionsPanel: React.FC<PendingActionsPanelProps> = ({
         <span>Instant email and mobile push notifications active</span>
         <Link
           href="/admin/approvals"
-          className="font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
+          className="font-bold text-[#f2320c] dark:text-red-400 hover:text-[#d82a08] flex items-center gap-1"
         >
           <span>Approvals Center</span>
           <ArrowRight className="w-3.5 h-3.5" />

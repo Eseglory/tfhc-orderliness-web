@@ -443,6 +443,7 @@ model Meeting {
   serviceCommitments   MemberServiceCommitment[]
   audiences            EventAudience[]
   invitations          EventInvitation[]
+  wardrobeSchedules    WardrobeSchedule[]
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -1340,3 +1341,139 @@ model ResumableUpload {
   @@index([expiresAt])
   @@map("resumable_uploads")
 }
+
+// ---------------------------------------------------------------------------
+// Visual Wardrobe Management Models
+// ---------------------------------------------------------------------------
+
+model WardrobeItem {
+  id          String                @id @default(uuid())
+  name        String
+  category    String                // e.g. "SUIT", "BLAZER", "SHIRT", "TROUSER", "SKIRT", "GOWN", "NATIVE", "AGBADA", "KAFTAN", "TIE", "SCARF", "SHOES", "ACCESSORY", "CAP"
+  description String?
+  gender      String                @default("ALL") // "ALL", "MALE", "FEMALE"
+  imageUrl    String?               @db.Text
+  active      Boolean               @default(true)
+  sortOrder   Int                   @default(0)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  variants    WardrobeItemVariant[]
+  outfitItems WardrobeOutfitItem[]
+
+  @@index([category])
+  @@index([active])
+  @@map("wardrobe_items")
+}
+
+model WardrobeItemVariant {
+  id          String               @id @default(uuid())
+  itemId      String
+  item        WardrobeItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  colorName   String               // e.g. "Navy Blue", "Black", "Emerald Green", "Burgundy", "White"
+  colorCode   String?              // e.g. "#1B2A4A", "#000000", "#50C878"
+  imageUrl    String?              @db.Text
+  active      Boolean              @default(true)
+  sortOrder   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  outfitItems WardrobeOutfitItem[]
+
+  @@index([itemId])
+  @@index([active])
+  @@map("wardrobe_item_variants")
+}
+
+model WardrobeOutfit {
+  id           String               @id @default(uuid())
+  title        String               // e.g. "Sunday Royal Navy Formal", "Youth Convention Native Wear"
+  description  String?
+  genderTarget String               @default("ALL") // "ALL", "BROTHERS", "SISTERS"
+  coverImageUrl String?             @db.Text
+  notes        String?              // Styling tips, accessories required
+  isTemplate   Boolean              @default(false)
+  active       Boolean              @default(true)
+  createdById  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  items        WardrobeOutfitItem[]
+  schedules    WardrobeSchedule[]
+
+  @@index([active])
+  @@index([isTemplate])
+  @@map("wardrobe_outfits")
+}
+
+model WardrobeOutfitItem {
+  id         String               @id @default(uuid())
+  outfitId   String
+  outfit     WardrobeOutfit       @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       WardrobeItem         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  variantId  String?
+  variant    WardrobeItemVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  layerOrder Int                  @default(0) // Order in which clothing pieces appear
+  required   Boolean              @default(true)
+  notes      String?              // e.g. "Long sleeve, cufflinks required"
+
+  @@index([outfitId])
+  @@index([itemId])
+  @@map("wardrobe_outfit_items")
+}
+
+model WardrobeSchedule {
+  id                String          @id @default(uuid())
+  outfitId          String
+  outfit            WardrobeOutfit  @relation(fields: [outfitId], references: [id], onDelete: Cascade)
+  title             String          // e.g. "Sunday 1st & 2nd Service", "Youth Convention Opening"
+  meetingId         String?
+  meeting           Meeting?        @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  serviceScheduleId String?
+  scheduledDate     DateTime        // Occurrence date & time
+  endDate           DateTime?       // Occurrence end date & time
+  eventType         String?         // "SUNDAY_SERVICE", "SPECIAL_PROGRAM", "MIDWEEK", "CONVENTION", "COMMUNION", etc.
+  status            String          @default("PUBLISHED") // "DRAFT", "PUBLISHED", "ARCHIVED", "CANCELLED"
+  instructions      String?
+  createdById       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([outfitId])
+  @@map("wardrobe_schedules")
+}
+
+model WardrobeCategory {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String   @unique
+  description String?
+  icon        String?
+  sortOrder   Int      @default(100)
+  isSystem    Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@map("wardrobe_categories")
+}
+
+model WardrobeColor {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String   @unique
+  hexCode     String
+  sortOrder   Int      @default(100)
+  isSystem    Boolean  @default(false)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@map("wardrobe_colors")
+}
+

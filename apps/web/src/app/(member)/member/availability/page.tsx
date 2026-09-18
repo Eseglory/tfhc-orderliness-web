@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
 
@@ -20,6 +21,7 @@ type AvailabilityResponse = {
 };
 
 export default function MemberAvailabilityPage() {
+  const router = useRouter();
   const [data, setData] = useState<AvailabilityResponse | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -71,9 +73,13 @@ export default function MemberAvailabilityPage() {
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
-            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
-          </div>
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
+            aria-label="Go back"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
           <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
         </div>
       </header>

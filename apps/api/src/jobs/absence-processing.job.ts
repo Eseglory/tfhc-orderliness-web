@@ -14,17 +14,35 @@ export class AbsenceProcessingJob {
   async processClosedMeetings() {
     const now = new Date();
 
-    // Find meetings whose attendance window has closed but are not yet marked CLOSED
+    // 1. Auto-activate scheduled meetings whose attendance window has opened
+    const dueForActivation = await this.prisma.meeting.findMany({
+      where: {
+        status: MeetingStatus.SCHEDULED,
+        attendanceOpenTime: { lte: now },
+        attendanceCloseTime: { gt: now },
+      },
+      select: { id: true },
+    });
+
+    for (const m of dueForActivation) {
+      await this.prisma.meeting.update({
+        where: { id: m.id },
+        data: { status: MeetingStatus.ACTIVE },
+      });
+      this.logger.log(`Automatically activated meeting ${m.id} for live attendance.`);
+    }
+
+    // 2. Find meetings whose attendance window has closed (ACTIVE or past SCHEDULED) but are not yet marked CLOSED
     const expiredMeetings = await this.prisma.meeting.findMany({
       where: {
-        status: MeetingStatus.ACTIVE,
+        status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
         attendanceCloseTime: { lte: now },
       },
     });
 
     if (expiredMeetings.length === 0) return;
 
-    this.logger.log(`Found ${expiredMeetings.length} meeting(s) due for automatic close-out.`);
+    this.logger.log(`Found ${expiredMeetings.length} meeting(s) due for automatic conclusion.`);
 
     for (const meeting of expiredMeetings) {
       await this.closeMeetingAndProcessAbsences(meeting.id);
@@ -35,7 +53,7 @@ export class AbsenceProcessingJob {
     return this.prisma.$transaction(async (tx) => {
       // 1. Atomic state update
       const updated = await tx.meeting.updateMany({
-        where: { id: meetingId, status: MeetingStatus.ACTIVE },
+        where: { id: meetingId, status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] } },
         data: { status: MeetingStatus.CLOSED },
       });
 

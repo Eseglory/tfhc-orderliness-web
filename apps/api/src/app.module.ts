@@ -35,6 +35,7 @@ import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
 import { ServicesModule } from './modules/services/services.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
+import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { CalendarModule } from './modules/calendar/calendar.module';
     ServicesModule,
     AppointmentsModule,
     CalendarModule,
+    WardrobeModule,
     AbsenceProcessingModule,
     AuthModule,
     AccessRolesModule,

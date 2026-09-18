@@ -23,23 +23,35 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setError('');
     const token = getAuthToken();
     if (!token) { router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`); return; }
-    fetchApi('/auth/me').then(user => {
-      if (cancelled || getAuthToken() !== token) return;
-      const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
-      if (pathname.startsWith('/admin') && !isAdminUser) {
-        router.replace('/member');
-      } else {
-        setAuthorizedPath(pathname);
-      }
-    }).catch((failure) => {
-      if (cancelled || getAuthToken() !== token) return;
-      if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403)) {
-        removeAuthToken();
-        router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
-      } else {
+
+    const authenticate = async (retriesLeft = 2) => {
+      try {
+        const user = await fetchApi('/auth/me');
+        if (cancelled || getAuthToken() !== token) return;
+        const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
+        if (pathname.startsWith('/admin') && !isAdminUser) {
+          router.replace('/member');
+        } else {
+          setAuthorizedPath(pathname);
+        }
+      } catch (failure) {
+        if (cancelled || getAuthToken() !== token) return;
+        if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403)) {
+          removeAuthToken();
+          router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
+          return;
+        }
+        if (retriesLeft > 0) {
+          setTimeout(() => {
+            if (!cancelled) authenticate(retriesLeft - 1);
+          }, 800);
+          return;
+        }
         setError('Unable to connect to your account. Check your connection and retry.');
       }
-    });
+    };
+
+    authenticate();
     return () => { cancelled = true; };
   }, [pathname, protectedRoute, router, attempt]);
 

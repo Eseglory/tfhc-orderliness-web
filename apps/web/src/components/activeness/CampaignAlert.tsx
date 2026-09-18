@@ -59,41 +59,64 @@ export function CampaignAlert() {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-inverse-surface/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl bg-surface-container-lowest p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-3">
-          <span className="material-symbols-outlined text-3xl text-primary">campaign</span>
-          <button onClick={dismiss} aria-label="Close" className="rounded-full p-1 text-on-surface-variant hover:bg-surface-container">
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-        <h2 className="mt-2 text-lg font-bold text-on-surface">{campaign.title}</h2>
-        {campaign.description && <p className="mt-1 text-sm text-on-surface-variant">{campaign.description}</p>}
-        <p className="mt-3 text-sm font-semibold text-on-surface">
-          {naira(campaign.balance)} outstanding
-          <span className="font-normal text-on-surface-variant">
-            {' '}· Deadline {new Date(campaign.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        </p>
-        {campaign.paymentAccount && (
-          <div className="mt-3 rounded-lg bg-surface-container-low p-3 text-xs">
-            <p className="font-semibold text-on-surface">{campaign.paymentAccount.bankName}</p>
-            <p>{campaign.paymentAccount.accountName}</p>
-            <p className="font-mono">{campaign.paymentAccount.accountNumber}</p>
+    <div className="relative overflow-hidden rounded-2xl border border-red-200/80 dark:border-red-900/60 bg-gradient-to-r from-red-50/90 via-orange-50/50 to-white dark:from-red-950/40 dark:via-slate-900 dark:to-slate-900 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2320c] text-white shadow-sm shadow-red-500/20">
+            <span className="material-symbols-outlined text-xl">campaign</span>
           </div>
-        )}
-        <div className="mt-4 flex gap-2">
-          <button onClick={dismiss} className="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container">
-            Remind me tomorrow
-          </button>
-          <Link
-            href="/member/dues"
-            onClick={dismiss}
-            className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-center text-sm font-semibold text-on-primary"
-          >
-            View &amp; pay
-          </Link>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                {campaign.title}
+              </h4>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-900/60 text-[#f2320c] dark:text-red-400">
+                Action Required
+              </span>
+            </div>
+            {campaign.description && (
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                {campaign.description}
+              </p>
+            )}
+            <p className="mt-1.5 text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+              <span className="text-[#f2320c] font-black">{naira(campaign.balance)} outstanding</span>
+              <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                Due by {new Date(campaign.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </p>
+            {campaign.paymentAccount && (
+              <div className="mt-2 text-[11px] text-slate-600 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg border border-slate-200/60 dark:border-slate-700">
+                <span className="font-semibold">{campaign.paymentAccount.bankName}</span> • <span>{campaign.paymentAccount.accountName}</span> • <span className="font-mono font-bold text-slate-900 dark:text-white">{campaign.paymentAccount.accountNumber}</span>
+              </div>
+            )}
+          </div>
         </div>
+
+        <button
+          onClick={dismiss}
+          aria-label="Dismiss today"
+          className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors shrink-0"
+        >
+          <span className="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center justify-end gap-2 pt-2 border-t border-red-100/80 dark:border-red-900/40">
+        <button
+          onClick={dismiss}
+          className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
+          Remind me later
+        </button>
+        <Link
+          href="/member/dues"
+          onClick={dismiss}
+          className="px-4 py-1.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-bold text-xs shadow-xs transition-transform active:scale-95 flex items-center gap-1"
+        >
+          <span>View &amp; Pay</span>
+          <span className="material-symbols-outlined text-sm">arrow_forward</span>
+        </Link>
       </div>
     </div>
   );

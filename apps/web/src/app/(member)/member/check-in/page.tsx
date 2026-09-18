@@ -1,10 +1,13 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
+import { LogoIcon } from '../../../../components/LogoIcon';
 import { calculateHaversineDistanceMeters } from '@tfhc/shared';
 
 export default function CheckInPage() {
+  const router = useRouter();
   const [meetings, setMeetings] = useState<any[]>([]);
   const [meetingId, setMeetingId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,16 +49,24 @@ export default function CheckInPage() {
   };
   const distance = location && meeting ? Math.round(calculateHaversineDistanceMeters(location, meeting)) : null;
   return (
-    <main className="min-h-screen max-w-xl mx-auto p-5 pb-28 space-y-5">
-      <div className="flex items-center justify-between">
-        <Link href="/member" className="inline-flex items-center gap-1 font-bold text-primary hover:underline">
-          <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          <span>Home</span>
-        </Link>
-        <span className="font-label-sm text-xs uppercase tracking-wider text-on-surface-variant font-bold">GPS Location Check</span>
-      </div>
+    <div className="bg-background text-on-background min-h-screen pb-28">
+      {/* Top App Bar */}
+      <header className="flex justify-between items-center w-full px-4 h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
+          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary">GPS Check In</h1>
+        </div>
+        <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
+          <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
+        </div>
+      </header>
 
-      <h1 className="text-2xl font-black text-primary">Check In</h1>
+      <main className="p-4 space-y-4 max-w-xl mx-auto">
 
       {loading ? (
         <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-center space-y-2">
@@ -169,6 +180,7 @@ export default function CheckInPage() {
           </Link>
         </section>
       )}
-    </main>
+      </main>
+    </div>
   );
 }

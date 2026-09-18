@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
 
 export default function MemberLeaderboardPage() {
+  const router = useRouter();
   const [period, setPeriod] = useState('month');
   const [team, setTeam] = useState('');
   const [teams, setTeams] = useState<any[]>([]);
@@ -35,13 +37,17 @@ export default function MemberLeaderboardPage() {
 
   return (
     <div className="bg-background text-on-background min-h-screen pb-safe antialiased flex flex-col font-body-md">
-      {/* TopAppBar matching Stitch Screen 11 */}
+      {/* TopAppBar */}
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center p-1">
-            <LogoIcon alt="Logo" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
+            aria-label="Go back"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
+          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Leaderboard</h1>
         </div>
         <Link href="/member/notifications" className="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:opacity-80 transition-all">
           <span className="material-symbols-outlined" data-icon="notifications">notifications</span>
@@ -136,6 +142,41 @@ export default function MemberLeaderboardPage() {
               ))}
             </div>
           </div>
+        </section>
+
+        {/* Cross-Navigation Links */}
+        <section className="px-edge-margin pb-stack-lg grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link
+            href="/member/analytics"
+            className="flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest hover:bg-surface-container-low transition-colors shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">monitoring</span>
+              </div>
+              <div>
+                <span className="font-label-md font-bold text-primary text-xs block">My Performance Analytics</span>
+                <span className="text-[11px] text-on-surface-variant">View points breakdown &amp; dual ring chart</span>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+          </Link>
+
+          <Link
+            href="/member/rewards"
+            className="flex items-center justify-between p-3.5 rounded-xl border border-outline-variant/30 bg-surface-container-lowest hover:bg-surface-container-low transition-colors shadow-xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-yellow-500/10 text-yellow-600 flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">workspace_premium</span>
+              </div>
+              <div>
+                <span className="font-label-md font-bold text-primary text-xs block">Milestones &amp; Rewards</span>
+                <span className="text-[11px] text-on-surface-variant">Check recognition eligibility criteria</span>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
+          </Link>
         </section>
       </main>
 

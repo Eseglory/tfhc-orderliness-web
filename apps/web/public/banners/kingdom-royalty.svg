@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="100%" height="100%">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1e0c2b" />
+          <stop offset="40%" stop-color="#3b0764" />
+          <stop offset="75%" stop-color="#6b21a8" />
+          <stop offset="100%" stop-color="#a855f7" />
+        </linearGradient>
+        <radialGradient id="gold" cx="75%" cy="25%" r="50%">
+          <stop offset="0%" stop-color="#fde047" stop-opacity="0.5" />
+          <stop offset="40%" stop-color="#eab308" stop-opacity="0.2" />
+          <stop offset="80%" stop-color="#3b0764" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="1600" height="500" fill="url(#bg)" />
+      <circle cx="1200" cy="125" r="450" fill="url(#gold)" />
+      <g stroke="#e9d5ff" stroke-width="1.5" fill="none" opacity="0.25">
+        <circle cx="1200" cy="125" r="120" />
+        <circle cx="1200" cy="125" r="200" stroke-dasharray="6 6" />
+        <circle cx="1200" cy="125" r="280" />
+      </g>
+      <path d="M0,410 Q450,330 900,420 T1600,375 L1600,500 L0,500 Z" fill="#12051c" opacity="0.8" />
+      <path d="M0,450 Q550,400 1100,460 T1600,430 L1600,500 L0,500 Z" fill="#08020d" opacity="0.95" />
+    </svg>

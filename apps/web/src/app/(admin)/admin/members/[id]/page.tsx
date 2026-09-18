@@ -144,6 +144,28 @@ export default function MemberCRMProfilePage() {
     notify('Note recorded successfully.', 'success');
   };
 
+  const [inviting, setInviting] = useState(false);
+
+  const handleSendInvite = async () => {
+    if (!member) return;
+    setInviting(true);
+    try {
+      const res = await fetchApi<{ status: string; message: string }>(`/members/${member.id}/invite`, {
+        method: 'POST',
+      });
+      notify(res.message || 'Platform invitation sent successfully.', 'success');
+      // Reload member data to refresh status
+      if (rawId) {
+        const updated = await fetchApi<any>(`/members/${rawId}`);
+        setMember(updated);
+      }
+    } catch (err: any) {
+      notify(err.message || 'Failed to send platform invitation.', 'error');
+    } finally {
+      setInviting(false);
+    }
+  };
+
   if (loading) {
     return (
       <AdminLayoutShell>
@@ -193,6 +215,7 @@ export default function MemberCRMProfilePage() {
   const excuseList = member.excuseRequests || [];
   const followUpList = member.followUpFlags || [];
   const isRegistered = Boolean(member.user?.emailVerifiedAt || member.user?.googleSubject || member.user?.passwordAuthEnabled);
+  const photoUrl = member.profilePhotoUrl || member.photoUrl || member.avatarUrl || member.user?.profilePhotoUrl || member.user?.photoUrl || member.approvedMember?.photoUrl || null;
 
   return (
     <AdminLayoutShell>
@@ -225,6 +248,17 @@ export default function MemberCRMProfilePage() {
 
           {/* Quick Actions */}
           <div className="flex flex-wrap items-center gap-2">
+            {!isRegistered && (
+              <button
+                onClick={handleSendInvite}
+                disabled={inviting}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+                title="Send Platform Invitation Email"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {inviting ? 'Sending Invite...' : 'Send Platform Invite'}
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('notes')}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/80 transition-all shadow-sm cursor-pointer"
@@ -241,7 +275,7 @@ export default function MemberCRMProfilePage() {
             </button>
             <Link
               href="/admin/members"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               Members Roster
@@ -251,15 +285,30 @@ export default function MemberCRMProfilePage() {
 
         {/* Master Profile Banner Card */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+          {member.bannerPhotoUrl ? (
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-30 dark:opacity-25 pointer-events-none transition-opacity"
+              style={{ backgroundImage: `url(${member.bannerPhotoUrl})` }}
+            />
+          ) : (
+            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+          )}
 
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             {/* Left: Avatar & Identity details */}
             <div className="flex items-start gap-4 sm:gap-5">
-              <div className="relative">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-indigo-900/30 border-2 border-white dark:border-slate-800">
-                  {`${member.firstName?.[0] || 'M'}${member.lastName?.[0] || ''}`}
-                </div>
+              <div className="relative shrink-0">
+                {photoUrl ? (
+                  <img
+                    src={photoUrl}
+                    alt={fullName}
+                    className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-lg shadow-indigo-900/20 border-2 border-white dark:border-slate-800 shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-indigo-700 via-indigo-800 to-slate-900 text-white flex items-center justify-center text-2xl font-black shadow-lg shadow-indigo-900/30 border-2 border-white dark:border-slate-800 shrink-0">
+                    {`${member.firstName?.[0] || 'M'}${member.lastName?.[0] || ''}`}
+                  </div>
+                )}
                 {isRegistered && (
                   <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center" title="Registered User">
                     <Check className="w-3 h-3 text-white stroke-[3]" />

@@ -17,7 +17,7 @@ describe('PWA database contracts', () => {
   const chat = new ChatService(prisma as any, { record: jest.fn() } as any);
   const uploads = new ResumableUploadsService(prisma as any, chat, new ChatAttachmentsService(), { fanOut: jest.fn() } as any);
   const auth = new JwtStrategy({ getOrThrow: () => 'isolated-test-secret' } as any, prisma as any, {} as any, cache as any);
-  const pwa = new PwaService(prisma as any, auth, new MembersService(prisma as any, cache as any));
+  const pwa = new PwaService(prisma as any, auth, new MembersService(prisma as any, cache as any, {} as any));
   const userId = randomUUID(), memberId = randomUUID(), roomId = randomUUID();
   const viewer = { userId, memberId, role: 'MEMBER', permissions: [] };
   beforeAll(async () => {

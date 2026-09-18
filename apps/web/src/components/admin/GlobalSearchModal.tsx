@@ -210,9 +210,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                   <div
                     className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                       item.category === 'member'
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400'
+                        ? 'bg-[#0b1c30] text-white dark:bg-slate-800 dark:text-slate-200'
                         : item.category === 'meeting'
-                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400'
+                        ? 'bg-red-100 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400'
                         : 'bg-surface-container-high text-on-surface-variant dark:bg-slate-800 dark:text-slate-300'
                     }`}
                   >

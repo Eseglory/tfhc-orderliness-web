@@ -53,7 +53,7 @@ export const AdminBreadcrumb: React.FC = () => {
     <nav className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 py-1 overflow-x-auto whitespace-nowrap scrollbar-none" aria-label="Breadcrumb">
       <Link
         href="/admin"
-        className="flex items-center gap-1 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
+        className="flex items-center gap-1 hover:text-[#f2320c] dark:hover:text-red-400 transition-colors font-medium"
       >
         <Home className="w-3.5 h-3.5" />
         <span className="hidden sm:inline">Admin</span>
@@ -66,7 +66,7 @@ export const AdminBreadcrumb: React.FC = () => {
           {matched.parent.href ? (
             <Link
               href={matched.parent.href}
-              className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium"
+              className="hover:text-[#f2320c] dark:hover:text-red-400 transition-colors font-medium"
             >
               {matched.parent.label}
             </Link>

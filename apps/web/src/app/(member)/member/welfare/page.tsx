@@ -1,7 +1,8 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '../../../../components/Navbar';
+import { useRouter } from 'next/navigation';
+import { LogoIcon } from '../../../../components/LogoIcon';
 import { ApprovalTimeline, ApprovalStepView } from '../../../../components/ApprovalTimeline';
 import { fetchApi } from '../../../../lib/api';
 
@@ -23,6 +24,7 @@ const badge = (s: string) =>
       : 'bg-secondary-container/40 text-on-secondary-container';
 
 export default function MemberWelfarePage() {
+  const router = useRouter();
   const [rows, setRows] = useState<WelfareRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,17 +78,27 @@ export default function MemberWelfarePage() {
   const field = 'w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20';
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <Navbar />
-      <main className="mx-auto max-w-2xl space-y-6 px-4 py-6">
-        <nav className="text-xs text-on-surface-variant">
-          <Link href="/member" className="hover:text-primary">Home</Link>
-          <span className="mx-1.5">/</span>
-          <span className="text-on-surface">Request and complaint</span>
-        </nav>
+    <div className="min-h-screen bg-background pb-28 text-on-background">
+      {/* Top App Bar */}
+      <header className="flex justify-between items-center w-full px-4 h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+          </button>
+          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary">Welfare &amp; Requests</h1>
+        </div>
+        <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
+          <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-on-surface">Request and Complaint</h1>
-          <p className="mt-1 text-sm text-on-surface-variant">Submit a request, welfare assistance, or complaint. Each submission is reviewed by leadership.</p>
+          <h2 className="text-xl font-bold tracking-tight text-primary">Request &amp; Welfare Support</h2>
+          <p className="text-xs text-on-surface-variant mt-0.5">Submit assistance requests or complaints for church leadership review.</p>
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-sm">

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 500" width="100%" height="100%">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1e130c" />
+          <stop offset="40%" stop-color="#3d1e03" />
+          <stop offset="75%" stop-color="#9a4d05" />
+          <stop offset="100%" stop-color="#f59e0b" />
+        </linearGradient>
+        <radialGradient id="sun" cx="70%" cy="30%" r="60%">
+          <stop offset="0%" stop-color="#fef3c7" stop-opacity="0.9" />
+          <stop offset="30%" stop-color="#f59e0b" stop-opacity="0.4" />
+          <stop offset="70%" stop-color="#b45309" stop-opacity="0" />
+        </radialGradient>
+        <linearGradient id="beam" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25" />
+          <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width="1600" height="500" fill="url(#bg)" />
+      <circle cx="1120" cy="150" r="450" fill="url(#sun)" />
+      <path d="M0,500 L600,0 L850,0 L250,500 Z" fill="url(#beam)" />
+      <path d="M400,500 L1100,0 L1300,0 L600,500 Z" fill="url(#beam)" opacity="0.6" />
+      <g fill="none" stroke="#fde68a" stroke-width="1.5" opacity="0.35">
+        <circle cx="1120" cy="150" r="180" stroke-dasharray="8 6" />
+        <circle cx="1120" cy="150" r="260" stroke-dasharray="12 8" />
+        <circle cx="1120" cy="150" r="340" stroke-dasharray="4 10" />
+      </g>
+      <path d="M0,420 Q400,340 800,420 T1600,380 L1600,500 L0,500 Z" fill="#0f0904" opacity="0.7" />
+      <path d="M0,450 Q500,400 1000,460 T1600,430 L1600,500 L0,500 Z" fill="#050301" opacity="0.9" />
+    </svg>

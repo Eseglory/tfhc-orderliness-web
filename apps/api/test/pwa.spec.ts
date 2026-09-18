@@ -78,19 +78,19 @@ describe('Push security and lifecycle', () => {
 });
 describe('Offline notification read contract', () => {
   test('explicit IDs scope an idempotent read to the authenticated member', async () => {
-    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any);
+    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any, {} as any);
     await service.readNotifications('member', ['notification']);
     expect(prisma.memberNotification.updateMany).toHaveBeenCalledWith({ where: { memberId: 'member', status: 'UNREAD', id: { in: ['notification'] } }, data: { status: 'READ', readAt: expect.any(Date) } });
   });
   test('legacy bulk reads remain compatible and an empty list does not mark new activity', async () => {
-    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any);
+    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any, {} as any);
     await service.readNotifications('member');
     expect(prisma.memberNotification.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { memberId: 'member', status: 'UNREAD' } }));
     await service.readNotifications('member', []);
     expect(prisma.memberNotification.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { memberId: 'member', status: 'UNREAD', id: { in: [] } } }));
   });
   test('rejects malformed or oversized queues', async () => {
-    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any);
+    const { prisma } = fixture(); const service = new MembersService(prisma as any, {} as any, {} as any);
     await expect(service.readNotifications('member', [null] as any)).rejects.toThrow(BadRequestException);
     await expect(service.readNotifications('member', Array(101).fill('id'))).rejects.toThrow(BadRequestException);
     expect(prisma.memberNotification.updateMany).not.toHaveBeenCalled();

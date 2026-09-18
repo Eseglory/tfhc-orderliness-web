@@ -18,6 +18,7 @@ import {
 import { AdminLayoutShell } from '../../../components/admin/AdminLayoutShell';
 import { AdminKpiCard } from '../../../components/admin/AdminKpiCard';
 import { AttendanceTrendsChart, ServiceDataPoint } from '../../../components/admin/AttendanceTrendsChart';
+import { AttendanceDistributionPieChart } from '../../../components/admin/AttendanceDistributionPieChart';
 import { TodayOperationsPanel, UpcomingMeetingItem } from '../../../components/admin/TodayOperationsPanel';
 import { MemberRetentionCard } from '../../../components/admin/MemberRetentionCard';
 import { ActiveTrackersPanel } from '../../../components/admin/ActiveTrackersPanel';
@@ -66,6 +67,22 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [exporting, setExporting] = useState<boolean>(false);
 
+  // Safe fetch helper that guarantees resolution within timeout
+  const safeFetch = <T,>(endpoint: string, fallback: T, timeoutMs = 2000): Promise<T> => {
+    return new Promise<T>((resolve) => {
+      const timer = setTimeout(() => resolve(fallback), timeoutMs);
+      fetchApi<T>(endpoint)
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res !== undefined && res !== null ? res : fallback);
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          resolve(fallback);
+        });
+    });
+  };
+
   // Fetch all live dashboard data
   const loadDashboardData = async (selectedDays: number) => {
     setLoading(true);
@@ -80,14 +97,17 @@ export default function AdminDashboardPage() {
         flagsData,
         auditLogsData,
       ] = await Promise.all([
-        fetchApi<DashboardStats>('/reports/dashboard').catch(() => null),
-        fetchApi<AnalyticsData>(`/reports/analytics?days=${selectedDays}`).catch(() => null),
-        fetchApi<{ activeMeeting: UpcomingMeetingItem | null; today: UpcomingMeetingItem[]; upcoming: UpcomingMeetingItem[] }>('/calendar/today-upcoming').catch(() => null),
-        fetchApi<any[]>('/excuses/pending').catch(() => []),
-        fetchApi<any[]>('/excuses/corrections/pending').catch(() => []),
-        fetchApi<any[]>('/approvals/pending').catch(() => []),
-        fetchApi<any[]>('/alerts').catch(() => []),
-        fetchApi<{ items: any[] }>('/audit-logs?limit=8').catch(() => ({ items: [] })),
+        safeFetch<DashboardStats | null>('/reports/dashboard', null),
+        safeFetch<AnalyticsData | null>(`/reports/analytics?days=${selectedDays}`, null),
+        safeFetch<{ activeMeeting: UpcomingMeetingItem | null; today: UpcomingMeetingItem[]; upcoming: UpcomingMeetingItem[] } | null>(
+          '/calendar/today-upcoming',
+          null
+        ),
+        safeFetch<any[]>('/excuses/pending', []),
+        safeFetch<any[]>('/excuses/corrections/pending', []),
+        safeFetch<any[]>('/approvals/pending', []),
+        safeFetch<any[]>('/alerts', []),
+        safeFetch<{ items: any[] }>('/audit-logs?limit=8', { items: [] }),
       ]);
 
       setStats(statsData);
@@ -182,7 +202,7 @@ export default function AdminDashboardPage() {
         {/* Executive Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#f2320c] dark:text-red-400">
               CAMPUS EXECUTIVE OPERATIONS
             </p>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-0.5">
@@ -203,7 +223,7 @@ export default function AdminDashboardPage() {
                   onClick={() => setDays(d)}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                     days === d
-                      ? 'bg-indigo-600 text-white shadow-xs'
+                      ? 'bg-[#0b1c30] text-white shadow-xs dark:bg-slate-800'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                   }`}
                 >
@@ -225,7 +245,7 @@ export default function AdminDashboardPage() {
             {/* Live Roster Button */}
             <Link
               href="/admin/live-meeting"
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-600/20 text-xs sm:text-sm font-semibold transition-all active:scale-95"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#f2320c] text-white hover:bg-[#d82a08] shadow-sm shadow-red-600/25 text-xs sm:text-sm font-semibold transition-all active:scale-95"
             >
               <Flame className="w-4 h-4 text-amber-300" />
               <span>Record Attendance</span>
@@ -301,9 +321,9 @@ export default function AdminDashboardPage() {
           />
         </div>
 
-        {/* Middle Section: Attendance Trends Chart + Today & Upcoming Operations */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left: Attendance Trends by Service (7 cols) */}
+        {/* Middle Section: Graph + Pie Chart Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+          {/* Left: Attendance Trends by Service Graph (7 cols) */}
           <div className="lg:col-span-7">
             <AttendanceTrendsChart
               services={analytics?.services || []}
@@ -313,36 +333,39 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          {/* Right: Today & Upcoming Operations (5 cols) */}
+          {/* Right: Status Distribution Pie / Donut Chart (5 cols) */}
           <div className="lg:col-span-5">
-            <TodayOperationsPanel
-              todayMeetings={todayMeetings}
-              upcomingMeetings={upcomingMeetings}
-              activeMeeting={activeMeeting}
+            <AttendanceDistributionPieChart
+              totals={analytics?.totals}
+              attendanceRate={analytics?.attendanceRate}
+              punctualityRate={analytics?.punctualityRate}
               loading={loading}
             />
           </div>
         </div>
 
-        {/* Bottom Section: 4 Operations Panels in 2x2 Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Member Retention & Milestones */}
-          <MemberRetentionCard
-            totalMembers={totalMembersCount}
-            memberStatuses={analytics?.members || { ACTIVE: totalMembersCount }}
-            attendanceRate={analytics?.attendanceRate}
-            loading={loading}
-          />
-
-          {/* Active Trackers & Goals */}
-          <ActiveTrackersPanel
-            activeFlagsCount={flagsCount}
+        {/* Operational Flow Row: Today & Upcoming Gatherings + Activity Feed */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          {/* Today & Upcoming Operations */}
+          <TodayOperationsPanel
+            todayMeetings={todayMeetings}
+            upcomingMeetings={upcomingMeetings}
+            activeMeeting={activeMeeting}
             loading={loading}
           />
 
           {/* Recent Ministry Activity Feed */}
           <ActivityFeedPanel
             activities={activities}
+            loading={loading}
+          />
+        </div>
+
+        {/* Action Center Row: Active Trackers & Goals + Pending Actions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Active Trackers & Goals */}
+          <ActiveTrackersPanel
+            activeFlagsCount={flagsCount}
             loading={loading}
           />
 
