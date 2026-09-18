@@ -38,6 +38,7 @@ import {
   Globe,
   AlertTriangle,
   MoveHorizontal,
+  XCircle,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi } from '../../../../lib/api';
@@ -928,68 +929,102 @@ export default function AdvancedCalendarPage() {
           </main>
         </div>
 
-        {/* Selected Item Detail Drawer Modal */}
+        {/* Selected Item Detail Drawer Modal (Dark Theme) */}
         {selectedEvent && (
-          <Modal
-            open={Boolean(selectedEvent)}
-            onClose={() => setSelectedEvent(null)}
-            title={selectedEvent.title}
-          >
-            <div className="space-y-4 text-xs sm:text-sm">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${DOMAIN_STYLES[selectedEvent.domainType].badgeClass}`}>
-                  {DOMAIN_STYLES[selectedEvent.domainType].label}
-                </span>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-800/80 flex items-start justify-between gap-4 bg-slate-900/50">
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  <div className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-0.5 border border-primary/25 shadow-xs">
+                    {selectedEvent.domainType === 'EVENT' ? (
+                      <CalendarIcon className="w-5 h-5" />
+                    ) : selectedEvent.domainType === 'MEETING' ? (
+                      <Users className="w-5 h-5" />
+                    ) : (
+                      <Clock className="w-5 h-5" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight">
+                      {selectedEvent.title}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${DOMAIN_STYLES[selectedEvent.domainType].badgeClass}`}>
+                        {DOMAIN_STYLES[selectedEvent.domainType].label}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Status: <strong className="text-white uppercase">{selectedEvent.status}</strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                <span className="text-xs text-slate-500">
-                  Status: <strong className="text-slate-900 dark:text-white uppercase">{selectedEvent.status}</strong>
-                </span>
+                <button
+                  onClick={() => setSelectedEvent(null)}
+                  className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer shrink-0"
+                  title="Close"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <Clock className="w-4 h-4 text-slate-400 mt-0.5" />
+              {/* Body */}
+              <div className="p-6 space-y-3.5 text-xs sm:text-sm">
+                {/* Time & Date Card */}
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-start gap-3.5">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5 border border-cyan-500/20">
+                    <Clock className="w-4 h-4" />
+                  </div>
                   <div>
-                    <p className="font-semibold text-slate-700 dark:text-slate-300">Time & Date</p>
-                    <p className="text-slate-900 dark:text-white">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Time &amp; Date</p>
+                    <p className="text-sm font-bold text-white mt-0.5">
                       {selectedEvent.startTime.toLocaleString()} — {selectedEvent.endTime ? selectedEvent.endTime.toLocaleTimeString() : 'Flexible'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
+                {/* Location Card */}
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-start gap-3.5">
+                  <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 border border-rose-500/20">
+                    <MapPin className="w-4 h-4" />
+                  </div>
                   <div>
-                    <p className="font-semibold text-slate-700 dark:text-slate-300">Location / Platform</p>
-                    <p className="text-slate-900 dark:text-white">{selectedEvent.locationName}</p>
+                    <p className="text-[11px] font-black uppercase tracking-wider text-slate-400">Location / Platform</p>
+                    <p className="text-sm font-medium text-slate-200 mt-0.5 leading-relaxed">{selectedEvent.locationName}</p>
                   </div>
                 </div>
 
+                {/* Google Meet Call Card */}
                 {selectedEvent.meetingUrl && (
-                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Video className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">Google Meet Video Call</p>
-                        <p className="text-[11px] text-blue-600 dark:text-blue-400 truncate max-w-xs">{selectedEvent.meetingUrl}</p>
+                  <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-800/60 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/25">
+                        <Video className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-white">Google Meet Video Call</p>
+                        <p className="text-[11px] text-blue-400 truncate mt-0.5">{selectedEvent.meetingUrl}</p>
                       </div>
                     </div>
                     <a
                       href={selectedEvent.meetingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/25 shrink-0 transition-all"
                     >
-                      Join
+                      Join Call
                     </a>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+              {/* Actions Footer */}
+              <div className="px-6 py-4 border-t border-slate-800/80 bg-slate-900/50 flex items-center justify-end gap-3 shrink-0">
                 <button
                   onClick={() => openRescheduleModal(selectedEvent)}
-                  className="px-4 py-2 rounded-xl bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 font-bold text-xs hover:bg-indigo-100 transition-colors"
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 font-bold text-xs transition-all cursor-pointer"
                 >
                   Reschedule Slot
                 </button>
@@ -1001,108 +1036,124 @@ export default function AdvancedCalendarPage() {
                       ? '/admin/meetings'
                       : '/admin/appointments'
                   }
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition-colors"
+                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs hover:bg-primary/90 transition-all shadow-lg shadow-primary/25"
                 >
                   Manage in {selectedEvent.domainType === 'EVENT' ? 'Events' : selectedEvent.domainType === 'MEETING' ? 'Meetings' : 'Appointments'}
                 </Link>
               </div>
             </div>
-          </Modal>
+          </div>
         )}
 
-        {/* Reschedule Modal with Conflict Detection */}
+        {/* Reschedule Modal with Conflict Detection (Dark Theme) */}
         {rescheduleModalOpen && rescheduleTarget && (
-          <Modal
-            open={rescheduleModalOpen}
-            onClose={() => setRescheduleModalOpen(false)}
-            title={`Reschedule: ${rescheduleTarget.title}`}
-          >
-            <div className="space-y-4">
-              <p className="text-xs text-slate-500">
-                Update date and time. Conflict detection checks existing internal calendars and Google Calendar events automatically.
-              </p>
-
-              {conflictWarning && (
-                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>{conflictWarning}</span>
-                </div>
-              )}
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">New Date</label>
-                  <input
-                    type="date"
-                    value={rescheduleDate}
-                    onChange={(e) => setRescheduleDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Start Time</label>
-                    <input
-                      type="time"
-                      value={rescheduleStartTime}
-                      onChange={(e) => setRescheduleStartTime(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
-                    />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center border border-indigo-500/20">
+                    <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">End Time</label>
-                    <input
-                      type="time"
-                      value={rescheduleEndTime}
-                      onChange={(e) => setRescheduleEndTime(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
-                    />
+                    <h3 className="text-lg font-black text-white">Reschedule: {rescheduleTarget.title}</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Automated conflict detection active</p>
                   </div>
                 </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">Reason for Reschedule (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Schedule adjustment per stakeholder request"
-                    value={rescheduleReason}
-                    onChange={(e) => setRescheduleReason(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-semibold text-xs"
-                  />
-                </div>
+                <button
+                  onClick={() => setRescheduleModalOpen(false)}
+                  className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={handleCheckConflict}
-                  disabled={checkingConflict}
-                  className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200"
-                >
-                  {checkingConflict ? 'Checking...' : 'Check Conflicts'}
-                </button>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800/80">
+                  Update date and time. Conflict detection checks existing internal calendars and Google Calendar events automatically.
+                </p>
 
-                <div className="flex items-center gap-2">
+                {conflictWarning && (
+                  <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>{conflictWarning}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3.5 text-xs">
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">New Date</label>
+                    <input
+                      type="date"
+                      value={rescheduleDate}
+                      onChange={(e) => setRescheduleDate(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white font-semibold text-xs focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Start Time</label>
+                      <input
+                        type="time"
+                        value={rescheduleStartTime}
+                        onChange={(e) => setRescheduleStartTime(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white font-semibold text-xs focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">End Time</label>
+                      <input
+                        type="time"
+                        value={rescheduleEndTime}
+                        onChange={(e) => setRescheduleEndTime(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white font-semibold text-xs focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">Reason for Reschedule (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Schedule adjustment per stakeholder request"
+                      value={rescheduleReason}
+                      onChange={(e) => setRescheduleReason(e.target.value)}
+                      className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white font-medium text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
                   <button
                     type="button"
-                    onClick={() => setRescheduleModalOpen(false)}
-                    className="px-3 py-2 rounded-xl text-slate-500 text-xs font-bold hover:bg-slate-100"
+                    onClick={handleCheckConflict}
+                    disabled={checkingConflict}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    Cancel
+                    {checkingConflict ? 'Checking...' : 'Check Conflicts'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveReschedule}
-                    disabled={savingReschedule}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs"
-                  >
-                    {savingReschedule ? 'Saving...' : 'Confirm Reschedule'}
-                  </button>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setRescheduleModalOpen(false)}
+                      className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveReschedule}
+                      disabled={savingReschedule}
+                      className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-black shadow-lg shadow-primary/25 disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingReschedule ? 'Saving...' : 'Confirm Reschedule'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </Modal>
+          </div>
         )}
 
         {/* Create Event Modal */}
