@@ -511,15 +511,18 @@ export default function WardrobeSchedulePage() {
                 key={sched.id}
                 className="group bg-card border rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-6"
               >
-                {/* Left side: Date Badge + Full Title & Info */}
+                {/* Left side: Date Badge (Navy Blue) + Full Title & Info */}
                 <div className="flex items-start sm:items-center gap-5 flex-1 min-w-0">
-                  {/* Visual Date Badge */}
-                  <div className="flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-indigo-500/10 border border-primary/20 text-foreground shrink-0 shadow-2xs">
-                    <span className="text-[11px] font-black uppercase text-primary tracking-wider">
+                  {/* Visual Date Badge (Navy Blue) */}
+                  <div className="flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#0f172a] border border-blue-900/60 text-white shrink-0 shadow-md shadow-slate-950/15 group-hover:border-blue-700/80 transition-all overflow-hidden relative">
+                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-sky-400" />
+                    <span className="text-[10px] sm:text-[11px] font-black uppercase text-sky-400 tracking-wider">
                       {dateObj.toLocaleDateString('default', { month: 'short' })}
                     </span>
-                    <span className="text-2xl sm:text-3xl font-black leading-none my-0.5">{dateObj.getDate()}</span>
-                    <span className="text-[10px] font-semibold text-muted-foreground">
+                    <span className="text-2xl sm:text-3xl font-black text-white leading-none my-0.5 tracking-tight">
+                      {dateObj.getDate()}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-300">
                       {dateObj.toLocaleDateString('default', { weekday: 'short' })}
                     </span>
                   </div>
