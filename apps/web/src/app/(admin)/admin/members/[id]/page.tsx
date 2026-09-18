@@ -66,6 +66,7 @@ export default function MemberCRMProfilePage() {
   const rawId = params?.id as string;
   const { user: currentUser } = useAuth();
   const { notify } = useToast();
+  const isSuperOwner = currentUser?.email?.toLowerCase() === 'engreseglory@gmail.com';
 
   const [activeTab, setActiveTab] = useState<'overview' | 'notes' | 'attendance'>('overview');
   const [member, setMember] = useState<any>(null);
@@ -253,7 +254,7 @@ export default function MemberCRMProfilePage() {
 
           {/* Quick Actions */}
           <div className="flex flex-wrap items-center gap-2">
-            {!isRegistered && (
+            {isSuperOwner && !isRegistered && (
               <button
                 onClick={handleSendInvite}
                 disabled={inviting}

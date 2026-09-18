@@ -85,6 +85,7 @@ const when = (iso: string | null) =>
 export default function AdminUsersAndTeamPage() {
   const { can, user, loading: authLoading } = useAuth();
   const { notify } = useToast();
+  const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
@@ -261,7 +262,7 @@ export default function AdminUsersAndTeamPage() {
               </Link>
             )}
 
-            {can('users.create') && (
+            {isSuperOwner && can('users.create') && (
               <button
                 onClick={() => setInviting(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
@@ -503,7 +504,7 @@ export default function AdminUsersAndTeamPage() {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {m.invitePending && can('users.create') && (
+                          {isSuperOwner && m.invitePending && can('users.create') && (
                             <button
                               disabled={busyId === m.id}
                               className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
@@ -691,7 +692,7 @@ export default function AdminUsersAndTeamPage() {
       )}
 
       {/* Invite Modal */}
-      {inviting && (
+      {isSuperOwner && inviting && (
         <InviteModal
           roles={roles}
           onClose={() => setInviting(false)}

@@ -10,6 +10,7 @@ import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role, MemberStatus } from '@tfhc/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
 
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('members')
@@ -192,9 +193,12 @@ export class MembersController {
   @Post(':id/invite')
   async inviteExistingMember(
     @Param('id') id: string,
-    @CurrentUser('userId') actorId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.inviteMember(id, actorId);
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite members.');
+    }
+    return this.membersService.inviteMember(id, user.userId);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
@@ -210,9 +214,12 @@ export class MembersController {
       roleInUnit?: string;
       gender?: string;
     },
-    @CurrentUser('userId') actorId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.inviteNewMember(body, actorId);
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite members.');
+    }
+    return this.membersService.inviteNewMember(body, user.userId);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)

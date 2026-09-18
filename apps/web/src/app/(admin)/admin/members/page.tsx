@@ -44,6 +44,7 @@ type MemberViewMode = 'table' | 'grid' | 'cards' | 'compact';
 export default function AdminMembersPage() {
   const { user } = useAuth();
   const { notify } = useToast();
+  const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
 
   const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -402,25 +403,27 @@ export default function AdminMembersPage() {
             </div>
 
             {/* Invite Member to Platform button */}
-            <button
-              onClick={() => {
-                setInviteForm({
-                  firstName: '',
-                  lastName: '',
-                  email: '',
-                  phoneNumber: '',
-                  subTeamId: '',
-                  roleInUnit: 'Member',
-                  gender: 'Male',
-                });
-                setInviteError('');
-                setShowInviteModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Invite Member to Platform</span>
-            </button>
+            {isSuperOwner && (
+              <button
+                onClick={() => {
+                  setInviteForm({
+                    firstName: '',
+                    lastName: '',
+                    email: '',
+                    phoneNumber: '',
+                    subTeamId: '',
+                    roleInUnit: 'Member',
+                    gender: 'Male',
+                  });
+                  setInviteError('');
+                  setShowInviteModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Invite Member to Platform</span>
+              </button>
+            )}
 
             {/* Lookup Directory link */}
             <Link
@@ -749,7 +752,7 @@ export default function AdminMembersPage() {
                               {/* Actions Column */}
                             <td className="px-5 py-3.5 text-right">
                               <div className="flex items-center justify-end gap-1.5">
-                                {!Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled) && (
+                                {isSuperOwner && !Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled) && (
                                   <button
                                     onClick={() => handleQuickInvite(m)}
                                     disabled={quickInvitingId === m.id}
@@ -1403,7 +1406,7 @@ export default function AdminMembersPage() {
         )}
 
         {/* Invite Member to Platform Modal */}
-        {showInviteModal && (
+        {isSuperOwner && showInviteModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 max-h-[90dvh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">

@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { LookupKind, LookupsService } from './lookups.service';
 
 const KINDS: LookupKind[] = ['event-types', 'meeting-categories', 'sub-teams'];
@@ -40,21 +41,30 @@ export class LookupsController {
   @RequirePermissions('lookups.manage')
   inviteSelected(
     @Body() body: { ids: string[] },
-    @CurrentUser('userId') userId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.inviteSelectedApprovedMembers(body?.ids ?? [], userId);
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+    }
+    return this.service.inviteSelectedApprovedMembers(body?.ids ?? [], user.userId);
   }
 
   @Post('approved-members/invite-all-eligible')
   @RequirePermissions('lookups.manage')
-  inviteAllEligible(@CurrentUser('userId') userId: string) {
-    return this.service.inviteAllEligibleApprovedMembers(userId);
+  inviteAllEligible(@CurrentUser() user: AuthenticatedUser) {
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+    }
+    return this.service.inviteAllEligibleApprovedMembers(user.userId);
   }
 
   @Post('approved-members/:id/invite')
   @RequirePermissions('lookups.manage')
-  inviteOne(@Param('id') id: string, @CurrentUser('userId') userId: string) {
-    return this.service.inviteOneApprovedMember(id, userId);
+  inviteOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
+      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+    }
+    return this.service.inviteOneApprovedMember(id, user.userId);
   }
 
   // =========================================================================

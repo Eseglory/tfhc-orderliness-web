@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, ConfirmDialog, EmptyState, Modal, Spinner, useToast } from '../ui';
 import { fetchApi, ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 
 export interface ApprovedMemberRow {
   id: string;
@@ -62,7 +63,10 @@ export interface BulkInviteResponse {
 }
 
 export function ApprovedMemberLookupTable() {
+  const { user } = useAuth();
   const { notify } = useToast();
+  const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
+
   const [rows, setRows] = useState<ApprovedMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -277,27 +281,29 @@ export function ApprovedMemberLookupTable() {
         </div>
 
         {/* Global / Selection Actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          {selectedIds.size > 0 && (
-            <button
-              onClick={handleInviteSelected}
-              disabled={bulkLoading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              Invite Selected ({selectedIds.size})
-            </button>
-          )}
+        {isSuperOwner && (
+          <div className="flex items-center gap-2 shrink-0">
+            {selectedIds.size > 0 && (
+              <button
+                onClick={handleInviteSelected}
+                disabled={bulkLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Invite Selected ({selectedIds.size})
+              </button>
+            )}
 
-          <button
-            onClick={() => setShowConfirmInviteAll(true)}
-            disabled={bulkLoading}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white shadow-sm transition-all disabled:opacity-50"
-          >
-            <Users className="w-3.5 h-3.5" />
-            Invite All Eligible Users
-          </button>
-        </div>
+            <button
+              onClick={() => setShowConfirmInviteAll(true)}
+              disabled={bulkLoading}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white shadow-sm transition-all disabled:opacity-50"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Invite All Eligible Users
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Table */}
@@ -322,20 +328,22 @@ export function ApprovedMemberLookupTable() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50/75 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                 <tr>
-                  <th className="px-4 py-3.5 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isAllSelected}
-                      onChange={toggleSelectAll}
-                      className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                    />
-                  </th>
+                  {isSuperOwner && (
+                    <th className="px-4 py-3.5 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        onChange={toggleSelectAll}
+                        className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-3.5">Name &amp; Code</th>
                   <th className="px-4 py-3.5">Email</th>
                   <th className="px-4 py-3.5">Sub-team / Details</th>
                   <th className="px-4 py-3.5">Invitation Status</th>
                   <th className="px-4 py-3.5">Platform Account</th>
-                  <th className="px-4 py-3.5 text-right">Action</th>
+                  {isSuperOwner && <th className="px-4 py-3.5 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -352,14 +360,16 @@ export function ApprovedMemberLookupTable() {
                         isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''
                       }`}
                     >
-                      <td className="px-4 py-3.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectRow(row.id)}
-                          className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
-                        />
-                      </td>
+                      {isSuperOwner && (
+                        <td className="px-4 py-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectRow(row.id)}
+                            className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        </td>
+                      )}
 
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-slate-900 dark:text-white text-sm">
@@ -391,24 +401,26 @@ export function ApprovedMemberLookupTable() {
                         )}
                       </td>
 
-                      <td className="px-4 py-3.5 text-right">
-                        {isAccepted ? (
-                          <span className="text-[11px] font-bold text-slate-400">Active</span>
-                        ) : (
-                          <button
-                            onClick={() => handleInviteSingle(row)}
-                            disabled={isInvitingThis || bulkLoading}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 transition-colors disabled:opacity-50"
-                          >
-                            {isInvitingThis ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Send className="w-3.5 h-3.5" />
-                            )}
-                            {isPending ? 'Resend Invite' : 'Invite to Become Member'}
-                          </button>
-                        )}
-                      </td>
+                      {isSuperOwner && (
+                        <td className="px-4 py-3.5 text-right">
+                          {isAccepted ? (
+                            <span className="text-[11px] font-bold text-slate-400">Active</span>
+                          ) : (
+                            <button
+                              onClick={() => handleInviteSingle(row)}
+                              disabled={isInvitingThis || bulkLoading}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 transition-colors disabled:opacity-50"
+                            >
+                              {isInvitingThis ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Send className="w-3.5 h-3.5" />
+                              )}
+                              {isPending ? 'Resend Invite' : 'Invite to Become Member'}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
