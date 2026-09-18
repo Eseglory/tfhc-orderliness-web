@@ -66,7 +66,7 @@ export class AuthService {
       throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     }
 
-    const { rawToken, currentMember } = await this.prisma.$transaction(async (tx) => {
+    const { user } = await this.prisma.$transaction(async (tx) => {
       const approved = await tx.approvedMember.findUnique({
         where: { normalizedEmail },
         include: { member: { include: { user: true } } },
@@ -145,14 +145,15 @@ export class AuthService {
       }
 
       const passwordHash = await argon2.hash(dto.password);
-      const rawToken = crypto.randomBytes(32).toString('hex');
       const verifyFields = {
         passwordHash,
         passwordAuthEnabled: true,
         googleSubject: null,
-        emailVerifiedAt: null,
-        emailVerifyTokenHash: hashInviteToken(rawToken),
-        emailVerifyExpiresAt: new Date(Date.now() + EMAIL_VERIFY_TTL_MS),
+        emailVerifiedAt: new Date(),
+        passwordChangedAt: new Date(),
+        lastLoginAt: new Date(),
+        emailVerifyTokenHash: null,
+        emailVerifyExpiresAt: null,
       };
 
       const user = await tx.user.create({
@@ -171,7 +172,7 @@ export class AuthService {
         },
       });
 
-      return { rawToken, currentMember: member };
+      return { user: { ...user, member } };
     }, { isolationLevel: 'Serializable', timeout: 20000 }).catch((error: any) => {
       if (error.code === 'P2002') {
         throw new ConflictException({
@@ -182,14 +183,7 @@ export class AuthService {
       throw error;
     });
 
-    const verifyUrl = `${webBaseUrl(this.config)}/verify-email?token=${rawToken}`;
-    const delivered = await this.sendVerificationEmail(normalizedEmail, currentMember.firstName || firstName, verifyUrl);
-    return {
-      pendingVerification: true,
-      // Only ever exposed in non-production when SMTP is unavailable, so local
-      // development and the e2e suite aren't blocked on a mail server.
-      verifyUrl: !delivered && !this.isProd() ? verifyUrl : undefined,
-    };
+    return this.buildAuthResponse(user as any);
   }
 
   async verifyEmail(dto: { token: string }) {
@@ -354,7 +348,11 @@ export class AuthService {
     }
 
     if (user.passwordAuthEnabled && !user.emailVerifiedAt) {
-      throw new ForbiddenException({ code: 'EMAIL_VERIFICATION_PENDING', message: 'Confirm your email address first. Check your inbox for the verification link.' });
+      // Auto-verify pre-approved church lookup table members
+      if (typeof this.prisma.user?.update === 'function') {
+        await this.prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } }).catch(() => undefined);
+      }
+      user.emailVerifiedAt = new Date();
     }
     if (!user.isActive) {
       throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });

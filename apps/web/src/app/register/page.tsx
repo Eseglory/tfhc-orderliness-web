@@ -1,22 +1,48 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchApi, ApiError } from '../../lib/api';
-import { AuthShell, AuthError, AuthNotice, AuthSubmit, authInputClass } from '../../components/AuthShell';
+import { useRouter } from 'next/navigation';
+import { fetchApi, saveAuthToken, saveAuthUser, ApiError } from '../../lib/api';
+import { AuthShell, AuthError, AuthSubmit, authInputClass } from '../../components/AuthShell';
+import { GoogleSignInButton } from '../../components/GoogleSignInButton';
+import { safeDestination } from '../../lib/pwa/deep-link';
 
 const MIN_PASSWORD = 12;
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
-  const [devUrl, setDevUrl] = useState<string | undefined>();
-  const [resent, setResent] = useState(false);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handleSuccessfulAuth = (data: any) => {
+    if (data?.accessToken) {
+      saveAuthToken(data.accessToken, true);
+      if (data.user) {
+        saveAuthUser(
+          {
+            userId: data.user.id,
+            email: data.user.email,
+            role: data.user.role,
+            memberId: data.user.member?.id,
+            memberCode: data.user.member?.memberCode,
+            firstName: data.user.member?.firstName,
+            lastName: data.user.member?.lastName,
+            permissions: data.user.permissions ?? data.permissions ?? [],
+            accessRoles: data.user.accessRoles ?? data.accessRoles ?? [],
+            isSuperAdmin: Boolean(data.user.isSuperAdmin ?? data.isSuperAdmin),
+          },
+          true,
+        );
+      }
+      const isPrivileged = data.user?.role === 'ADMIN' || data.user?.role === 'LEADER' || Boolean(data.user?.isSuperAdmin);
+      router.push(safeDestination(new URLSearchParams(window.location.search).get('next'), isPrivileged));
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,15 +51,14 @@ export default function RegisterPage() {
     if (form.password !== form.confirm) return setError('Passwords do not match.');
     setLoading(true);
     try {
-      const res = await fetchApi<{ pendingVerification: boolean; verifyUrl?: string }>('/auth/register', {
+      const res = await fetchApi<any>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           email: form.email.trim(),
           password: form.password,
         }),
       });
-      setDevUrl(res.verifyUrl);
-      setDone(true);
+      handleSuccessfulAuth(res);
     } catch (err: any) {
       if (err instanceof ApiError && err.message) {
         setError(err.message);
@@ -45,36 +70,21 @@ export default function RegisterPage() {
     }
   };
 
-  const resend = async () => {
-    setResent(false);
+  const handleGoogleCredential = async (idToken: string) => {
+    setLoading(true);
+    setError('');
     try {
-      const res = await fetchApi<{ ok: boolean; devUrl?: string }>('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email: form.email.trim() }) });
-      setDevUrl(res.devUrl ?? devUrl);
-      setResent(true);
-    } catch {
-      setResent(true);
+      const data = await fetchApi<any>('/auth/google/member', {
+        method: 'POST',
+        body: JSON.stringify({ idToken }),
+      });
+      handleSuccessfulAuth(data);
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Google sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
-
-  if (done) {
-    return (
-      <AuthShell title="Check your inbox" subtitle="One more step">
-        <AuthNotice>
-          We sent a confirmation link to <strong>{form.email.trim()}</strong>. Open it to activate your account and sign in.
-        </AuthNotice>
-        {devUrl && (
-          <p className="text-xs text-on-surface-variant break-all">
-            Dev: <a className="text-primary underline" href={devUrl}>{devUrl}</a>
-          </p>
-        )}
-        <button onClick={resend} className="text-sm text-primary underline self-center">Resend confirmation email</button>
-        {resent && <p className="text-xs text-center text-on-surface-variant">If that address needs a link, another one is on its way.</p>}
-        <div className="text-center text-sm text-on-surface-variant">
-          <Link href="/login" className="text-primary underline">Back to sign in</Link>
-        </div>
-      </AuthShell>
-    );
-  }
 
   return (
     <AuthShell
@@ -95,7 +105,7 @@ export default function RegisterPage() {
             autoComplete="email"
           />
           <p className="text-[11px] text-on-surface-variant mt-1 px-1">
-            Your details will automatically link from the member directory.
+            Your details will automatically link from the member lookup table.
           </p>
         </div>
         <div className="relative flex items-center">
@@ -139,10 +149,21 @@ export default function RegisterPage() {
           </button>
         </div>
         <AuthSubmit loading={loading}>
-          <span>{loading ? 'Creating account…' : 'Create account'}</span>
+          <span>{loading ? 'Creating account…' : 'Create account & Sign in'}</span>
           <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
         </AuthSubmit>
       </form>
+
+      <div className="relative my-2 flex items-center justify-center">
+        <div className="w-full border-t border-outline-variant/30" />
+        <span className="absolute bg-surface-container-lowest px-3 font-label-sm text-label-sm text-on-surface-variant">
+          or
+        </span>
+      </div>
+
+      <div className="flex flex-col items-center gap-2">
+        <GoogleSignInButton onCredential={handleGoogleCredential} />
+      </div>
     </AuthShell>
   );
 }

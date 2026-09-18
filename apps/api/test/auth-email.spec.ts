@@ -41,10 +41,11 @@ describe('AuthService.registerUser', () => {
       .rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('creates and links a user for an approved member, sends verification, and returns no session', async () => {
+  it('creates and links a user for an approved member, auto-verifies email, and returns auth session', async () => {
+    const createdUser = { id: 'u1', email: 'jane@tfhc.org', role: 'MEMBER', member: { id: 'mem1' } };
     const tx = {
       approvedMember: { findUnique: jest.fn(async () => activeApproved()), update: jest.fn() },
-      user: { create: jest.fn(async () => ({ id: 'u1' })), update: jest.fn(), findUnique: jest.fn(async () => null) },
+      user: { create: jest.fn(async () => createdUser), update: jest.fn(), findUnique: jest.fn(async () => null) },
       member: { update: jest.fn() },
     };
     const mail = { sendEmail: jest.fn(async () => ({ messageId: 'm' })) };
@@ -56,9 +57,8 @@ describe('AuthService.registerUser', () => {
     const res = await makeService(prisma as any, mail).registerUser({ email: 'Jane@tfhc.org', password: 'longenough12', firstName: 'Jane', lastName: 'Doe', phoneNumber: '08011112222' });
     expect(tx.user.create).toHaveBeenCalled();
     expect(tx.member.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'mem1' } }));
-    expect(mail.sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'jane@tfhc.org' }));
-    expect(res).toMatchObject({ pendingVerification: true });
-    expect(res).not.toHaveProperty('accessToken');
+    expect(res).toHaveProperty('accessToken');
+    expect(res).toHaveProperty('user');
   });
 
   it('refuses registration for an existing Google-registered member', async () => {
@@ -168,10 +168,16 @@ describe('AuthService.loginUser member rules', () => {
       .rejects.toMatchObject({ response: { code: 'PASSWORD_AUTH_DISABLED' } });
   });
 
-  it('blocks login until the email is verified', async () => {
-    const prisma = { user: { findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: true, emailVerifiedAt: null, isActive: true, member: { status: 'ACTIVE', approvedMember: { status: 'ACTIVE', normalizedEmail: 'm@tfhc.org' } } })) } };
-    await expect(makeService(prisma as any).loginUser({ email: 'm@tfhc.org', password: 'whatever12345' }))
-      .rejects.toMatchObject({ response: { code: 'EMAIL_VERIFICATION_PENDING' } });
+  it('auto-verifies pre-approved member on valid password login', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: true, emailVerifiedAt: null, isActive: true, member: { id: 'mem1', status: 'ACTIVE', approvedMember: { status: 'ACTIVE', normalizedEmail: 'm@tfhc.org' } } })),
+        update: jest.fn(async () => ({ id: 'u1' })),
+      },
+    };
+    const res = await makeService(prisma as any).loginUser({ email: 'm@tfhc.org', password: 'whatever12345' });
+    expect(res).toHaveProperty('accessToken');
+    expect(res).toHaveProperty('user');
   });
 });
 
