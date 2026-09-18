@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -38,6 +39,9 @@ import {
   Shirt,
   CalendarDays,
   ExternalLink,
+  FileText,
+  FileCheck,
+  Award,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import {
@@ -73,7 +77,7 @@ interface Meeting {
   _count?: { attendanceRecords: number; invitations: number };
 }
 
-type ViewMode = 'grid' | 'table' | 'compact' | 'timeline';
+type ViewMode = 'grid' | 'table' | 'compact' | 'timeline' | 'operations';
 type CategoryTab = 'all' | 'services' | 'meetings' | 'rehearsals' | 'specials' | 'archived';
 
 const STATUS_BADGES: Record<string, { label: string; color: string }> = {
@@ -95,7 +99,10 @@ const STATUS_BADGES: Record<string, { label: string; color: string }> = {
   },
 };
 
-export default function EventsManagementPage() {
+function EventsManagementContent() {
+  const searchParams = useSearchParams();
+  const initialViewParam = searchParams.get('view') as ViewMode | null;
+
   const { user, can, loading: authLoading } = useAuth();
   const { notify } = useToast();
 
@@ -106,7 +113,11 @@ export default function EventsManagementPage() {
   const [error, setError] = useState('');
 
   // View Mode
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    initialViewParam && ['grid', 'table', 'compact', 'timeline', 'operations'].includes(initialViewParam)
+      ? initialViewParam
+      : 'grid'
+  );
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,6 +125,9 @@ export default function EventsManagementPage() {
   const [formatFilter, setFormatFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [venueFilter, setVenueFilter] = useState('All');
+
+  // Selected session in Operations / Agenda mode
+  const [selectedFocusSession, setSelectedFocusSession] = useState<Meeting | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -130,15 +144,16 @@ export default function EventsManagementPage() {
 
   // Load view mode preference
   useEffect(() => {
+    if (initialViewParam) return;
     try {
       const saved = localStorage.getItem('tfhc_events_view_mode') as ViewMode;
-      if (saved && ['grid', 'table', 'compact', 'timeline'].includes(saved)) {
+      if (saved && ['grid', 'table', 'compact', 'timeline', 'operations'].includes(saved)) {
         setViewMode(saved);
       }
     } catch {
       // Ignore
     }
-  }, []);
+  }, [initialViewParam]);
 
   const handleSetViewMode = (mode: ViewMode) => {
     setViewMode(mode);
@@ -303,6 +318,13 @@ export default function EventsManagementPage() {
     return filteredEvents.slice(start, start + pageSize);
   }, [filteredEvents, currentPage, pageSize]);
 
+  // Auto-select focused session in operations view
+  useEffect(() => {
+    if (paginatedEvents.length > 0 && !selectedFocusSession) {
+      setSelectedFocusSession(paginatedEvents[0]);
+    }
+  }, [paginatedEvents, selectedFocusSession]);
+
   // Unique venues
   const uniqueVenues = useMemo(() => {
     const set = new Set<string>();
@@ -342,11 +364,11 @@ export default function EventsManagementPage() {
                 <Layers className="w-5 h-5" />
               </div>
               <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Events &amp; Service Management
+                Events, Services &amp; Agendas
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl">
-              Unified console for church worship services, team syncs &amp; meetings, rehearsals, duty rosters, and special conferences.
+              Consolidated management console for worship services, team syncs, rehearsals, order of business agendas, duty rosters, and special conferences.
             </p>
           </div>
 
@@ -358,13 +380,6 @@ export default function EventsManagementPage() {
             >
               <CalendarDays className="w-3.5 h-3.5 text-amber-400" />
               Calendar View
-            </Link>
-            <Link
-              href="/admin/meetings/dashboard"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-xs"
-            >
-              <Kanban className="w-3.5 h-3.5 text-blue-400" />
-              Operations Board
             </Link>
             <button
               onClick={handleExportRoster}
@@ -392,7 +407,7 @@ export default function EventsManagementPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                Schedule Event / Sync
+                Schedule Gathering / Sync
               </button>
             )}
           </div>
@@ -554,7 +569,7 @@ export default function EventsManagementPage() {
                 ))}
               </select>
 
-              {/* 4 VIEW MODE TOGGLE BUTTONS */}
+              {/* 5 VIEW MODE TOGGLE BUTTONS (Including Operations & Agendas Board) */}
               <div className="flex items-center bg-slate-100 dark:bg-slate-950 rounded-xl p-0.5 border border-slate-200 dark:border-slate-800">
                 <button
                   onClick={() => handleSetViewMode('grid')}
@@ -566,6 +581,17 @@ export default function EventsManagementPage() {
                   title="Grid Cards View"
                 >
                   <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleSetViewMode('operations')}
+                  className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    viewMode === 'operations'
+                      ? 'bg-amber-500 text-slate-950 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="Agendas & Operations Board"
+                >
+                  <Kanban className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => handleSetViewMode('table')}
@@ -737,6 +763,16 @@ export default function EventsManagementPage() {
                         </div>
 
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setSelectedFocusSession(evt);
+                              setViewMode('operations');
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                            title="View Agenda & Operations"
+                          >
+                            <Kanban className="w-3.5 h-3.5" />
+                          </button>
                           {canEdit && (
                             <button
                               onClick={() => {
@@ -786,7 +822,186 @@ export default function EventsManagementPage() {
               </div>
             )}
 
-            {/* 2. TABLE VIEW */}
+            {/* 2. OPERATIONS & AGENDAS SPLIT VIEW */}
+            {viewMode === 'operations' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left: Interactive Sessions Directory (5 cols) */}
+                <div className="lg:col-span-5 space-y-3">
+                  <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-400 uppercase tracking-wider text-[11px]">Select Gathering / Session</span>
+                    <span className="text-amber-400 font-bold">{paginatedEvents.length} Sessions</span>
+                  </div>
+                  {paginatedEvents.map((session) => {
+                    const isSelected = selectedFocusSession?.id === session.id;
+                    const badge = STATUS_BADGES[session.status] || STATUS_BADGES.CLOSED;
+                    const dateStr = new Date(session.startTime).toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                    const timeStr = new Date(session.startTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    return (
+                      <button
+                        key={session.id}
+                        type="button"
+                        onClick={() => setSelectedFocusSession(session)}
+                        className={`w-full text-left p-4 rounded-2xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500/60 shadow-lg shadow-amber-500/5'
+                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-mono font-bold uppercase text-amber-500">
+                            #{session.id.slice(0, 8).toUpperCase()}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${badge.color}`}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-black text-slate-900 dark:text-white line-clamp-1">
+                          {session.title}
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>{dateStr} · {timeStr}</span>
+                        </p>
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="truncate max-w-[180px]">{session.locationName}</span>
+                          <span className="font-bold text-white">{session._count?.attendanceRecords || 0} attendees</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right: Focused Agenda & Session Detail (7 cols) */}
+                <div className="lg:col-span-7">
+                  {selectedFocusSession ? (
+                    <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-100 dark:border-slate-800">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">
+                              {selectedFocusSession.eventType?.name || selectedFocusSession.category?.name || 'General Gathering'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${STATUS_BADGES[selectedFocusSession.status]?.color || ''}`}>
+                              {STATUS_BADGES[selectedFocusSession.status]?.label}
+                            </span>
+                          </div>
+                          <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                            {selectedFocusSession.title}
+                          </h2>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/admin/live-meeting/${selectedFocusSession.id}`}
+                            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shadow-md flex items-center gap-1.5"
+                          >
+                            <Flame className="w-3.5 h-3.5" />
+                            Live Check-in
+                          </Link>
+                          {canEdit && (
+                            <button
+                              onClick={() => {
+                                setEditing(selectedFocusSession);
+                                setFormOpen(true);
+                              }}
+                              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-300 hover:text-white"
+                              title="Edit Gathering"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Information Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                          <span className="text-slate-400 font-medium">Date &amp; Schedule</span>
+                          <p className="font-bold text-slate-900 dark:text-white mt-0.5">
+                            {new Date(selectedFocusSession.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                          <p className="text-slate-400">
+                            {new Date(selectedFocusSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                          <span className="text-slate-400 font-medium">Venue / Location</span>
+                          <p className="font-bold text-slate-900 dark:text-white mt-0.5 truncate">
+                            {selectedFocusSession.locationName}
+                          </p>
+                          <p className="text-slate-400">Radius: {selectedFocusSession.geofenceRadiusMeters}m</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                          <span className="text-slate-400 font-medium">Checked-in Verified</span>
+                          <p className="font-black text-amber-400 text-base mt-0.5">
+                            {selectedFocusSession._count?.attendanceRecords || 0}
+                          </p>
+                          <p className="text-slate-400">{selectedFocusSession.isCompulsory ? 'Compulsory' : 'Optional'}</p>
+                        </div>
+                      </div>
+
+                      {/* Description & Agenda Notes */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-amber-400" />
+                          Agenda &amp; Order of Business
+                        </h4>
+                        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 text-xs text-slate-300 leading-relaxed space-y-2">
+                          {selectedFocusSession.description || selectedFocusSession.notes ? (
+                            <>
+                              {selectedFocusSession.description && <p>{selectedFocusSession.description}</p>}
+                              {selectedFocusSession.notes && (
+                                <div className="pt-2 border-t border-slate-800 text-slate-400 font-mono text-[11px]">
+                                  {selectedFocusSession.notes}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-slate-500 italic py-2">
+                              Standard order of worship and operations agenda. No custom notes recorded.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Audience Scopes if Restricted */}
+                      {selectedFocusSession.visibility === 'RESTRICTED' && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-amber-400" />
+                            Designated Teams &amp; Rosters
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedFocusSession.audiences && selectedFocusSession.audiences.length > 0 ? (
+                              selectedFocusSession.audiences.map((aud, i) => (
+                                <span key={i} className="px-3 py-1 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200">
+                                  {aud.subTeam?.name || aud.scope || 'Designated Role'}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-500">Restricted to church executives</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center text-slate-500 border border-dashed border-slate-800 rounded-2xl">
+                      Select a session from the list to view order of business and agenda details.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 3. TABLE VIEW */}
             {viewMode === 'table' && (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
@@ -862,7 +1077,7 @@ export default function EventsManagementPage() {
               </div>
             )}
 
-            {/* 3. COMPACT VIEW */}
+            {/* 4. COMPACT VIEW */}
             {viewMode === 'compact' && (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800/60 overflow-hidden">
                 {paginatedEvents.map((evt) => {
@@ -905,7 +1120,7 @@ export default function EventsManagementPage() {
               </div>
             )}
 
-            {/* 4. TIMELINE VIEW */}
+            {/* 5. TIMELINE VIEW */}
             {viewMode === 'timeline' && (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6">
                 <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-8">
@@ -1072,5 +1287,13 @@ export default function EventsManagementPage() {
         />
       </div>
     </AdminLayoutShell>
+  );
+}
+
+export default function EventsManagementPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-slate-400">Loading Events &amp; Services Hub...</div>}>
+      <EventsManagementContent />
+    </Suspense>
   );
 }

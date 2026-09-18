@@ -106,7 +106,6 @@ const NAVIGATION_TREE: NavParent[] = [
       { href: '/admin/calendar', label: 'Calendar', icon: Calendar, anyOf: ['events.read'] },
       { href: '/admin/events', label: 'Events & Services', icon: Layers, anyOf: ['events.read'] },
       { href: '/admin/appointments', label: 'Appointments', icon: HeartHandshake, anyOf: ['events.read'] },
-      { href: '/admin/meetings/dashboard', label: 'Operations Board', icon: Kanban, anyOf: ['events.read'] },
       { href: '/admin/live-meeting', label: 'Live Attendance', icon: Flame, anyOf: ['attendance.manage'] },
     ],
   },
@@ -693,7 +692,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
           { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
           { href: '/admin/members', label: 'People', icon: Users },
           { href: '/admin/calendar', label: 'Activities', icon: Calendar },
-          { href: '/admin/meetings/dashboard', label: 'Operations', icon: Layers },
+          { href: '/admin/events', label: 'Events & Syncs', icon: Layers },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
