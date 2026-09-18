@@ -1,61 +1,40 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ApiError, fetchApi, getAuthToken, removeAuthToken } from '../lib/api';
+import { getAuthToken, removeAuthToken } from '../lib/api';
+import { useAuth } from '../lib/auth';
 import { LoadingScreen } from './LoadingScreen';
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [authorizedPath, setAuthorizedPath] = useState('');
-  const [error, setError] = useState('');
-  const [attempt, setAttempt] = useState(0);
+  const { user, loading, error, reload } = useAuth();
+  const token = typeof window !== 'undefined' ? getAuthToken() : null;
   const protectedRoute = pathname.startsWith('/admin') || pathname.startsWith('/member');
-  useEffect(() => {
-    const changed = () => { setAuthorizedPath(''); setAttempt(value => value + 1); };
-    window.addEventListener('tfhc:account-change', changed);
-    window.addEventListener('tfhc:logout', changed);
-    return () => { window.removeEventListener('tfhc:account-change', changed); window.removeEventListener('tfhc:logout', changed); };
-  }, []);
+
   useEffect(() => {
     if (!protectedRoute) return;
-    let cancelled = false;
-    setError('');
-    const token = getAuthToken();
-    if (!token) { router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`); return; }
-
-    const authenticate = async (retriesLeft = 2) => {
-      try {
-        const user = await fetchApi('/auth/me');
-        if (cancelled || getAuthToken() !== token) return;
-        const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
-        if (pathname.startsWith('/admin') && !isAdminUser) {
-          router.replace('/member');
-        } else {
-          setAuthorizedPath(pathname);
-        }
-      } catch (failure) {
-        if (cancelled || getAuthToken() !== token) return;
-        if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403)) {
-          removeAuthToken();
-          router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`);
-          return;
-        }
-        if (retriesLeft > 0) {
-          setTimeout(() => {
-            if (!cancelled) authenticate(retriesLeft - 1);
-          }, 800);
-          return;
-        }
-        setError('Unable to connect to your account. Check your connection and retry.');
+    if (!token) {
+      router.replace(`/login?next=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
+      return;
+    }
+    if (user) {
+      const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
+      if (pathname.startsWith('/admin') && !isAdminUser) {
+        router.replace('/member');
       }
-    };
+    }
+  }, [pathname, protectedRoute, router, token, user]);
 
-    authenticate();
-    return () => { cancelled = true; };
-  }, [pathname, protectedRoute, router, attempt]);
+  if (!protectedRoute) {
+    return <>{children}</>;
+  }
 
-  if (protectedRoute && error) {
+  if (!token) {
+    return <LoadingScreen message="Redirecting to sign in…" />;
+  }
+
+  if (error && !user) {
     return (
       <main className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 bg-background/95 dark:bg-slate-950/95 backdrop-blur-xl">
         <div className="max-w-md w-full p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl text-center space-y-4">
@@ -67,7 +46,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <div className="flex flex-col gap-2 pt-2">
             <button
               className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white font-bold text-sm shadow-md transition-all"
-              onClick={() => { setError(''); setAttempt(value => value + 1); }}
+              onClick={() => reload()}
             >
               Retry Connection
             </button>
@@ -86,8 +65,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (protectedRoute && authorizedPath !== pathname) {
+  if (loading && !user) {
     return <LoadingScreen message="Loading your account…" />;
+  }
+
+  if (user && pathname.startsWith('/admin')) {
+    const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
+    if (!isAdminUser) {
+      return <LoadingScreen message="Checking permissions…" />;
+    }
   }
 
   return <>{children}</>;
