@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../ui';
 import {
+  ChatContact,
   ChatMessage,
   ChatRoom,
   chatApi,
@@ -53,6 +54,7 @@ export function ChatWorkspace({
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
 
   const [typingBy, setTypingBy] = useState<Record<string, string>>({});
   const [roomTyping, setRoomTyping] = useState<Record<string, boolean>>({});
@@ -80,6 +82,10 @@ export function ChatWorkspace({
 
   useEffect(() => {
     void loadRooms();
+    chatApi
+      .contacts()
+      .then(setContacts)
+      .catch(() => undefined);
   }, [loadRooms]);
 
   const scrollToBottom = useCallback((smooth = false) => {
@@ -331,6 +337,18 @@ export function ChatWorkspace({
     });
   }, [rooms, search, roomFilter]);
 
+  // Filtered contacts list for user search
+  const filteredContacts = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase();
+    return contacts.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.roleInUnit && c.roleInUnit.toLowerCase().includes(q)) ||
+        (c.subTeam && c.subTeam.toLowerCase().includes(q)),
+    );
+  }, [contacts, search]);
+
   const totalUnread = rooms.reduce((s, r) => s + r.unreadCount, 0);
 
   // Filter messages by in-chat search query if active
@@ -405,11 +423,20 @@ export function ChatWorkspace({
               search
             </span>
             <input
-              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low pl-9 pr-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none"
-              placeholder="Search or start new chat…"
+              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low pl-9 pr-8 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none"
+              placeholder="Search chats or members…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 rounded-full p-0.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                title="Clear search"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -430,72 +457,212 @@ export function ChatWorkspace({
           ))}
         </div>
 
-        {/* Rooms Scroll List */}
+        {/* Rooms & Contacts Scroll List */}
         <div className="flex-1 overflow-y-auto">
-          {filteredRooms.length === 0 ? (
-            <div className="p-8 text-center text-xs text-on-surface-variant space-y-1">
-              <span className="material-symbols-outlined text-3xl opacity-50">forum</span>
-              <p className="font-semibold">No conversations found</p>
-            </div>
-          ) : (
-            filteredRooms.map((r) => {
-              const isDirect = r.type === 'DIRECT';
-              const presenceOnline = isDirect && r.direct ? socket.online.has(r.direct.memberId) : undefined;
-              const isTyping = roomTyping[r.id];
+          {search.trim() ? (
+            /* Search Results (Both Chats and Users) */
+            filteredRooms.length === 0 && filteredContacts.length === 0 ? (
+              <div className="p-8 text-center text-xs text-on-surface-variant space-y-1">
+                <span className="material-symbols-outlined text-3xl opacity-50">person_search</span>
+                <p className="font-semibold text-on-surface">No chats or members found</p>
+                <p className="text-[11px] text-on-surface-variant">No results matching “{search}”</p>
+              </div>
+            ) : (
+              <div>
+                {filteredRooms.length > 0 && (
+                  <div>
+                    <div className="px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-container-low/70 border-b border-outline-variant/10">
+                      Chats ({filteredRooms.length})
+                    </div>
+                    {filteredRooms.map((r) => {
+                      const isDirect = r.type === 'DIRECT';
+                      const presenceOnline = isDirect && r.direct ? socket.online.has(r.direct.memberId) : undefined;
+                      const isTyping = roomTyping[r.id];
 
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => openRoom(r.id)}
-                  className={`flex w-full items-center gap-3 border-b border-outline-variant/10 px-3.5 py-3 text-left transition-all ${
-                    r.id === activeId
-                      ? 'bg-surface-container border-l-4 border-l-primary'
-                      : 'hover:bg-surface-container-low'
-                  }`}
-                >
-                  <Avatar
-                    name={r.name}
-                    photoUrl={isDirect ? r.direct?.photoUrl : r.imageUrl}
-                    icon={isDirect ? undefined : roomIcon(r)}
-                    online={presenceOnline}
-                    size={42}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-bold text-on-surface">{r.name}</span>
-                      {r.lastMessage && (
-                        <span className="shrink-0 text-[10px] font-medium text-on-surface-variant">
-                          {new Date(r.lastMessage.createdAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                      )}
+                      return (
+                        <button
+                          key={r.id}
+                          onClick={() => {
+                            setSearch('');
+                            openRoom(r.id);
+                          }}
+                          className={`flex w-full items-center gap-3 border-b border-outline-variant/10 px-3.5 py-3 text-left transition-all ${
+                            r.id === activeId
+                              ? 'bg-surface-container border-l-4 border-l-primary'
+                              : 'hover:bg-surface-container-low'
+                          }`}
+                        >
+                          <Avatar
+                            name={r.name}
+                            photoUrl={isDirect ? r.direct?.photoUrl : r.imageUrl}
+                            icon={isDirect ? undefined : roomIcon(r)}
+                            online={presenceOnline}
+                            size={42}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-bold text-on-surface">{r.name}</span>
+                              {r.lastMessage && (
+                                <span className="shrink-0 text-[10px] font-medium text-on-surface-variant">
+                                  {new Date(r.lastMessage.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              )}
+                            </span>
+                            <span className="flex items-center justify-between gap-2 mt-0.5">
+                              {isTyping ? (
+                                <span className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
+                                  <span>typing…</span>
+                                </span>
+                              ) : (
+                                <span className="truncate text-xs text-on-surface-variant">
+                                  {r.lastMessage
+                                    ? `${r.lastMessage.type !== 'TEXT' && r.lastMessage.type !== 'SYSTEM' ? '📎 ' : ''}${
+                                        r.lastMessage.deletedAt ? 'Message deleted' : r.lastMessage.body || 'Attachment'
+                                      }`
+                                    : r.description || 'No messages yet'}
+                                </span>
+                              )}
+                              {r.unreadCount > 0 && (
+                                <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary shadow-xs">
+                                  {r.unreadCount}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {filteredContacts.length > 0 && (
+                  <div>
+                    <div className="px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant bg-surface-container-low/70 border-b border-outline-variant/10">
+                      Members & Contacts ({filteredContacts.length})
+                    </div>
+                    {filteredContacts.map((c) => (
+                      <button
+                        key={c.memberId}
+                        onClick={() => {
+                          setSearch('');
+                          void startDirect(c.memberId);
+                        }}
+                        className="flex w-full items-center gap-3 border-b border-outline-variant/10 px-3.5 py-2.5 text-left transition-all hover:bg-surface-container-low"
+                      >
+                        <Avatar
+                          name={c.name}
+                          photoUrl={c.photoUrl}
+                          online={socket.online.has(c.memberId)}
+                          size={40}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-bold text-on-surface">{c.name}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                              Chat
+                            </span>
+                          </div>
+                          <p className="truncate text-xs text-on-surface-variant">
+                            {[c.roleInUnit, c.subTeam].filter(Boolean).join(' · ') || 'Member'}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          ) : (
+            /* Regular Filtered Rooms */
+            filteredRooms.length === 0 ? (
+              roomFilter === 'DIRECT' ? (
+                <div className="p-6 text-center text-xs text-on-surface-variant space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-surface-container mx-auto flex items-center justify-center text-primary">
+                    <span className="material-symbols-outlined text-2xl">person</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-on-surface text-sm">No direct chats yet</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5">
+                      Search for any member above or start a direct conversation.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowContacts(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-on-primary shadow-sm hover:opacity-90 transition-opacity"
+                  >
+                    <span className="material-symbols-outlined text-sm">edit_square</span>
+                    <span>New Direct Message</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-xs text-on-surface-variant space-y-1">
+                  <span className="material-symbols-outlined text-3xl opacity-50">forum</span>
+                  <p className="font-semibold">No conversations found</p>
+                </div>
+              )
+            ) : (
+              filteredRooms.map((r) => {
+                const isDirect = r.type === 'DIRECT';
+                const presenceOnline = isDirect && r.direct ? socket.online.has(r.direct.memberId) : undefined;
+                const isTyping = roomTyping[r.id];
+
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => openRoom(r.id)}
+                    className={`flex w-full items-center gap-3 border-b border-outline-variant/10 px-3.5 py-3 text-left transition-all ${
+                      r.id === activeId
+                        ? 'bg-surface-container border-l-4 border-l-primary'
+                        : 'hover:bg-surface-container-low'
+                    }`}
+                  >
+                    <Avatar
+                      name={r.name}
+                      photoUrl={isDirect ? r.direct?.photoUrl : r.imageUrl}
+                      icon={isDirect ? undefined : roomIcon(r)}
+                      online={presenceOnline}
+                      size={42}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-bold text-on-surface">{r.name}</span>
+                        {r.lastMessage && (
+                          <span className="shrink-0 text-[10px] font-medium text-on-surface-variant">
+                            {new Date(r.lastMessage.createdAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex items-center justify-between gap-2 mt-0.5">
+                        {isTyping ? (
+                          <span className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
+                            <span>typing…</span>
+                          </span>
+                        ) : (
+                          <span className="truncate text-xs text-on-surface-variant">
+                            {r.lastMessage
+                              ? `${r.lastMessage.type !== 'TEXT' && r.lastMessage.type !== 'SYSTEM' ? '📎 ' : ''}${
+                                  r.lastMessage.deletedAt ? 'Message deleted' : r.lastMessage.body || 'Attachment'
+                                }`
+                              : r.description || 'No messages yet'}
+                          </span>
+                        )}
+                        {r.unreadCount > 0 && (
+                          <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary shadow-xs">
+                            {r.unreadCount}
+                          </span>
+                        )}
+                      </span>
                     </span>
-                    <span className="flex items-center justify-between gap-2 mt-0.5">
-                      {isTyping ? (
-                        <span className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
-                          <span>typing…</span>
-                        </span>
-                      ) : (
-                        <span className="truncate text-xs text-on-surface-variant">
-                          {r.lastMessage
-                            ? `${r.lastMessage.type !== 'TEXT' && r.lastMessage.type !== 'SYSTEM' ? '📎 ' : ''}${
-                                r.lastMessage.deletedAt ? 'Message deleted' : r.lastMessage.body || 'Attachment'
-                              }`
-                            : r.description || 'No messages yet'}
-                        </span>
-                      )}
-                      {r.unreadCount > 0 && (
-                        <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary shadow-xs">
-                          {r.unreadCount}
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                </button>
-              );
-            })
+                  </button>
+                );
+              })
+            )
           )}
         </div>
       </aside>
