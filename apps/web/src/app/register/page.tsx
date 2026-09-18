@@ -7,8 +7,9 @@ import { AuthShell, AuthError, AuthNotice, AuthSubmit, authInputClass } from '..
 const MIN_PASSWORD = 12;
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phoneNumber: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -29,9 +30,6 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email: form.email.trim(),
           password: form.password,
-          firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
-          phoneNumber: form.phoneNumber.trim(),
         }),
       });
       setDevUrl(res.verifyUrl);
@@ -86,19 +84,60 @@ export default function RegisterPage() {
     >
       <AuthError>{error}</AuthError>
       <form className="flex flex-col gap-stack-sm" onSubmit={submit}>
-        <div className="grid grid-cols-2 gap-3">
-          <input className={authInputClass} placeholder="First name" required value={form.firstName} onChange={set('firstName')} autoComplete="given-name" />
-          <input className={authInputClass} placeholder="Last name" required value={form.lastName} onChange={set('lastName')} autoComplete="family-name" />
+        <div>
+          <input
+            className={authInputClass}
+            type="email"
+            placeholder="Church member email address"
+            required
+            value={form.email}
+            onChange={set('email')}
+            autoComplete="email"
+          />
+          <p className="text-[11px] text-on-surface-variant mt-1 px-1">
+            Your details will automatically link from the member directory.
+          </p>
         </div>
-        <input className={authInputClass} type="email" placeholder="Email (must be on the approved list)" required value={form.email} onChange={set('email')} autoComplete="email" />
-        <input className={authInputClass} type="tel" placeholder="Phone number" required value={form.phoneNumber} onChange={set('phoneNumber')} autoComplete="tel" />
         <div className="relative flex items-center">
-          <input className={authInputClass} type={showPassword ? 'text' : 'password'} placeholder={`Password (${MIN_PASSWORD}+ characters)`} required minLength={MIN_PASSWORD} value={form.password} onChange={set('password')} autoComplete="new-password" />
-          <button type="button" aria-label="Toggle password visibility" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 text-outline hover:text-on-surface">
+          <input
+            className={authInputClass}
+            type={showPassword ? 'text' : 'password'}
+            placeholder={`Password (${MIN_PASSWORD}+ characters)`}
+            required
+            minLength={MIN_PASSWORD}
+            value={form.password}
+            onChange={set('password')}
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            aria-label="Toggle password visibility"
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute right-3 text-outline hover:text-on-surface"
+          >
             <span className="material-symbols-outlined text-xl">{showPassword ? 'visibility' : 'visibility_off'}</span>
           </button>
         </div>
-        <input className={authInputClass} type={showPassword ? 'text' : 'password'} placeholder="Confirm password" required value={form.confirm} onChange={set('confirm')} autoComplete="new-password" />
+        <div className="relative flex items-center">
+          <input
+            className={authInputClass}
+            type={showConfirmPassword ? 'text' : 'password'}
+            placeholder="Confirm password"
+            required
+            minLength={MIN_PASSWORD}
+            value={form.confirm}
+            onChange={set('confirm')}
+            autoComplete="new-password"
+          />
+          <button
+            type="button"
+            aria-label="Toggle confirm password visibility"
+            onClick={() => setShowConfirmPassword((v) => !v)}
+            className="absolute right-3 text-outline hover:text-on-surface"
+          >
+            <span className="material-symbols-outlined text-xl">{showConfirmPassword ? 'visibility' : 'visibility_off'}</span>
+          </button>
+        </div>
         <AuthSubmit loading={loading}>
           <span>{loading ? 'Creating account…' : 'Create account'}</span>
           <span className="material-symbols-outlined text-[18px]">arrow_forward</span>

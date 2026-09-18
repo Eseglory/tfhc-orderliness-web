@@ -46,9 +46,9 @@ export class AuthService {
   async registerUser(dto: {
     email: string;
     password: string;
-    firstName: string;
-    lastName: string;
-    phoneNumber: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string;
   }) {
     const emailValidation = validateEmail(dto.email, { allowTestDomains: !this.isProd() });
     if (!emailValidation.isValid) {
@@ -58,8 +58,9 @@ export class AuthService {
       });
     }
     const normalizedEmail = emailValidation.normalizedEmail;
-    const firstName = toPascalCase(dto.firstName);
-    const lastName = toPascalCase(dto.lastName);
+    const firstName = dto.firstName ? toPascalCase(dto.firstName) : 'Member';
+    const lastName = dto.lastName ? toPascalCase(dto.lastName) : '';
+    const phoneNumber = dto.phoneNumber?.trim() || '';
 
     if (!dto.password || typeof dto.password !== 'string' || dto.password.length < MIN_PASSWORD_LENGTH) {
       throw new BadRequestException(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
@@ -73,7 +74,7 @@ export class AuthService {
       if (!approved || approved.status !== 'ACTIVE') {
         throw new ForbiddenException({
           code: 'EMAIL_NOT_IN_LOOKUP_TABLE',
-          message: "This email is not on the church member directory / lookup table. Please contact the unit administrator to be added first.",
+          message: "You are not authorized to use this platform. Your email address is not in the church member lookup table. Please contact the administrator.",
         });
       }
 
@@ -117,7 +118,7 @@ export class AuthService {
               data: {
                 firstName: toPascalCase(matchRes.match.firstName || firstName),
                 lastName: toPascalCase(matchRes.match.lastName || lastName),
-                phoneNumber: matchRes.match.phoneNumber?.length >= 7 ? matchRes.match.phoneNumber : dto.phoneNumber.trim(),
+                phoneNumber: matchRes.match.phoneNumber?.length >= 7 ? matchRes.match.phoneNumber : (phoneNumber || '0000000000'),
               },
             })
           : null;
@@ -129,7 +130,7 @@ export class AuthService {
               memberCode,
               firstName,
               lastName,
-              phoneNumber: dto.phoneNumber.trim(),
+              phoneNumber: phoneNumber || '0000000000',
               status: MemberStatus.ACTIVE,
             },
           });
@@ -166,7 +167,7 @@ export class AuthService {
         data: {
           firstName: toPascalCase(member.firstName || firstName),
           lastName: toPascalCase(member.lastName || lastName),
-          phoneNumber: member.phoneNumber?.trim() || dto.phoneNumber.trim(),
+          phoneNumber: member.phoneNumber?.trim() || phoneNumber,
         },
       });
 
@@ -182,7 +183,7 @@ export class AuthService {
     });
 
     const verifyUrl = `${webBaseUrl(this.config)}/verify-email?token=${rawToken}`;
-    const delivered = await this.sendVerificationEmail(normalizedEmail, currentMember.firstName || dto.firstName, verifyUrl);
+    const delivered = await this.sendVerificationEmail(normalizedEmail, currentMember.firstName || firstName, verifyUrl);
     return {
       pendingVerification: true,
       // Only ever exposed in non-production when SMTP is unavailable, so local
