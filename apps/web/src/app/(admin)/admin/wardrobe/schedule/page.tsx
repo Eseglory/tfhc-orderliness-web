@@ -648,175 +648,197 @@ export default function WardrobeSchedulePage() {
         </div>
       )}
 
-      {/* MODAL: Single Schedule Form */}
+      {/* MODAL: Single Schedule Form (Create / Edit) */}
       {isScheduleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card border rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-4">
-              <div>
-                <h3 className="text-xl font-bold">
-                  {editingSchedule ? `Edit Schedule "${editingSchedule.title}"` : 'Schedule Wardrobe Outfit'}
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Designate what members will wear for this service or special gathering.
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-[2rem] max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4 bg-slate-50/70 dark:bg-slate-900/50">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5 border border-primary/20 shadow-xs">
+                  {editingSchedule ? <Edit2 className="w-5 h-5" /> : <CalendarIcon className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+                    {editingSchedule ? 'Edit Wardrobe Schedule' : 'Schedule Wardrobe Outfit'}
+                  </h3>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+                    {editingSchedule ? `Updating "${editingSchedule.title}"` : 'Designate what members will wear for this service or special gathering.'}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsScheduleModalOpen(false)}
-                className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition-colors"
+                className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer"
+                title="Close"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveSchedule} className="space-y-4">
-              {/* Event Title */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Schedule / Sunday Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Sunday 20th September: Native for All"
-                  value={scheduleTitle}
-                  onChange={(e) => setScheduleTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              {/* Event Type & Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <form onSubmit={handleSaveSchedule} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-6 overflow-y-auto space-y-5 flex-1 min-h-0">
+                {/* Event Title */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Event Type *
-                  </label>
-                  <select
-                    value={scheduleEventType}
-                    onChange={(e) => setScheduleEventType(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
-                  >
-                    {EVENT_TYPES.map((et) => (
-                      <option key={et.value} value={et.value}>
-                        {et.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Scheduled Date & Time *
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Schedule / Sunday Title <span className="text-primary">*</span>
                   </label>
                   <input
-                    type="datetime-local"
+                    type="text"
                     required
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
+                    placeholder="e.g. Sunday 6th September: Carton Trousers, White Shirt & Red Tie"
+                    value={scheduleTitle}
+                    onChange={(e) => setScheduleTitle(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
                   />
                 </div>
-              </div>
 
-              {/* Outfit Selection */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Select Visual Outfit Template *
-                </label>
-                {outfits.length === 0 ? (
-                  <p className="text-xs text-amber-600 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                    No outfits found. Create an outfit template first in the Wardrobe hub.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto p-1 border rounded-2xl bg-muted/20">
-                    {outfits.map((outfit) => {
-                      const isSelected = scheduleOutfitId === outfit.id;
-                      const outfitImg = getOutfitImage(outfit);
-                      return (
-                        <div
-                          key={outfit.id}
-                          onClick={() => setScheduleOutfitId(outfit.id)}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? 'bg-primary/10 border-primary shadow-xs'
-                              : 'bg-card border-border hover:bg-muted/60'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <img
-                              src={outfitImg}
-                              alt={outfit.title}
-                              className="w-10 h-10 rounded-lg object-cover border flex-shrink-0"
-                            />
-                            <div>
-                              <p className="text-xs font-bold text-foreground line-clamp-1">{outfit.title}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {outfit.gender} • {outfit.items.length} pieces
-                              </p>
-                            </div>
-                          </div>
+                {/* Event Type & Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                      Event Type <span className="text-primary">*</span>
+                    </label>
+                    <select
+                      value={scheduleEventType}
+                      onChange={(e) => setScheduleEventType(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
+                    >
+                      {EVENT_TYPES.map((et) => (
+                        <option key={et.value} value={et.value}>
+                          {et.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                          <span
-                            className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                              isSelected ? 'bg-primary text-primary-foreground border-primary' : 'border-muted-foreground/40'
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                      Date &amp; Time <span className="text-primary">*</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all shadow-2xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Outfit Selection Gallery */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-primary" /> Select Visual Outfit Template <span className="text-primary">*</span>
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">Click card to select</span>
+                  </div>
+
+                  {outfits.length === 0 ? (
+                    <p className="text-xs text-amber-600 p-4 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900">
+                      No outfits found. Create an outfit template first in the Wardrobe hub.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto p-1.5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30">
+                      {outfits.map((outfit) => {
+                        const isSelected = scheduleOutfitId === outfit.id;
+                        const outfitImg = getOutfitImage(outfit);
+                        return (
+                          <div
+                            key={outfit.id}
+                            onClick={() => setScheduleOutfitId(outfit.id)}
+                            className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                              isSelected
+                                ? 'bg-primary/10 border-primary ring-2 ring-primary/40 shadow-sm'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-2xs'
                             }`}
                           >
-                            {isSelected && <span className="w-2 h-2 rounded-full bg-white" />}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                              <img
+                                src={outfitImg}
+                                alt={outfit.title}
+                                className="w-14 h-14 rounded-xl object-cover border border-black/10 dark:border-white/10 shrink-0 bg-slate-900 shadow-2xs"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-black text-slate-900 dark:text-white leading-snug line-clamp-2">
+                                  {outfit.title}
+                                </p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                                    {outfit.gender === 'ALL' ? 'All Members' : outfit.gender}
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                    • {outfit.items.length} pieces
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
 
-              {/* Notes */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Special Instructions / Reminders
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Please ensure dress shoes are polished. Gowns should be floor or knee length."
-                  value={scheduleNotes}
-                  onChange={(e) => setScheduleNotes(e.target.value)}
-                  className="w-full px-4 py-2 bg-background border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 resize-none"
-                />
-              </div>
-
-              {/* Status Switch */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/30 border">
-                <div>
-                  <p className="text-xs font-bold text-foreground">Publication Status</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Draft entries remain hidden from member dashboards until published.
-                  </p>
+                            <div
+                              className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                                isSelected
+                                  ? 'bg-primary border-primary text-white shadow-xs'
+                                  : 'border-slate-300 dark:border-slate-700 bg-transparent'
+                              }`}
+                            >
+                              {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <select
-                  value={scheduleStatus}
-                  onChange={(e) => setScheduleStatus(e.target.value as any)}
-                  className="px-3 py-1.5 bg-background border rounded-xl text-xs font-bold focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="PUBLISHED">Published</option>
-                  <option value="DRAFT">Draft</option>
-                </select>
+
+                {/* Notes */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                    Special Instructions / Dress Code Reminders
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Please ensure dress shoes are polished. Gowns should be floor or knee length."
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none shadow-2xs"
+                  />
+                </div>
+
+                {/* Status Switch */}
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                  <div>
+                    <p className="text-xs font-extrabold text-slate-900 dark:text-white">Publication Status</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Draft entries remain hidden from member dashboards until published.
+                    </p>
+                  </div>
+                  <select
+                    value={scheduleStatus}
+                    onChange={(e) => setScheduleStatus(e.target.value as any)}
+                    className="px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white shadow-2xs focus:ring-2 focus:ring-primary/20"
+                  >
+                    <option value="PUBLISHED">Published</option>
+                    <option value="DRAFT">Draft</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              {/* Actions Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsScheduleModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border font-semibold text-sm hover:bg-muted transition-colors"
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingSchedule}
-                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-all shadow-md shadow-primary/20 disabled:opacity-50"
+                  className="px-7 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 disabled:opacity-50 cursor-pointer"
                 >
-                  {submittingSchedule ? 'Saving...' : editingSchedule ? 'Save Changes' : 'Confirm Schedule'}
+                  {submittingSchedule ? 'Saving...' : editingSchedule ? 'Save Changes' : 'Confirm & Schedule'}
                 </button>
               </div>
             </form>
@@ -826,23 +848,28 @@ export default function WardrobeSchedulePage() {
 
       {/* MODAL: Auto-Generate Bulk Monthly Sundays */}
       {isBulkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card border rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b pb-4">
-              <div className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-primary" />
-                <h3 className="text-xl font-bold">Auto-Generate Monthly Sundays</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-[2rem] max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-6 pb-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+                  <Wand2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">Auto-Generate Sundays</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quick monthly timetable builder</p>
+                </div>
               </div>
               <button
                 onClick={() => setIsBulkModalOpen(false)}
-                className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition-colors"
+                className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleGenerateMonthlySundays} className="space-y-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
+            <form onSubmit={handleGenerateMonthlySundays} className="p-6 space-y-4">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800">
                 Automatically calculates every Sunday date of the selected month, generates schedule slots, and
                 attaches your chosen default outfit. You can edit individual Sundays anytime afterwards.
               </p>
@@ -850,11 +877,11 @@ export default function WardrobeSchedulePage() {
               {/* Month & Year */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Month</label>
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">Month</label>
                   <select
                     value={bulkMonth}
                     onChange={(e) => setBulkMonth(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20"
                   >
                     {[
                       'January', 'February', 'March', 'April', 'May', 'June',
@@ -868,26 +895,26 @@ export default function WardrobeSchedulePage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Year</label>
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">Year</label>
                   <input
                     type="number"
                     value={bulkYear}
                     onChange={(e) => setBulkYear(Number(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               </div>
 
               {/* Default Outfit */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Default Outfit Template *
+                <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                  Default Outfit Template <span className="text-primary">*</span>
                 </label>
                 <select
                   required
                   value={bulkOutfitId}
                   onChange={(e) => setBulkOutfitId(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20"
                 >
                   {outfits.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -899,13 +926,13 @@ export default function WardrobeSchedulePage() {
 
               {/* Status */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   Initial Status
                 </label>
                 <select
                   value={bulkStatus}
                   onChange={(e) => setBulkStatus(e.target.value as any)}
-                  className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20"
                 >
                   <option value="PUBLISHED">Published (Immediately visible to members)</option>
                   <option value="DRAFT">Draft (Keep hidden until ready)</option>
@@ -913,18 +940,18 @@ export default function WardrobeSchedulePage() {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsBulkModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border text-xs font-semibold hover:bg-muted"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingBulk}
-                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 flex items-center gap-2 shadow-md shadow-primary/20"
+                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs hover:bg-primary/90 flex items-center gap-2 shadow-lg shadow-primary/25"
                 >
                   <Wand2 className="w-4 h-4" />
                   {submittingBulk ? 'Generating...' : 'Generate Sunday Timetable'}
