@@ -672,12 +672,22 @@ export default function AdminMembersPage() {
                                       <span>{m.firstName} {m.middleName ? m.middleName + ' ' : ''}{m.lastName}</span>
                                       <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-500" />
                                     </p>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                                       <span className="font-mono text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400">
                                         {m.memberCode}
                                       </span>
-                                      {m.roleInUnit && (
+                                      {m.roleInUnit === 'Executive' || m.user?.role === 'ADMIN' || m.user?.role === 'LEADER' ? (
+                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30">
+                                          <Shield className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                          Executive
+                                        </span>
+                                      ) : m.roleInUnit ? (
                                         <span className="text-[10px] text-slate-400">{m.roleInUnit}</span>
+                                      ) : null}
+                                      {m.profession && (
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[150px]">
+                                          • {m.profession}
+                                        </span>
                                       )}
                                     </div>
                                   </div>
@@ -703,10 +713,10 @@ export default function AdminMembersPage() {
                             {/* Phone Column */}
                             <td className="px-5 py-3.5">
                               {m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? (
-                                <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                                <a href={`tel:${m.phoneNumber}`} className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 hover:text-indigo-600 transition-colors">
                                   <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                                  <span className="font-mono">{m.phoneNumber}</span>
-                                </div>
+                                  <span className="font-mono font-medium">{m.phoneNumber}</span>
+                                </a>
                               ) : (
                                 <span className="text-xs text-slate-400 italic">Not provided</span>
                               )}
@@ -831,9 +841,22 @@ export default function AdminMembersPage() {
                           <h3 className="font-extrabold text-sm text-slate-900 dark:text-white line-clamp-1">
                             {m.firstName} {m.lastName}
                           </h3>
-                          <p className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                            {m.memberCode}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">
+                              {m.memberCode}
+                            </span>
+                            {m.roleInUnit === 'Executive' || m.user?.role === 'ADMIN' || m.user?.role === 'LEADER' ? (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30">
+                                <Shield className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                Executive
+                              </span>
+                            ) : null}
+                          </div>
+                          {m.profession && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                              {m.profession}
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-1 text-xs text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
@@ -843,7 +866,7 @@ export default function AdminMembersPage() {
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'No phone'}</span>
+                            <span className="font-mono">{m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'No phone'}</span>
                           </div>
                         </div>
                       </div>
@@ -903,13 +926,18 @@ export default function AdminMembersPage() {
                             <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
                               {m.firstName} {m.middleName ? m.middleName + ' ' : ''}{m.lastName}
                             </h3>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
                                 {m.memberCode}
                               </span>
-                              {m.roleInUnit && (
+                              {m.roleInUnit === 'Executive' || m.user?.role === 'ADMIN' || m.user?.role === 'LEADER' ? (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-300 border border-amber-500/30">
+                                  <Shield className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                                  Executive
+                                </span>
+                              ) : m.roleInUnit ? (
                                 <span className="text-xs text-slate-400">· {m.roleInUnit}</span>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -932,20 +960,20 @@ export default function AdminMembersPage() {
                         </div>
                         <div>
                           <span className="text-[10px] text-slate-400 font-bold uppercase block">Phone</span>
-                          <span className="font-semibold text-slate-900 dark:text-white block truncate">
+                          <span className="font-mono font-semibold text-slate-900 dark:text-white block truncate">
                             {m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : 'Not provided'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Attendance</span>
-                          <span className="font-bold text-indigo-600 dark:text-indigo-400 block">
-                            {attendanceCount} Services Recorded
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Profession</span>
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400 block truncate">
+                            {m.profession || 'Not specified'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Portal Access</span>
-                          <span className="font-bold text-slate-900 dark:text-white block">
-                            {isRegistered ? 'Active Account' : 'Directory Only'}
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Attendance</span>
+                          <span className="font-semibold text-slate-900 dark:text-white block truncate">
+                            {attendanceCount} Services logged
                           </span>
                         </div>
                       </div>
