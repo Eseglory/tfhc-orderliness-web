@@ -99,16 +99,14 @@ const NAVIGATION_TREE: NavParent[] = [
   },
   {
     key: 'events',
-    label: 'Events',
+    label: 'Events & Gatherings',
     icon: Calendar,
     anyOf: ['events.read', 'attendance.read', 'attendance.manage'],
     children: [
       { href: '/admin/calendar', label: 'Calendar', icon: Calendar, anyOf: ['events.read'] },
-      { href: '/admin/events', label: 'Events', icon: Sparkles, anyOf: ['events.read'] },
+      { href: '/admin/events', label: 'Events & Services', icon: Layers, anyOf: ['events.read'] },
       { href: '/admin/appointments', label: 'Appointments', icon: HeartHandshake, anyOf: ['events.read'] },
-      { href: '/admin/meetings', label: 'Meetings', icon: Clock, anyOf: ['events.read'] },
-      { href: '/admin/services', label: 'Services', icon: Layers, anyOf: ['events.read'] },
-      { href: '/admin/meetings/dashboard', label: 'Operations', icon: Kanban, anyOf: ['events.read'] },
+      { href: '/admin/meetings/dashboard', label: 'Operations Board', icon: Kanban, anyOf: ['events.read'] },
       { href: '/admin/live-meeting', label: 'Live Attendance', icon: Flame, anyOf: ['attendance.manage'] },
     ],
   },
@@ -397,7 +395,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                 <button
                   onClick={() => {
                     setQuickActionOpen(false);
-                    router.push('/admin/meetings?action=create');
+                    router.push('/admin/events?action=create');
                   }}
                   className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
