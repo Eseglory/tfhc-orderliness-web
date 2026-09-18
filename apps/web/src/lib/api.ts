@@ -54,11 +54,23 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
-    ...options,
-    cache: 'no-store',
-    headers,
-  });
+  const timeoutSignal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(18000) : undefined;
+  const signal = options.signal || timeoutSignal;
+
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
+      ...options,
+      cache: 'no-store',
+      headers,
+      signal,
+    });
+  } catch (netErr: any) {
+    if (netErr?.name === 'TimeoutError' || netErr?.name === 'AbortError') {
+      throw new ApiError('Server took too long to respond. The server may be waking up, please retry.', 504);
+    }
+    throw new ApiError(netErr?.message || 'Network connection error. Check your internet connection.', 0);
+  }
 
   if (!response.ok) {
     let errorMessage = 'An error occurred';
@@ -72,8 +84,6 @@ export async function fetchApi<T = any>(
   }
 
   if (response.status === 204) return undefined as T;
-  // Some endpoints (e.g. GET /meetings/active with no active meeting) legitimately
-  // return 200 with an empty body — Response.json() throws on that, so read text first.
   const body = await response.text();
   if (!body) return undefined as T;
   try {

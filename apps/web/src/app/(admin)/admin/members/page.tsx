@@ -120,8 +120,22 @@ export default function AdminMembersPage() {
     }
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      try {
+        const cached = sessionStorage.getItem('tfhc_cached_members_list');
+        const cachedTeams = sessionStorage.getItem('tfhc_cached_subteams_list');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMembers(parsed);
+            if (cachedTeams) setSubTeams(JSON.parse(cachedTeams));
+            setLoading(false);
+          }
+        }
+      } catch {}
+      setLoading((prev) => (members.length > 0 ? false : true));
+    }
     try {
       const [memData, teamData] = await Promise.all([
         fetchApi<any[]>('/members'),
@@ -130,8 +144,12 @@ export default function AdminMembersPage() {
       setMembers(memData || []);
       setSubTeams(teamData || []);
       setPageError('');
+      try {
+        sessionStorage.setItem('tfhc_cached_members_list', JSON.stringify(memData || []));
+        sessionStorage.setItem('tfhc_cached_subteams_list', JSON.stringify(teamData || []));
+      } catch {}
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Could not load members.');
+      setPageError(err instanceof Error ? err.message : 'Could not load members. Click refresh to retry.');
     } finally {
       setLoading(false);
     }
@@ -416,8 +434,14 @@ export default function AdminMembersPage() {
         </div>
 
         {pageError && (
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-700 dark:text-rose-300">
-            {pageError}
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 flex items-center justify-between gap-3 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            <span>{pageError}</span>
+            <button
+              onClick={() => loadData(false)}
+              className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold transition-all"
+            >
+              Retry Now
+            </button>
           </div>
         )}
 
@@ -446,6 +470,16 @@ export default function AdminMembersPage() {
 
             {/* Action Buttons & 4 View Switcher */}
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => loadData(false)}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                title="Refresh Member Registry"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+
               <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700 shadow-xs transition-all cursor-pointer"
