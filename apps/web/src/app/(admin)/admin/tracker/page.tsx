@@ -57,16 +57,18 @@ export default function AdminTrackerPage() {
   const [pendingExcuses, setPendingExcuses] = useState<any[]>([]);
   const [pendingCorrections, setPendingCorrections] = useState<any[]>([]);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [financeData, setFinanceData] = useState<any>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [fData, aData, eData, cData, rData] = await Promise.all([
+      const [fData, aData, eData, cData, rData, finData] = await Promise.all([
         can('excuses.review') ? fetchApi<any[]>('/alerts').catch(() => []) : Promise.resolve([]),
         can('approvals.act') || can('approvals.read') ? fetchApi<any[]>('/approvals/pending').catch(() => []) : Promise.resolve([]),
         can('excuses.review') ? fetchApi<any[]>('/excuses/pending').catch(() => []) : Promise.resolve([]),
         can('corrections.review') || can('excuses.review') ? fetchApi<any[]>('/excuses/corrections/pending').catch(() => []) : Promise.resolve([]),
         can('reports.view') ? fetchApi<any>('/reports/dashboard').catch(() => null) : Promise.resolve(null),
+        can('finance.read') ? fetchApi<any>('/finance/dashboard').catch(() => null) : Promise.resolve(null),
       ]);
 
       setFlags(fData || []);
@@ -74,6 +76,7 @@ export default function AdminTrackerPage() {
       setPendingExcuses(eData || []);
       setPendingCorrections(cData || []);
       setDashboardData(rData);
+      setFinanceData(finData);
     } catch (err) {
       console.error('Tracker load failed', err);
     } finally {
@@ -101,8 +104,17 @@ export default function AdminTrackerPage() {
   const stats: TrackerStat = useMemo(() => {
     const totalMembers = dashboardData?.totalMembers || 0;
     const activeMembers = dashboardData?.activeMembers || 0;
-    const recentAttendanceRate = dashboardData?.overallAttendanceRate ? Math.round(dashboardData.overallAttendanceRate) : 85;
+    const recentAttendanceRate = dashboardData?.overallAttendanceRate !== undefined && dashboardData?.overallAttendanceRate !== null
+      ? Math.round(dashboardData.overallAttendanceRate)
+      : (dashboardData?.avgAttendance ? Math.round(dashboardData.avgAttendance) : 0);
     const criticalFlags = flags.filter((f) => f.flagLevel === 3).length;
+
+    let computedDuesRate = 0;
+    if (financeData?.dues?.totalExpected && financeData.dues.totalExpected > 0) {
+      computedDuesRate = Math.min(100, Math.round((financeData.dues.collectedAmount / financeData.dues.totalExpected) * 100));
+    } else if (financeData?.dues?.collectedAmount && financeData.dues.collectedAmount > 0) {
+      computedDuesRate = 100;
+    }
 
     return {
       pendingApprovals: pendingApprovals.length,
@@ -113,9 +125,9 @@ export default function AdminTrackerPage() {
       totalMembers,
       activeMembers,
       recentAttendanceRate,
-      duesCollectionRate: 92,
+      duesCollectionRate: computedDuesRate,
     };
-  }, [flags, pendingApprovals, pendingExcuses, pendingCorrections, dashboardData]);
+  }, [flags, pendingApprovals, pendingExcuses, pendingCorrections, dashboardData, financeData]);
 
   const trackerModules = [
     {
@@ -141,7 +153,7 @@ export default function AdminTrackerPage() {
         ? 'Zero pending approval bottlenecks'
         : `${stats.pendingApprovals} requests currently awaiting administrative decision`,
       progressPct: stats.pendingApprovals === 0 ? 100 : Math.max(15, Math.round(100 - stats.pendingApprovals * 15)),
-      targetLabel: stats.pendingApprovals === 0 ? 'All Decided' : `${stats.pendingApprovals} In Queue`,
+      targetLabel: stats.pendingApprovals === 0 ? '0 in Queue' : `${stats.pendingApprovals} In Queue`,
       tone: (stats.pendingApprovals === 0 ? 'emerald' : 'indigo') as 'emerald' | 'indigo',
       badge: stats.pendingApprovals === 0 ? 'Queue Cleared' : `${stats.pendingApprovals} Pending SLA`,
       href: '/admin/approvals',
@@ -167,11 +179,13 @@ export default function AdminTrackerPage() {
       id: 'tracker-attendance',
       category: 'attendance',
       title: 'Overall Attendance & Punctuality Benchmark',
-      subtitle: `Overall attendance consistency target (Target: 80%, Current: ${stats.recentAttendanceRate}%)`,
-      progressPct: Math.min(100, stats.recentAttendanceRate),
-      targetLabel: `${stats.recentAttendanceRate}% Met`,
-      tone: (stats.recentAttendanceRate >= 80 ? 'emerald' : 'amber') as 'emerald' | 'amber',
-      badge: stats.recentAttendanceRate >= 80 ? 'Above Benchmark' : 'Below Target',
+      subtitle: stats.recentAttendanceRate === 0
+        ? 'Attendance benchmark tracking will activate automatically as gatherings conclude (Target: 80%)'
+        : `Overall attendance consistency target (Target: 80%, Current: ${stats.recentAttendanceRate}%)`,
+      progressPct: stats.recentAttendanceRate === 0 ? 0 : Math.min(100, stats.recentAttendanceRate),
+      targetLabel: stats.recentAttendanceRate === 0 ? '0% (No Records Yet)' : `${stats.recentAttendanceRate}% Met`,
+      tone: (stats.recentAttendanceRate === 0 ? 'indigo' : stats.recentAttendanceRate >= 80 ? 'emerald' : 'amber') as 'emerald' | 'amber' | 'indigo',
+      badge: stats.recentAttendanceRate === 0 ? 'No Data Yet' : stats.recentAttendanceRate >= 80 ? 'Above Benchmark' : 'Below Target',
       href: '/admin/reports',
       ctaText: 'View Detailed Trends',
       icon: BarChart3,
@@ -184,7 +198,7 @@ export default function AdminTrackerPage() {
       progressPct: stats.duesCollectionRate,
       targetLabel: `${stats.duesCollectionRate}% Collected`,
       tone: 'indigo' as 'indigo',
-      badge: 'Active Ledger',
+      badge: stats.duesCollectionRate > 0 ? 'Active Ledger' : 'No Collections Yet',
       href: '/admin/finance/dues',
       ctaText: 'Open Dues Ledger',
       icon: DollarSign,
@@ -310,16 +324,20 @@ export default function AdminTrackerPage() {
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                 ATTENDANCE BENCHMARK
               </span>
-              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+              <div className={`p-2 rounded-xl ${stats.recentAttendanceRate > 0 ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                 <Activity className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-600">{stats.recentAttendanceRate}%</span>
-              <span className="text-xs font-bold text-slate-400">Avg Consistency</span>
+              <span className={`text-2xl font-black ${stats.recentAttendanceRate > 0 ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>
+                {stats.recentAttendanceRate}%
+              </span>
+              <span className="text-xs font-bold text-slate-400">
+                {stats.recentAttendanceRate > 0 ? 'Avg Consistency' : 'No Records Yet'}
+              </span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Target: 80% attendance rate</span>
+              <span>{stats.recentAttendanceRate > 0 ? 'Target: 80% attendance rate' : 'Awaiting first concluded gathering'}</span>
             </div>
           </div>
         </div>
