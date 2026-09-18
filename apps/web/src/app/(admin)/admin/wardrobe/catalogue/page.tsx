@@ -562,17 +562,17 @@ export default function WardrobeCataloguePage() {
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-4 pt-0 border-t mt-4 flex items-center justify-between gap-2 bg-muted/20">
+                <div className="p-4 pt-3 border-t border-border/60 bg-slate-50/70 dark:bg-slate-900/40 flex items-center justify-between gap-2.5">
                   <button
                     onClick={() => openVariantManager(item)}
-                    className="flex-1 py-1.5 px-3 rounded-lg bg-secondary/80 hover:bg-secondary text-secondary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    className="flex-1 py-2 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-xs font-black flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.98]"
                   >
-                    <Palette className="w-3.5 h-3.5" /> Colors ({item.variants.length})
+                    <Palette className="w-3.5 h-3.5 text-primary" /> Colors ({item.variants.length})
                   </button>
 
                   <button
                     onClick={() => openEditItemModal(item)}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer border border-slate-200/60 dark:border-slate-700/60"
                     title="Edit Item"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -580,7 +580,7 @@ export default function WardrobeCataloguePage() {
 
                   <button
                     onClick={() => handleDeleteItem(item)}
-                    className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 transition-all cursor-pointer border border-red-200/60 dark:border-red-900/60"
                     title="Delete Item"
                   >
                     <Trash2 className="w-4 h-4" />
