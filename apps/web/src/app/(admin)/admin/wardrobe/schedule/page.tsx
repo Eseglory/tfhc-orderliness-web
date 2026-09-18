@@ -285,6 +285,25 @@ export default function WardrobeSchedulePage() {
     return '/wardrobe/native-all.jpg';
   };
 
+  const resolveColorHex = (colorHex?: string, colorName?: string, itemName?: string) => {
+    if (colorHex && colorHex.startsWith('#') && colorHex !== '#A855F7' && colorHex !== '#CBD5E1') {
+      return colorHex;
+    }
+    const text = `${colorName || ''} ${itemName || ''}`.toLowerCase();
+    if (text.includes('white') || text.includes('cream') || text.includes('ivory')) return '#F8FAFC';
+    if (text.includes('black') || text.includes('midnight') || text.includes('dark')) return '#0F172A';
+    if (text.includes('carton') || text.includes('tan') || text.includes('khaki') || text.includes('beige') || text.includes('brown')) return '#C29B38';
+    if (text.includes('red') || text.includes('crimson') || text.includes('burgundy') || text.includes('maroon') || text.includes('wine')) return '#DC2626';
+    if (text.includes('blue') || text.includes('navy') || text.includes('royal')) return '#1E40AF';
+    if (text.includes('green') || text.includes('emerald') || text.includes('olive') || text.includes('mint')) return '#16A34A';
+    if (text.includes('lemon') || text.includes('lime') || text.includes('yellow')) return '#EAB308';
+    if (text.includes('purple') || text.includes('violet') || text.includes('lilac')) return '#9333EA';
+    if (text.includes('pink') || text.includes('coral') || text.includes('rose') || text.includes('peach')) return '#F43F5E';
+    if (text.includes('gold') || text.includes('bronze') || text.includes('orange') || text.includes('amber')) return '#D97706';
+    if (text.includes('grey') || text.includes('gray') || text.includes('silver')) return '#64748B';
+    return colorHex || '#6366F1';
+  };
+
   const getDaysUntil = (dateStr: string) => {
     try {
       const target = new Date(dateStr);
@@ -566,14 +585,17 @@ export default function WardrobeSchedulePage() {
 
                     {/* Mini Swatches */}
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {sched.outfit.items.slice(0, 4).map((i, idx) => (
-                        <span
-                          key={idx}
-                          title={i.variant?.colorName || i.item?.name}
-                          className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-xs"
-                          style={{ backgroundColor: i.variant?.colorHex || '#CBD5E1' }}
-                        />
-                      ))}
+                      {sched.outfit.items.slice(0, 4).map((i, idx) => {
+                        const hex = resolveColorHex(i.variant?.colorHex, i.variant?.colorName, i.item?.name);
+                        return (
+                          <span
+                            key={idx}
+                            title={i.variant?.colorName || i.item?.name}
+                            className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-xs"
+                            style={{ backgroundColor: hex }}
+                          />
+                        );
+                      })}
                       <span className="text-[10px] font-medium text-muted-foreground ml-0.5">
                         {sched.outfit.items.length} pieces • <span className="text-primary font-bold">View</span>
                       </span>
@@ -978,7 +1000,7 @@ export default function WardrobeSchedulePage() {
                   <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
                     <div className="px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
                       <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{selectedScheduleForDetail.outfit.gender === 'ALL' ? 'For All Members' : selectedScheduleForDetail.outfit.gender}</span>
+                      <span>{selectedScheduleForDetail.outfit.gender === 'ALL' || !selectedScheduleForDetail.outfit.gender ? 'For All Members' : selectedScheduleForDetail.outfit.gender}</span>
                     </div>
 
                     <div className="px-3.5 py-1.5 rounded-full bg-indigo-950/80 backdrop-blur-md border border-indigo-500/40 text-indigo-300 text-xs font-black tracking-wide flex items-center gap-1.5 shadow-lg">
@@ -1031,17 +1053,17 @@ export default function WardrobeSchedulePage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {selectedScheduleForDetail.outfit.items.map((layer, idx) => {
-                      const hex = layer.variant?.colorHex || '#A855F7';
+                      const hex = resolveColorHex(layer.variant?.colorHex, layer.variant?.colorName, layer.item?.name);
                       return (
                         <div
                           key={idx}
-                          className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 transition-all flex items-center gap-3.5 shadow-xs"
+                          className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/70 hover:bg-slate-900 transition-all flex items-center gap-3.5 shadow-xs"
                         >
                           <div
-                            className="w-9 h-9 rounded-xl border-2 border-white/20 shadow-md flex-shrink-0 flex items-center justify-center"
+                            className="w-10 h-10 rounded-xl border-2 border-white/20 shadow-md flex-shrink-0 flex items-center justify-center relative overflow-hidden"
                             style={{ backgroundColor: hex }}
                           >
-                            <span className="text-[10px] font-black text-white/90 drop-shadow-xs uppercase">
+                            <span className="text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase">
                               L{idx + 1}
                             </span>
                           </div>
@@ -1050,14 +1072,14 @@ export default function WardrobeSchedulePage() {
                               {layer.item?.name || 'Garment Piece'}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] font-semibold text-slate-400">
+                              <span className="text-[10px] font-semibold text-slate-300">
                                 {layer.variant?.colorName || 'Prescribed Color'}
                               </span>
                               {layer.item?.category && (
                                 <>
                                   <span className="text-slate-600">•</span>
                                   <span className="text-[10px] text-indigo-400 font-medium capitalize">
-                                    {layer.item.category.toLowerCase()}
+                                    {layer.item.category.replace(/_/g, ' ').toLowerCase()}
                                   </span>
                                 </>
                               )}
