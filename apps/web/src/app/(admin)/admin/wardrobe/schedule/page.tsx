@@ -502,7 +502,6 @@ export default function WardrobeSchedulePage() {
           {filteredSchedules.map((sched) => {
             const dateObj = new Date(sched.scheduledDate);
             const isPublished = sched.status === 'PUBLISHED';
-            const formattedDay = dateObj.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
             const formattedTime = dateObj.toLocaleTimeString('default', { hour: 'numeric', minute: '2-digit' });
             const outfitImg = getOutfitImage(sched);
             const countdown = getDaysUntil(sched.scheduledDate);
@@ -510,49 +509,52 @@ export default function WardrobeSchedulePage() {
             return (
               <div
                 key={sched.id}
-                className="group bg-card border rounded-3xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
+                className="group bg-card border rounded-3xl p-5 sm:p-6 shadow-xs hover:shadow-md transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-6"
               >
-                {/* Left: Date & Event details */}
-                <div className="flex items-start gap-4 flex-1">
+                {/* Left side: Date Badge + Full Title & Info */}
+                <div className="flex items-start sm:items-center gap-5 flex-1 min-w-0">
                   {/* Visual Date Badge */}
-                  <div className="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-indigo-500/10 border border-primary/20 text-foreground flex-shrink-0">
-                    <span className="text-[10px] font-black uppercase text-primary tracking-wider">
+                  <div className="flex flex-col items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-indigo-500/10 border border-primary/20 text-foreground shrink-0 shadow-2xs">
+                    <span className="text-[11px] font-black uppercase text-primary tracking-wider">
                       {dateObj.toLocaleDateString('default', { month: 'short' })}
                     </span>
-                    <span className="text-xl font-black leading-none">{dateObj.getDate()}</span>
-                    <span className="text-[10px] font-medium text-muted-foreground">
+                    <span className="text-2xl sm:text-3xl font-black leading-none my-0.5">{dateObj.getDate()}</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground">
                       {dateObj.toLocaleDateString('default', { weekday: 'short' })}
                     </span>
                   </div>
 
-                  {/* Title & Metadata */}
-                  <div className="space-y-1.5">
+                  {/* Title, Badges, and Notes */}
+                  <div className="space-y-1.5 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs px-2.5 py-0.5 rounded-lg bg-muted font-semibold text-foreground border">
+                      <span className="text-xs px-2.5 py-0.5 rounded-lg bg-muted font-bold text-foreground border">
                         {sched.eventType.replace('_', ' ')}
                       </span>
 
                       <span
-                        className={`text-xs px-2.5 py-0.5 rounded-lg font-bold flex items-center gap-1 ${
+                        className={`text-xs px-2.5 py-0.5 rounded-lg font-extrabold flex items-center gap-1 border ${
                           isPublished
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                         }`}
                       >
                         {isPublished ? <CheckCircle2 className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                         {sched.status}
                       </span>
 
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50">
+                      <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50">
                         {countdown}
                       </span>
 
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {formattedTime}
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 font-medium">
+                        <Clock className="w-3.5 h-3.5" /> {formattedTime}
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors cursor-pointer" onClick={() => setSelectedScheduleForDetail(sched)}>
+                    <h3
+                      onClick={() => setSelectedScheduleForDetail(sched)}
+                      className="text-lg sm:text-xl font-bold text-foreground group-hover:text-primary transition-colors cursor-pointer leading-snug"
+                    >
                       {sched.title}
                     </h3>
 
@@ -562,77 +564,80 @@ export default function WardrobeSchedulePage() {
                   </div>
                 </div>
 
-                {/* Center: Assigned Visual Outfit */}
-                <div
-                  onClick={() => setSelectedScheduleForDetail(sched)}
-                  className="w-full md:w-84 p-3 rounded-2xl bg-muted/40 border border-muted/80 hover:border-primary/50 hover:bg-muted/70 cursor-pointer transition-all flex items-center gap-3.5 group/outfit shadow-2xs"
-                >
-                  <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 flex-shrink-0 bg-slate-900">
-                    <img
-                      src={outfitImg}
-                      alt={sched.outfit.title}
-                      className="w-full h-full object-cover group-hover/outfit:scale-110 transition-transform duration-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                      <p className="text-xs font-extrabold text-foreground line-clamp-1 group-hover/outfit:text-primary transition-colors">
-                        {sched.outfit.title}
-                      </p>
+                {/* Right side: Outfit Pill Card + Action Buttons */}
+                <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
+                  {/* Assigned Visual Outfit Card */}
+                  <div
+                    onClick={() => setSelectedScheduleForDetail(sched)}
+                    className="w-full sm:w-80 p-2.5 rounded-2xl bg-muted/40 border border-muted/80 hover:border-primary/50 hover:bg-muted/70 cursor-pointer transition-all flex items-center gap-3 group/outfit shadow-2xs"
+                  >
+                    <div className="relative w-14 h-14 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 shrink-0 bg-slate-900">
+                      <img
+                        src={outfitImg}
+                        alt={sched.outfit.title}
+                        className="w-full h-full object-cover group-hover/outfit:scale-110 transition-transform duration-500"
+                      />
                     </div>
 
-                    {/* Mini Swatches */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {sched.outfit.items.slice(0, 4).map((i, idx) => {
-                        const hex = resolveColorHex(i.variant?.colorHex, i.variant?.colorName, i.item?.name);
-                        return (
-                          <span
-                            key={idx}
-                            title={i.variant?.colorName || i.item?.name}
-                            className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-xs"
-                            style={{ backgroundColor: hex }}
-                          />
-                        );
-                      })}
-                      <span className="text-[10px] font-medium text-muted-foreground ml-0.5">
-                        {sched.outfit.items.length} pieces • <span className="text-primary font-bold">View</span>
-                      </span>
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <p className="text-xs font-bold text-foreground truncate group-hover/outfit:text-primary transition-colors">
+                          {sched.outfit.title}
+                        </p>
+                      </div>
+
+                      {/* Mini Swatches */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {sched.outfit.items.slice(0, 4).map((i, idx) => {
+                          const hex = resolveColorHex(i.variant?.colorHex, i.variant?.colorName, i.item?.name);
+                          return (
+                            <span
+                              key={idx}
+                              title={i.variant?.colorName || i.item?.name}
+                              className="w-3.5 h-3.5 rounded-full border border-black/20 shadow-xs"
+                              style={{ backgroundColor: hex }}
+                            />
+                          );
+                        })}
+                        <span className="text-[10px] font-semibold text-muted-foreground ml-0.5">
+                          {sched.outfit.items.length} pieces • <span className="text-primary font-bold">Lookbook</span>
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Right: Actions */}
-                <div className="flex items-center gap-2 self-end md:self-center">
-                  <button
-                    onClick={() => handleTogglePublish(sched)}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-                      isPublished
-                        ? 'hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30'
-                        : 'hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-500/30'
-                    }`}
-                    title={isPublished ? 'Unpublish (Switch to Draft)' : 'Publish for Members'}
-                  >
-                    {isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{isPublished ? 'Unpublish' : 'Publish'}</span>
-                  </button>
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleTogglePublish(sched)}
+                      className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        isPublished
+                          ? 'hover:bg-amber-500/10 hover:text-amber-600 hover:border-amber-500/30'
+                          : 'hover:bg-emerald-500/10 hover:text-emerald-600 hover:border-emerald-500/30'
+                      }`}
+                      title={isPublished ? 'Unpublish (Switch to Draft)' : 'Publish for Members'}
+                    >
+                      {isPublished ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      <span className="hidden sm:inline">{isPublished ? 'Unpublish' : 'Publish'}</span>
+                    </button>
 
-                  <button
-                    onClick={() => openEditScheduleModal(sched)}
-                    className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    title="Edit Schedule"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                    <button
+                      onClick={() => openEditScheduleModal(sched)}
+                      className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors border border-transparent hover:border-border"
+                      title="Edit Schedule"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
 
-                  <button
-                    onClick={() => handleDeleteSchedule(sched)}
-                    className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                    title="Delete Schedule"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <button
+                      onClick={() => handleDeleteSchedule(sched)}
+                      className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors border border-transparent hover:border-destructive/20"
+                      title="Delete Schedule"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
