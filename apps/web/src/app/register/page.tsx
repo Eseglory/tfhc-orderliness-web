@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi, saveAuthToken, saveAuthUser, ApiError } from '../../lib/api';
@@ -11,9 +11,8 @@ const MIN_PASSWORD = 12;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,7 +47,6 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
     if (form.password.length < MIN_PASSWORD) return setError(`Choose a password of at least ${MIN_PASSWORD} characters.`);
-    if (form.password !== form.confirm) return setError('Passwords do not match.');
     setLoading(true);
     try {
       const res = await fetchApi<any>('/auth/register', {
@@ -126,26 +124,6 @@ export default function RegisterPage() {
             className="absolute right-3 text-outline hover:text-on-surface"
           >
             <span className="material-symbols-outlined text-xl">{showPassword ? 'visibility' : 'visibility_off'}</span>
-          </button>
-        </div>
-        <div className="relative flex items-center">
-          <input
-            className={authInputClass}
-            type={showConfirmPassword ? 'text' : 'password'}
-            placeholder="Confirm password"
-            required
-            minLength={MIN_PASSWORD}
-            value={form.confirm}
-            onChange={set('confirm')}
-            autoComplete="new-password"
-          />
-          <button
-            type="button"
-            aria-label="Toggle confirm password visibility"
-            onClick={() => setShowConfirmPassword((v) => !v)}
-            className="absolute right-3 text-outline hover:text-on-surface"
-          >
-            <span className="material-symbols-outlined text-xl">{showConfirmPassword ? 'visibility' : 'visibility_off'}</span>
           </button>
         </div>
         <AuthSubmit loading={loading}>

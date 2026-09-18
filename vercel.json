@@ -3,7 +3,7 @@
   "framework": "nextjs",
   "buildCommand": "yarn build:shared && yarn workspace @tfhc/web build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "corepack enable && yarn install",
+  "installCommand": "corepack enable && corepack prepare yarn@4.5.3 --activate && yarn install",
   "env": {
     "ENABLE_EXPERIMENTAL_COREPACK": "1",
     "NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1036684690535-4oalsecrnjcbk774heohgeohd8s2v1k2.apps.googleusercontent.com",
