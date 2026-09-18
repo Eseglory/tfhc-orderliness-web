@@ -46,7 +46,15 @@ export function ChatWorkspace({
   const [loadingRoom, setLoadingRoom] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
+  const [roomFilter, setRoomFilter] = useState<'ALL' | 'UNREAD' | 'DIRECT' | 'GROUPS'>('ALL');
+  const [inChatSearch, setInChatSearch] = useState('');
+  const [showInChatSearch, setShowInChatSearch] = useState(false);
+  const [showRoomInfo, setShowRoomInfo] = useState(false);
+  const [roomMembers, setRoomMembers] = useState<any[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
   const [typingBy, setTypingBy] = useState<Record<string, string>>({});
+  const [roomTyping, setRoomTyping] = useState<Record<string, boolean>>({});
   const [showContacts, setShowContacts] = useState(false);
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [showManage, setShowManage] = useState(false);
@@ -92,74 +100,89 @@ export function ChatWorkspace({
 
   const openRoom = useCallback(
     async (roomId: string) => {
-      // Update the ref synchronously so a message sent before React re-renders
-      // still targets the room the user just opened.
       activeIdRef.current = roomId;
       setActiveId(roomId);
       setMobileThread(true);
       setReplyTo(null);
       setEditing(null);
+      setInChatSearch('');
+      setShowInChatSearch(false);
+      setShowRoomInfo(false);
       setLoadingRoom(true);
-      setMessages([]);
+      socket.subscribe(roomId);
+      markRoomRead(roomId);
       try {
         const page = await chatApi.messages(roomId);
         setMessages(page.messages);
         setNextCursor(page.nextCursor);
-        socket.subscribe(roomId);
-        const last = page.messages[page.messages.length - 1];
-        markRoomRead(roomId, last?.id);
-        scrollToBottom();
       } catch (e) {
-        notify(e instanceof Error ? e.message : 'Could not open the conversation.', 'error');
+        notify(e instanceof Error ? e.message : 'Could not load messages.', 'error');
       } finally {
         setLoadingRoom(false);
+        scrollToBottom();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [markRoomRead, notify, scrollToBottom],
   );
 
-  const loadMore = useCallback(async () => {
+  const loadRoomMembers = useCallback(async (roomId: string) => {
+    try {
+      setLoadingMembers(true);
+      const data = await chatApi.roomMembers(roomId);
+      setRoomMembers(data || []);
+    } catch (err) {
+      console.error('Failed to load room members:', err);
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showRoomInfo && activeId) {
+      void loadRoomMembers(activeId);
+    }
+  }, [showRoomInfo, activeId, loadRoomMembers]);
+
+  const loadMore = async () => {
     if (!activeId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const el = scrollRef.current;
-    const prevHeight = el?.scrollHeight ?? 0;
+    const prevHeight = scrollRef.current?.scrollHeight ?? 0;
     try {
       const page = await chatApi.messages(activeId, nextCursor);
       setMessages((prev) => [...page.messages, ...prev]);
       setNextCursor(page.nextCursor);
       requestAnimationFrame(() => {
+        const el = scrollRef.current;
         if (el) el.scrollTop = el.scrollHeight - prevHeight;
       });
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'Could not load earlier messages.', 'error');
     } finally {
       setLoadingMore(false);
     }
-  }, [activeId, nextCursor, loadingMore]);
+  };
 
-  // --- socket wiring -------------------------------------------------------
   const socket = useChatSocket({
-    onReady: () => {
-      void loadRooms();
-      const roomId = activeIdRef.current;
-      if (roomId) void chatApi.messages(roomId).then(page => {
-        if (activeIdRef.current !== roomId) return;
-        // Fetch authoritative recent history after reconnect, including edits and deletions.
-        setMessages(previous => {
-          const ids = new Set(page.messages.map(message => message.id));
-          const newest = page.messages.at(-1)?.createdAt || '';
-          // Keep messages that arrived while the recovery request was in flight.
+    onReady: ({ online: list }) => {
+      // Refresh room list unread & latest messages when socket reconnects
+      if (!activeIdRef.current) return;
+      const current = activeIdRef.current;
+      chatApi.messages(current).then((page) => {
+        if (activeIdRef.current !== current) return;
+        setMessages((previous) => {
+          const ids = new Set(page.messages.map(m => m.id));
+          const newest = page.messages[page.messages.length - 1]?.createdAt ?? '';
           return [...page.messages, ...previous.filter(message => message.pending ||
             (!ids.has(message.id) && message.createdAt > newest))];
         });
         setNextCursor(page.nextCursor);
-      }).catch(() => notify('Reconnected, but messages could not refresh. Reopen the conversation.', 'error'));
+      }).catch(() => undefined);
     },
     onMessage: (m) => {
       if (m.roomId === activeIdRef.current) {
         setMessages((prev) => {
           if (prev.some((x) => x.id === m.id)) return prev;
-          // Our own message is still mid-flight as an optimistic bubble; let the
-          // REST response swap it in so we don't render it twice.
           if (m.mine && prev.some((x) => x.pending && x.body === m.body)) return prev;
           return [...prev, m];
         });
@@ -186,6 +209,9 @@ export function ChatWorkspace({
       setRooms((prev) => prev.map((r) => (r.lastMessage?.id === m.id ? { ...r, lastMessage: m } : r)));
     },
     onTyping: (e) => {
+      // Update global room typing for sidebar
+      setRoomTyping((prev) => ({ ...prev, [e.roomId]: e.typing }));
+
       if (e.roomId !== activeIdRef.current) return;
       setTypingBy((prev) => {
         const next = { ...prev };
@@ -201,7 +227,8 @@ export function ChatWorkspace({
             delete next[e.memberId];
             return next;
           });
-        }, 5000);
+          setRoomTyping((prev) => ({ ...prev, [e.roomId]: false }));
+        }, 4000);
       }
     },
   });
@@ -214,7 +241,6 @@ export function ChatWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkRoomId, rooms]);
 
-  // --- actions ------------------------------------------------------------
   const mergeSaved = (tempId: string, saved: ChatMessage) =>
     setMessages((prev) => {
       const next = prev.filter((m) => m.id !== tempId);
@@ -292,12 +318,29 @@ export function ChatWorkspace({
     }
   };
 
-  // --- rendering --------------------------------------------------------
-  const filteredRooms = rooms.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
+  // Filtered rooms list
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((r) => {
+      const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
+      if (!matchesSearch) return false;
+      if (roomFilter === 'UNREAD') return r.unreadCount > 0;
+      if (roomFilter === 'DIRECT') return r.type === 'DIRECT';
+      if (roomFilter === 'GROUPS') return r.type !== 'DIRECT';
+      return true;
+    });
+  }, [rooms, search, roomFilter]);
+
   const totalUnread = rooms.reduce((s, r) => s + r.unreadCount, 0);
 
+  // Filter messages by in-chat search query if active
+  const displayedMessages = useMemo(() => {
+    if (!inChatSearch.trim()) return messages;
+    const q = inChatSearch.toLowerCase();
+    return messages.filter((m) => m.body?.toLowerCase().includes(q) || m.sender?.name.toLowerCase().includes(q));
+  }, [messages, inChatSearch]);
+
   const grouped: { day: string; items: ChatMessage[] }[] = [];
-  for (const m of messages) {
+  for (const m of displayedMessages) {
     const label = dayLabel(m.createdAt);
     const last = grouped[grouped.length - 1];
     if (last && last.day === label) last.items.push(m);
@@ -308,212 +351,446 @@ export function ChatWorkspace({
   const canManageRoom =
     !!activeRoom && activeRoom.type === 'CUSTOM' && (canManage || activeRoom.role === 'MODERATOR');
 
+  const isDirectOnline =
+    activeRoom?.type === 'DIRECT' && activeRoom.direct ? socket.online.has(activeRoom.direct.memberId) : false;
+
   return (
     <div
       className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
       style={bottomInset !== '0rem' ? { height: `calc(100vh - 4rem - ${bottomInset})` } : undefined}
     >
-      {/* Room list */}
+      {/* Sidebar: Conversation List */}
       <aside
-        className={`flex w-full flex-col border-r border-outline-variant/20 bg-surface-container-lowest sm:w-80 ${
+        className={`flex w-full flex-col border-r border-outline-variant/20 bg-surface-container-lowest sm:w-84 md:w-96 shrink-0 ${
           mobileThread ? 'hidden sm:flex' : 'flex'
         }`}
       >
+        {/* Sidebar Header */}
         <div className="flex items-center justify-between gap-2 border-b border-outline-variant/20 px-4 py-3">
-          <h2 className="text-lg font-bold text-on-surface">
-            Chat
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-black tracking-tight text-on-surface">Chat</h2>
             {totalUnread > 0 && (
-              <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-primary">
+              <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-primary">
                 {totalUnread}
               </span>
             )}
-          </h2>
+          </div>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setShowContacts(true)}
-              className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container"
+              className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+              title="New direct message"
               aria-label="New message"
             >
-              <span className="material-symbols-outlined text-[20px]">edit_square</span>
+              <span className="material-symbols-outlined text-[22px]">edit_square</span>
             </button>
             {canManage && (
               <button
                 onClick={() => setShowNewRoom(true)}
-                className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container"
+                className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                title="Create new channel"
                 aria-label="New room"
               >
-                <span className="material-symbols-outlined text-[20px]">group_add</span>
+                <span className="material-symbols-outlined text-[22px]">group_add</span>
               </button>
             )}
           </div>
         </div>
-        <div className="px-3 py-2">
-          <input
-            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            placeholder="Search conversations…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+
+        {/* Search Bar */}
+        <div className="px-3 pt-2 pb-1.5">
+          <div className="relative flex items-center">
+            <span className="material-symbols-outlined absolute left-3 text-sm text-on-surface-variant">
+              search
+            </span>
+            <input
+              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low pl-9 pr-3 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none"
+              placeholder="Search or start new chat…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
+
+        {/* Filter Pills (WhatsApp Style) */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-outline-variant/15 overflow-x-auto no-scrollbar">
+          {(['ALL', 'UNREAD', 'GROUPS', 'DIRECT'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setRoomFilter(tab)}
+              className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all shrink-0 ${
+                roomFilter === tab
+                  ? 'bg-primary text-on-primary shadow-xs'
+                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              {tab === 'ALL' ? 'All' : tab === 'UNREAD' ? 'Unread' : tab === 'GROUPS' ? 'Groups' : 'Direct'}
+            </button>
+          ))}
+        </div>
+
+        {/* Rooms Scroll List */}
         <div className="flex-1 overflow-y-auto">
-          {filteredRooms.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-on-surface-variant">No conversations yet.</p>
-          )}
-          {filteredRooms.map((r) => {
-            const isDirect = r.type === 'DIRECT';
-            const presenceOnline = isDirect && r.direct ? socket.online.has(r.direct.memberId) : undefined;
-            return (
-              <button
-                key={r.id}
-                onClick={() => openRoom(r.id)}
-                className={`flex w-full items-center gap-3 border-b border-outline-variant/10 px-4 py-3 text-left transition-colors ${
-                  r.id === activeId ? 'bg-surface-container' : 'hover:bg-surface-container-low'
-                }`}
-              >
-                <Avatar
-                  name={r.name}
-                  photoUrl={isDirect ? r.direct?.photoUrl : r.imageUrl}
-                  icon={isDirect ? undefined : roomIcon(r)}
-                  online={presenceOnline}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-semibold text-on-surface">{r.name}</span>
-                    {r.lastMessage && (
-                      <span className="shrink-0 text-[10px] text-on-surface-variant">
-                        {new Date(r.lastMessage.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    )}
-                  </span>
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs text-on-surface-variant">
-                      {r.lastMessage
-                        ? `${r.lastMessage.type !== 'TEXT' && r.lastMessage.type !== 'SYSTEM' ? '📎 ' : ''}${
-                            r.lastMessage.deletedAt ? 'Message deleted' : r.lastMessage.body || 'Attachment'
-                          }`
-                        : r.description || 'No messages yet'}
+          {filteredRooms.length === 0 ? (
+            <div className="p-8 text-center text-xs text-on-surface-variant space-y-1">
+              <span className="material-symbols-outlined text-3xl opacity-50">forum</span>
+              <p className="font-semibold">No conversations found</p>
+            </div>
+          ) : (
+            filteredRooms.map((r) => {
+              const isDirect = r.type === 'DIRECT';
+              const presenceOnline = isDirect && r.direct ? socket.online.has(r.direct.memberId) : undefined;
+              const isTyping = roomTyping[r.id];
+
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => openRoom(r.id)}
+                  className={`flex w-full items-center gap-3 border-b border-outline-variant/10 px-3.5 py-3 text-left transition-all ${
+                    r.id === activeId
+                      ? 'bg-surface-container border-l-4 border-l-primary'
+                      : 'hover:bg-surface-container-low'
+                  }`}
+                >
+                  <Avatar
+                    name={r.name}
+                    photoUrl={isDirect ? r.direct?.photoUrl : r.imageUrl}
+                    icon={isDirect ? undefined : roomIcon(r)}
+                    online={presenceOnline}
+                    size={42}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-bold text-on-surface">{r.name}</span>
+                      {r.lastMessage && (
+                        <span className="shrink-0 text-[10px] font-medium text-on-surface-variant">
+                          {new Date(r.lastMessage.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      )}
                     </span>
-                    {r.unreadCount > 0 && (
-                      <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
-                        {r.unreadCount}
-                      </span>
-                    )}
+                    <span className="flex items-center justify-between gap-2 mt-0.5">
+                      {isTyping ? (
+                        <span className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
+                          <span>typing…</span>
+                        </span>
+                      ) : (
+                        <span className="truncate text-xs text-on-surface-variant">
+                          {r.lastMessage
+                            ? `${r.lastMessage.type !== 'TEXT' && r.lastMessage.type !== 'SYSTEM' ? '📎 ' : ''}${
+                                r.lastMessage.deletedAt ? 'Message deleted' : r.lastMessage.body || 'Attachment'
+                              }`
+                            : r.description || 'No messages yet'}
+                        </span>
+                      )}
+                      {r.unreadCount > 0 && (
+                        <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary shadow-xs">
+                          {r.unreadCount}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })
+          )}
         </div>
       </aside>
 
-      {/* Thread */}
+      {/* Main Conversation Thread */}
       <section className={`flex flex-1 flex-col ${mobileThread ? 'flex' : 'hidden sm:flex'}`}>
         {!activeRoom ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-on-surface-variant">
-            <span className="material-symbols-outlined text-5xl">chat</span>
-            <p className="text-sm">Select a conversation to start messaging.</p>
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-on-surface-variant p-6 text-center">
+            <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined text-4xl">chat</span>
+            </div>
+            <h3 className="text-base font-bold text-on-surface">TFHC Communications Engine</h3>
+            <p className="text-xs text-on-surface-variant max-w-sm">
+              Select a channel or direct message from the sidebar to start collaborating in real-time.
+            </p>
           </div>
         ) : (
           <>
-            <header className="flex items-center gap-3 border-b border-outline-variant/20 bg-surface-container-lowest px-4 py-3">
+            {/* Thread Header (WhatsApp Style) */}
+            <header className="flex items-center gap-3 border-b border-outline-variant/20 bg-surface-container-lowest px-4 py-2.5 shrink-0">
               <button
                 onClick={() => setMobileThread(false)}
-                className="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container sm:hidden"
+                className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container sm:hidden"
                 aria-label="Back"
               >
-                <span className="material-symbols-outlined">arrow_back</span>
+                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
               </button>
-              <Avatar
-                name={activeRoom.name}
-                photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
-                icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
-                size={36}
-                online={
-                  activeRoom.type === 'DIRECT' && activeRoom.direct
-                    ? socket.online.has(activeRoom.direct.memberId)
-                    : undefined
-                }
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-on-surface">{activeRoom.name}</p>
-                <p className="truncate text-xs text-on-surface-variant">
-                  {activeRoom.type === 'DIRECT'
-                    ? activeRoom.direct && socket.online.has(activeRoom.direct.memberId)
-                      ? 'Online'
-                      : 'Direct message'
-                    : `${activeRoom.memberCount} member${activeRoom.memberCount === 1 ? '' : 's'}`}
-                </p>
-              </div>
-              {activeRoom.type === 'CUSTOM' && (
+
+              <button
+                type="button"
+                onClick={() => setShowRoomInfo((v) => !v)}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left group hover:opacity-90 transition-opacity"
+              >
+                <Avatar
+                  name={activeRoom.name}
+                  photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
+                  icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
+                  size={38}
+                  online={isDirectOnline}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
+                    {activeRoom.name}
+                  </p>
+                  {typingNames.length > 0 ? (
+                    <p className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
+                      <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is typing…' : 'are typing…'}</span>
+                    </p>
+                  ) : activeRoom.type === 'DIRECT' ? (
+                    <p className={`truncate text-xs flex items-center gap-1 ${isDirectOnline ? 'font-bold text-emerald-500' : 'text-on-surface-variant'}`}>
+                      {isDirectOnline ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                          <span>Online</span>
+                        </>
+                      ) : (
+                        <span>Offline</span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="truncate text-xs text-on-surface-variant">
+                      {activeRoom.memberCount} member{activeRoom.memberCount === 1 ? '' : 's'}
+                    </p>
+                  )}
+                </div>
+              </button>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setShowManage(true)}
-                  className="rounded-lg p-2 text-on-surface-variant hover:bg-surface-container"
-                  aria-label="Room details"
+                  type="button"
+                  onClick={() => setShowInChatSearch((v) => !v)}
+                  className={`p-2 rounded-xl transition-colors ${
+                    showInChatSearch
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container'
+                  }`}
+                  title="Search in conversation"
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {canManageRoom ? 'manage_accounts' : 'group'}
-                  </span>
+                  <span className="material-symbols-outlined text-[20px]">search</span>
                 </button>
-              )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowRoomInfo((v) => !v)}
+                  className={`p-2 rounded-xl transition-colors ${
+                    showRoomInfo
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container'
+                  }`}
+                  title="Channel & member info"
+                >
+                  <span className="material-symbols-outlined text-[20px]">info</span>
+                </button>
+
+                {activeRoom.type === 'CUSTOM' && (
+                  <button
+                    onClick={() => setShowManage(true)}
+                    className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container"
+                    aria-label="Room settings"
+                    title="Manage Members"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {canManageRoom ? 'manage_accounts' : 'group'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </header>
 
-            <div ref={scrollRef} className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low px-4 py-4">
-              {nextCursor && (
-                <div className="flex justify-center py-2">
+            {/* In-Chat Search Bar */}
+            {showInChatSearch && (
+              <div className="p-2.5 border-b border-outline-variant/20 bg-surface-container-low flex items-center gap-2 animate-in slide-in-from-top-2">
+                <span className="material-symbols-outlined text-sm text-on-surface-variant">search</span>
+                <input
+                  type="text"
+                  placeholder="Search messages in this conversation…"
+                  value={inChatSearch}
+                  onChange={(e) => setInChatSearch(e.target.value)}
+                  className="flex-1 bg-surface-container-lowest px-3 py-1.5 rounded-xl border border-outline-variant/30 text-xs text-on-surface focus:outline-none focus:border-primary"
+                  autoFocus
+                />
+                {inChatSearch && (
                   <button
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                    className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high"
+                    onClick={() => setInChatSearch('')}
+                    className="text-on-surface-variant hover:text-on-surface"
                   >
-                    {loadingMore ? 'Loading…' : 'Load earlier messages'}
+                    <span className="material-symbols-outlined text-xs">close</span>
                   </button>
-                </div>
-              )}
-              {loadingRoom ? (
-                <p className="py-10 text-center text-sm text-on-surface-variant">Loading messages…</p>
-              ) : messages.length === 0 ? (
-                <p className="py-10 text-center text-sm text-on-surface-variant">
-                  No messages yet — say hello 👋
-                </p>
-              ) : (
-                grouped.map((group) => (
-                  <div key={group.day}>
-                    <SystemLine text={group.day} />
-                    {group.items.map((m, i) => {
-                      if (m.type === 'SYSTEM') return <SystemLine key={m.id} text={m.body ?? ''} />;
-                      const prev = group.items[i - 1];
-                      const showSender =
-                        !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
-                      return (
-                        <div key={m.id} className="py-0.5">
-                          <MessageBubble
-                            message={m}
-                            showSender={showSender}
-                            canModerate={canModerate}
-                            onReply={setReplyTo}
-                            onEdit={(msg) => {
-                              setEditing(msg);
-                              setReplyTo(null);
-                            }}
-                            onDelete={handleDelete}
-                          />
-                        </div>
-                      );
-                    })}
+                )}
+                <button
+                  onClick={() => {
+                    setShowInChatSearch(false);
+                    setInChatSearch('');
+                  }}
+                  className="px-2.5 py-1 text-xs font-bold text-on-surface-variant hover:bg-surface-container rounded-lg"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {/* Message Stream Area */}
+            <div className="relative flex-1 flex overflow-hidden">
+              <div
+                ref={scrollRef}
+                className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low px-4 py-4"
+              >
+                {nextCursor && (
+                  <div className="flex justify-center py-2">
+                    <button
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="rounded-full bg-surface-container px-3 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high"
+                    >
+                      {loadingMore ? 'Loading…' : 'Load earlier messages'}
+                    </button>
                   </div>
-                ))
-              )}
-              {typingNames.length > 0 && (
-                <p className="px-2 text-xs italic text-on-surface-variant">
-                  {typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…
-                </p>
+                )}
+
+                {loadingRoom ? (
+                  <div className="py-16 text-center text-xs text-on-surface-variant space-y-2">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p>Loading conversation messages…</p>
+                  </div>
+                ) : displayedMessages.length === 0 ? (
+                  <div className="py-16 text-center text-xs text-on-surface-variant space-y-2">
+                    <span className="material-symbols-outlined text-4xl opacity-40">waving_hand</span>
+                    <p className="font-semibold">No messages yet — say hello 👋</p>
+                  </div>
+                ) : (
+                  grouped.map((group) => (
+                    <div key={group.day}>
+                      <SystemLine text={group.day} />
+                      {group.items.map((m, i) => {
+                        if (m.type === 'SYSTEM') return <SystemLine key={m.id} text={m.body ?? ''} />;
+                        const prev = group.items[i - 1];
+                        const showSender =
+                          !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
+                        return (
+                          <div key={m.id} className="py-0.5">
+                            <MessageBubble
+                              message={m}
+                              showSender={showSender}
+                              canModerate={canModerate}
+                              onReply={setReplyTo}
+                              onEdit={(msg) => {
+                                setEditing(msg);
+                                setReplyTo(null);
+                              }}
+                              onDelete={handleDelete}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
+
+                {/* WhatsApp Bouncing 3-Dot Typing Bubble */}
+                {typingNames.length > 0 && (
+                  <div className="flex items-center gap-2 py-1.5 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="rounded-2xl rounded-tl-xs bg-surface-container-lowest border border-outline-variant/20 px-3.5 py-2 shadow-sm flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-500">
+                        {typingNames.join(', ')} {typingNames.length === 1 ? 'is typing' : 'are typing'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[bounce_1.4s_infinite_0ms]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[bounce_1.4s_infinite_200ms]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[bounce_1.4s_infinite_400ms]" />
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Side Drawer: Room & Contact Info */}
+              {showRoomInfo && (
+                <div className="w-72 sm:w-80 border-l border-outline-variant/20 bg-surface-container-lowest overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right-4 duration-200">
+                  <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+                    <h4 className="text-sm font-black text-on-surface">Conversation Info</h4>
+                    <button
+                      onClick={() => setShowRoomInfo(false)}
+                      className="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                  </div>
+
+                  <div className="text-center space-y-2 py-2">
+                    <Avatar
+                      name={activeRoom.name}
+                      photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
+                      icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
+                      size={64}
+                      online={isDirectOnline}
+                    />
+                    <h3 className="text-base font-bold text-on-surface">{activeRoom.name}</h3>
+                    <p className="text-xs text-on-surface-variant">{activeRoom.description || 'No description provided'}</p>
+                  </div>
+
+                  {activeRoom.type !== 'DIRECT' && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-on-surface uppercase tracking-wider">
+                          Members ({roomMembers.length || activeRoom.memberCount})
+                        </span>
+                      </div>
+                      {loadingMembers ? (
+                        <p className="text-xs text-on-surface-variant">Loading members…</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {roomMembers.map((member) => {
+                            const isOnline = socket.online.has(member.memberId);
+                            return (
+                              <div
+                                key={member.memberId}
+                                className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Avatar
+                                    name={member.name}
+                                    photoUrl={member.photoUrl}
+                                    size={30}
+                                    online={isOnline}
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-bold text-on-surface">{member.name}</p>
+                                    <p className="text-[10px] text-on-surface-variant">
+                                      {isOnline ? 'Online' : member.role || 'Member'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => startDirect(member.memberId)}
+                                  className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                                  title="Send direct message"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
+            {/* File Upload Progress */}
             {upload.view}
+
+            {/* Composer Input Area */}
             <Composer
               draftKey={activeId ? `chat:${activeId}` : undefined}
               disabled={!activeRoom.isActive}
@@ -529,6 +806,7 @@ export function ChatWorkspace({
         )}
       </section>
 
+      {/* Modals */}
       <ContactPickerModal
         open={showContacts}
         onClose={() => setShowContacts(false)}

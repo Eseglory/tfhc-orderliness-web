@@ -49,10 +49,10 @@ export function Avatar({
       )}
       {online !== undefined && (
         <span
-          className={`absolute bottom-0 right-0 block rounded-full border-2 border-surface-container-lowest ${
-            online ? 'bg-on-tertiary-container' : 'bg-outline-variant'
+          className={`absolute bottom-0 right-0 block rounded-full ring-2 ring-surface-container-lowest shadow-xs ${
+            online ? 'bg-emerald-500' : 'bg-slate-400'
           }`}
-          style={{ width: size * 0.28, height: size * 0.28 }}
+          style={{ width: Math.max(size * 0.28, 9), height: Math.max(size * 0.28, 9) }}
         />
       )}
     </span>
