@@ -19,4 +19,4 @@ RUN apk add --no-cache openssl
 COPY --from=builder --chown=node:node /app /app
 USER node
 EXPOSE 4000
-CMD ["sh", "-c", "node apps/api/scripts/migrate-deploy.cjs && node apps/api/dist/apps/api/src/main.js"]
+CMD ["node", "apps/api/scripts/start.cjs"]
