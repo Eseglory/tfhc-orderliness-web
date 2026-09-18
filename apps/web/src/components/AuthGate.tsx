@@ -15,7 +15,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!protectedRoute) return;
     if (!token) {
-      router.replace(`/login?next=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`);
+      const loginUrl = `/login?next=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`;
+      if (typeof window !== 'undefined') {
+        window.location.href = loginUrl;
+      } else {
+        router.replace(loginUrl);
+      }
       return;
     }
     if (user) {

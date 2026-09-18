@@ -4,6 +4,7 @@ import { prepareDevice, clearDevice } from '../lib/pwa/device';
 import { startMetrics, recordPwaMetric } from '../lib/pwa/metrics';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { clearOperations, discardFailed, flushQueue, QUEUE_EVENT, queueStatus, QueueStatus } from '../lib/pwa/queue';
 
 type InstallPrompt = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -11,6 +12,7 @@ type Connection = EventTarget & { saveData?: boolean; effectiveType?: string };
 const empty: QueueStatus = { pending: 0, failed: 0, syncing: false, message: '' };
 
 export function PwaManager() {
+  const pathname = usePathname();
   const [install, setInstall] = useState<InstallPrompt | null>(null);
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [queue, setQueue] = useState(empty);
@@ -116,6 +118,11 @@ export function PwaManager() {
     recordPwaMetric('update');
     waiting?.postMessage({ type: 'ACTIVATE_UPDATE' });
   };
+
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname === '/verify-email';
+  if (isAuthPage || (!pathname.startsWith('/admin') && !pathname.startsWith('/member'))) {
+    return null;
+  }
 
   return (
     <aside aria-label="App status" className="bg-surface-container/70 dark:bg-slate-900/80 backdrop-blur-md text-on-surface px-4 py-2 border-b border-outline-variant/15 text-xs">

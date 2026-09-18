@@ -5,10 +5,9 @@ export const getApiBaseUrl = (): string => {
     }
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
-      // Honor explicitly configured local API ports (including isolated E2E servers).
       const configured = process.env.NEXT_PUBLIC_API_URL;
-      if (configured) {
-        try { if (['localhost', '127.0.0.1'].includes(new URL(configured, window.location.origin).hostname)) return configured; } catch { /* Use the local fallback. */ }
+      if (configured && configured.startsWith('http')) {
+        return configured;
       }
       const port = (window as any).__E2E_API_PORT__ || (window.location.port === '3100' ? '4100' : '4000');
       return `${window.location.protocol}//${host}:${port}`;

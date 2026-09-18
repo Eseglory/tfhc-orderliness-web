@@ -291,6 +291,7 @@ export class ScoringService {
         firstName: member.firstName,
         lastName: member.lastName,
         memberName: `${member.firstName} ${member.lastName}`,
+        profilePhotoUrl: member.profilePhotoUrl || null,
         subTeamName: member.subTeam?.name || 'Unassigned',
         attendanceRate,
         punctualityRate,

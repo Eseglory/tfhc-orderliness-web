@@ -68,8 +68,14 @@ export default function MemberLeaderboardPage() {
           {/* #2 Silver */}
           <div className="flex flex-col items-center">
             <div className="relative mb-2">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#C0C0C0] shadow-md z-10 relative bg-surface-container flex items-center justify-center">
-                <LogoIcon alt="Second place" className="w-full h-full object-contain p-1" />
+              <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#C0C0C0] shadow-md z-10 relative bg-surface-container flex items-center justify-center font-bold text-sm text-primary">
+                {top2.profilePhotoUrl ? (
+                  <img src={top2.profilePhotoUrl} alt={`${top2.memberName} avatar`} className="w-full h-full object-cover" />
+                ) : top2.memberName && top2.memberName !== '—' ? (
+                  <span>{top2.firstName?.[0] || ''}{top2.lastName?.[0] || ''}</span>
+                ) : (
+                  <LogoIcon alt="Second place" className="w-full h-full object-contain p-1" />
+                )}
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#C0C0C0] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">2</div>
             </div>
@@ -84,8 +90,14 @@ export default function MemberLeaderboardPage() {
           <div className="flex flex-col items-center z-10">
             <div className="relative mb-2">
               <span className="material-symbols-outlined text-[#FFD700] absolute -top-6 left-1/2 -translate-x-1/2 text-3xl drop-shadow-md z-20">crown</span>
-              <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FFD700] shadow-lg z-10 relative bg-surface-container flex items-center justify-center">
-                <LogoIcon alt="First place" className="w-full h-full object-contain p-1" />
+              <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FFD700] shadow-lg z-10 relative bg-surface-container flex items-center justify-center font-black text-base text-primary">
+                {top1.profilePhotoUrl ? (
+                  <img src={top1.profilePhotoUrl} alt={`${top1.memberName} avatar`} className="w-full h-full object-cover" />
+                ) : top1.memberName && top1.memberName !== '—' ? (
+                  <span>{top1.firstName?.[0] || ''}{top1.lastName?.[0] || ''}</span>
+                ) : (
+                  <LogoIcon alt="First place" className="w-full h-full object-contain p-1" />
+                )}
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#FFD700] text-tertiary-container w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm border-2 border-surface z-20">1</div>
             </div>
@@ -99,8 +111,14 @@ export default function MemberLeaderboardPage() {
           {/* #3 Bronze */}
           <div className="flex flex-col items-center">
             <div className="relative mb-2">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#CD7F32] shadow-md z-10 relative bg-surface-container flex items-center justify-center">
-                <LogoIcon alt="Third place" className="w-full h-full object-contain p-1" />
+              <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#CD7F32] shadow-md z-10 relative bg-surface-container flex items-center justify-center font-bold text-sm text-primary">
+                {top3.profilePhotoUrl ? (
+                  <img src={top3.profilePhotoUrl} alt={`${top3.memberName} avatar`} className="w-full h-full object-cover" />
+                ) : top3.memberName && top3.memberName !== '—' ? (
+                  <span>{top3.firstName?.[0] || ''}{top3.lastName?.[0] || ''}</span>
+                ) : (
+                  <LogoIcon alt="Third place" className="w-full h-full object-contain p-1" />
+                )}
               </div>
               <div className="absolute -bottom-2 -right-2 bg-[#CD7F32] text-white w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs border-2 border-surface z-20">3</div>
             </div>
@@ -130,9 +148,17 @@ export default function MemberLeaderboardPage() {
                     {item.rankPosition || idx + 4}
                   </div>
                   <div className="flex-1 pl-2 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 flex items-center justify-center p-1 font-bold text-xs text-primary">
-                      {item.memberName ? item.memberName.substring(0, 2).toUpperCase() : 'MT'}
-                    </div>
+                    {item.profilePhotoUrl ? (
+                      <img
+                        src={item.profilePhotoUrl}
+                        alt={`${item.memberName} avatar`}
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 flex items-center justify-center p-1 font-bold text-xs text-primary">
+                        {item.firstName?.[0] || ''}{item.lastName?.[0] || ''}
+                      </div>
+                    )}
                     <span className="font-body-md text-body-md text-on-surface truncate font-semibold">{item.memberName}</span>
                   </div>
                   <div className="w-16 text-right font-body-md text-body-md text-on-surface font-semibold">{item.attendancePercentage}%</div>

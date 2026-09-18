@@ -189,11 +189,25 @@ export default function AdminLeaderboardPage() {
                 <span className="text-xs font-black text-slate-400">RANK #2 • SILVER</span>
                 <Medal className="w-6 h-6 text-slate-400" />
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  {topThree[1].firstName} {topThree[1].lastName}
-                </h3>
-                <p className="text-xs text-slate-500">{topThree[1].subTeamName || 'General Registry'}</p>
+              <div className="flex items-center gap-3">
+                {topThree[1].profilePhotoUrl ? (
+                  <img
+                    src={topThree[1].profilePhotoUrl}
+                    alt={`${topThree[1].firstName} avatar`}
+                    className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-200 dark:ring-slate-700 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold flex items-center justify-center text-sm ring-1 ring-slate-200 dark:ring-slate-700 shrink-0">
+                    {topThree[1].firstName?.[0] || 'M'}
+                    {topThree[1].lastName?.[0] || ''}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
+                    {topThree[1].firstName} {topThree[1].lastName}
+                  </h3>
+                  <p className="text-xs text-slate-500 truncate">{topThree[1].subTeamName || 'General Registry'}</p>
+                </div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                 <span>
@@ -214,13 +228,27 @@ export default function AdminLeaderboardPage() {
                 </span>
                 <Trophy className="w-7 h-7 text-amber-500" />
               </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-900 dark:text-white">
-                  {topThree[0].firstName} {topThree[0].lastName}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {topThree[0].subTeamName || 'General Registry'}
-                </p>
+              <div className="flex items-center gap-3.5">
+                {topThree[0].profilePhotoUrl ? (
+                  <img
+                    src={topThree[0].profilePhotoUrl}
+                    alt={`${topThree[0].firstName} avatar`}
+                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400/80 shadow-md shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-950 dark:text-amber-200 font-black flex items-center justify-center text-base ring-2 ring-amber-400/60 shadow-md shrink-0">
+                    {topThree[0].firstName?.[0] || 'M'}
+                    {topThree[0].lastName?.[0] || ''}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white truncate">
+                    {topThree[0].firstName} {topThree[0].lastName}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    {topThree[0].subTeamName || 'General Registry'}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-amber-200/40 text-xs">
                 <span>
@@ -239,11 +267,25 @@ export default function AdminLeaderboardPage() {
                 <span className="text-xs font-black text-amber-700">RANK #3 • BRONZE</span>
                 <Award className="w-6 h-6 text-amber-700" />
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  {topThree[2].firstName} {topThree[2].lastName}
-                </h3>
-                <p className="text-xs text-slate-500">{topThree[2].subTeamName || 'General Registry'}</p>
+              <div className="flex items-center gap-3">
+                {topThree[2].profilePhotoUrl ? (
+                  <img
+                    src={topThree[2].profilePhotoUrl}
+                    alt={`${topThree[2].firstName} avatar`}
+                    className="w-12 h-12 rounded-xl object-cover ring-2 ring-amber-700/30 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-amber-800 dark:text-amber-300 font-extrabold flex items-center justify-center text-sm ring-1 ring-amber-700/30 shrink-0">
+                    {topThree[2].firstName?.[0] || 'M'}
+                    {topThree[2].lastName?.[0] || ''}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
+                    {topThree[2].firstName} {topThree[2].lastName}
+                  </h3>
+                  <p className="text-xs text-slate-500 truncate">{topThree[2].subTeamName || 'General Registry'}</p>
+                </div>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                 <span>
@@ -419,19 +461,33 @@ export default function AdminLeaderboardPage() {
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                         <Link
                           href={`/admin/members/${item.memberId}`}
-                          className="hover:text-indigo-600 transition-colors flex items-center gap-1.5"
+                          className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-2.5 group"
                         >
-                          <span>
-                            {item.firstName} {item.lastName}
-                          </span>
-                          {item.isPerfectAttendance && (
-                            <span
-                              className="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                              title="100% Perfect Attendance"
-                            >
-                              PERFECT
-                            </span>
+                          {item.profilePhotoUrl ? (
+                            <img
+                              src={item.profilePhotoUrl}
+                              alt={`${item.firstName} avatar`}
+                              className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-extrabold flex items-center justify-center text-[11px] ring-1 ring-indigo-200/70 dark:ring-indigo-800/60 shrink-0">
+                              {item.firstName?.[0] || 'M'}
+                              {item.lastName?.[0] || ''}
+                            </div>
                           )}
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate">
+                              {item.firstName} {item.lastName}
+                            </span>
+                            {item.isPerfectAttendance && (
+                              <span
+                                className="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 shrink-0"
+                                title="100% Perfect Attendance"
+                              >
+                                PERFECT
+                              </span>
+                            )}
+                          </div>
                         </Link>
                       </td>
 
