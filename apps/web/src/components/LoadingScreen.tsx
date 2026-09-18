@@ -74,8 +74,8 @@ export function LoadingScreen({
       </div>
 
       {/* Dynamic Status Label with Animated Wave Dots */}
-      <div className="flex items-center justify-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
-        <span>{message.replace(/[.…]+$/, '')}</span>
+      <div suppressHydrationWarning className="flex items-center justify-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
+        <span suppressHydrationWarning>{message.replace(/[.…]+$/, '')}</span>
         <span className="inline-flex tracking-tight font-black text-orange-500">
           <span className="animate-[bounce_1.4s_infinite_0ms]">.</span>
           <span className="animate-[bounce_1.4s_infinite_200ms]">.</span>

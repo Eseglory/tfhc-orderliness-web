@@ -11,5 +11,5 @@ export default function MeetingsRedirectPage() {
     router.replace('/admin/events');
   }, [router]);
 
-  return <LoadingScreen message="Redirecting to Unified Events & Services Hub…" />;
+  return <LoadingScreen message="Loading application…" />;
 }

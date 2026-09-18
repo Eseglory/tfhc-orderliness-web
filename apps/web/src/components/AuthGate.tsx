@@ -1,5 +1,5 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getAuthToken, removeAuthToken } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -9,11 +9,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, error, reload } = useAuth();
-  const token = typeof window !== 'undefined' ? getAuthToken() : null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const protectedRoute = pathname.startsWith('/admin') || pathname.startsWith('/member');
 
   useEffect(() => {
-    if (!protectedRoute) return;
+    if (!mounted || !protectedRoute) return;
+    const token = getAuthToken();
     if (!token) {
       const loginUrl = `/login?next=${encodeURIComponent(pathname + (typeof window !== 'undefined' ? window.location.search : ''))}`;
       if (typeof window !== 'undefined') {
@@ -29,12 +35,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         router.replace('/member');
       }
     }
-  }, [pathname, protectedRoute, router, token, user]);
+  }, [mounted, pathname, protectedRoute, router, user]);
 
   if (!protectedRoute) {
     return <>{children}</>;
   }
 
+  if (!mounted) {
+    return <LoadingScreen message="Loading application…" />;
+  }
+
+  const token = getAuthToken();
   if (!token) {
     return <LoadingScreen message="Redirecting to sign in…" />;
   }
