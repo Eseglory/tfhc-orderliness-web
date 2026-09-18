@@ -366,8 +366,18 @@ export class AuthService {
       if (!user.member || user.member.status !== 'ACTIVE') {
         throw new ForbiddenException({ code: 'MEMBER_ACCOUNT_INACTIVE', message: 'This member account is not currently active.' });
       }
-      if (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase()) {
-        throw new ForbiddenException({ code: 'MEMBER_NOT_AUTHORIZED', message: 'This account is not currently authorized to access TFHC Orderliness.' });
+      let approvedMember = user.member.approvedMember;
+      if (!approvedMember) {
+        approvedMember = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail: user.email.toLowerCase() } });
+        if (approvedMember && approvedMember.memberId !== user.member.id) {
+          await this.prisma.approvedMember.update({
+            where: { id: approvedMember.id },
+            data: { memberId: user.member.id },
+          }).catch(() => undefined);
+        }
+      }
+      if (!approvedMember || approvedMember.status !== 'ACTIVE' || approvedMember.normalizedEmail !== user.email.toLowerCase()) {
+        throw new ForbiddenException({ code: 'MEMBER_NOT_AUTHORIZED', message: 'This account is not currently authorized to access TFHC Orderliness. Your email is not in the approved member lookup table.' });
       }
     }
 

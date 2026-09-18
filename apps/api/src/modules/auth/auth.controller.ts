@@ -63,6 +63,7 @@ export class AuthController {
 
   @Throttle(authThrottle)
   @Post('login')
+  @HttpCode(200)
   async login(@Body() body: LoginDto) {
     return this.authService.loginUser(body);
   }
@@ -71,6 +72,7 @@ export class AuthController {
   // a Google-signed ID token, not a password, so brute force isn't a realistic
   // attack surface — the global per-IP limit above still applies.
   @Post('google/member')
+  @HttpCode(200)
   async googleMemberLogin(@Body() body: { idToken: string }) {
     return this.authService.loginMemberWithGoogle(body.idToken);
   }
