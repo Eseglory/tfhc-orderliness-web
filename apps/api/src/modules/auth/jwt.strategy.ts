@@ -53,57 +53,60 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   private async resolveUser(payload: JwtPayload): Promise<AuthenticatedUser> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { member: { include: { approvedMember: true } } },
-    });
+    const cacheKey = `auth:user:${payload.sub}:${payload.iat ?? 0}`;
+    return this.cache.wrap(cacheKey, 15, async () => {
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        include: { member: { include: { approvedMember: true } } },
+      });
 
-    if (!user) {
-      throw new UnauthorizedException('User account no longer exists');
-    }
+      if (!user) {
+        throw new UnauthorizedException('User account no longer exists');
+      }
 
-    // A password change / reset signs out every session issued beforehand.
-    // jsonwebtoken's `iat` is whole seconds, so compare at second granularity:
-    // a token issued in the same wall-clock second as the change is kept (that's
-    // the freshly-issued one the caller keeps using).
-    if (user.passwordChangedAt && typeof payload.iat === 'number' &&
-        Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat) {
-      throw new UnauthorizedException('Your session ended because the account password was changed');
-    }
+      // A password change / reset signs out every session issued beforehand.
+      // jsonwebtoken's `iat` is whole seconds, so compare at second granularity:
+      // a token issued in the same wall-clock second as the change is kept (that's
+      // the freshly-issued one the caller keeps using).
+      if (user.passwordChangedAt && typeof payload.iat === 'number' &&
+          Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat) {
+        throw new UnauthorizedException('Your session ended because the account password was changed');
+      }
 
-    if (user.role === 'MEMBER' && (!user.member || user.member.status !== 'ACTIVE')) {
-      throw new UnauthorizedException('Member account is not active');
-    }
-    // Revocation of a member's allowlist entry must take effect immediately, for
-    // both Google and email/password members. Locally-signed test identities
-    // (no googleSubject, no password auth) are exempt — they have no allowlist row.
-    if (user.role === 'MEMBER' && (user.googleSubject || user.passwordAuthEnabled) &&
-        (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) {
-      throw new UnauthorizedException('Member access has been revoked');
-    }
-    // Any account can be deactivated by an administrator; the block
-    // must take effect immediately, not only at next login.
-    if (user.isActive === false) {
-      throw new UnauthorizedException('This account has been deactivated');
-    }
+      if (user.role === 'MEMBER' && (!user.member || user.member.status !== 'ACTIVE')) {
+        throw new UnauthorizedException('Member account is not active');
+      }
+      // Revocation of a member's allowlist entry must take effect immediately, for
+      // both Google and email/password members. Locally-signed test identities
+      // (no googleSubject, no password auth) are exempt — they have no allowlist row.
+      if (user.role === 'MEMBER' && (user.googleSubject || user.passwordAuthEnabled) &&
+          (user.member.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) {
+        throw new UnauthorizedException('Member access has been revoked');
+      }
+      // Any account can be deactivated by an administrator; the block
+      // must take effect immediately, not only at next login.
+      if (user.isActive === false) {
+        throw new UnauthorizedException('This account has been deactivated');
+      }
 
-    // Members carry no RBAC grants; skip the extra lookup on the hot member path.
-    const access = user.role === 'MEMBER'
-      ? { permissions: [] as string[], roleKeys: [] as string[], roleNames: [] as string[], isSuperAdmin: false }
-      : await this.rbac.resolveAccess(user.id, user.role);
+      // Members carry no RBAC grants; skip the extra lookup on the hot member path.
+      const access = user.role === 'MEMBER'
+        ? { permissions: [] as string[], roleKeys: [] as string[], roleNames: [] as string[], isSuperAdmin: false }
+        : await this.rbac.resolveAccess(user.id, user.role);
 
-    return {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      memberId: user.member?.id,
-      memberCode: user.member?.memberCode,
-      firstName: user.member?.firstName,
-      lastName: user.member?.lastName,
-      profilePhotoUrl: user.member?.profilePhotoUrl ?? null,
-      permissions: access.permissions,
-      accessRoles: access.roleKeys,
-      isSuperAdmin: access.isSuperAdmin,
-    };
+      return {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        memberId: user.member?.id,
+        memberCode: user.member?.memberCode,
+        firstName: user.member?.firstName,
+        lastName: user.member?.lastName,
+        profilePhotoUrl: user.member?.profilePhotoUrl ?? null,
+        permissions: access.permissions,
+        accessRoles: access.roleKeys,
+        isSuperAdmin: access.isSuperAdmin,
+      };
+    }, ['auth', `user:${payload.sub}`]);
   }
 }
