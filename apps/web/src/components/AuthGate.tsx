@@ -62,14 +62,25 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center text-2xl font-bold">
             !
           </div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Connection Error</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Connection Notice</h2>
           <p role="alert" className="text-sm text-slate-600 dark:text-slate-400">{error}</p>
-          <button
-            className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white font-bold text-sm shadow-md transition-all"
-            onClick={() => setAttempt(value => value + 1)}
-          >
-            Retry Connection
-          </button>
+          <div className="flex flex-col gap-2 pt-2">
+            <button
+              className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white font-bold text-sm shadow-md transition-all"
+              onClick={() => { setError(''); setAttempt(value => value + 1); }}
+            >
+              Retry Connection
+            </button>
+            <button
+              className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-all"
+              onClick={() => {
+                removeAuthToken();
+                router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+              }}
+            >
+              Sign In with Another Account
+            </button>
+          </div>
         </div>
       </main>
     );

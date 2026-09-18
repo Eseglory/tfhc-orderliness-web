@@ -17,11 +17,11 @@ declare global {
 }
 
 export function GoogleSignInButton({ onCredential }: { onCredential: (idToken: string) => void }) {
-  const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const rawClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || '1036684690535-4oalsecrnjcbk774heohgeohd8s2v1k2.apps.googleusercontent.com';
   // A REPLACE_-prefixed value is an unfilled placeholder (mirrors how the API
   // treats GOOGLE_OAUTH_CLIENT_IDS) — treat it as unset rather than handing a
   // bogus client_id to Google Identity Services.
-  const clientId = rawClientId && !rawClientId.startsWith('REPLACE_') ? rawClientId : undefined;
+  const clientId = rawClientId && !rawClientId.startsWith('REPLACE_') ? rawClientId : '1036684690535-4oalsecrnjcbk774heohgeohd8s2v1k2.apps.googleusercontent.com';
   const buttonRef = useRef<HTMLDivElement>(null);
   // The GIS callback is registered once, but must always invoke the latest
   // onCredential — binding it to the first render's closure would capture a

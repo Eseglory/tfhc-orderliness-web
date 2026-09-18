@@ -13,11 +13,18 @@ export const getApiBaseUrl = (): string => {
       const port = (window as any).__E2E_API_PORT__ || (window.location.port === '3100' ? '4100' : '4000');
       return `${window.location.protocol}//${host}:${port}`;
     }
+
+    // Remote browser host (Vercel, Render, custom domain):
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (configured && configured.startsWith('http') && !configured.includes('localhost') && !configured.includes('127.0.0.1')) {
+      return configured;
+    }
+    return 'https://tfhc-orderliness-api.onrender.com';
   }
-  if (process.env.NEXT_PUBLIC_API_URL) {
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  return 'http://localhost:4000';
+  return process.env.NODE_ENV === 'production' ? 'https://tfhc-orderliness-api.onrender.com' : 'http://localhost:4000';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
