@@ -1,7 +1,7 @@
 'use client';
 
 import { pwaRuntime } from '../../../../lib/pwa/runtime';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi, ApiError } from '../../../../lib/api';
@@ -56,7 +56,7 @@ export default function MemberCalendarPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  const loadCalendar = async () => {
+  const loadCalendar = useCallback(async () => {
     setLoading(true);
     try {
       const [year, month] = selectedMonth.split('-').map(Number);
@@ -78,11 +78,11 @@ export default function MemberCalendarPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedMonth]);
 
   useEffect(() => {
     loadCalendar();
-  }, [selectedMonth]);
+  }, [loadCalendar]);
 
   const filteredItems = items.filter((item) => {
     if (filterType === 'ALL') return true;

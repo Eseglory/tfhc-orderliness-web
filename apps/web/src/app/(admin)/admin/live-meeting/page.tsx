@@ -79,7 +79,7 @@ export default function AdminLiveMeetingsIndexPage() {
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <Link
-              href="/admin/meetings?action=create"
+              href="/admin/events"
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm shadow-md shadow-indigo-600/20 hover:bg-indigo-700 active:scale-[0.98] transition-all"
             >
               <Plus className="w-4 h-4" />

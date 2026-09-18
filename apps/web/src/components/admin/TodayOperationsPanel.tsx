@@ -143,7 +143,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                         </div>
 
                         <Link
-                          href={`/admin/live-meeting?meetingId=${m.id}`}
+                          href={`/admin/live-meeting/${m.id}`}
                           className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold shadow-xs shrink-0"
                         >
                           Check-in
@@ -168,29 +168,25 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
               </div>
 
               {upcomingMeetings.length === 0 ? (
-                <div className="p-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-dashed border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-                  No upcoming events scheduled.
-                </div>
+                <p className="text-xs text-slate-400 italic py-2">No upcoming services today</p>
               ) : (
                 <div className="space-y-2">
-                  {upcomingMeetings.slice(0, 5).map((m) => {
+                  {upcomingMeetings.map((m) => {
                     const dateObj = new Date(m.startTime);
                     const timeString = dateObj.toLocaleTimeString(undefined, {
                       hour: 'numeric',
                       minute: '2-digit',
                     });
-                    const dateString = `${dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: dateObj.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })} • ${timeString}`;
-                    const catName = m.category?.name || m.categoryName;
-
+                    const catName = m.category?.name || '';
                     return (
                       <div
                         key={m.id}
-                        className="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 transition-colors flex items-center justify-between gap-3"
+                        className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
                       >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-bold text-[#f2320c] dark:text-red-400">
-                              {dateString}
+                        <div className="min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                              {timeString}
                             </span>
                             {catName && (
                               <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
@@ -210,7 +206,7 @@ export const TodayOperationsPanel: React.FC<TodayOperationsPanelProps> = ({
                         </div>
 
                         <Link
-                          href={`/admin/meetings/${m.id}`}
+                          href={`/admin/live-meeting/${m.id}`}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60 shrink-0"
                           title="Manage Meeting"
                         >
