@@ -271,6 +271,39 @@ export default function WardrobeSchedulePage() {
     }
   };
 
+  const getOutfitImage = (scheduleOrOutfit: any) => {
+    const outfit = scheduleOrOutfit?.outfit || scheduleOrOutfit;
+    if (outfit?.coverImageUrl) return outfit.coverImageUrl;
+    const title = `${scheduleOrOutfit?.title || ''} ${outfit?.title || ''}`.toLowerCase();
+    if (title.includes('native') || title.includes('traditional')) return '/wardrobe/native-all.jpg';
+    if (title.includes('carton') || title.includes('red tie')) return '/wardrobe/carton-red-tie.jpg';
+    if (title.includes('colour riot') || title.includes('color riot')) return '/wardrobe/colour-riot-suit.jpg';
+    if (title.includes('lemon') || title.includes('lime')) return '/wardrobe/lemon-gown.jpg';
+    if (title.includes('white native')) return '/wardrobe/white-native.jpg';
+    if (title.includes('suspenders')) return '/wardrobe/black-suspenders.jpg';
+    if (title.includes('blazer') || title.includes('bright')) return '/wardrobe/bright-blazer.jpg';
+    return '/wardrobe/native-all.jpg';
+  };
+
+  const getDaysUntil = (dateStr: string) => {
+    try {
+      const target = new Date(dateStr);
+      const now = new Date();
+      target.setHours(0, 0, 0, 0);
+      now.setHours(0, 0, 0, 0);
+      const diffTime = target.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Tomorrow';
+      if (diffDays > 1 && diffDays <= 7) return `This ${target.toLocaleDateString('en-GB', { weekday: 'long' })}`;
+      if (diffDays > 7) return `In ${diffDays} days`;
+      if (diffDays < 0) return `${Math.abs(diffDays)}d ago`;
+      return 'Upcoming';
+    } catch {
+      return 'Upcoming';
+    }
+  };
+
   // Filter schedules for current selected month/search
   const currentMonthYearStr = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
   const filteredSchedules = schedules.filter((s) => {
@@ -293,14 +326,14 @@ export default function WardrobeSchedulePage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Link href="/admin/wardrobe" className="hover:text-primary transition-colors flex items-center gap-1">
+            <Link href="/admin/wardrobe" className="hover:text-primary transition-colors flex items-center gap-1 font-medium">
               <ArrowLeft className="w-4 h-4" /> Wardrobe Hub
             </Link>
             <span>/</span>
-            <span className="text-foreground font-medium">Timetable & Schedule</span>
+            <span className="text-foreground font-semibold">Timetable & Schedule</span>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary via-blue-600 to-teal-600 bg-clip-text text-transparent">
-            Wardrobe Timetable & Monthly Scheduler
+            Wardrobe Timetable & Scheduler
           </h1>
           <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
             Assign visual outfits to Sunday services and special programs. Toggle between Draft and Published state
@@ -452,6 +485,8 @@ export default function WardrobeSchedulePage() {
             const isPublished = sched.status === 'PUBLISHED';
             const formattedDay = dateObj.toLocaleDateString('default', { weekday: 'short', day: 'numeric', month: 'short' });
             const formattedTime = dateObj.toLocaleTimeString('default', { hour: 'numeric', minute: '2-digit' });
+            const outfitImg = getOutfitImage(sched);
+            const countdown = getDaysUntil(sched.scheduledDate);
 
             return (
               <div
@@ -489,12 +524,16 @@ export default function WardrobeSchedulePage() {
                         {sched.status}
                       </span>
 
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50">
+                        {countdown}
+                      </span>
+
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" /> {formattedTime}
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                    <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors cursor-pointer" onClick={() => setSelectedScheduleForDetail(sched)}>
                       {sched.title}
                     </h3>
 
@@ -507,30 +546,26 @@ export default function WardrobeSchedulePage() {
                 {/* Center: Assigned Visual Outfit */}
                 <div
                   onClick={() => setSelectedScheduleForDetail(sched)}
-                  className="w-full md:w-80 p-3 rounded-2xl bg-muted/30 border border-muted/80 hover:border-primary/40 cursor-pointer transition-all flex items-center gap-3.5 group/outfit"
+                  className="w-full md:w-84 p-3 rounded-2xl bg-muted/40 border border-muted/80 hover:border-primary/50 hover:bg-muted/70 cursor-pointer transition-all flex items-center gap-3.5 group/outfit shadow-2xs"
                 >
-                  {sched.outfit.coverImageUrl ? (
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-black/10 dark:border-white/10 flex-shrink-0 bg-slate-900">
                     <img
-                      src={sched.outfit.coverImageUrl}
+                      src={outfitImg}
                       alt={sched.outfit.title}
-                      className="w-14 h-14 rounded-xl object-cover border flex-shrink-0"
+                      className="w-full h-full object-cover group-hover/outfit:scale-110 transition-transform duration-500"
                     />
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                      <Shirt className="w-6 h-6 stroke-[1.5]" />
-                    </div>
-                  )}
+                  </div>
 
-                  <div className="space-y-1 min-w-0">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      <p className="text-xs font-bold text-foreground line-clamp-1 group-hover/outfit:text-primary">
+                      <Sparkles className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                      <p className="text-xs font-extrabold text-foreground line-clamp-1 group-hover/outfit:text-primary transition-colors">
                         {sched.outfit.title}
                       </p>
                     </div>
 
                     {/* Mini Swatches */}
-                    <div className="flex items-center gap-1 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {sched.outfit.items.slice(0, 4).map((i, idx) => (
                         <span
                           key={idx}
@@ -539,8 +574,8 @@ export default function WardrobeSchedulePage() {
                           style={{ backgroundColor: i.variant?.colorHex || '#CBD5E1' }}
                         />
                       ))}
-                      <span className="text-[10px] text-muted-foreground ml-1">
-                        {sched.outfit.items.length} pieces
+                      <span className="text-[10px] font-medium text-muted-foreground ml-0.5">
+                        {sched.outfit.items.length} pieces • <span className="text-primary font-bold">View</span>
                       </span>
                     </div>
                   </div>
@@ -608,15 +643,15 @@ export default function WardrobeSchedulePage() {
               {/* Event Title */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Event / Service Title *
+                  Schedule / Sunday Title *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Sunday Celebration Service, Youth Convention, Thanksgiving"
+                  placeholder="e.g. Sunday 20th September: Native for All"
                   value={scheduleTitle}
                   onChange={(e) => setScheduleTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 font-medium"
+                  className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
                 />
               </div>
 
@@ -624,16 +659,16 @@ export default function WardrobeSchedulePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Event Type
+                    Event Type *
                   </label>
                   <select
                     value={scheduleEventType}
                     onChange={(e) => setScheduleEventType(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
                   >
-                    {EVENT_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>
-                        {t.label}
+                    {EVENT_TYPES.map((et) => (
+                      <option key={et.value} value={et.value}>
+                        {et.label}
                       </option>
                     ))}
                   </select>
@@ -641,41 +676,32 @@ export default function WardrobeSchedulePage() {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Date & Time *
+                    Scheduled Date & Time *
                   </label>
                   <input
                     type="datetime-local"
                     required
                     value={scheduleDate}
                     onChange={(e) => setScheduleDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-2.5 bg-background border rounded-xl text-sm font-semibold focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
               </div>
 
-              {/* Assigned Outfit Selector */}
+              {/* Outfit Selection */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-primary" /> Select Required Outfit *
-                  </label>
-                  <Link
-                    href="/admin/wardrobe/outfits"
-                    target="_blank"
-                    className="text-[11px] text-primary hover:underline"
-                  >
-                    + Compose New Outfit
-                  </Link>
-                </div>
-
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Select Visual Outfit Template *
+                </label>
                 {outfits.length === 0 ? (
-                  <p className="text-xs text-destructive p-3 rounded-xl border bg-destructive/10">
-                    No outfits available. Please create outfits in the Outfit Builder first.
+                  <p className="text-xs text-amber-600 p-3 bg-amber-50 rounded-xl border border-amber-200">
+                    No outfits found. Create an outfit template first in the Wardrobe hub.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-1 gap-2.5 max-h-48 overflow-y-auto p-2 bg-muted/20 border rounded-2xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto p-1 border rounded-2xl bg-muted/20">
                     {outfits.map((outfit) => {
                       const isSelected = scheduleOutfitId === outfit.id;
+                      const outfitImg = getOutfitImage(outfit);
                       return (
                         <div
                           key={outfit.id}
@@ -683,23 +709,17 @@ export default function WardrobeSchedulePage() {
                           className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
                             isSelected
                               ? 'bg-primary/10 border-primary shadow-xs'
-                              : 'bg-card hover:border-primary/40'
+                              : 'bg-card border-border hover:bg-muted/60'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            {outfit.coverImageUrl ? (
-                              <img
-                                src={outfit.coverImageUrl}
-                                alt={outfit.title}
-                                className="w-10 h-10 rounded-lg object-cover border"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                                <Shirt className="w-5 h-5" />
-                              </div>
-                            )}
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <img
+                              src={outfitImg}
+                              alt={outfit.title}
+                              className="w-10 h-10 rounded-lg object-cover border flex-shrink-0"
+                            />
                             <div>
-                              <p className="text-xs font-bold text-foreground">{outfit.title}</p>
+                              <p className="text-xs font-bold text-foreground line-clamp-1">{outfit.title}</p>
                               <p className="text-[10px] text-muted-foreground">
                                 {outfit.gender} • {outfit.items.length} pieces
                               </p>
@@ -707,7 +727,7 @@ export default function WardrobeSchedulePage() {
                           </div>
 
                           <span
-                            className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 ${
                               isSelected ? 'bg-primary text-primary-foreground border-primary' : 'border-muted-foreground/40'
                             }`}
                           >
@@ -885,90 +905,219 @@ export default function WardrobeSchedulePage() {
         </div>
       )}
 
-      {/* MODAL: Visual Schedule Details & Breakdown */}
-      {selectedScheduleForDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card border rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b pb-4">
-              <div>
-                <span className="text-xs px-2.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold uppercase tracking-wider">
-                  {selectedScheduleForDetail.eventType.replace('_', ' ')}
-                </span>
-                <h3 className="text-xl font-bold mt-1">{selectedScheduleForDetail.title}</h3>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(selectedScheduleForDetail.scheduledDate).toLocaleString('default', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedScheduleForDetail(null)}
-                className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition-colors"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
+      {/* MODAL: Visual Schedule Details & Breakdown (Editorial Lookbook Modal) */}
+      {selectedScheduleForDetail && (() => {
+        const detailImg = getOutfitImage(selectedScheduleForDetail);
+        const isPub = selectedScheduleForDetail.status === 'PUBLISHED';
+        const countdown = getDaysUntil(selectedScheduleForDetail.scheduledDate);
+        const formattedDate = new Date(selectedScheduleForDetail.scheduledDate).toLocaleString('default', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
 
-            {/* Visual Outfit Header */}
-            <div className="relative w-full h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center">
-              {selectedScheduleForDetail.outfit.coverImageUrl ? (
-                <img
-                  src={selectedScheduleForDetail.outfit.coverImageUrl}
-                  alt={selectedScheduleForDetail.outfit.title}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-white/60">
-                  <Shirt className="w-12 h-12 stroke-[1.25]" />
-                  <span className="text-xs font-semibold tracking-wider uppercase">Visual Outfit Ensemble</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute bottom-3 left-4 right-4">
-                <h4 className="text-lg font-extrabold text-white">{selectedScheduleForDetail.outfit.title}</h4>
-              </div>
-            </div>
-
-            {/* Pieces */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-extrabold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-primary" /> Outfit Components ({selectedScheduleForDetail.outfit.items.length})
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {selectedScheduleForDetail.outfit.items.map((layer, idx) => (
-                  <div key={idx} className="p-3 rounded-xl border bg-muted/30 flex items-center gap-3">
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 sm:p-6 animate-in fade-in duration-200">
+            <div className="bg-slate-950 border border-slate-800 text-white rounded-[2rem] max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+              
+              {/* Header Bar */}
+              <div className="p-6 pb-4 border-b border-slate-800/80 flex items-start justify-between gap-4 bg-slate-900/40">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    <span className="text-[11px] px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-extrabold uppercase tracking-wider">
+                      {selectedScheduleForDetail.eventType.replace('_', ' ')}
+                    </span>
                     <span
-                      className="w-5 h-5 rounded-full border border-black/20 shadow-xs flex-shrink-0"
-                      style={{ backgroundColor: layer.variant?.colorHex || '#CBD5E1' }}
-                    />
+                      className={`text-[11px] px-3 py-1 rounded-full font-bold flex items-center gap-1.5 border ${
+                        isPub
+                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${isPub ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                      {isPub ? 'Live on Member App' : 'Draft Mode'}
+                    </span>
+                    <span className="text-[11px] px-3 py-1 rounded-full bg-white/10 text-white border border-white/10 font-bold">
+                      {countdown}
+                    </span>
+                  </div>
+                  <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                    {selectedScheduleForDetail.title}
+                  </h3>
+                  <p className="text-xs font-medium text-slate-400 flex items-center gap-1.5 mt-1">
+                    <CalendarIcon className="w-3.5 h-3.5 text-indigo-400" />
+                    {formattedDate}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedScheduleForDetail(null)}
+                  className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-all border border-white/5"
+                  title="Close Modal"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Content Body */}
+              <div className="p-6 overflow-y-auto space-y-6">
+                
+                {/* Hero Editorial Lookbook Card */}
+                <div className="relative w-full h-64 sm:h-72 rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl group">
+                  <img
+                    src={detailImg}
+                    alt={selectedScheduleForDetail.outfit.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                  />
+                  {/* Subtle Gradient Framing */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent pointer-events-none" />
+
+                  {/* Top Badges */}
+                  <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-2 pointer-events-none">
+                    <div className="px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{selectedScheduleForDetail.outfit.gender === 'ALL' ? 'For All Members' : selectedScheduleForDetail.outfit.gender}</span>
+                    </div>
+
+                    <div className="px-3.5 py-1.5 rounded-full bg-indigo-950/80 backdrop-blur-md border border-indigo-500/40 text-indigo-300 text-xs font-black tracking-wide flex items-center gap-1.5 shadow-lg">
+                      <Shirt className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Official Dress Code</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom Title on Artwork */}
+                  <div className="absolute bottom-4 left-5 right-5 flex items-end justify-between gap-3 pointer-events-none">
                     <div>
-                      <p className="text-xs font-bold text-foreground">{layer.item?.name}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {layer.variant?.colorName || 'Default'}
+                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-0.5 block">
+                        Prescribed Ensemble
+                      </span>
+                      <h4 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-md">
+                        {selectedScheduleForDetail.outfit.title}
+                      </h4>
+                    </div>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-white border border-white/20">
+                      {selectedScheduleForDetail.outfit.items.length} Pieces
+                    </span>
+                  </div>
+                </div>
+
+                {/* Special Instructions / Notes Banner */}
+                {selectedScheduleForDetail.notes && (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h5 className="text-xs font-black uppercase tracking-wider text-amber-400">
+                        Dress Code Guidance &amp; Notes
+                      </h5>
+                      <p className="text-xs text-amber-100/90 leading-relaxed">
+                        {selectedScheduleForDetail.notes}
                       </p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                )}
 
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setSelectedScheduleForDetail(null)}
-                className="px-6 py-2 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90"
-              >
-                Close
-              </button>
+                {/* Prescribed Attire Layers Breakdown */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-indigo-400" /> Prescribed Components &amp; Layers ({selectedScheduleForDetail.outfit.items.length})
+                    </h4>
+                    <span className="text-[11px] text-slate-400 font-medium">Standard Attire Blueprint</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedScheduleForDetail.outfit.items.map((layer, idx) => {
+                      const hex = layer.variant?.colorHex || '#A855F7';
+                      return (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-2xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 transition-all flex items-center gap-3.5 shadow-xs"
+                        >
+                          <div
+                            className="w-9 h-9 rounded-xl border-2 border-white/20 shadow-md flex-shrink-0 flex items-center justify-center"
+                            style={{ backgroundColor: hex }}
+                          >
+                            <span className="text-[10px] font-black text-white/90 drop-shadow-xs uppercase">
+                              L{idx + 1}
+                            </span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-extrabold text-white line-clamp-1">
+                              {layer.item?.name || 'Garment Piece'}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] font-semibold text-slate-400">
+                                {layer.variant?.colorName || 'Prescribed Color'}
+                              </span>
+                              {layer.item?.category && (
+                                <>
+                                  <span className="text-slate-600">•</span>
+                                  <span className="text-[10px] text-indigo-400 font-medium capitalize">
+                                    {layer.item.category.toLowerCase()}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="p-6 pt-4 border-t border-slate-800/80 bg-slate-900/40 flex items-center justify-between gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleTogglePublish(selectedScheduleForDetail);
+                    setSelectedScheduleForDetail((prev) =>
+                      prev ? { ...prev, status: prev.status === 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED' } : null
+                    );
+                  }}
+                  className={`px-4 py-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all ${
+                    isPub
+                      ? 'border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+                      : 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20'
+                  }`}
+                >
+                  {isPub ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{isPub ? 'Switch to Draft' : 'Publish to Members'}</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sched = selectedScheduleForDetail;
+                      setSelectedScheduleForDetail(null);
+                      openEditScheduleModal(sched);
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit Schedule
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedScheduleForDetail(null)}
+                    className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-extrabold text-xs hover:bg-primary/90 transition-all shadow-md shadow-primary/20"
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       </div>
     </AdminLayoutShell>
   );
