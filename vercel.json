@@ -5,11 +5,15 @@
   "outputDirectory": "apps/web/.next",
   "installCommand": "corepack enable && yarn install",
   "env": {
-    "ENABLE_EXPERIMENTAL_COREPACK": "1"
+    "ENABLE_EXPERIMENTAL_COREPACK": "1",
+    "NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1036684690535-4oalsecrnjcbk774heohgeohd8s2v1k2.apps.googleusercontent.com",
+    "NEXT_PUBLIC_API_URL": "https://tfhc-orderliness-api.onrender.com"
   },
   "build": {
     "env": {
-      "ENABLE_EXPERIMENTAL_COREPACK": "1"
+      "ENABLE_EXPERIMENTAL_COREPACK": "1",
+      "NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1036684690535-4oalsecrnjcbk774heohgeohd8s2v1k2.apps.googleusercontent.com",
+      "NEXT_PUBLIC_API_URL": "https://tfhc-orderliness-api.onrender.com"
     }
   }
 }
