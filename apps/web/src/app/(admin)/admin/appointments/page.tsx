@@ -28,6 +28,7 @@ import {
   ChevronsRight,
   Edit2,
   CalendarDays,
+  CalendarCheck,
   XCircle,
   AlertTriangle,
   UserCheck,
@@ -968,301 +969,387 @@ export default function AppointmentsPage() {
           </div>
         )}
 
-        {/* Schedule New Appointment Modal */}
-        <Modal
-          open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          title="Schedule New Appointment"
-        >
-          <form onSubmit={handleCreateAppointment} className="space-y-4 text-xs">
-            {/* Service & Member selector */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Service Offering</label>
-                <select
-                  value={formServiceId}
-                  onChange={(e) => handleServiceSelect(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+        {/* Schedule New Appointment Modal (Dark Glassmorphism Theme) */}
+        {createModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
+            <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-800/80 flex items-start justify-between gap-4 bg-slate-900/50">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 border border-amber-500/25 shadow-xs">
+                    <CalendarCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                      Schedule New Appointment
+                    </h3>
+                    <p className="text-xs font-medium text-slate-400 mt-0.5">
+                      Book 1-on-1 pastoral session, counseling, or executive consultation.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCreateModalOpen(false)}
+                  className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+                  title="Close"
                 >
-                  <option value="">Custom Consultation</option>
-                  {servicesList.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.durationMinutes}m)
-                    </option>
-                  ))}
-                </select>
+                  <XCircle className="w-5 h-5" />
+                </button>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Existing Member (Optional)</label>
-                <select
-                  value={formMemberId}
-                  onChange={(e) => handleMemberSelect(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="">-- Manual Client Info --</option>
-                  {membersList.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.firstName} {m.lastName} ({m.memberCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+              <form onSubmit={handleCreateAppointment} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                <div className="p-6 overflow-y-auto space-y-4 flex-1 min-h-0 text-xs">
+                  {/* Service Offering & Member */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">
+                        Service Offering
+                      </label>
+                      <select
+                        value={formServiceId}
+                        onChange={(e) => handleServiceSelect(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      >
+                        <option value="">Custom Consultation</option>
+                        {servicesList.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.durationMinutes}m)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-            {/* Client info */}
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Name *</label>
-              <input
-                type="text"
-                value={formClientName}
-                onChange={(e) => setFormClientName(e.target.value)}
-                placeholder="Full client name"
-                required
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">
+                        Existing Member (Optional)
+                      </label>
+                      <select
+                        value={formMemberId}
+                        onChange={(e) => handleMemberSelect(e.target.value)}
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      >
+                        <option value="">-- Manual Client Info --</option>
+                        {membersList.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.firstName} {m.lastName} ({m.memberCode})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Email</label>
-                <input
-                  type="email"
-                  value={formClientEmail}
-                  onChange={(e) => setFormClientEmail(e.target.value)}
-                  placeholder="client@example.com"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
+                  {/* Client Name */}
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">
+                      Client Name <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formClientName}
+                      onChange={(e) => setFormClientName(e.target.value)}
+                      placeholder="e.g. Sister Deborah Adeola"
+                      required
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                    />
+                  </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Client Phone</label>
-                <input
-                  type="tel"
-                  value={formClientPhone}
-                  onChange={(e) => setFormClientPhone(e.target.value)}
-                  placeholder="+234..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-            </div>
+                  {/* Email & Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Client Email</label>
+                      <input
+                        type="email"
+                        value={formClientEmail}
+                        onChange={(e) => setFormClientEmail(e.target.value)}
+                        placeholder="client@example.com"
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      />
+                    </div>
 
-            {/* Provider info */}
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Assigned Provider / Staff *</label>
-              <input
-                type="text"
-                value={formProviderName}
-                onChange={(e) => setFormProviderName(e.target.value)}
-                placeholder="Staff / Coordinator Name"
-                required
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Client Phone</label>
+                      <input
+                        type="tel"
+                        value={formClientPhone}
+                        onChange={(e) => setFormClientPhone(e.target.value)}
+                        placeholder="+234..."
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      />
+                    </div>
+                  </div>
 
-            {/* Date & Time */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Date *</label>
-                <input
-                  type="date"
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
+                  {/* Assigned Provider */}
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">
+                      Assigned Provider / Staff <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formProviderName}
+                      onChange={(e) => setFormProviderName(e.target.value)}
+                      placeholder="e.g. Glory Eseosa / Pastor in Charge"
+                      required
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                    />
+                  </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Start Time *</label>
-                <input
-                  type="time"
-                  value={formTime}
-                  onChange={(e) => setFormTime(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
+                  {/* Date, Time, Duration */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">
+                        Date <span className="text-amber-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={formDate}
+                        onChange={(e) => setFormDate(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      />
+                    </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Duration</label>
-                <select
-                  value={formDuration}
-                  onChange={(e) => setFormDuration(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value={15}>15 Mins</option>
-                  <option value={30}>30 Mins</option>
-                  <option value={45}>45 Mins</option>
-                  <option value={60}>60 Mins</option>
-                  <option value={90}>90 Mins</option>
-                </select>
-              </div>
-            </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">
+                        Start Time <span className="text-amber-500">*</span>
+                      </label>
+                      <input
+                        type="time"
+                        value={formTime}
+                        onChange={(e) => setFormTime(e.target.value)}
+                        required
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      />
+                    </div>
 
-            {/* Mode & Venue */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mode</label>
-                <select
-                  value={formMode}
-                  onChange={(e) => setFormMode(e.target.value as AppointmentMode)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="IN_PERSON">In-Person</option>
-                  <option value="VIDEO_CONFERENCE">Online (Google Meet)</option>
-                  <option value="PHONE_CALL">Phone Call</option>
-                </select>
-              </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Duration</label>
+                      <select
+                        value={formDuration}
+                        onChange={(e) => setFormDuration(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      >
+                        <option value={15}>15 Mins</option>
+                        <option value={30}>30 Mins</option>
+                        <option value={45}>45 Mins</option>
+                        <option value={60}>60 Mins (1 Hour)</option>
+                        <option value={90}>90 Mins (1.5 Hr)</option>
+                        <option value={120}>120 Mins (2 Hr)</option>
+                      </select>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Venue / Room</label>
-                <input
-                  type="text"
-                  value={formLocation}
-                  onChange={(e) => setFormLocation(e.target.value)}
-                  placeholder="e.g. Executive Suite 201"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-            </div>
+                  {/* Mode & Venue */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Mode</label>
+                      <select
+                        value={formMode}
+                        onChange={(e) => setFormMode(e.target.value as AppointmentMode)}
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      >
+                        <option value="IN_PERSON">🏢 In-Person</option>
+                        <option value="VIDEO_CONFERENCE">📹 Online (Google Meet)</option>
+                        <option value="PHONE_CALL">📞 Phone Call</option>
+                      </select>
+                    </div>
 
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Session Notes</label>
-              <textarea
-                value={formNotes}
-                onChange={(e) => setFormNotes(e.target.value)}
-                placeholder="Add agenda, background, or preparation notes..."
-                rows={2}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
+                    <div className="space-y-1.5">
+                      <label className="font-black uppercase tracking-wider text-slate-400 block">Venue / Room</label>
+                      <input
+                        type="text"
+                        value={formLocation}
+                        onChange={(e) => setFormLocation(e.target.value)}
+                        placeholder="e.g. Executive Suite 201"
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all shadow-2xs"
+                      />
+                    </div>
+                  </div>
 
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-sm disabled:opacity-50"
-              >
-                {saving ? 'Scheduling...' : 'Confirm Appointment'}
-              </button>
-            </div>
-          </form>
-        </Modal>
+                  {/* Notes */}
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">Session Notes</label>
+                    <textarea
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      placeholder="Add agenda, counseling background, or preparation notes..."
+                      rows={2}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-medium text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40 transition-all resize-none shadow-2xs"
+                    />
+                  </div>
+                </div>
 
-        {/* Reschedule Modal */}
-        <Modal
-          open={rescheduleModalOpen}
-          onClose={() => setRescheduleModalOpen(false)}
-          title={`Reschedule: ${selectedAppointment?.referenceCode || 'Appointment'}`}
-        >
-          <form onSubmit={handleReschedule} className="space-y-4 text-xs">
-            <p className="text-slate-500 dark:text-slate-400">
-              Current slot: <strong>{selectedAppointment && new Date(selectedAppointment.startTime).toLocaleString()}</strong>
-            </p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">New Date *</label>
-                <input
-                  type="date"
-                  value={rescheduleDate}
-                  onChange={(e) => setRescheduleDate(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">New Start Time *</label>
-                <input
-                  type="time"
-                  value={rescheduleTime}
-                  onChange={(e) => setRescheduleTime(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Reason for Rescheduling</label>
-              <input
-                type="text"
-                value={rescheduleReason}
-                onChange={(e) => setRescheduleReason(e.target.value)}
-                placeholder="e.g. Client requested postponement"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setRescheduleModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-sm disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save New Slot'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-
-        {/* Cancel Appointment Dialog */}
-        <Modal
-          open={!!cancellingAppointment}
-          onClose={() => setCancellingAppointment(null)}
-          title="Cancel Appointment"
-        >
-          <div className="space-y-4 text-xs">
-            <p className="text-slate-600 dark:text-slate-300">
-              Are you sure you want to cancel appointment <strong>{cancellingAppointment?.referenceCode}</strong> for{' '}
-              <strong>{cancellingAppointment?.clientName}</strong>?
-            </p>
-
-            <div>
-              <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Cancellation Reason</label>
-              <input
-                type="text"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="e.g. Schedule conflict"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setCancellingAppointment(null)}
-                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmCancel}
-                className="px-4 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm"
-              >
-                Confirm Cancellation
-              </button>
+                {/* Actions Footer */}
+                <div className="px-6 py-4 border-t border-slate-800/80 bg-slate-900/50 flex items-center justify-end gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCreateModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/25 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {saving ? 'Scheduling...' : 'Confirm Appointment'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </Modal>
+        )}
+
+        {/* Reschedule Modal (Dark Glassmorphism Theme) */}
+        {rescheduleModalOpen && selectedAppointment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
+            <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/25">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white">
+                      Reschedule: {selectedAppointment.referenceCode}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Client: {selectedAppointment.clientName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRescheduleModalOpen(false)}
+                  className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleReschedule} className="p-6 space-y-4 text-xs">
+                <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800/80">
+                  <span className="text-slate-400 text-[11px] font-bold uppercase tracking-wider block mb-1">
+                    Current Scheduled Slot
+                  </span>
+                  <span className="text-white font-bold text-sm">
+                    {new Date(selectedAppointment.startTime).toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">New Date *</label>
+                    <input
+                      type="date"
+                      value={rescheduleDate}
+                      onChange={(e) => setRescheduleDate(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-black uppercase tracking-wider text-slate-400 block">New Start Time *</label>
+                    <input
+                      type="time"
+                      value={rescheduleTime}
+                      onChange={(e) => setRescheduleTime(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-semibold text-xs focus:ring-2 focus:ring-amber-500/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-black uppercase tracking-wider text-slate-400 block">Reason for Rescheduling</label>
+                  <input
+                    type="text"
+                    value={rescheduleReason}
+                    onChange={(e) => setRescheduleReason(e.target.value)}
+                    placeholder="e.g. Client requested postponement"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-medium text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-amber-500/40"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setRescheduleModalOpen(false)}
+                    className="px-5 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/25 disabled:opacity-50 cursor-pointer"
+                  >
+                    {saving ? 'Saving...' : 'Save New Slot'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Appointment Dialog (Dark Glassmorphism Theme) */}
+        {cancellingAppointment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-md w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-400 flex items-center justify-center border border-rose-500/25">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-white">Cancel Appointment</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{cancellingAppointment.referenceCode}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCancellingAppointment(null)}
+                  className="p-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                <p className="text-slate-300 leading-relaxed bg-rose-950/30 border border-rose-900/50 p-3.5 rounded-2xl">
+                  Are you sure you want to cancel the session for <strong className="text-white">{cancellingAppointment.clientName}</strong>?
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="font-black uppercase tracking-wider text-slate-400 block">Cancellation Reason</label>
+                  <input
+                    type="text"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="e.g. Client unable to attend"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-800 bg-slate-900 text-white font-medium text-xs placeholder:text-slate-500 focus:ring-2 focus:ring-rose-500/40"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={() => setCancellingAppointment(null)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmCancel}
+                    className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs shadow-lg shadow-rose-600/25 transition-all cursor-pointer"
+                  >
+                    Confirm Cancellation
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AdminLayoutShell>
   );
