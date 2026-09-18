@@ -42,6 +42,7 @@ import {
   FileText,
   FileCheck,
   Award,
+  Share2,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import {
@@ -51,6 +52,11 @@ import {
   emptyEvent,
   meetingToForm,
 } from '../../../../components/EventForm';
+import {
+  buildAdvancedGoogleCalendarUrl,
+  formatMeetingInviteMessage,
+  extractVirtualUrl,
+} from '../../../../lib/calendar-integration';
 import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
 import { Modal, ConfirmDialog, useToast } from '../../../../components/ui';
@@ -744,6 +750,75 @@ function EventsManagementContent() {
                         </div>
                       </div>
 
+                      {/* Quick Google Calendar & Virtual Meeting actions bar */}
+                      {(() => {
+                        const virtualUrl = extractVirtualUrl(evt);
+                        const googleCalUrl = buildAdvancedGoogleCalendarUrl({
+                          id: evt.id,
+                          title: evt.title,
+                          description: evt.description,
+                          notes: evt.notes,
+                          startTime: evt.startTime,
+                          endTime: evt.endTime,
+                          locationName: evt.locationName,
+                          address: evt.address,
+                          virtualMeetingUrl: virtualUrl,
+                        });
+
+                        return (
+                          <div className="flex items-center justify-between gap-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200/80 dark:border-slate-800/80 text-xs">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <a
+                                href={googleCalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 font-bold text-[11px] text-amber-500 hover:text-amber-400 hover:underline"
+                                title="Open & Sync with Google Calendar"
+                              >
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                <span>Google Cal</span>
+                              </a>
+                              {virtualUrl && (
+                                <>
+                                  <span className="text-slate-600">•</span>
+                                  <a
+                                    href={virtualUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 font-bold text-[11px] text-blue-400 hover:text-blue-300 hover:underline truncate"
+                                    title={`Join Online Room: ${virtualUrl}`}
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Meet Link</span>
+                                  </a>
+                                </>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const msg = formatMeetingInviteMessage({
+                                  title: evt.title,
+                                  description: evt.description,
+                                  notes: evt.notes,
+                                  startTime: evt.startTime,
+                                  endTime: evt.endTime,
+                                  locationName: evt.locationName,
+                                  virtualMeetingUrl: virtualUrl,
+                                });
+                                navigator.clipboard.writeText(msg);
+                                notify('Invite details & meeting link copied to clipboard!', 'success');
+                              }}
+                              className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                              title="Copy invitation message to clipboard"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
+
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-1.5">
                           <Link
@@ -991,6 +1066,90 @@ function EventsManagementContent() {
                           </div>
                         </div>
                       )}
+
+                      {/* Google Calendar & Virtual Meeting Integration Card */}
+                      {(() => {
+                        const virtualUrl = extractVirtualUrl(selectedFocusSession);
+                        const googleCalUrl = buildAdvancedGoogleCalendarUrl({
+                          id: selectedFocusSession.id,
+                          title: selectedFocusSession.title,
+                          description: selectedFocusSession.description,
+                          notes: selectedFocusSession.notes,
+                          startTime: selectedFocusSession.startTime,
+                          endTime: selectedFocusSession.endTime,
+                          locationName: selectedFocusSession.locationName,
+                          address: selectedFocusSession.address,
+                          virtualMeetingUrl: virtualUrl,
+                        });
+
+                        return (
+                          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-blue-500/10 border border-amber-500/30 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="w-4 h-4 text-amber-400" />
+                                <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                                  Google Calendar &amp; Virtual Sync
+                                </span>
+                              </div>
+                              {virtualUrl ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                                  <Video className="w-3 h-3" />
+                                  Online Room Active
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400">
+                                  In-Person
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <a
+                                href={googleCalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 shadow-md"
+                              >
+                                <CalendarDays className="w-3.5 h-3.5" />
+                                Add / Sync to Google Calendar
+                              </a>
+
+                              {virtualUrl && (
+                                <a
+                                  href={virtualUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+                                >
+                                  <Video className="w-3.5 h-3.5" />
+                                  Launch Online Room
+                                </a>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const msg = formatMeetingInviteMessage({
+                                    title: selectedFocusSession.title,
+                                    description: selectedFocusSession.description,
+                                    notes: selectedFocusSession.notes,
+                                    startTime: selectedFocusSession.startTime,
+                                    endTime: selectedFocusSession.endTime,
+                                    locationName: selectedFocusSession.locationName,
+                                    virtualMeetingUrl: virtualUrl,
+                                  });
+                                  navigator.clipboard.writeText(msg);
+                                  notify('Formatted invitation copied to clipboard!', 'success');
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700"
+                              >
+                                <Share2 className="w-3.5 h-3.5 text-amber-400" />
+                                Copy Full Invite
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     <div className="p-12 text-center text-slate-500 border border-dashed border-slate-800 rounded-2xl">
@@ -1047,26 +1206,63 @@ function EventsManagementContent() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <Link
-                                  href={`/admin/live-meeting/${evt.id}`}
-                                  className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors"
-                                >
-                                  Monitor
-                                </Link>
-                                {canEdit && (
-                                  <button
-                                    onClick={() => {
-                                      setEditing(evt);
-                                      setFormOpen(true);
-                                    }}
-                                    className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                    title="Edit"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
+                              {(() => {
+                                const virtualUrl = extractVirtualUrl(evt);
+                                const googleCalUrl = buildAdvancedGoogleCalendarUrl({
+                                  id: evt.id,
+                                  title: evt.title,
+                                  description: evt.description,
+                                  notes: evt.notes,
+                                  startTime: evt.startTime,
+                                  endTime: evt.endTime,
+                                  locationName: evt.locationName,
+                                  address: evt.address,
+                                  virtualMeetingUrl: virtualUrl,
+                                });
+
+                                return (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <a
+                                      href={googleCalUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                      title="Sync with Google Calendar"
+                                    >
+                                      <CalendarDays className="w-3.5 h-3.5" />
+                                    </a>
+                                    {virtualUrl && (
+                                      <a
+                                        href={virtualUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        title="Join Google Meet / Online Room"
+                                      >
+                                        <Video className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                    <Link
+                                      href={`/admin/live-meeting/${evt.id}`}
+                                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors"
+                                    >
+                                      Monitor
+                                    </Link>
+                                    {canEdit && (
+                                      <button
+                                        onClick={() => {
+                                          setEditing(evt);
+                                          setFormOpen(true);
+                                        }}
+                                        className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        title="Edit"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );
@@ -1082,6 +1278,19 @@ function EventsManagementContent() {
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800/60 overflow-hidden">
                 {paginatedEvents.map((evt) => {
                   const badge = STATUS_BADGES[evt.status] || STATUS_BADGES.CLOSED;
+                  const virtualUrl = extractVirtualUrl(evt);
+                  const googleCalUrl = buildAdvancedGoogleCalendarUrl({
+                    id: evt.id,
+                    title: evt.title,
+                    description: evt.description,
+                    notes: evt.notes,
+                    startTime: evt.startTime,
+                    endTime: evt.endTime,
+                    locationName: evt.locationName,
+                    address: evt.address,
+                    virtualMeetingUrl: virtualUrl,
+                  });
+
                   return (
                     <div
                       key={evt.id}
@@ -1104,6 +1313,26 @@ function EventsManagementContent() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <a
+                          href={googleCalUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 rounded text-slate-400 hover:text-amber-400"
+                          title="Sync to Google Calendar"
+                        >
+                          <CalendarDays className="w-3.5 h-3.5" />
+                        </a>
+                        {virtualUrl && (
+                          <a
+                            href={virtualUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 rounded text-slate-400 hover:text-blue-400"
+                            title="Join Virtual Meet"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                          </a>
+                        )}
                         <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${badge.color}`}>
                           {badge.label}
                         </span>
