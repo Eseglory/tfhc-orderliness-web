@@ -218,6 +218,19 @@
       "phoneNumber": "08052076744",
       "birthday": "18th June",
       "profession": "Business"
+    },
+    {
+      "firstName": "David",
+      "lastName": "Folawewo",
+      "email": "david.folawewo@gmail.com",
+      "phoneNumber": "08000000000",
+      "gender": "FEMALE",
+      "roleInUnit": "Executive",
+      "profession": "Executive",
+      "aliases": [
+        "Folawewo David",
+        "Wewo David"
+      ]
     }
   ],
   "skipped": []
