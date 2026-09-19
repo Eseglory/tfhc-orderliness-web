@@ -1,4 +1,6 @@
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { assertEventCreateAuthority } from '../../common/rbac/authorization-rules';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { MeetingsService } from './meetings.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -6,12 +8,28 @@ import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Role, MeetingStatus } from '@tfhc/shared';
 
+import { ServiceReminderService } from './service-reminder.service';
+
 const isStaff = (role: string) => role === Role.ADMIN || role === Role.LEADER;
 
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('meetings')
 export class MeetingsController {
-  constructor(private meetingsService: MeetingsService) {}
+  constructor(
+    private meetingsService: MeetingsService,
+    private serviceReminderService: ServiceReminderService,
+  ) {}
+
+  @Get('active-reminder')
+  getActiveReminder(@CurrentUser('memberId') memberId?: string) {
+    return this.serviceReminderService.getActiveReminderForMember(memberId);
+  }
+
+  @RequirePermissions('events.read')
+  @Get(':id/reminder-stats')
+  getReminderStats(@Param('id') id: string) {
+    return this.serviceReminderService.getReminderStats(id);
+  }
 
   @Get('categories')
   getCategories() {
@@ -118,14 +136,16 @@ export class MeetingsController {
 
   @RequirePermissions('events.create')
   @Post()
-  create(@Body() body: any, @CurrentUser('userId') userId: string) {
-    return this.meetingsService.createMeeting(body, userId);
+  create(@Body() body: any, @CurrentUser() user: AuthenticatedUser) {
+    assertEventCreateAuthority(user, 'meetings');
+    return this.meetingsService.createMeeting(body, user.userId);
   }
 
   @RequirePermissions('events.create')
   @Post('recurring')
-  createRecurring(@Body() body: any, @CurrentUser('userId') userId: string) {
-    return this.meetingsService.createRecurringMeetings(body, userId);
+  createRecurring(@Body() body: any, @CurrentUser() user: AuthenticatedUser) {
+    assertEventCreateAuthority(user, 'meetings');
+    return this.meetingsService.createRecurringMeetings(body, user.userId);
   }
 
   @RequirePermissions('events.update')
@@ -142,8 +162,9 @@ export class MeetingsController {
 
   @RequirePermissions('events.create')
   @Post(':id/duplicate')
-  duplicate(@Param('id') id: string, @Body() body: { startTime?: string; title?: string }, @CurrentUser('userId') userId: string) {
-    return this.meetingsService.duplicateMeeting(id, body ?? {}, userId);
+  duplicate(@Param('id') id: string, @Body() body: { startTime?: string; title?: string }, @CurrentUser() user: AuthenticatedUser) {
+    assertEventCreateAuthority(user, 'meetings');
+    return this.meetingsService.duplicateMeeting(id, body ?? {}, user.userId);
   }
 
   @RequirePermissions('events.cancel')

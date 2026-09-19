@@ -126,3 +126,65 @@ const NO_AUTH: AuthState = {
 export function useAuth(): AuthState {
   return useContext(AuthContext) ?? NO_AUTH;
 }
+
+export const AUTHORIZED_PERSONS = {
+  ESEOSA_GLORY: 'engreseglory@gmail.com',
+  DANIEL_OGUAMANAM: 'danoguamanam@gmail.com',
+  JACOB_ONOJA: 'onojamonday123@gmail.com',
+  LOVETH_UBABUIKE: 'ngoziloveth41@gmail.com',
+  AANU_OYENIRAN: 'aanuoyeniran@gmail.com',
+  VICTORIA_OLANREWAJU: 'olarenwajuvictoria@gmail.com',
+  CONFORT_STEPHEN: 'comfort.osariroya@gmail.com',
+  PASEDA_OLUWAFEMI: 'fpaseda@yahoo.com',
+} as const;
+
+export function isEseosaGlory(user?: CurrentUser | null): boolean {
+  return user?.email?.toLowerCase() === AUTHORIZED_PERSONS.ESEOSA_GLORY;
+}
+
+export function isDaniel(user?: CurrentUser | null): boolean {
+  return user?.email?.toLowerCase() === AUTHORIZED_PERSONS.DANIEL_OGUAMANAM;
+}
+
+export function isLoveth(user?: CurrentUser | null): boolean {
+  return user?.email?.toLowerCase() === AUTHORIZED_PERSONS.LOVETH_UBABUIKE;
+}
+
+export function canCreateWardrobe(user?: CurrentUser | null): boolean {
+  const email = user?.email?.toLowerCase();
+  return (
+    email === AUTHORIZED_PERSONS.AANU_OYENIRAN ||
+    email === AUTHORIZED_PERSONS.VICTORIA_OLANREWAJU ||
+    email === AUTHORIZED_PERSONS.ESEOSA_GLORY
+  );
+}
+
+export function canCreateEvents(user?: CurrentUser | null): boolean {
+  const email = user?.email?.toLowerCase();
+  return (
+    email === AUTHORIZED_PERSONS.CONFORT_STEPHEN ||
+    email === AUTHORIZED_PERSONS.PASEDA_OLUWAFEMI ||
+    email === AUTHORIZED_PERSONS.ESEOSA_GLORY
+  );
+}
+
+export function canManageFinance(user?: CurrentUser | null): boolean {
+  return isEseosaGlory(user);
+}
+
+export function isJacob(target?: { email?: string | null; user?: { email?: string | null } | null } | null): boolean {
+  const email = target?.email || target?.user?.email;
+  return email?.toLowerCase() === AUTHORIZED_PERSONS.JACOB_ONOJA;
+}
+
+export function canApproveAbsenceFor(
+  reviewer?: CurrentUser | null,
+  requester?: { email?: string | null; user?: { email?: string | null } | null } | null,
+): boolean {
+  if (!reviewer) return false;
+  if (isJacob(requester)) {
+    return isDaniel(reviewer);
+  }
+  return true;
+}
+

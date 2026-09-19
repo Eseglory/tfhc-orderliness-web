@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { assertWardrobeCreateAuthority } from '../../common/rbac/authorization-rules';
 import { WardrobeAdminService } from './wardrobe-admin.service';
 import { WardrobeService } from './wardrobe.service';
 import {
@@ -91,7 +93,8 @@ export class WardrobeAdminController {
 
   @Post('items')
   @RequirePermissions('wardrobe.manage')
-  async createItem(@Body() dto: CreateWardrobeItemDto) {
+  async createItem(@Body() dto: CreateWardrobeItemDto, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.createItem(dto);
   }
 
@@ -116,7 +119,9 @@ export class WardrobeAdminController {
   async createVariant(
     @Param('itemId') itemId: string,
     @Body() dto: CreateWardrobeVariantDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.createVariant(itemId, dto);
   }
 
@@ -146,7 +151,11 @@ export class WardrobeAdminController {
       limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 },
     }),
   )
-  async uploadImage(@UploadedFile() file: { buffer: Buffer; size: number }) {
+  async uploadImage(
+    @UploadedFile() file: { buffer: Buffer; size: number },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.processAndStoreImage(file);
   }
 
@@ -178,9 +187,10 @@ export class WardrobeAdminController {
   @RequirePermissions('wardrobe.manage')
   async createOutfit(
     @Body() dto: CreateWardrobeOutfitDto,
-    @CurrentUser('id') userId?: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.adminService.createOutfit(dto, userId);
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.createOutfit(dto, user.userId);
   }
 
   @Put('outfits/:id')
@@ -222,9 +232,10 @@ export class WardrobeAdminController {
   @RequirePermissions('wardrobe.manage')
   async createSchedule(
     @Body() dto: CreateWardrobeScheduleDto,
-    @CurrentUser('id') userId?: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.adminService.createSchedule(dto, userId);
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.createSchedule(dto, user.userId);
   }
 
   @Put('schedules/:id')
@@ -255,9 +266,10 @@ export class WardrobeAdminController {
   @RequirePermissions('wardrobe.manage')
   async generateMonthlySundays(
     @Body() dto: GenerateMonthlySundaysDto,
-    @CurrentUser('id') userId?: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.adminService.generateMonthlySundays(dto, userId);
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.generateMonthlySundays(dto, user.userId);
   }
 
   // ---------------------------------------------------------------------------
@@ -284,7 +296,8 @@ export class WardrobeAdminController {
 
   @Post('categories')
   @RequirePermissions('wardrobe.manage')
-  async createCategory(@Body() dto: CreateWardrobeCategoryDto) {
+  async createCategory(@Body() dto: CreateWardrobeCategoryDto, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.createCategory(dto);
   }
 
@@ -327,7 +340,8 @@ export class WardrobeAdminController {
 
   @Post('colors')
   @RequirePermissions('wardrobe.manage')
-  async createColor(@Body() dto: CreateWardrobeColorDto) {
+  async createColor(@Body() dto: CreateWardrobeColorDto, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.createColor(dto);
   }
 

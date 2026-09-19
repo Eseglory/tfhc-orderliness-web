@@ -10,6 +10,7 @@ import { EngagementNudge } from '../../../components/activeness/EngagementNudge'
 import { ProfileCompletionReminder } from '../../../components/activeness/ProfileCompletionReminder';
 import { CampaignAlert } from '../../../components/activeness/CampaignAlert';
 import { MonthlyDuesAlert } from '../../../components/activeness/MonthlyDuesAlert';
+import { ActiveServiceReminderModal } from '../../../components/ActiveServiceReminderModal';
 import { MemberAttendanceTrendChart } from '../../../components/member/MemberAttendanceTrendChart';
 import { MemberAttendancePieChart } from '../../../components/member/MemberAttendancePieChart';
 
@@ -179,6 +180,9 @@ export default function MemberDashboard() {
       </header>
 
       <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 py-4 max-w-4xl mx-auto">
+        {/* Active Service Attendance Reminder Modal / Banner */}
+        <ActiveServiceReminderModal />
+
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex flex-col gap-3.5">
@@ -350,7 +354,7 @@ export default function MemberDashboard() {
             <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
             <div className="flex-1 min-w-0">
               <p className="text-xs font-extrabold text-emerald-950 dark:text-emerald-200">Availability Submitted</p>
-              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">You have submitted your availability for this week&apos;s service. No additional check-in is required.</p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">You have submitted your availability for this week&apos;s service. Remember to check in when service starts.</p>
             </div>
             <span className="material-symbols-outlined text-emerald-400 text-base">chevron_right</span>
           </Link>

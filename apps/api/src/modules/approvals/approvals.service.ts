@@ -11,6 +11,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { AuditService } from '../../common/rbac/audit.service';
 import { SYSTEM_ROLE, LEGACY_ROLE_FALLBACK } from '@tfhc/shared';
+import {
+  isJacob,
+  isDaniel,
+  isLoveth,
+  isEseosaGlory,
+} from '../../common/rbac/authorization-rules';
 
 /** Legacy enum roles (no explicit grants) that satisfy an access-role step. */
 const LEGACY_KEYS_FOR = (roleKey: string): string[] =>
@@ -161,6 +167,42 @@ export class ApprovalsService {
       const approvers = await this.approverUserIds(step);
       if (!approvers.has(actorUserId)) {
         throw new ForbiddenException('You are not an approver for the current step');
+      }
+
+      // Resolve requester and actor emails
+      let requesterEmail: string | null = null;
+      if (request.requestedByUserId) {
+        const u = await tx.user.findUnique({ where: { id: request.requestedByUserId }, select: { email: true } });
+        requesterEmail = u?.email ?? null;
+      }
+      if (!requesterEmail && request.requestedByMemberId) {
+        const m = await tx.member.findUnique({
+          where: { id: request.requestedByMemberId },
+          include: { user: { select: { email: true } }, approvedMember: { select: { normalizedEmail: true } } },
+        });
+        requesterEmail = m?.user?.email ?? m?.approvedMember?.normalizedEmail ?? null;
+      }
+
+      const actorUser = await tx.user.findUnique({ where: { id: actorUserId }, select: { email: true } });
+      const actorEmail = actorUser?.email ?? null;
+
+      // Rule: Jacob's requests can ONLY be approved by Daniel
+      if (isJacob(requesterEmail)) {
+        if (!isDaniel(actorEmail)) {
+          throw new ForbiddenException("Only Daniel is authorized to approve Jacob's requests.");
+        }
+      }
+
+      // Rule: Loveth's fund and expense requests can ONLY be approved by Eseosa Glory or Daniel. Self-approval is forbidden.
+      if (isLoveth(requesterEmail) && (request.requestType === 'EXPENSE' || request.requestType === 'WELFARE_FUND')) {
+        if (actorUserId === request.requestedByUserId || isLoveth(actorEmail)) {
+          throw new ForbiddenException('Self-approval is not permitted for financial requests.');
+        }
+        if (!isEseosaGlory(actorEmail) && !isDaniel(actorEmail)) {
+          throw new ForbiddenException(
+            "Only Eseosa Glory and Daniel are authorized to approve Loveth's fund and expense requests."
+          );
+        }
       }
 
       try {
@@ -344,18 +386,48 @@ export class ApprovalsService {
   async pendingFor(actorUserId: string, requestType?: ApprovalRequestType) {
     const key = `approvals:pending:${actorUserId}:${requestType ?? 'all'}`;
     return this.cache.wrap(key, 30, async () => {
+      const actorUser = await this.prisma.user.findUnique({ where: { id: actorUserId }, select: { email: true } });
+      const actorEmail = actorUser?.email ?? null;
+
       const pending = await this.prisma.approvalRequest.findMany({
         where: { status: 'PENDING', ...(requestType ? { requestType } : {}) },
         include: {
           workflow: { include: { steps: { orderBy: { order: 'asc' } } } },
           actions: { orderBy: { createdAt: 'asc' } },
-          requestedByMember: { select: { firstName: true, lastName: true, memberCode: true } },
+          requestedByMember: {
+            select: {
+              firstName: true,
+              lastName: true,
+              memberCode: true,
+              approvedMember: { select: { normalizedEmail: true } },
+              user: { select: { email: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'asc' },
       });
 
       const out = [];
       for (const r of pending) {
+        let requesterEmail: string | null =
+          r.requestedByMember?.user?.email ??
+          r.requestedByMember?.approvedMember?.normalizedEmail ??
+          null;
+
+        if (!requesterEmail && r.requestedByUserId) {
+          const u = await this.prisma.user.findUnique({ where: { id: r.requestedByUserId }, select: { email: true } });
+          requesterEmail = u?.email ?? null;
+        }
+
+        if (isJacob(requesterEmail) && !isDaniel(actorEmail)) {
+          continue;
+        }
+
+        if (isLoveth(requesterEmail) && (r.requestType === 'EXPENSE' || r.requestType === 'WELFARE_FUND')) {
+          if (actorUserId === r.requestedByUserId || isLoveth(actorEmail)) continue;
+          if (!isEseosaGlory(actorEmail) && !isDaniel(actorEmail)) continue;
+        }
+
         const step = r.workflow.steps.find((s) => s.order === r.currentStepOrder);
         if (!step) continue;
         const approvers = await this.approverUserIds(step);

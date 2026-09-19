@@ -66,6 +66,7 @@ export function ApprovedMemberLookupTable() {
   const { user } = useAuth();
   const { notify } = useToast();
   const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || isSuperOwner;
 
   const [rows, setRows] = useState<ApprovedMemberRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -281,7 +282,7 @@ export function ApprovedMemberLookupTable() {
         </div>
 
         {/* Global / Selection Actions */}
-        {isSuperOwner && (
+        {isAdmin && (
           <div className="flex items-center gap-2 shrink-0">
             {selectedIds.size > 0 && (
               <button
@@ -328,7 +329,7 @@ export function ApprovedMemberLookupTable() {
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50/75 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                 <tr>
-                  {isSuperOwner && (
+                  {isAdmin && (
                     <th className="px-4 py-3.5 w-10 text-center">
                       <input
                         type="checkbox"
@@ -343,7 +344,7 @@ export function ApprovedMemberLookupTable() {
                   <th className="px-4 py-3.5">Sub-team / Details</th>
                   <th className="px-4 py-3.5">Invitation Status</th>
                   <th className="px-4 py-3.5">Platform Account</th>
-                  {isSuperOwner && <th className="px-4 py-3.5 text-right">Action</th>}
+                  {isAdmin && <th className="px-4 py-3.5 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -360,7 +361,7 @@ export function ApprovedMemberLookupTable() {
                         isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''
                       }`}
                     >
-                      {isSuperOwner && (
+                      {isAdmin && (
                         <td className="px-4 py-3.5 text-center">
                           <input
                             type="checkbox"
@@ -401,7 +402,7 @@ export function ApprovedMemberLookupTable() {
                         )}
                       </td>
 
-                      {isSuperOwner && (
+                      {isAdmin && (
                         <td className="px-4 py-3.5 text-right">
                           {isAccepted ? (
                             <span className="text-[11px] font-bold text-slate-400">Active</span>

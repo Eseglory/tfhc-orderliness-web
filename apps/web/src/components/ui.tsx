@@ -275,9 +275,11 @@ export function EmptyState({
 export function Badge({
   children,
   tone = 'neutral',
+  className = '',
 }: {
   children: React.ReactNode;
   tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info';
+  className?: string;
 }) {
   const tones = {
     neutral: 'bg-surface-container-high text-on-surface-variant',
@@ -287,7 +289,7 @@ export function Badge({
     info: 'bg-primary-fixed text-on-primary-fixed',
   };
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]} ${className}`}>
       {children}
     </span>
   );

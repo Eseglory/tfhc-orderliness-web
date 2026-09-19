@@ -24,6 +24,7 @@ import {
   Shirt
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
+import { useAuth, canCreateWardrobe } from '@/lib/auth';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 
 interface OutfitItemLayer {
@@ -78,6 +79,7 @@ const EVENT_TYPES = [
 ];
 
 export default function WardrobeSchedulePage() {
+  const { user } = useAuth();
   const [schedules, setSchedules] = useState<WardrobeSchedule[]>([]);
   const [outfits, setOutfits] = useState<WardrobeOutfit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -360,24 +362,26 @@ export default function WardrobeSchedulePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => {
-              setBulkOutfitId(outfits[0]?.id || '');
-              setIsBulkModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border bg-card hover:bg-muted font-semibold text-sm transition-colors shadow-xs"
-          >
-            <Wand2 className="w-4 h-4 text-primary" /> Auto-Generate Month Sundays
-          </button>
+        {canCreateWardrobe(user) && (
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => {
+                setBulkOutfitId(outfits[0]?.id || '');
+                setIsBulkModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border bg-card hover:bg-muted font-semibold text-sm transition-colors shadow-xs"
+            >
+              <Wand2 className="w-4 h-4 text-primary" /> Auto-Generate Month Sundays
+            </button>
 
-          <button
-            onClick={openCreateScheduleModal}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95 text-sm"
-          >
-            <Plus className="w-5 h-5" /> Schedule Outfit
-          </button>
-        </div>
+            <button
+              onClick={openCreateScheduleModal}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95 text-sm"
+            >
+              <Plus className="w-5 h-5" /> Schedule Outfit
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Alerts */}

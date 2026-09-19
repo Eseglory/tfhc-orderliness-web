@@ -4,6 +4,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { ExcuseStatus, AttendanceStatus, AttendanceMethod, calculateAttendancePoints } from '@tfhc/shared';
+import { isJacob, isDaniel } from '../../common/rbac/authorization-rules';
 import { ApprovalsService } from '../approvals/approvals.service';
 
 const EXCUSE_ENTITY = 'AbsenceExcuse';
@@ -270,9 +271,21 @@ export class ExcusesService implements OnModuleInit {
     if (dto.reviewNote !== undefined && (typeof dto.reviewNote !== 'string' || dto.reviewNote.length > 2000)) {
       throw new BadRequestException('Invalid review note');
     }
-    const excuse = await this.prisma.absenceExcuse.findUnique({ where: { id: dto.excuseId } });
+    const excuse = await this.prisma.absenceExcuse.findUnique({
+      where: { id: dto.excuseId },
+      include: { member: { include: { user: true, approvedMember: true } } },
+    });
     if (!excuse) throw new NotFoundException('Absence excuse request not found');
     if (excuse.status !== ExcuseStatus.PENDING) throw new BadRequestException('This request has already been reviewed');
+
+    const requesterEmail = excuse.member.user?.email ?? excuse.member.approvedMember?.normalizedEmail ?? null;
+    const adminUser = await this.prisma.user.findUnique({ where: { id: dto.adminUserId }, select: { email: true } });
+
+    if (isJacob(requesterEmail)) {
+      if (!isDaniel(adminUser?.email)) {
+        throw new ForbiddenException("Only Daniel is authorized to approve Jacob's requests.");
+      }
+    }
 
     // Routed through the approval engine when a workflow is attached; this
     // endpoint then fast-tracks every step the caller is authorised for.
@@ -470,9 +483,21 @@ export class ExcusesService implements OnModuleInit {
     if (![ExcuseStatus.APPROVED, ExcuseStatus.REJECTED].includes(dto.status)) throw new BadRequestException('Approve or reject the request');
     const correction = await this.prisma.correctionRequest.findUnique({
       where: { id: dto.correctionId },
-      include: { meeting: { include: { category: true } } },
+      include: {
+        meeting: { include: { category: true } },
+        member: { include: { user: true, approvedMember: true } },
+      },
     });
     if (!correction) throw new NotFoundException('Correction request not found');
+
+    const requesterEmail = correction.member?.user?.email ?? correction.member?.approvedMember?.normalizedEmail ?? null;
+    const adminUser = await this.prisma.user.findUnique({ where: { id: dto.adminUserId }, select: { email: true } });
+
+    if (isJacob(requesterEmail)) {
+      if (!isDaniel(adminUser?.email)) {
+        throw new ForbiddenException("Only Daniel is authorized to approve Jacob's requests.");
+      }
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.correctionRequest.updateMany({ where: { id: dto.correctionId, status: ExcuseStatus.PENDING }, data: { status: dto.status } });

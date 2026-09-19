@@ -43,8 +43,8 @@ export class LookupsController {
     @Body() body: { ids: string[] },
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com' && !user.isSuperAdmin && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only authorized administrators can invite users.');
     }
     return this.service.inviteSelectedApprovedMembers(body?.ids ?? [], user.userId);
   }
@@ -52,19 +52,23 @@ export class LookupsController {
   @Post('approved-members/invite-all-eligible')
   @RequirePermissions('lookups.manage')
   inviteAllEligible(@CurrentUser() user: AuthenticatedUser) {
-    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com' && !user.isSuperAdmin && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only authorized administrators can invite users.');
     }
     return this.service.inviteAllEligibleApprovedMembers(user.userId);
   }
 
   @Post('approved-members/:id/invite')
   @RequirePermissions('lookups.manage')
-  inviteOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite users.');
+  inviteOne(
+    @Param('id') id: string,
+    @Body() body: { resend?: boolean },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com' && !user.isSuperAdmin && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only authorized administrators can invite users.');
     }
-    return this.service.inviteOneApprovedMember(id, user.userId);
+    return this.service.inviteOneApprovedMember(id, user.userId, body?.resend === true);
   }
 
   // =========================================================================

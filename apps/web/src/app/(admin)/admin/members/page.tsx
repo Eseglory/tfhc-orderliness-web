@@ -61,7 +61,6 @@ export default function AdminMembersPage() {
 
   // Modals
   const [showMemberModal, setShowMemberModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [accessMember, setAccessMember] = useState<any>(null);
   const [accessEmail, setAccessEmail] = useState('');
   const [accessStatus, setAccessStatus] = useState('ACTIVE');
@@ -69,19 +68,6 @@ export default function AdminMembersPage() {
 
   // Sub-teams
   const [subTeams, setSubTeams] = useState<any[]>([]);
-
-  // Invite Form state
-  const [inviteForm, setInviteForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phoneNumber: '',
-    subTeamId: '',
-    roleInUnit: 'Member',
-    gender: 'Male',
-  });
-  const [inviteError, setInviteError] = useState('');
-  const [inviting, setInviting] = useState(false);
   const [quickInvitingId, setQuickInvitingId] = useState<string | null>(null);
 
   // Form states
@@ -156,45 +142,6 @@ export default function AdminMembersPage() {
     }
   };
 
-  const handleInviteMemberSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteForm.email.trim()) {
-      setInviteError('Email address is required to send an invitation.');
-      return;
-    }
-    setInviting(true);
-    setInviteError('');
-    try {
-      const res = await fetchApi<{ status: string; message: string }>('/members/invite', {
-        method: 'POST',
-        body: JSON.stringify({
-          firstName: inviteForm.firstName.trim(),
-          lastName: inviteForm.lastName.trim(),
-          email: inviteForm.email.trim(),
-          phoneNumber: inviteForm.phoneNumber.trim() || undefined,
-          subTeamId: inviteForm.subTeamId || undefined,
-          roleInUnit: inviteForm.roleInUnit || 'Member',
-          gender: inviteForm.gender || 'Male',
-        }),
-      });
-      notify(res.message || 'Platform invitation sent successfully.', 'success');
-      setShowInviteModal(false);
-      setInviteForm({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phoneNumber: '',
-        subTeamId: '',
-        roleInUnit: 'Member',
-        gender: 'Male',
-      });
-      loadData();
-    } catch (err: any) {
-      setInviteError(err.message || 'Failed to send invitation');
-    } finally {
-      setInviting(false);
-    }
-  };
 
   const handleQuickInvite = async (m: any) => {
     setQuickInvitingId(m.id);
@@ -402,27 +349,15 @@ export default function AdminMembersPage() {
               </div>
             </div>
 
-            {/* Invite Member to Platform button */}
-            {isSuperOwner && (
-              <button
-                onClick={() => {
-                  setInviteForm({
-                    firstName: '',
-                    lastName: '',
-                    email: '',
-                    phoneNumber: '',
-                    subTeamId: '',
-                    roleInUnit: 'Member',
-                    gender: 'Male',
-                  });
-                  setInviteError('');
-                  setShowInviteModal(true);
-                }}
+            {/* Invite Members Link */}
+            {isAdmin && (
+              <Link
+                href="/admin/members/invite"
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
               >
                 <UserPlus className="w-4 h-4" />
-                <span>Invite Member to Platform</span>
-              </button>
+                <span>Invite Members</span>
+              </Link>
             )}
 
             {/* Lookup Directory link */}
@@ -1405,183 +1340,6 @@ export default function AdminMembersPage() {
           </div>
         )}
 
-        {/* Invite Member to Platform Modal */}
-        {isSuperOwner && showInviteModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 max-h-[90dvh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                    <UserPlus className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
-                      Invite Member to Platform
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Send an official registration invitation to a church member
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowInviteModal(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/60 text-xs text-emerald-900 dark:text-emerald-300 leading-relaxed">
-                <strong>Platform Member Invitation:</strong> The recipient will receive an email with a secure, 1-click magic invite link to complete their member profile and access the member dashboard.
-              </div>
-
-              <form onSubmit={handleInviteMemberSubmit} className="space-y-4">
-                {inviteError && (
-                  <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-700 dark:text-rose-300">
-                    {inviteError}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-firstName">
-                      First Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      id="inv-firstName"
-                      value={inviteForm.firstName}
-                      onChange={(e) => setInviteForm({ ...inviteForm, firstName: e.target.value })}
-                      placeholder="e.g. Samuel"
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-lastName">
-                      Last Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      id="inv-lastName"
-                      value={inviteForm.lastName}
-                      onChange={(e) => setInviteForm({ ...inviteForm, lastName: e.target.value })}
-                      placeholder="e.g. Adebayo"
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-email">
-                    Member Email Address <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    id="inv-email"
-                    value={inviteForm.email}
-                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                    placeholder="member@gmail.com"
-                    className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">Invitation link will be dispatched to this email address.</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-phone">
-                      Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      id="inv-phone"
-                      value={inviteForm.phoneNumber}
-                      onChange={(e) => setInviteForm({ ...inviteForm, phoneNumber: e.target.value })}
-                      placeholder="+234..."
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-subteam">
-                      Sub-Team
-                    </label>
-                    <select
-                      id="inv-subteam"
-                      value={inviteForm.subTeamId}
-                      onChange={(e) => setInviteForm({ ...inviteForm, subTeamId: e.target.value })}
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                    >
-                      <option value="">No sub-team assigned</option>
-                      {subTeams.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Gender
-                    </label>
-                    <select
-                      value={inviteForm.gender}
-                      onChange={(e) => setInviteForm({ ...inviteForm, gender: e.target.value })}
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1" htmlFor="inv-role">
-                      Role in Unit
-                    </label>
-                    <input
-                      type="text"
-                      id="inv-role"
-                      list="inv-roles-list"
-                      value={inviteForm.roleInUnit}
-                      onChange={(e) => setInviteForm({ ...inviteForm, roleInUnit: e.target.value })}
-                      placeholder="e.g. Member, Executive..."
-                      className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none"
-                    />
-                    <datalist id="inv-roles-list">
-                      <option value="Member" />
-                      <option value="Executive" />
-                      <option value="Unit Head" />
-                      <option value="Secretary" />
-                      <option value="Financial Secretary" />
-                      <option value="Coordinator" />
-                    </datalist>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={inviting}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-extrabold text-xs text-white shadow-sm shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>{inviting ? 'Sending Invitation...' : 'Send Platform Invitation'}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </AdminLayoutShell>
   );

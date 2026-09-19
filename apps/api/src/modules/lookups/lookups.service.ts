@@ -36,6 +36,28 @@ export interface LookupRow {
   extra: Record<string, unknown>;
 }
 
+export type CandidateAccountStatus = 'NOT_REGISTERED' | 'REGISTERED_PASSWORD' | 'REGISTERED_GOOGLE';
+export type CandidateInviteStatus = 'NOT_INVITED' | 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'FAILED' | 'REVOKED';
+
+export function computeApprovedMemberAccountStatus(approved: {
+  member?: {
+    user?: {
+      id: string;
+      isActive: boolean;
+      inviteTokenHash?: string | null;
+      emailVerifiedAt?: Date | null;
+      googleSubject?: string | null;
+      passwordAuthEnabled?: boolean;
+    } | null;
+  } | null;
+}): CandidateAccountStatus {
+  const user = approved.member?.user;
+  if (!user || user.inviteTokenHash) return 'NOT_REGISTERED';
+  if (user.googleSubject && !user.passwordAuthEnabled) return 'REGISTERED_GOOGLE';
+  if (user.passwordAuthEnabled || user.emailVerifiedAt) return 'REGISTERED_PASSWORD';
+  return 'NOT_REGISTERED';
+}
+
 export function computeApprovedMemberInviteStatus(
   approved: {
     status: string;
@@ -54,7 +76,8 @@ export function computeApprovedMemberInviteStatus(
       } | null;
     } | null;
   }
-): 'NOT_INVITED' | 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'FAILED' {
+): CandidateInviteStatus {
+  if (approved.status === 'REVOKED') return 'REVOKED';
   const user = approved.member?.user;
   if (user && user.isActive && !user.inviteTokenHash && (user.emailVerifiedAt || user.googleSubject || user.passwordAuthEnabled)) {
     return 'ACCEPTED';
@@ -441,11 +464,16 @@ export class LookupsService implements OnApplicationBootstrap {
 
     const formatted = rows.map((r) => {
       const computedStatus = computeApprovedMemberInviteStatus(r);
+      const accountStatus = computeApprovedMemberAccountStatus(r);
+      const isEligible = r.status === 'ACTIVE' && computedStatus !== 'ACCEPTED' && computedStatus !== 'PENDING';
       return {
         id: r.id,
         email: r.email,
         normalizedEmail: r.normalizedEmail,
         status: r.status,
+        lookupStatus: r.status === 'ACTIVE' ? 'FOUND' : 'REVOKED',
+        accountStatus,
+        isEligible,
         source: r.source,
         importedAt: r.importedAt,
         importedBy: r.importedBy,
@@ -485,7 +513,10 @@ export class LookupsService implements OnApplicationBootstrap {
 
     const filtered =
       inviteStatusFilter && inviteStatusFilter !== 'ALL'
-        ? formatted.filter((r) => r.inviteStatus === inviteStatusFilter)
+        ? formatted.filter((r) => {
+            if (inviteStatusFilter === 'ELIGIBLE') return r.isEligible;
+            return r.inviteStatus === inviteStatusFilter;
+          })
         : formatted;
 
     const total = filtered.length;
@@ -494,10 +525,12 @@ export class LookupsService implements OnApplicationBootstrap {
 
     const stats = {
       total: formatted.length,
+      eligible: formatted.filter((f) => f.isEligible).length,
       notInvited: formatted.filter((f) => f.inviteStatus === 'NOT_INVITED').length,
       pending: formatted.filter((f) => f.inviteStatus === 'PENDING').length,
       accepted: formatted.filter((f) => f.inviteStatus === 'ACCEPTED').length,
       expired: formatted.filter((f) => f.inviteStatus === 'EXPIRED').length,
+      revoked: formatted.filter((f) => f.inviteStatus === 'REVOKED').length,
       failed: formatted.filter((f) => f.inviteStatus === 'FAILED').length,
     };
 
@@ -511,15 +544,25 @@ export class LookupsService implements OnApplicationBootstrap {
     };
   }
 
-  async inviteOneApprovedMember(id: string, actorUserId: string) {
+  async inviteOneApprovedMember(id: string, actorUserId: string, resend = false) {
     const approved = await this.prisma.approvedMember.findUnique({
       where: { id },
       include: { member: { include: { user: true } } },
     });
 
-    if (!approved) throw new NotFoundException('Lookup table record not found');
+    if (!approved) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'LOOKUP_RECORD_NOT_FOUND',
+        message: 'This person is not in the church member lookup table and is not eligible for invitation.',
+      });
+    }
     if (approved.status !== 'ACTIVE') {
-      throw new BadRequestException('This lookup record is deactivated or revoked.');
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'LOOKUP_RECORD_REVOKED',
+        message: 'This lookup record is deactivated or revoked. Only active lookup members can be invited.',
+      });
     }
 
     const currentStatus = computeApprovedMemberInviteStatus(approved);
@@ -530,17 +573,17 @@ export class LookupsService implements OnApplicationBootstrap {
         email: approved.email,
         name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
         status: 'ALREADY_MEMBER' as const,
-        message: 'Person is already an active platform member.',
+        message: 'Person is already an active registered platform member.',
       };
     }
 
-    if (currentStatus === 'PENDING') {
+    if (currentStatus === 'PENDING' && !resend) {
       return {
         id: approved.id,
         email: approved.email,
         name: approved.member ? `${approved.member.firstName} ${approved.member.lastName}` : approved.email,
         status: 'ALREADY_PENDING' as const,
-        message: 'An active invitation is already pending.',
+        message: 'An active invitation is already pending for this lookup member.',
       };
     }
 
@@ -710,12 +753,21 @@ export class LookupsService implements OnApplicationBootstrap {
         else invalidCount++;
         results.push(res);
       } catch (err: any) {
-        failedCount++;
-        results.push({
-          id,
-          status: 'FAILED',
-          message: err.message || 'Processing failed',
-        });
+        if (err instanceof NotFoundException || err?.response?.code === 'LOOKUP_RECORD_NOT_FOUND' || err?.status === 404 || err?.status === 400) {
+          invalidCount++;
+          results.push({
+            id,
+            status: 'INVALID',
+            message: err.message || 'Lookup record not found or not eligible',
+          });
+        } else {
+          failedCount++;
+          results.push({
+            id,
+            status: 'FAILED',
+            message: err.message || 'Processing failed',
+          });
+        }
       }
     }
 

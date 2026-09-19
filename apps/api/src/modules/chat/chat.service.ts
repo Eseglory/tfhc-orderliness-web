@@ -1056,6 +1056,10 @@ export class ChatService implements OnApplicationBootstrap {
     return [viewer.firstName, viewer.lastName].filter(Boolean).join(' ').trim() || 'A member';
   }
 
+  public async postSystemMessage(roomId: string, body: string) {
+    return this.systemMessage(roomId, body);
+  }
+
   private async systemMessage(roomId: string, body: string) {
     const messageId = randomUUID();
     const createdAt = new Date().toISOString();

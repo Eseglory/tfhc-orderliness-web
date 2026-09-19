@@ -3,6 +3,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/jwt.strategy';
+import { assertEventCreateAuthority } from '../../common/rbac/authorization-rules';
 import { RecurringServicesService, RecurringConfig } from './recurring-services.service';
 
 @Controller('service-schedules')
@@ -24,8 +26,9 @@ export class RecurringServicesController {
 
   @Post()
   @RequirePermissions('events.create')
-  create(@Body() body: unknown, @CurrentUser('userId') userId: string) {
-    return this.service.saveSchedule(undefined, body, userId);
+  create(@Body() body: unknown, @CurrentUser() user: AuthenticatedUser) {
+    assertEventCreateAuthority(user, 'service schedules');
+    return this.service.saveSchedule(undefined, body, user.userId);
   }
 
   @Put(':id')

@@ -43,6 +43,8 @@ interface CreateMeetingDto {
   audiences?: AudienceInput[];
 }
 
+import { ServiceReminderService } from './service-reminder.service';
+
 const EDITABLE_STATUSES: MeetingStatus[] = [MeetingStatus.SCHEDULED, MeetingStatus.ACTIVE];
 
 @Injectable()
@@ -53,6 +55,7 @@ export class MeetingsService {
     private audit: AuditService,
     private cache: CacheService,
     @Optional() private calendarService?: CalendarService,
+    @Optional() private serviceReminderService?: ServiceReminderService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -984,6 +987,9 @@ export class MeetingsService {
       data: { status },
       include: { category: true, eventType: true },
     });
+    if (status === MeetingStatus.ACTIVE && this.serviceReminderService) {
+      await this.serviceReminderService.dispatchActiveServiceReminders(id).catch(() => undefined);
+    }
     if (actorUserId)
       await this.audit.record({
         actorUserId,

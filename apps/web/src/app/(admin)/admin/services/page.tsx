@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi, ApiError } from '../../../../lib/api';
-import { useAuth } from '../../../../lib/auth';
+import { useAuth, canCreateEvents } from '../../../../lib/auth';
 import { Modal, ConfirmDialog, useToast } from '../../../../components/ui';
 
 export type ServiceCategory =
@@ -103,7 +103,7 @@ const CATEGORY_BADGES: Record<ServiceCategory, { label: string; color: string }>
 };
 
 export default function ServicesCatalogPage() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const { notify } = useToast();
 
   const [services, setServices] = useState<OrganizationServiceItem[]>([]);
@@ -340,13 +340,15 @@ export default function ServicesCatalogPage() {
               <span>View Appointments</span>
             </Link>
 
-            <button
-              onClick={openCreateModal}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Create Service</span>
-            </button>
+            {canCreateEvents(user) && (
+              <button
+                onClick={openCreateModal}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Create Service</span>
+              </button>
+            )}
           </div>
         </div>
 

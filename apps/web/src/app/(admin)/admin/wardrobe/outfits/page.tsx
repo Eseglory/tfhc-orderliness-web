@@ -19,9 +19,10 @@ import {
   Eye,
   Bookmark,
   ChevronRight,
-  Info
+  Info,
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
+import { useAuth, canCreateWardrobe } from '@/lib/auth';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 
 interface Variant {
@@ -64,6 +65,7 @@ interface WardrobeOutfit {
 }
 
 export default function WardrobeOutfitsPage() {
+  const { user } = useAuth();
   const [outfits, setOutfits] = useState<WardrobeOutfit[]>([]);
   const [catalogue, setCatalogue] = useState<WardrobeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -283,14 +285,16 @@ export default function WardrobeOutfitsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={openCreateBuilder}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
-          >
-            <Sparkles className="w-5 h-5" /> Build New Outfit
-          </button>
-        </div>
+        {canCreateWardrobe(user) && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openCreateBuilder}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Sparkles className="w-5 h-5" /> Build New Outfit
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Alerts */}

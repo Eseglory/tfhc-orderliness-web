@@ -59,7 +59,7 @@ import {
   extractVirtualUrl,
 } from '../../../../lib/calendar-integration';
 import { fetchApi } from '../../../../lib/api';
-import { useAuth } from '../../../../lib/auth';
+import { useAuth, canCreateEvents } from '../../../../lib/auth';
 import { Modal, ConfirmDialog, useToast } from '../../../../components/ui';
 import { HeadcountModal } from '../../../../components/HeadcountModal';
 
@@ -168,7 +168,7 @@ function EventsManagementContent() {
   const [headcountMeeting, setHeadcountMeeting] = useState<Meeting | null>(null);
   const [busyId, setBusyId] = useState('');
 
-  const canCreate = can('events.create');
+  const canCreate = can('events.create') && canCreateEvents(user);
   const canEdit = can('events.update');
   const canHeadcount = can('headcount.record') || can('headcount.read') || can('events.update');
 

@@ -40,7 +40,7 @@ import {
   Shirt,
   Tag,
 } from 'lucide-react';
-import { useAuth } from '../../lib/auth';
+import { useAuth, canCreateEvents, canCreateWardrobe, canManageFinance, isLoveth, isEseosaGlory } from '../../lib/auth';
 import { logout } from '../../lib/api';
 import { LogoIcon } from '../LogoIcon';
 import { GlobalSearchModal } from './GlobalSearchModal';
@@ -255,18 +255,32 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
     if (loading && !user) {
       return NAVIGATION_TREE;
     }
+    const isEseosa = isEseosaGlory(user);
+    const isLovethUser = isLoveth(user);
+
     return NAVIGATION_TREE.filter((parent) => {
+      // Finance: only Eseosa Glory gets full Finance CRUD. Loveth gets Expenses creation.
+      if (parent.key === 'finance') {
+        if (!isEseosa && !isLovethUser) return false;
+      }
       if (parent.anyOf && !canAny(...parent.anyOf)) return false;
       if (parent.children) {
-        const visibleChildren = parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf));
+        let visibleChildren = parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf));
+        if (parent.key === 'finance' && isLovethUser && !isEseosa) {
+          visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
+        }
         return visibleChildren.length > 0;
       }
       return true;
     }).map((parent) => {
       if (!parent.children) return parent;
+      let visibleChildren = parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf));
+      if (parent.key === 'finance' && isLovethUser && !isEseosa) {
+        visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
+      }
       return {
         ...parent,
-        children: parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf)),
+        children: visibleChildren,
       };
     });
   }, [canAny, loading, user]);
@@ -391,16 +405,18 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   <Users className="w-4 h-4 text-[#0b1c30] dark:text-slate-300" />
                   <span>Add New Member</span>
                 </button>
-                <button
-                  onClick={() => {
-                    setQuickActionOpen(false);
-                    router.push('/admin/events?action=create');
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  <Calendar className="w-4 h-4 text-[#f2320c]" />
-                  <span>Create Meeting / Service</span>
-                </button>
+                {canCreateEvents(user) && (
+                  <button
+                    onClick={() => {
+                      setQuickActionOpen(false);
+                      router.push('/admin/events?action=create');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Calendar className="w-4 h-4 text-[#f2320c]" />
+                    <span>Create Meeting / Service</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setQuickActionOpen(false);

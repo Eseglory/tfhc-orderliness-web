@@ -12,12 +12,15 @@ import { Role, MemberStatus } from '@tfhc/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 
+import { LookupsService } from '../lookups/lookups.service';
+
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 @Controller('members')
 export class MembersController {
   constructor(
     private membersService: MembersService,
     private memberImport: MemberImportService,
+    private lookupsService: LookupsService,
   ) {}
 
   @RequirePermissions('members.create')
@@ -166,6 +169,43 @@ export class MembersController {
     return this.membersService.removeBanner(id);
   }
 
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
+  @Get('invite-candidates')
+  async getInviteCandidates(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.lookupsService.listApprovedMembers({
+      search,
+      inviteStatus: status,
+      page: page ? parseInt(page, 10) : undefined,
+      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+    });
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.create')
+  @Post('invite')
+  async inviteCandidate(
+    @Body() body: {
+      ids?: string[];
+      approvedMemberIds?: string[];
+      id?: string;
+      email?: string;
+      firstName?: string;
+      lastName?: string;
+    },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com' && !user.isSuperAdmin && user.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only authorized administrators can invite members.');
+    }
+    return this.membersService.inviteCandidateByEmailOrId(body, user.userId);
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.LEADER)
   @RequirePermissions('members.read')
@@ -195,31 +235,10 @@ export class MembersController {
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite members.');
+    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com' && !user.isSuperAdmin && user.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only authorized administrators can invite members.');
     }
     return this.membersService.inviteMember(id, user.userId);
-  }
-
-  @Roles(Role.ADMIN, Role.LEADER)
-  @RequirePermissions('members.create')
-  @Post('invite')
-  async inviteNewMember(
-    @Body() body: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      phoneNumber?: string;
-      subTeamId?: string;
-      roleInUnit?: string;
-      gender?: string;
-    },
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    if (user.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to invite members.');
-    }
-    return this.membersService.inviteNewMember(body, user.userId);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)

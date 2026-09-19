@@ -20,9 +20,11 @@ import {
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi } from '../../../../lib/api';
+import { useAuth, canCreateWardrobe } from '../../../../lib/auth';
 import { useToast } from '../../../../components/ui';
 
 export default function AdminWardrobeOverviewPage() {
+  const { user } = useAuth();
   const { notify } = useToast();
   const [loading, setLoading] = useState(true);
   const [nextSchedule, setNextSchedule] = useState<any>(null);
@@ -143,13 +145,15 @@ export default function AdminWardrobeOverviewPage() {
               <span>Timetable Manager</span>
             </Link>
 
-            <Link
-              href="/admin/wardrobe/outfits"
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Create Outfit</span>
-            </Link>
+            {canCreateWardrobe(user) && (
+              <Link
+                href="/admin/wardrobe/outfits"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Create Outfit</span>
+              </Link>
+            )}
           </div>
         </div>
 

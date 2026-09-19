@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Palette,
   CheckCircle2,
+  AlertCircle,
   XCircle,
   Upload,
   ArrowLeft,
@@ -17,9 +18,9 @@ import {
   Sparkles,
   Layers,
   Check,
-  AlertCircle
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
+import { useAuth, canCreateWardrobe } from '@/lib/auth';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 
 interface Variant {
@@ -107,6 +108,7 @@ const DEFAULT_COLORS: DynamicColor[] = [
 ];
 
 export default function WardrobeCataloguePage() {
+  const { user } = useAuth();
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [categories, setCategories] = useState<DynamicCategory[]>(DEFAULT_CATEGORIES);
   const [colors, setColors] = useState<DynamicColor[]>(DEFAULT_COLORS);
@@ -372,14 +374,16 @@ export default function WardrobeCataloguePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={openCreateItemModal}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
-          >
-            <Plus className="w-5 h-5" /> Add Clothing Item
-          </button>
-        </div>
+        {canCreateWardrobe(user) && (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openCreateItemModal}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95"
+            >
+              <Plus className="w-5 h-5" /> Add Clothing Item
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Notifications / Alerts */}
@@ -465,12 +469,14 @@ export default function WardrobeCataloguePage() {
               ? 'No items match your active search filters. Try clearing or expanding your criteria.'
               : 'Your wardrobe catalogue is empty. Start by adding reusable clothing items like Suits, Gowns, or Shirts.'}
           </p>
-          <button
-            onClick={openCreateItemModal}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
-          >
-            <Plus className="w-4 h-4" /> Add First Item
-          </button>
+          {canCreateWardrobe(user) && (
+            <button
+              onClick={openCreateItemModal}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90"
+            >
+              <Plus className="w-4 h-4" /> Add First Item
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -813,126 +819,116 @@ export default function WardrobeCataloguePage() {
             </div>
 
             {/* Add New Variant Form */}
-            <div className="p-4 rounded-2xl border bg-muted/20 space-y-4">
-              <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                <Plus className="w-4 h-4 text-primary" /> Add New Color Variant
-              </h4>
+            {canCreateWardrobe(user) && (
+              <div className="p-4 rounded-2xl border bg-muted/20 space-y-4">
+                <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-primary" /> Add New Color Variant
+                </h4>
 
-              <form onSubmit={handleAddVariant} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Color Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Navy Blue, Emerald Green"
-                      value={variantColorName}
-                      onChange={(e) => setVariantColorName(e.target.value)}
-                      className="w-full px-3 py-2 bg-background border rounded-xl text-xs focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Color Hex Swatch</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={variantColorHex}
-                        onChange={(e) => setVariantColorHex(e.target.value)}
-                        className="w-9 h-8 p-0.5 rounded-lg border cursor-pointer bg-background"
-                      />
+                <form onSubmit={handleAddVariant} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Color Name *</label>
                       <input
                         type="text"
-                        value={variantColorHex}
-                        onChange={(e) => setVariantColorHex(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-background border rounded-xl text-xs uppercase font-mono"
+                        required
+                        placeholder="e.g. Navy Blue, Emerald Green"
+                        value={variantColorName}
+                        onChange={(e) => setVariantColorName(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border rounded-xl text-xs focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
-                  </div>
-                </div>
 
-                {/* Preset Palettes */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground">Quick Palette Presets</label>
-                  <div className="flex items-center gap-1.5 flex-wrap max-h-36 overflow-y-auto pr-1">
-                    {colors.map((preset) => (
-                      <button
-                        type="button"
-                        key={preset.id || preset.key}
-                        onClick={() => {
-                          setVariantColorName(preset.name);
-                          setVariantColorHex(preset.hexCode);
-                        }}
-                        className="px-2 py-1 rounded-lg border text-[11px] bg-background hover:bg-muted flex items-center gap-1.5 transition-colors"
-                      >
-                        <span
-                          className="w-2.5 h-2.5 rounded-full border border-black/10 shadow-inner"
-                          style={{ backgroundColor: preset.hexCode }}
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-muted-foreground">Color Hex Swatch</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={variantColorHex}
+                          onChange={(e) => setVariantColorHex(e.target.value)}
+                          className="w-8 h-8 rounded-lg border border-border cursor-pointer bg-transparent p-0.5"
                         />
-                        <span>{preset.name}</span>
-                      </button>
-                    ))}
+                        <input
+                          type="text"
+                          value={variantColorHex}
+                          onChange={(e) => setVariantColorHex(e.target.value)}
+                          className="flex-1 px-3 py-2 bg-background border rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
 
+                  {/* Preset Quick Swatches */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Preset Color Swatches</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {colors.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setVariantColorName(c.name);
+                            setVariantColorHex(c.hexCode);
+                          }}
+                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-medium bg-card hover:border-primary/50 transition-colors"
+                        >
+                          <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: c.hexCode }} />
+                          <span>{c.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                {/* Variant Image Upload */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Variant Photo / Specimen (Optional)
-                  </label>
-                  <div className="flex items-center gap-3">
+                  {/* Variant Image */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-muted-foreground">Variant Image (Optional)</label>
                     {variantImage ? (
-                      <div className="relative w-14 h-14 rounded-lg overflow-hidden border bg-muted group">
-                        <img src={variantImage} alt="Variant" className="w-full h-full object-cover" />
+                      <div className="relative w-full h-32 rounded-xl overflow-hidden border bg-muted/30">
+                        <img src={variantImage} alt="Variant Preview" className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => setVariantImage(null)}
-                          className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px]"
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-background/80 hover:bg-background text-destructive"
                         >
-                          Remove
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     ) : (
-                      <div className="w-14 h-14 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground bg-muted/40">
-                        <ImageIcon className="w-5 h-5 stroke-[1.25]" />
-                      </div>
+                      <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer hover:bg-muted/50 border-muted-foreground/20">
+                        <Upload className="w-5 h-5 text-muted-foreground mb-1" />
+                        <span className="text-xs text-muted-foreground font-medium">Upload Swatch / Variant Image</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageFileChange(e, 'variant')}
+                        />
+                      </label>
                     )}
-
-                    <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed hover:border-primary bg-background text-xs font-medium text-foreground">
-                      <Upload className="w-3.5 h-3.5 text-primary" />
-                      <span>Upload Color Photo</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleImageFileChange(e, 'variant')}
-                      />
-                    </label>
                   </div>
-                </div>
 
-                {/* Is Default Switch */}
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={variantIsDefault}
-                    onChange={(e) => setVariantIsDefault(e.target.checked)}
-                    className="w-4 h-4 rounded text-primary focus:ring-primary/20"
-                  />
-                  <span>Set as default primary color for {activeItemForVariants.name}</span>
-                </label>
+                  {/* Default Variant Flag */}
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={variantIsDefault}
+                      onChange={(e) => setVariantIsDefault(e.target.checked)}
+                      className="w-4 h-4 rounded text-primary focus:ring-primary/20"
+                    />
+                    <span>Set as default primary color for {activeItemForVariants.name}</span>
+                  </label>
 
-                {/* Add Variant Button */}
-                <button
-                  type="submit"
-                  disabled={submittingVariant}
-                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Plus className="w-4 h-4" /> {submittingVariant ? 'Adding...' : 'Save Color Variant'}
-                </button>
-              </form>
-            </div>
+                  {/* Add Variant Button */}
+                  <button
+                    type="submit"
+                    disabled={submittingVariant}
+                    className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" /> {submittingVariant ? 'Adding...' : 'Save Color Variant'}
+                  </button>
+                </form>
+              </div>
+            )}
 
             {/* Modal Footer */}
             <div className="flex justify-end pt-2">

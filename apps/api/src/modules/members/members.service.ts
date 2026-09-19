@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
@@ -404,97 +404,79 @@ export class MembersService {
     });
     if (!member) throw new NotFoundException('Member not found');
 
-    let approvedMemberId = member.approvedMember?.id;
-    if (!approvedMemberId) {
+    let approved = member.approvedMember;
+    if (!approved) {
       const email = member.user?.email;
-      if (!email) {
-        throw new BadRequestException('Member does not have an email address on file. Please update their profile email to send an invite.');
+      if (email) {
+        const normalizedEmail = email.trim().toLowerCase();
+        approved = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail } });
+        if (approved && !approved.memberId) {
+          await this.prisma.approvedMember.update({
+            where: { id: approved.id },
+            data: { memberId: member.id },
+          });
+        }
       }
-      const normalizedEmail = email.trim().toLowerCase();
-      let approved = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail } });
-      if (!approved) {
-        approved = await this.prisma.approvedMember.create({
-          data: {
-            email: email.trim(),
-            normalizedEmail,
-            status: 'ACTIVE',
-            source: 'ADMIN_INVITE',
-            memberId: member.id,
-          },
-        });
-      } else if (!approved.memberId) {
-        await this.prisma.approvedMember.update({
-          where: { id: approved.id },
-          data: { memberId: member.id, status: 'ACTIVE' },
-        });
-      }
-      approvedMemberId = approved.id;
     }
 
-    return this.lookupsService.inviteOneApprovedMember(approvedMemberId, actorUserId);
+    if (!approved) {
+      throw new BadRequestException(
+        'This member is not present in the church member lookup table and cannot be invited. Invitations are strictly for pre-approved members on the lookup roster.',
+      );
+    }
+
+    if (approved.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        'This member\'s lookup directory status is revoked or inactive and cannot receive platform invitations.',
+      );
+    }
+
+    return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
   }
 
-  async inviteNewMember(
+  async inviteCandidateByEmailOrId(
     dto: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      phoneNumber?: string;
-      subTeamId?: string;
-      roleInUnit?: string;
-      gender?: string;
+      ids?: string[];
+      approvedMemberIds?: string[];
+      id?: string;
+      email?: string;
+      firstName?: string;
+      lastName?: string;
     },
     actorUserId: string,
   ) {
+    const batchIds = dto.ids || dto.approvedMemberIds;
+    if (Array.isArray(batchIds) && batchIds.length > 0) {
+      return this.lookupsService.inviteSelectedApprovedMembers(batchIds, actorUserId);
+    }
+
+    if (dto.id) {
+      // Check if it's an approved member ID first, or member profile ID
+      const approved = await this.prisma.approvedMember.findUnique({ where: { id: dto.id } });
+      if (approved) {
+        return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
+      }
+      return this.inviteMember(dto.id, actorUserId);
+    }
+
     const email = dto.email?.trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      throw new BadRequestException('A valid email address is required to send an invitation.');
+      throw new BadRequestException('A valid email address or candidate ID is required to send an invitation.');
     }
-    const firstName = toPascalCase(dto.firstName?.trim() || 'Member');
-    const lastName = toPascalCase(dto.lastName?.trim() || '');
 
-    let approved = await this.prisma.approvedMember.findUnique({
+    const approved = await this.prisma.approvedMember.findUnique({
       where: { normalizedEmail: email },
       include: { member: { include: { user: true } } },
     });
 
-    if (approved && approved.member) {
-      return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
-    }
-
-    const memberCode = `TFHC-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
-    const member = await this.prisma.member.create({
-      data: {
-        memberCode,
-        firstName,
-        lastName,
-        phoneNumber: dto.phoneNumber?.trim() || '',
-        subTeamId: dto.subTeamId || undefined,
-        roleInUnit: dto.roleInUnit?.trim() || 'Member',
-        gender: dto.gender?.trim() || undefined,
-        status: 'ACTIVE',
-      },
-    });
-
-    if (!approved) {
-      approved = await this.prisma.approvedMember.create({
-        data: {
-          email: dto.email.trim(),
-          normalizedEmail: email,
-          status: 'ACTIVE',
-          source: 'ADMIN_INVITE',
-          memberId: member.id,
-        },
-        include: { member: { include: { user: true } } },
-      });
-    } else {
-      await this.prisma.approvedMember.update({
-        where: { id: approved.id },
-        data: { memberId: member.id, status: 'ACTIVE' },
+    if (!approved || approved.status !== 'ACTIVE') {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'EMAIL_NOT_IN_LOOKUP_TABLE',
+        message: 'This person is not in the church member lookup table and is not eligible for platform invitation. Only pre-approved directory members can be invited.',
       });
     }
 
-    this.cache.invalidateTag('members');
     return this.lookupsService.inviteOneApprovedMember(approved.id, actorUserId);
   }
 }

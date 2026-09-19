@@ -23,11 +23,11 @@ import {
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi } from '../../../../lib/api';
-import { useAuth } from '../../../../lib/auth';
+import { useAuth, canApproveAbsenceFor, isJacob } from '../../../../lib/auth';
 import { Modal, useToast } from '../../../../components/ui';
 
 export default function AbsenceRequestsPage() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const { notify } = useToast();
 
   const [kind, setKind] = useState<'absence' | 'correction'>('absence');
@@ -335,24 +335,37 @@ export default function AbsenceRequestsPage() {
                   </Link>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setActing({ item: request, decision: 'REJECTED' });
-                        setReviewNote('');
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
-                    >
-                      Reject {kind === 'absence' ? 'Excuse' : 'Correction'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActing({ item: request, decision: 'APPROVED' });
-                        setReviewNote('');
-                      }}
-                      className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-                    >
-                      Approve Request
-                    </button>
+                    {isJacob(request.member) && (
+                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        Assigned Approver: Daniel Oguamanam
+                      </span>
+                    )}
+                    {canApproveAbsenceFor(user, request.member) ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setActing({ item: request, decision: 'REJECTED' });
+                            setReviewNote('');
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
+                        >
+                          Reject {kind === 'absence' ? 'Excuse' : 'Correction'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActing({ item: request, decision: 'APPROVED' });
+                            setReviewNote('');
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                        >
+                          Approve Request
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 italic">
+                        Only Daniel can approve/reject
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

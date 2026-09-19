@@ -46,7 +46,7 @@ describe('Member Lookup Table Invitation Flow (E2E & Integration)', () => {
     const loginRes = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email: adminEmail, password: 'AdminPassword123!' })
-      .expect(201);
+      .expect(200);
     adminToken = loginRes.body.accessToken;
   });
 

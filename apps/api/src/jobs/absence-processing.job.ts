@@ -1,14 +1,18 @@
 import { canViewEvent } from '../common/event-visibility';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { MeetingStatus, MemberStatus, AttendanceStatus } from '@tfhc/shared';
+import { ServiceReminderService } from '../modules/meetings/service-reminder.service';
 
 @Injectable()
 export class AbsenceProcessingJob {
   private readonly logger = new Logger(AbsenceProcessingJob.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private serviceReminderService?: ServiceReminderService,
+  ) {}
 
   @Cron(CronExpression.EVERY_MINUTE, { disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
   async processClosedMeetings() {
@@ -30,6 +34,27 @@ export class AbsenceProcessingJob {
         data: { status: MeetingStatus.ACTIVE },
       });
       this.logger.log(`Automatically activated meeting ${m.id} for live attendance.`);
+      if (this.serviceReminderService) {
+        await this.serviceReminderService.dispatchActiveServiceReminders(m.id).catch((err) => {
+          this.logger.error(`Failed to dispatch active service reminders for ${m.id}: ${err?.message}`);
+        });
+      }
+    }
+
+    // Also ensure any live active meetings have reminders dispatched (idempotent)
+    const activeMeetings = await this.prisma.meeting.findMany({
+      where: {
+        status: MeetingStatus.ACTIVE,
+        attendanceOpenTime: { lte: now },
+        attendanceCloseTime: { gt: now },
+      },
+      select: { id: true },
+    });
+
+    for (const m of activeMeetings) {
+      if (this.serviceReminderService) {
+        await this.serviceReminderService.dispatchActiveServiceReminders(m.id).catch(() => undefined);
+      }
     }
 
     // 2. Find meetings whose attendance window has closed (ACTIVE or past SCHEDULED) but are not yet marked CLOSED
