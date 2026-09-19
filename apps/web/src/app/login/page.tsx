@@ -20,8 +20,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [needsVerification, setNeedsVerification] = useState(false);
-  const [resent, setResent] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -40,8 +38,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setNeedsVerification(false);
-    setResent('');
 
     try {
       const data = await fetchApi('/auth/login', {
@@ -71,32 +67,17 @@ export default function LoginPage() {
       router.push(safeDestination(new URLSearchParams(window.location.search).get('next'),
         data.user.role === 'ADMIN' || data.user.role === 'LEADER' || Boolean(data.user.isSuperAdmin)));
     } catch (err: any) {
-      if (err instanceof ApiError && /confirm your email/i.test(err.message)) {
-        setNeedsVerification(true);
-        setError(err.message);
-      } else {
-        setError(err.message || 'Sign in failed. Please check credentials.');
-      }
+      setError(err.message || 'Sign in failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const resendVerification = async () => {
-    setResent('');
-    try {
-      await fetchApi('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) });
-    } catch {
-      /* uniform response regardless */
-    }
-    setResent('If that account still needs confirming, a new link is on its way.');
   };
 
   const handleGoogleCredential = async (idToken: string) => {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchApi('/auth/google/member', {
+      const data = await fetchApi<any>('/auth/google/member', {
         method: 'POST',
         body: JSON.stringify({ idToken }),
       });
@@ -111,9 +92,9 @@ export default function LoginPage() {
             memberCode: data.user.member?.memberCode,
             firstName: data.user.member?.firstName,
             lastName: data.user.member?.lastName,
-            permissions: data.user.permissions ?? [],
-            accessRoles: data.user.accessRoles ?? [],
-            isSuperAdmin: Boolean(data.user.isSuperAdmin),
+            permissions: data.user.permissions ?? data.permissions ?? [],
+            accessRoles: data.user.accessRoles ?? data.accessRoles ?? [],
+            isSuperAdmin: Boolean(data.user.isSuperAdmin ?? data.isSuperAdmin),
           },
           rememberMe,
         );
@@ -149,15 +130,7 @@ export default function LoginPage() {
         {error && (
           <div className="p-3 rounded-lg bg-error-container text-on-error-container font-body-md text-sm border border-error/20 text-center space-y-2">
             <p>{error}</p>
-            {needsVerification && (
-              <button type="button" onClick={resendVerification} className="text-sm font-semibold underline">
-                Resend confirmation email
-              </button>
-            )}
           </div>
-        )}
-        {resent && (
-          <p role="status" className="text-xs text-center text-on-surface-variant">{resent}</p>
         )}
 
         {/* Form Section */}
