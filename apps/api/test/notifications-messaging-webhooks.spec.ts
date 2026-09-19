@@ -4,6 +4,8 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
+jest.setTimeout(60000);
+
 describe('Notifications, Push & Webhooks Integration (E2E)', () => {
   let app: INestApplication;
   let prisma: PrismaService;

@@ -122,7 +122,7 @@ export function useChatSocket(events: ChatSocketEvents) {
     if (!token) return;
 
     const socket = io(`${API_BASE_URL}/chat`, {
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       auth: { token },
       reconnectionAttempts: Infinity,
       reconnectionDelayMax: 30000,

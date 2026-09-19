@@ -1,11 +1,12 @@
 import * as crypto from 'crypto';
-import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundException, ConflictException, ForbiddenException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
 import { MemberStatus, toPascalCase, parseYearlessBirthday } from '@tfhc/shared';
 
 import { LookupsService } from '../lookups/lookups.service';
+import { PushService } from '../push/push.service';
 
 // sharp 0.35 is a CommonJS module whose export is the callable factory. With
 // esModuleInterop disabled a plain `require` keeps both the runtime value and
@@ -19,6 +20,7 @@ export class MembersService {
     private prisma: PrismaService,
     private cache: CacheService,
     private lookupsService: LookupsService,
+    @Optional() private readonly pushService?: PushService,
   ) {}
 
   async findAll(query?: { status?: MemberStatus; subTeamId?: string; search?: string }) {
@@ -192,6 +194,48 @@ export class MembersService {
       throw new BadRequestException('ids must contain at most 100 notification IDs');
     }
     return this.prisma.memberNotification.updateMany({ where: { memberId, status: 'UNREAD', ...(ids !== undefined ? { id: { in: ids } } : {}) }, data: { status: 'READ', readAt: new Date() } });
+  }
+
+  async sendTestNotification(userId: string, memberId: string) {
+    const meeting = await this.prisma.meeting.findFirst({
+      where: {
+        status: { in: ['ACTIVE', 'SCHEDULED'] },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const title = 'Service Attendance Reminder';
+    const body = meeting
+      ? `${meeting.title} is scheduled for tomorrow at ${meeting.locationName || 'Main Sanctuary'}. Please be prepared to take attendance.`
+      : 'Sunday Worship Service is scheduled for tomorrow (08:00 AM at Main Sanctuary). Please remember to take attendance.';
+
+    const notification = await this.prisma.memberNotification.create({
+      data: {
+        memberId,
+        type: 'SERVICE_ATTENDANCE_REMINDER',
+        title,
+        body,
+        data: {
+          meetingId: meeting?.id,
+          actionUrl: meeting?.id ? `/member/check-in?meetingId=${meeting.id}` : '/member/check-in',
+        },
+      },
+    });
+
+    let pushResult = { sent: 0, failed: 0 };
+    if (this.pushService) {
+      pushResult = await this.pushService.sendDirectPush(userId, {
+        title,
+        body,
+        url: '/member/notifications',
+      });
+    }
+
+    return {
+      success: true,
+      notification,
+      push: pushResult,
+    };
   }
 
   async findProfile(id: string) {
