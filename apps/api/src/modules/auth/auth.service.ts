@@ -78,20 +78,7 @@ export class AuthService {
         });
       }
 
-      // Email validation: You cannot register twice
       const existingUser = approved.member?.user || (await tx.user.findUnique({ where: { email: normalizedEmail } }));
-      if (existingUser) {
-        if (existingUser.googleSubject && !existingUser.passwordAuthEnabled) {
-          throw new ConflictException({
-            code: 'ALREADY_REGISTERED_WITH_GOOGLE',
-            message: 'This email is already registered via Google Sign-In. You cannot register with a password. Please sign in with Google.',
-          });
-        }
-        throw new ConflictException({
-          code: 'ALREADY_REGISTERED',
-          message: 'An account with this email already exists. You cannot register twice. Please sign in with your password, or use "Forgot password" if needed.',
-        });
-      }
 
       let member = approved.member;
       if (!member) {
@@ -148,18 +135,40 @@ export class AuthService {
       const verifyFields = {
         passwordHash,
         passwordAuthEnabled: true,
-        googleSubject: null,
         emailVerifiedAt: new Date(),
         passwordChangedAt: new Date(),
         lastLoginAt: new Date(),
+        inviteTokenHash: null,
+        inviteExpiresAt: null,
+        inviteAcceptedAt: new Date(),
         emailVerifyTokenHash: null,
         emailVerifyExpiresAt: null,
+        isActive: true,
       };
 
-      const user = await tx.user.create({
-        data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
-      });
+      let user: any;
+      if (existingUser) {
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: verifyFields,
+        });
+      } else {
+        user = await tx.user.create({
+          data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
+        });
+      }
+
       await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
+
+      await tx.approvedMember.update({
+        where: { id: approved.id },
+        data: {
+          memberId: member.id,
+          inviteStatus: 'ACCEPTED',
+          inviteTokenHash: null,
+          inviteExpiresAt: null,
+        },
+      });
 
       // Fill in any blank directory fields from the registration form in Pascal Case; never
       // overwrite data an administrator already imported.
@@ -173,15 +182,7 @@ export class AuthService {
       });
 
       return { user: { ...user, member } };
-    }, { isolationLevel: 'Serializable', timeout: 20000 }).catch((error: any) => {
-      if (error.code === 'P2002') {
-        throw new ConflictException({
-          code: 'ALREADY_REGISTERED',
-          message: 'An account with this email already exists. You cannot register twice.',
-        });
-      }
-      throw error;
-    });
+    }, { isolationLevel: 'Serializable', timeout: 20000 });
 
     return this.buildAuthResponse(user as any);
   }
@@ -314,8 +315,9 @@ export class AuthService {
     if (typeof dto.email !== 'string' || !dto.email.trim() || typeof dto.password !== 'string' || !dto.password) {
       throw new BadRequestException('Email and password are required');
     }
+    const normalizedEmail = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.trim().toLowerCase() },
+      where: { email: normalizedEmail },
       include: { member: { include: { approvedMember: true } } },
     });
 
@@ -323,50 +325,50 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.inviteTokenHash) {
-      throw new ForbiddenException({ code: 'INVITE_PENDING', message: 'Finish setting up your account from the invitation email before signing in.' });
+    if (!user.isActive && !user.inviteTokenHash) {
+      throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
     }
 
-    // Mutual exclusivity: if registered via Google OAuth, cannot use password
-    if (user.googleSubject && !user.passwordAuthEnabled) {
-      throw new ForbiddenException({
-        code: 'AUTH_METHOD_GOOGLE_ONLY',
-        message: 'This account was registered with Google Sign-In. You cannot sign in with a password. Please use Sign in with Google.',
-      });
-    }
+    const isPasswordValid = user.passwordHash
+      ? await argon2.verify(user.passwordHash, dto.password).catch(() => false)
+      : false;
 
-    if (!user.passwordAuthEnabled) {
-      throw new ForbiddenException({
-        code: 'PASSWORD_AUTH_DISABLED',
-        message: 'Password sign-in is not enabled for this account. Please sign in with Google or contact the administrator.',
-      });
-    }
-
-    const isPasswordValid = await argon2.verify(user.passwordHash, dto.password).catch(() => false);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.passwordAuthEnabled && !user.emailVerifiedAt) {
-      // Auto-verify pre-approved church lookup table members
-      if (typeof this.prisma.user?.update === 'function') {
-        await this.prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } }).catch(() => undefined);
-      }
-      user.emailVerifiedAt = new Date();
+    // Auto-verify and activate the account upon successful password verification
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        passwordAuthEnabled: true,
+        emailVerifiedAt: user.emailVerifiedAt || new Date(),
+        inviteTokenHash: null,
+        inviteExpiresAt: null,
+        inviteAcceptedAt: user.inviteAcceptedAt || new Date(),
+        isActive: true,
+      },
+    }).catch(() => undefined);
+
+    if (user.member?.approvedMember) {
+      await this.prisma.approvedMember.update({
+        where: { id: user.member.approvedMember.id },
+        data: {
+          inviteStatus: 'ACCEPTED',
+          inviteTokenHash: null,
+          inviteExpiresAt: null,
+        },
+      }).catch(() => undefined);
     }
-    if (!user.isActive) {
-      throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
-    }
-    if (user.inviteTokenHash) {
-      throw new ForbiddenException({ code: 'INVITE_PENDING', message: 'Finish setting up your account from the invitation email before signing in.' });
-    }
+
     if (user.role === Role.MEMBER) {
-      if (!user.member || user.member.status !== 'ACTIVE') {
+      if (!user.member || (user.member.status !== 'ACTIVE' && !user.inviteTokenHash)) {
         throw new ForbiddenException({ code: 'MEMBER_ACCOUNT_INACTIVE', message: 'This member account is not currently active.' });
       }
       let approvedMember = user.member.approvedMember;
       if (!approvedMember) {
-        approvedMember = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail: user.email.toLowerCase() } });
+        approvedMember = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail } });
         if (approvedMember && approvedMember.memberId !== user.member.id) {
           await this.prisma.approvedMember.update({
             where: { id: approvedMember.id },
@@ -374,12 +376,11 @@ export class AuthService {
           }).catch(() => undefined);
         }
       }
-      if (!approvedMember || approvedMember.status !== 'ACTIVE' || approvedMember.normalizedEmail !== user.email.toLowerCase()) {
+      if (!approvedMember || approvedMember.status !== 'ACTIVE' || approvedMember.normalizedEmail !== normalizedEmail) {
         throw new ForbiddenException({ code: 'MEMBER_NOT_AUTHORIZED', message: 'This account is not currently authorized to access TFHC Orderliness. Your email is not in the approved member lookup table.' });
       }
     }
 
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => undefined);
     return this.buildAuthResponse(user);
   }
 
@@ -528,36 +529,25 @@ export class AuthService {
           }
 
 
-          // Strict exclusivity: Check if an existing user with this email was registered via password
           const existingUser = currentMember.user || (await tx.user.findUnique({ where: { email: normalizedEmail } }));
-          if (existingUser) {
-            if (existingUser.role !== Role.MEMBER || !existingUser.isActive) {
-              throw new ForbiddenException('This account cannot use member Google sign-in');
-            }
-            if (existingUser.passwordAuthEnabled && !existingUser.googleSubject) {
-              throw new ForbiddenException({
-                code: 'AUTH_METHOD_PASSWORD_ONLY',
-                message: 'This account was registered with email and password. You cannot sign in with Google. Please sign in with your password.',
-              });
-            }
-            if (existingUser.googleSubject && existingUser.googleSubject !== claims.sub) {
-              throw new ForbiddenException({
-                code: 'GOOGLE_IDENTITY_MISMATCH',
-                message: 'This account is linked to a different Google identity.',
-              });
-            }
-          }
-
-          const existingSubject = await tx.user.findUnique({ where: { googleSubject: claims.sub } });
-          if (existingSubject && existingSubject.email.toLowerCase() !== normalizedEmail) {
-            throw new ForbiddenException({
-              code: 'GOOGLE_IDENTITY_ALREADY_LINKED',
-              message: 'This Google identity is linked to a different account email.',
-            });
+          if (existingUser && !existingUser.isActive && !existingUser.inviteTokenHash) {
+            throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
           }
 
           const user = existingUser
-            ? (existingUser.googleSubject === claims.sub ? existingUser : await tx.user.update({ where: { id: existingUser.id }, data: { googleSubject: claims.sub, email: normalizedEmail } }))
+            ? await tx.user.update({
+                where: { id: existingUser.id },
+                data: {
+                  googleSubject: claims.sub,
+                  email: normalizedEmail,
+                  emailVerifiedAt: existingUser.emailVerifiedAt || new Date(),
+                  inviteTokenHash: null,
+                  inviteExpiresAt: null,
+                  inviteAcceptedAt: existingUser.inviteAcceptedAt || new Date(),
+                  isActive: true,
+                  lastLoginAt: new Date(),
+                },
+              })
             : await tx.user.create({
                 data: {
                   email: normalizedEmail,
@@ -565,13 +555,26 @@ export class AuthService {
                   passwordAuthEnabled: false,
                   emailVerifiedAt: new Date(),
                   passwordHash: await argon2.hash(crypto.randomUUID()),
-                  role: Role.MEMBER
-                }
+                  role: Role.MEMBER,
+                  isActive: true,
+                  lastLoginAt: new Date(),
+                },
               });
 
           if (!currentMember.userId || currentMember.userId !== user.id) {
             await tx.member.update({ where: { id: currentMember.id }, data: { userId: user.id } });
           }
+
+          await tx.approvedMember.update({
+            where: { id: approved.id },
+            data: {
+              memberId: currentMember.id,
+              inviteStatus: 'ACCEPTED',
+              inviteTokenHash: null,
+              inviteExpiresAt: null,
+            },
+          });
+
           const token = this.generateToken(user.id, user.email, user.role, currentMember.id);
           return { user: { id: user.id, email: user.email, role: user.role, member: currentMember }, accessToken: token };
         }, { isolationLevel: 'Serializable', timeout: 20000 });
