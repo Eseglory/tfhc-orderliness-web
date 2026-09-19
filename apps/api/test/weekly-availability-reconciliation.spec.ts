@@ -133,6 +133,12 @@ describe('Weekly Availability Poll & Attendance Reconciliation Engine Suite', ()
     }).compile();
 
     service = module.get<AvailabilityService>(AvailabilityService);
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-14T07:00:00Z')); // Monday 08:00 AM WAT
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
   });
 
   beforeEach(() => {

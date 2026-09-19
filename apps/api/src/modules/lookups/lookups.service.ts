@@ -122,8 +122,56 @@ export class LookupsService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     try {
       await this.syncSystemEventTypes();
+      await this.syncSystemSubTeams();
     } catch (error) {
-      this.logger.error('Event-type sync failed at boot', error as Error);
+      this.logger.error('Lookups sync failed at boot', error as Error);
+    }
+  }
+
+  /** Ensure default system sub-teams (including Disciplinary Committee and Executive) exist */
+  async syncSystemSubTeams() {
+    const subTeams = [
+      { name: 'Executive', description: 'Executive and leadership council' },
+      { name: 'Disciplinary Committee', description: 'Disciplinary and ethics committee of the church' },
+      { name: 'Protocol', description: 'Protocol and orderliness unit' },
+      { name: 'Media & IT', description: 'Technical, sound, and media broadcast unit' },
+      { name: 'Choir', description: 'Worship and music ministry' },
+      { name: 'Ushering', description: 'Hospitality and ushering team' },
+      { name: 'Security', description: 'Facility safety and security team' },
+    ];
+
+    for (const st of subTeams) {
+      await this.prisma.subTeam.upsert({
+        where: { name: st.name },
+        update: { isSystem: true, active: true },
+        create: { name: st.name, description: st.description, isSystem: true, active: true },
+      });
+    }
+
+    // Auto-assign requested Disciplinary Committee members if they exist
+    const disciplinaryGroup = await this.prisma.subTeam.findUnique({
+      where: { name: 'Disciplinary Committee' },
+    });
+
+    if (disciplinaryGroup) {
+      const targetEmails = [
+        'nicoleokafor0@gmail.com',
+        'dotunakingbesote@gmail.com',
+        'onojamonday123@gmail.com',
+      ];
+      await this.prisma.member.updateMany({
+        where: {
+          OR: [
+            { approvedMember: { email: { in: targetEmails } } },
+            { firstName: 'Nicole', lastName: 'Okafor' },
+            { firstName: { in: ['Adedotun', 'Adedorun'] } },
+            { firstName: 'Jacob', lastName: 'Onoja' },
+          ],
+        },
+        data: {
+          subTeamId: disciplinaryGroup.id,
+        },
+      });
     }
   }
 

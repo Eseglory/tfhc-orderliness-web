@@ -39,3 +39,10 @@ test-results-member/
 
 # Safe configuration templates contain no live credentials.
 !.env.example
+
+# Local SQLite databases and test runtime data
+apps/api/data/
+apps/api/test-data/
+*.db
+*.db-wal
+*.db-shm

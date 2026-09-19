@@ -185,7 +185,7 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     const newAdminToken = accepted.accessToken;
     await http().get('/members').set(auth(newAdminToken)).expect(200);
     await http().get('/access-roles').set(auth(newAdminToken)).expect(403);
-    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(201);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(200);
 
     // Deactivate — the existing session must stop working immediately.
     await http().post(`/admin/team/${invited.id}/deactivate`).set(auth(superToken)).send({ reason: 'left the team' }).expect(201);
@@ -193,7 +193,7 @@ describe('RBAC + Admin Team (real PostgreSQL)', () => {
     await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(403);
 
     await http().post(`/admin/team/${invited.id}/reactivate`).set(auth(superToken)).expect(201);
-    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(201);
+    await http().post('/auth/login').send({ email: `newadmin-${run}@tfhc.org`, password: 'BrandNewPass!234' }).expect(200);
 
     const audit = await db.auditLog.findMany({ where: { entity: 'User', entityId: invited.id }, orderBy: { createdAt: 'asc' } });
     expect(audit.map((a) => a.action)).toEqual(

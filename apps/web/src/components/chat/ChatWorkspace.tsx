@@ -19,11 +19,13 @@ import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModa
 const ROOM_ICON: Record<string, string> = {
   GENERAL: 'forum',
   EXECUTIVES: 'shield_person',
+  DISCIPLINARY: 'gavel',
   CUSTOM: 'groups',
   DIRECT: 'person',
 };
 
 function roomIcon(room: ChatRoom): string {
+  if (room.key === 'DISCIPLINARY') return 'gavel';
   return ROOM_ICON[room.type] ?? 'chat';
 }
 
@@ -268,7 +270,8 @@ export function ChatWorkspace({
       }
       return;
     }
-    const tempId = `tmp-${Date.now()}`;
+    const clientId = `cli_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const tempId = clientId;
     const optimistic: ChatMessage = {
       id: tempId,
       roomId,
@@ -290,7 +293,12 @@ export function ChatWorkspace({
     const replyId = replyTo?.id;
     setReplyTo(null);
     try {
-      const saved = await chatApi.send(roomId, { body: text, replyToId: replyId });
+      const saved = await socket.sendMessage({
+        roomId,
+        body: text,
+        replyToId: replyId,
+        clientId,
+      });
       mergeSaved(tempId, saved);
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));

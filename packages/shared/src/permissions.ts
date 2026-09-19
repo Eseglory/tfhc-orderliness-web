@@ -39,6 +39,8 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   // Attendance
   { key: 'attendance.read', group: 'Attendance', label: 'View attendance' },
   { key: 'attendance.manage', group: 'Attendance', label: 'Record / amend attendance' },
+  { key: 'headcount.read', group: 'Attendance', label: 'View service headcount' },
+  { key: 'headcount.record', group: 'Attendance', label: 'Record / update service headcount' },
 
   // Scoring & leaderboard
   { key: 'scoring.read', group: 'Scoring', label: 'View scoring & leaderboard' },
@@ -139,6 +141,7 @@ export const SYSTEM_ROLE = {
   ADMINISTRATION: 'ADMINISTRATION',
   FINANCE: 'FINANCE',
   SECRETARY: 'SECRETARY',
+  DISCIPLINARY_COMMITTEE: 'DISCIPLINARY_COMMITTEE',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
@@ -191,6 +194,26 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
           !['users.create', 'users.deactivate', 'settings.update', 'audit.read'].includes(k),
       ),
       'users.read',
+    ],
+  },
+  DISCIPLINARY_COMMITTEE: {
+    name: 'Disciplinary Committee',
+    description:
+      'Disciplinary and ethics committee: member conduct reviews, attendance compliance, absence excuses, approval actions, member roster lookup, and reporting.',
+    permissions: [
+      'members.read',
+      'events.read',
+      'attendance.read',
+      'excuses.review',
+      'corrections.review',
+      'approvals.read',
+      'approvals.act',
+      'messages.read',
+      'messages.send',
+      'reports.view',
+      'reports.export',
+      'lookups.read',
+      'welfare.read',
     ],
   },
 };

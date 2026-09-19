@@ -55,8 +55,8 @@ async function main() {
     await prisma.meetingCategory.upsert({ where: { name: c.name }, update: { isSystem: true }, create: c });
   }
 
-  for (const name of ['Protocol', 'Media & IT', 'Choir', 'Ushering', 'Security']) {
-    await prisma.subTeam.upsert({ where: { name }, update: {}, create: { name, isSystem: true } });
+  for (const name of ['Protocol', 'Media & IT', 'Choir', 'Ushering', 'Security', 'Executive', 'Disciplinary Committee']) {
+    await prisma.subTeam.upsert({ where: { name }, update: { isSystem: true }, create: { name, isSystem: true } });
   }
 
   // System chat rooms. Membership is resolved dynamically by the chat service

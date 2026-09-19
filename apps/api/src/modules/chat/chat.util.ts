@@ -1,4 +1,4 @@
-import { isExecutiveRole } from '../../common/event-visibility';
+import { isExecutiveRole, isDisciplinaryRole } from '../../common/event-visibility';
 
 /**
  * The subset of the authenticated principal the chat module needs. Compatible
@@ -47,3 +47,17 @@ export function viewerIsExecutive(viewer: ChatViewer): boolean {
   if (viewer.isSuperAdmin) return true;
   return isExecutiveRole(viewer.roleInUnit ?? null);
 }
+
+/**
+ * Disciplinary access to the DISCIPLINARY room: any staff account, super admin,
+ * or member with a disciplinary committee role/permission.
+ */
+export function viewerIsDisciplinary(viewer: ChatViewer): boolean {
+  if (viewer.role && viewer.role !== 'MEMBER') return true;
+  if (viewer.isSuperAdmin) return true;
+  if (viewer.permissions.includes('*') || viewer.permissions.includes('excuses.review') || viewer.permissions.includes('flags.manage')) {
+    return true;
+  }
+  return isDisciplinaryRole(viewer.roleInUnit ?? null);
+}
+

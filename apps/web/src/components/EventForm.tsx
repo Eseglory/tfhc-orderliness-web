@@ -62,6 +62,7 @@ export interface EventFormValue {
   audienceScopes: ('ALL_MEMBERS' | 'EXECUTIVES' | 'ADMINS')[];
   audienceSubTeamIds: string[];
   audienceMemberIds: string[];
+  supervisingMinisterId?: string;
 }
 
 export const emptyEvent: EventFormValue = {
@@ -92,6 +93,7 @@ export const emptyEvent: EventFormValue = {
   audienceScopes: [],
   audienceSubTeamIds: [],
   audienceMemberIds: [],
+  supervisingMinisterId: '',
 };
 
 export function eventToPayload(v: EventFormValue) {
@@ -119,6 +121,7 @@ export function eventToPayload(v: EventFormValue) {
     description: v.description.trim() || undefined,
     eventTypeId: v.eventTypeId || undefined,
     categoryId: v.categoryId,
+    supervisingMinisterId: v.supervisingMinisterId || undefined,
     meetingDate: new Date(`${v.date}T${v.startTime || '00:00'}`).toISOString(),
     startTime: iso(v.startTime),
     expectedArrivalTime: iso(v.arrivalTime || v.startTime),
@@ -156,6 +159,7 @@ export function meetingToForm(m: any): EventFormValue {
     description: m.description ?? '',
     eventTypeId: m.eventTypeId ?? m.eventType?.id ?? '',
     categoryId: m.categoryId ?? m.category?.id ?? '',
+    supervisingMinisterId: m.supervisingMinisterId ?? m.supervisingMinister?.id ?? '',
     date: m.startTime ? new Date(m.startTime).toISOString().slice(0, 10) : '',
     allDay: Boolean(m.allDay),
     openTime: hhmm(m.attendanceOpenTime),
@@ -182,6 +186,15 @@ export function meetingToForm(m: any): EventFormValue {
   };
 }
 
+interface SupervisingMinisterCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  preferredName?: string | null;
+  roleInUnit?: string | null;
+  subTeam?: { id: string; name: string } | null;
+}
+
 export function EventForm({
   open,
   initial,
@@ -200,6 +213,7 @@ export function EventForm({
   const [v, setV] = useState<EventFormValue>(initial);
   const [subTeams, setSubTeams] = useState<SubTeamOption[]>([]);
   const [members, setMembers] = useState<MemberOption[]>([]);
+  const [candidates, setCandidates] = useState<SupervisingMinisterCandidate[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -221,6 +235,9 @@ export function EventForm({
   useEffect(() => {
     if (!open) return;
     fetchApi<SubTeamOption[]>('/members/sub-teams').then(setSubTeams).catch(() => setSubTeams([]));
+    fetchApi<SupervisingMinisterCandidate[]>('/meetings/supervising-ministers/candidates')
+      .then(setCandidates)
+      .catch(() => setCandidates([]));
     fetchApi<any[]>('/members')
       .then((rows) =>
         setMembers(
@@ -578,6 +595,66 @@ export function EventForm({
               maxLength={2000}
               placeholder="Provide context, agenda items, hymns, sermon topic, or preparation notes..."
             />
+          </div>
+
+          {/* Supervising Minister (Executive & Disciplinary Committee) */}
+          <div className="space-y-2 p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                Supervising Minister
+              </label>
+              <span className="text-[10px] text-amber-400/90 font-bold">
+                Pool: Executive &amp; Disciplinary Committee
+              </span>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <select
+                className={`${darkInputClass} flex-1`}
+                value={v.supervisingMinisterId || ''}
+                onChange={(e) => set('supervisingMinisterId', e.target.value)}
+              >
+                <option value="">— Select Supervising Minister (Optional) —</option>
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.firstName} {c.lastName} {c.preferredName ? `(${c.preferredName})` : ''} — {c.subTeam?.name || c.roleInUnit || 'Executive'}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  if (candidates.length === 0) return;
+                  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+                  set('supervisingMinisterId', chosen.id);
+                }}
+                disabled={candidates.length === 0}
+                className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-40"
+                title="Randomly pick an eligible minister from Executive or Disciplinary Committee"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                🎲 Random Pick
+              </button>
+            </div>
+            {v.supervisingMinisterId && (
+              <div className="text-[11px] text-amber-300/90 flex items-center justify-between pt-1">
+                <span>
+                  Assigned:{' '}
+                  <strong>
+                    {candidates.find((c) => c.id === v.supervisingMinisterId)
+                      ? `${candidates.find((c) => c.id === v.supervisingMinisterId)?.firstName} ${candidates.find((c) => c.id === v.supervisingMinisterId)?.lastName} (${candidates.find((c) => c.id === v.supervisingMinisterId)?.subTeam?.name || candidates.find((c) => c.id === v.supervisingMinisterId)?.roleInUnit || 'Executive'})`
+                      : 'Minister Selected'}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => set('supervisingMinisterId', '')}
+                  className="text-slate-400 hover:text-rose-400 text-[10px] underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mode Selector & Google Meet Integration */}

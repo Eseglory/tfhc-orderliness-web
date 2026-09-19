@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -58,5 +58,23 @@ export class AttendanceController {
   @RequirePermissions('attendance.read')
   async getMemberAttendance(@Param('memberId') memberId: string) {
     return this.attendanceService.getMemberAttendance(memberId);
+  }
+
+  @Post('headcount')
+  @RequirePermissions('headcount.record')
+  async recordHeadcount(@CurrentUser('userId') actorUserId: string, @Body() body: any) {
+    return this.attendanceService.recordServiceHeadcount(body, actorUserId);
+  }
+
+  @Get('headcount/stats')
+  @RequirePermissions('headcount.read')
+  async getHeadcountStats(@Query() query: any) {
+    return this.attendanceService.getHeadcountAnalytics(query);
+  }
+
+  @Get('headcount/:meetingId')
+  @RequirePermissions('headcount.read')
+  async getServiceHeadcount(@Param('meetingId') meetingId: string) {
+    return this.attendanceService.getServiceHeadcount(meetingId);
   }
 }

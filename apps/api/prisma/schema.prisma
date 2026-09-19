@@ -150,6 +150,8 @@ model User {
   pushSubscriptions PushSubscription[]
   pwaDevices PwaDeviceSession[]
   resumableUploads ResumableUpload[]
+  headcountsRecorded ServiceHeadcount[] @relation("HeadcountRecordedBy")
+  headcountsUpdated  ServiceHeadcount[] @relation("HeadcountUpdatedBy")
 
   @@index([isActive])
   @@map("users")
@@ -257,6 +259,7 @@ model Member {
   appointments       Appointment[]
   chatMemberships    ChatRoomMember[]
   chatMessages       ChatMessage[]
+  supervisedMeetings Meeting[]           @relation("MeetingSupervisingMinister")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -440,6 +443,9 @@ model Meeting {
   excuseRequests       AbsenceExcuse[]
   correctionRequests   CorrectionRequest[]
   meetingSummary       MeetingSummary?
+  headcount            ServiceHeadcount?
+  supervisingMinisterId String?
+  supervisingMinister   Member?             @relation("MeetingSupervisingMinister", fields: [supervisingMinisterId], references: [id], onDelete: SetNull)
   serviceCommitments   MemberServiceCommitment[]
   audiences            EventAudience[]
   invitations          EventInvitation[]
@@ -449,6 +455,7 @@ model Meeting {
 
   @@index([status])
   @@index([startTime])
+  @@index([supervisingMinisterId])
   @@index([archivedAt, startTime])
   @@index([status, startTime])
   @@index([categoryId, startTime])
@@ -536,6 +543,28 @@ model AttendanceRecord {
   @@index([actualArrivalTime])
   @@index([status, actualArrivalTime])
   @@map("attendance_records")
+}
+
+model ServiceHeadcount {
+  id               String    @id @default(uuid())
+  meetingId        String    @unique
+  meeting          Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  totalHeadcount   Int
+  maleCount        Int?
+  femaleCount      Int?
+  childrenCount    Int?
+  notes            String?
+  recordedById     String
+  recordedBy       User      @relation("HeadcountRecordedBy", fields: [recordedById], references: [id])
+  lastUpdatedById  String?
+  lastUpdatedBy    User?     @relation("HeadcountUpdatedBy", fields: [lastUpdatedById], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([meetingId])
+  @@index([recordedById])
+  @@index([createdAt])
+  @@map("service_headcounts")
 }
 
 model AbsenceExcuse {

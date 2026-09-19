@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AttendanceService } from '../src/modules/attendance/attendance.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { CacheService } from '../src/common/cache/cache.service';
+import { AuditService } from '../src/common/rbac/audit.service';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AttendanceStatus, AttendanceMethod } from '@tfhc/shared';
 
@@ -148,11 +149,17 @@ describe('Attendance, Geofencing & Lifecycle Enterprise Suite', () => {
       invalidateTags: jest.fn(),
     };
 
+    const mockAudit = {
+      record: jest.fn().mockResolvedValue(undefined),
+      recordWithin: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AttendanceService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: CacheService, useValue: mockCache },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 

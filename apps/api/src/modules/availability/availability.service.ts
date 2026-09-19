@@ -38,20 +38,57 @@ export class AvailabilityService {
     private readonly cache: CacheService,
   ) {}
 
-  weekStart(now = new Date()) {
+  getWatCycleWindows(now = new Date()) {
     const tz = process.env.TFHC_TIMEZONE || 'Africa/Lagos';
-    const p = new Intl.DateTimeFormat('en-CA', {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: tz,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       weekday: 'short',
-    }).formatToParts(now);
-    const val = (t: string) => Number(p.find((x) => x.type === t)?.value);
-    const weekday = p.find((x) => x.type === 'weekday')?.value;
-    const date = new Date(Date.UTC(val('year'), val('month') - 1, val('day')));
-    date.setUTCDate(date.getUTCDate() - ({ Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[weekday ?? 'Mon']));
-    return date;
+    });
+    const parts = formatter.formatToParts(now);
+    const getVal = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = Number(getVal('year'));
+    const month = Number(getVal('month'));
+    const day = Number(getVal('day'));
+    const weekday = getVal('weekday') || 'Mon';
+
+    const offsetMap: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+    const offsetFromMonday = offsetMap[weekday] ?? 0;
+
+    const mondayUtc = new Date(Date.UTC(year, month - 1, day));
+    mondayUtc.setUTCDate(mondayUtc.getUTCDate() - offsetFromMonday);
+
+    const mYear = mondayUtc.getUTCFullYear();
+    const mMonth = mondayUtc.getUTCMonth();
+    const mDay = mondayUtc.getUTCDate();
+
+    // weekStart: Date only (for @db.Date column in Postgres)
+    const weekStart = new Date(Date.UTC(mYear, mMonth, mDay));
+
+    // opensAt: Monday 00:00:00.000 WAT (Sunday 23:00:00 UTC)
+    const opensAt = new Date(Date.UTC(mYear, mMonth, mDay, 0 - 1, 0, 0, 0));
+
+    // closesAt: Monday 12:00:00.000 WAT (Monday 11:00:00 UTC)
+    const closesAt = new Date(Date.UTC(mYear, mMonth, mDay, 12 - 1, 0, 0, 0));
+
+    // nextOpensAt: Next Monday 00:00:00.000 WAT
+    const nextOpensAt = new Date(Date.UTC(mYear, mMonth, mDay + 7, 0 - 1, 0, 0, 0));
+
+    const isOpen = now.getTime() >= opensAt.getTime() && now.getTime() < closesAt.getTime();
+
+    return {
+      weekStart,
+      opensAt,
+      closesAt,
+      nextOpensAt,
+      isOpen,
+    };
+  }
+
+  weekStart(now = new Date()) {
+    return this.getWatCycleWindows(now).weekStart;
   }
 
   /**
@@ -64,20 +101,24 @@ export class AvailabilityService {
   }
 
   async openCurrentWeek(now = new Date()) {
-    const weekStart = this.weekStart(now);
-    // Response window closes Friday at 23:59:59 WAT (5 days after Monday open)
-    const closesAt = new Date(weekStart.getTime() + 5 * 24 * 60 * 60 * 1000 - 1);
+    const { weekStart, opensAt, closesAt } = this.getWatCycleWindows(now);
     const cycle = await this.prisma.weeklyAvailabilityCycle.upsert({
       where: { weekStart },
-      update: {},
-      create: { weekStart, opensAt: now, closesAt },
+      update: { opensAt, closesAt },
+      create: {
+        weekStart,
+        opensAt,
+        closesAt,
+        state: now.getTime() >= closesAt.getTime() ? WeeklyAvailabilityState.FINALIZED : WeeklyAvailabilityState.OPEN,
+      },
     });
     this.cache.invalidateTag('availability');
     return cycle;
   }
 
   async currentForMember(memberId: string) {
-    const weekStart = this.weekStart();
+    const now = new Date();
+    const { weekStart, isOpen: windowIsOpen, nextOpensAt } = this.getWatCycleWindows(now);
     let cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({
       where: { weekStart },
       include: {
@@ -87,8 +128,7 @@ export class AvailabilityService {
     });
 
     if (!cycle) {
-      // Auto-open if current week doesn't have a cycle yet
-      await this.openCurrentWeek();
+      await this.openCurrentWeek(now);
       cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({
         where: { weekStart },
         include: {
@@ -100,6 +140,8 @@ export class AvailabilityService {
 
     if (!cycle) throw new NotFoundException('Weekly availability has not opened');
 
+    const isOpen = cycle.state === WeeklyAvailabilityState.OPEN && windowIsOpen && now.getTime() < cycle.closesAt.getTime();
+
     const meetings = await this.weekMeetings(cycle.weekStart);
     return {
       cycle: {
@@ -108,6 +150,8 @@ export class AvailabilityService {
         state: cycle.state,
         opensAt: cycle.opensAt,
         closesAt: cycle.closesAt,
+        isOpen,
+        nextOpensAt,
       },
       meetings,
       selectedMeetingIds: cycle.commitments.filter((x) => x.status === 'COMMITTED').map((x) => x.meetingId),
@@ -125,15 +169,21 @@ export class AvailabilityService {
       throw new ForbiddenException('Only active members can submit availability');
     }
 
-    const weekStart = this.weekStart();
+    const now = new Date();
+    const { weekStart, isOpen: windowIsOpen } = this.getWatCycleWindows(now);
     let cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({ where: { weekStart } });
     if (!cycle) {
-      cycle = await this.openCurrentWeek();
+      cycle = await this.openCurrentWeek(now);
     }
     if (!cycle) throw new NotFoundException('Weekly availability has not opened');
 
-    if (cycle.state !== WeeklyAvailabilityState.OPEN || new Date() >= cycle.closesAt) {
-      throw new ForbiddenException('The availability response window is closed for this week');
+    if (
+      cycle.state !== WeeklyAvailabilityState.OPEN ||
+      !windowIsOpen ||
+      now.getTime() >= cycle.closesAt.getTime() ||
+      now.getTime() < cycle.opensAt.getTime()
+    ) {
+      throw new ForbiddenException('The weekly availability window closed Monday at 12:00 PM WAT.');
     }
 
     const meetings = await this.weekMeetings(cycle.weekStart);
@@ -145,8 +195,8 @@ export class AvailabilityService {
     const res = await this.prisma.$transaction(async (tx) => {
       await tx.weeklyAvailabilityResponse.upsert({
         where: { cycleId_memberId: { cycleId: cycle.id, memberId } },
-        update: { submittedAt: new Date() },
-        create: { cycleId: cycle.id, memberId },
+        update: { submittedAt: now },
+        create: { cycleId: cycle.id, memberId, submittedAt: now },
       });
       await tx.memberServiceCommitment.deleteMany({
         where: { cycleId: cycle.id, memberId },
@@ -161,7 +211,7 @@ export class AvailabilityService {
           })),
         });
       }
-      return { cycleId: cycle.id, selectedMeetingIds: meetingIds, submittedAt: new Date() };
+      return { cycleId: cycle.id, selectedMeetingIds: meetingIds, submittedAt: now };
     });
 
     this.cache.invalidateTag('availability');

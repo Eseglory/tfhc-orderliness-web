@@ -68,7 +68,7 @@ export const chatApi = {
     fetchApi<{ messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean }>(
       `/chat/rooms/${id}/messages?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
     ),
-  send: (id: string, body: { body?: string; replyToId?: string }) =>
+  send: (id: string, body: { body?: string; replyToId?: string; clientId?: string }) =>
     fetchApi<ChatMessage>(`/chat/rooms/${id}/messages`, { method: 'POST', body: JSON.stringify(body) }),
   attach: (id: string, form: FormData) =>
     fetchApi<ChatMessage>(`/chat/rooms/${id}/attachments`, { method: 'POST', body: form }),
@@ -132,10 +132,17 @@ export function useChatSocket(events: ChatSocketEvents) {
     const resume = () => {
       if (navigator.onLine && document.visibilityState === 'visible' && !socket.connected) {
         const currentToken = getAuthToken();
-        if (currentToken) { socket.auth = { token: currentToken }; socket.connect(); }
+        if (currentToken) {
+          socket.auth = { token: currentToken };
+          socket.connect();
+        }
       }
     };
-    const signedOut = () => { socket.disconnect(); setConnected(false); setOnline(new Set()); };
+    const signedOut = () => {
+      socket.disconnect();
+      setConnected(false);
+      setOnline(new Set());
+    };
     window.addEventListener('online', resume);
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('tfhc:logout', signedOut);
@@ -177,16 +184,53 @@ export function useChatSocket(events: ChatSocketEvents) {
   const subscribe = useCallback((roomId: string) => {
     socketRef.current?.emit('room:subscribe', { roomId });
   }, []);
+
   const sendTyping = useCallback((roomId: string, typing: boolean) => {
     socketRef.current?.emit('message:typing', { roomId, typing });
   }, []);
+
   const sendRead = useCallback((roomId: string, messageId?: string) => {
     socketRef.current?.emit('message:read', { roomId, messageId });
   }, []);
 
+  const sendMessage = useCallback(
+    (payload: {
+      roomId: string;
+      body?: string;
+      replyToId?: string;
+      clientId?: string;
+      attachmentUrl?: string;
+      type?: string;
+    }): Promise<ChatMessage> => {
+      const socket = socketRef.current;
+      if (socket && socket.connected) {
+        return new Promise<ChatMessage>((resolve, reject) => {
+          socket.emit(
+            'message:send',
+            payload,
+            (res: { ok: boolean; message?: ChatMessage; error?: string }) => {
+              if (res && res.ok && res.message) {
+                resolve(res.message);
+              } else {
+                reject(new Error(res?.error || 'WebSocket message failed'));
+              }
+            },
+          );
+        });
+      }
+      // Fallback to REST API if WebSocket is temporarily disconnected
+      return chatApi.send(payload.roomId, {
+        body: payload.body,
+        replyToId: payload.replyToId,
+        clientId: payload.clientId,
+      });
+    },
+    [],
+  );
+
   return useMemo(
-    () => ({ connected, online, subscribe, sendTyping, sendRead }),
-    [connected, online, subscribe, sendTyping, sendRead],
+    () => ({ connected, online, subscribe, sendTyping, sendRead, sendMessage }),
+    [connected, online, subscribe, sendTyping, sendRead, sendMessage],
   );
 }
 
@@ -223,8 +267,10 @@ export function formatMessageTime(iso: string): string {
   yesterday.setDate(now.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString())
     return `Yesterday ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
-    ` ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  return (
+    d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+    ` ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+  );
 }
 
 export function dayLabel(iso: string): string {

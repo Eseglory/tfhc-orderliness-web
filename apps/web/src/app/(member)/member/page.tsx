@@ -48,6 +48,12 @@ export default function MemberDashboard() {
     return () => window.removeEventListener('focus', refresh);
   }, []);
 
+  const [availabilityData, setAvailabilityData] = useState<{
+    submitted?: boolean;
+    selectedMeetingIds?: string[];
+    cycle?: { state?: string; closesAt?: string; isOpen?: boolean };
+  } | null>(null);
+
   useEffect(() => {
     const ac = new AbortController();
     const get = <T,>(url: string) => fetchApi<T>(url, { signal: ac.signal });
@@ -93,10 +99,14 @@ export default function MemberDashboard() {
       setUpcoming(combined.slice(0, 5));
     }).catch(() => {});
 
-    get<{ cycle?: { state?: string; closesAt?: string }; submitted?: boolean }>('/availability/current')
-      .then((a) => setAvailabilityOpen(Boolean(
-        a?.cycle?.state === 'OPEN' && !a.submitted && (!a.cycle.closesAt || new Date(a.cycle.closesAt) > new Date()),
-      )))
+    get<any>('/availability/current')
+      .then((a) => {
+        setAvailabilityData(a);
+        const open = Boolean(
+          a?.cycle?.isOpen ?? (a?.cycle?.state === 'OPEN' && (!a?.cycle?.closesAt || new Date(a.cycle.closesAt) > new Date()))
+        );
+        setAvailabilityOpen(open && !a?.submitted);
+      })
       .catch(() => {});
     return () => ac.abort();
   }, []);
@@ -175,7 +185,12 @@ export default function MemberDashboard() {
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  {activeMeeting ? (
+                  {availabilityData?.submitted ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
+                      <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
+                      Confirmed for Service
+                    </span>
+                  ) : activeMeeting ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                       Live Check-In Open
@@ -211,9 +226,14 @@ export default function MemberDashboard() {
                     ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName || 'Main Sanctuary'}`
                     : 'Check the upcoming schedule below for the next service.'}
                 </p>
+                {availabilityData?.submitted && (activeMeeting || nextTodayService) && (
+                  <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                    You have submitted your availability for this week&apos;s service. No additional check-in is required.
+                  </p>
+                )}
               </div>
 
-              {closesLabel && (
+              {!availabilityData?.submitted && closesLabel && (
                 <span className="rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 shrink-0">
                   {closesLabel}
                 </span>
@@ -221,17 +241,31 @@ export default function MemberDashboard() {
             </div>
 
             <Link
-              href={activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/calendar'}
+              href={
+                availabilityData?.submitted
+                  ? (activeMeeting ? `/member/meetings/${activeMeeting.id}` : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/availability')
+                  : (activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/calendar')
+              }
               className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 px-4 text-sm font-extrabold transition-all active:scale-[0.98] shadow-sm ${
-                activeMeeting
+                !availabilityData?.submitted && activeMeeting
                   ? 'bg-[#f2320c] hover:bg-[#d82a08] text-white shadow-red-600/25'
-                  : nextTodayService
-                  ? 'bg-[#0b1c30] hover:bg-[#162a42] text-white'
                   : 'bg-[#0b1c30] hover:bg-[#162a42] text-white shadow-slate-900/10'
               }`}
             >
-              <span className="material-symbols-outlined text-lg">{activeMeeting ? 'location_on' : 'calendar_month'}</span>
-              {activeMeeting ? 'Check In Now' : nextTodayService ? 'View Gathering Details' : 'View Calendar & Events'}
+              <span className="material-symbols-outlined text-lg">
+                {availabilityData?.submitted
+                  ? 'event_available'
+                  : activeMeeting
+                  ? 'location_on'
+                  : 'calendar_month'}
+              </span>
+              {availabilityData?.submitted
+                ? 'View Service Details'
+                : activeMeeting
+                ? 'Check In Now'
+                : nextTodayService
+                ? 'View Gathering Details'
+                : 'View Calendar & Events'}
             </Link>
           </div>
         </section>
@@ -273,7 +307,7 @@ export default function MemberDashboard() {
 
                 <div className="min-w-0 space-y-1">
                   <p className="text-xs text-slate-300 font-bold truncate">{nextWardrobe.title}</p>
-                  <h3 className="text-base sm:text-xl font-black text-white truncate leading-tight">
+                  <h3 className="text-base sm:xl font-black text-white truncate leading-tight">
                     {nextWardrobe.outfit?.title || 'Prescribed Uniform'}
                   </h3>
 
@@ -311,16 +345,25 @@ export default function MemberDashboard() {
         <EngagementNudge />
         <ProfileCompletionReminder />
 
-        {availabilityOpen && (
+        {availabilityData?.submitted ? (
+          <Link href="/member/availability" className="flex items-center gap-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/80 dark:bg-emerald-950/40 px-4 py-3 text-slate-900 dark:text-white hover:bg-emerald-100/80 transition-colors shadow-xs">
+            <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-extrabold text-emerald-950 dark:text-emerald-200">Availability Submitted</p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">You have submitted your availability for this week&apos;s service. No additional check-in is required.</p>
+            </div>
+            <span className="material-symbols-outlined text-emerald-400 text-base">chevron_right</span>
+          </Link>
+        ) : availabilityOpen ? (
           <Link href="/member/availability" className="flex items-center gap-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/80 dark:bg-blue-950/40 px-4 py-3 text-slate-900 dark:text-white hover:bg-blue-100/80 transition-colors shadow-xs">
             <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">event_available</span>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-extrabold text-blue-950 dark:text-blue-200">Weekly Availability Open</p>
-              <p className="text-[11px] text-blue-700 dark:text-blue-300 truncate">Let your team know when you can serve this week.</p>
+              <p className="text-xs font-extrabold text-blue-950 dark:text-blue-200">Weekly Availability Open (Monday 12:00 AM – 12:00 PM WAT)</p>
+              <p className="text-[11px] text-blue-700 dark:text-blue-300 truncate">Let your team know when you can serve this week before Monday 12:00 PM WAT.</p>
             </div>
             <span className="material-symbols-outlined text-blue-400 text-base">chevron_right</span>
           </Link>
-        )}
+        ) : null}
 
         {/* Top KPI Metrics Bar */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

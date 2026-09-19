@@ -14,12 +14,21 @@ export default function MeetingDetailPage() {
   const [saving, setSaving] = useState(false);
   const [meeting, setMeeting] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [isAvailabilityConfirmed, setIsAvailabilityConfirmed] = useState(false);
 
   useEffect(() => {
     if (meetingId) {
       fetchApi(`/meetings/${meetingId}`)
         .then((data) => setMeeting(data))
         .catch((err) => setError(err.message));
+
+      fetchApi<any>('/availability/current')
+        .then((res) => {
+          if (res?.submitted && (res?.selectedMeetingIds?.includes(meetingId) || res?.selectedMeetingIds?.length > 0)) {
+            setIsAvailabilityConfirmed(Boolean(res?.selectedMeetingIds?.includes(meetingId)));
+          }
+        })
+        .catch(() => {});
     }
   }, [meetingId]);
 
@@ -176,7 +185,19 @@ export default function MeetingDetailPage() {
         </section>
 
         {/* Dynamic Primary Check-In / Status Card (In-Flow, positioned naturally above the bottom nav) */}
-        {isCheckInEligible ? (
+        {isAvailabilityConfirmed ? (
+          <section className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 p-5 shadow-xs space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
+              <h3 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 uppercase tracking-wider">
+                Availability Confirmed
+              </h3>
+            </div>
+            <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed">
+              You have confirmed your availability for this service via Weekly Availability. No additional check-in is required.
+            </p>
+          </section>
+        ) : isCheckInEligible ? (
           <section className="rounded-2xl border-2 border-[#f2320c]/30 bg-gradient-to-br from-red-50 to-orange-50/50 dark:from-red-950/40 dark:to-slate-900 p-5 shadow-md space-y-3.5">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">

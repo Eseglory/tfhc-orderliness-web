@@ -69,6 +69,7 @@ export class RbacService implements OnApplicationBootstrap {
     const chatRooms = [
       { key: 'GENERAL', name: 'General', description: 'Unit-wide conversation for every member.', type: 'GENERAL' as const },
       { key: 'EXECUTIVES', name: 'Executives', description: 'Private channel for unit executives and administrators.', type: 'EXECUTIVES' as const },
+      { key: 'DISCIPLINARY', name: 'Disciplinary Committee', description: 'Confidential channel for Disciplinary Committee members, ethics reviews, and case discussions.', type: 'EXECUTIVES' as const },
     ];
     await Promise.all(
       chatRooms.map((r) =>

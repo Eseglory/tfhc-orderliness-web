@@ -19,9 +19,14 @@ export interface EventViewer {
 }
 
 const EXECUTIVE_ROLE = /president|vice|secretary|treasurer|financial|coordinator|\bhead\b|leader|executive|chairman|chairperson|director/i;
+const DISCIPLINARY_ROLE = /disciplinary|ethics|conduct|tribunal/i;
 
 export function isExecutiveRole(roleInUnit?: string | null): boolean {
   return EXECUTIVE_ROLE.test(roleInUnit ?? '');
+}
+
+export function isDisciplinaryRole(roleInUnit?: string | null): boolean {
+  return DISCIPLINARY_ROLE.test(roleInUnit ?? '');
 }
 
 export function canViewEvent(

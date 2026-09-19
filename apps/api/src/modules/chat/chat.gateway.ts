@@ -37,6 +37,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   /** memberId -> live socket ids */
   private readonly online = new Map<string, Set<string>>();
 
+  /** socketId -> Set of roomIds where this socket actively signaled typing */
+  private readonly socketTypingRooms = new Map<string, Set<string>>();
+
   afterInit(server: Namespace | Server) {
     this.io = server ?? this.server;
   }
@@ -86,6 +89,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   handleDisconnect(socket: Socket) {
     const viewer: ChatViewer | undefined = socket.data?.viewer;
     if (!viewer?.memberId) return;
+
+    // Clear any active typing indicators for this socket
+    const typingRooms = this.socketTypingRooms.get(socket.id);
+    if (typingRooms) {
+      for (const roomId of typingRooms) {
+        socket.to(`room:${roomId}`).emit('message:typing', {
+          roomId,
+          memberId: viewer.memberId,
+          name: [viewer.firstName, viewer.lastName].filter(Boolean).join(' ').trim(),
+          typing: false,
+        });
+      }
+      this.socketTypingRooms.delete(socket.id);
+    }
+
     const stillOnline = this.removeOnline(viewer.memberId, socket.id);
     if (!stillOnline) {
       socket.broadcast.emit('presence:update', { memberId: viewer.memberId, online: false });
@@ -156,7 +174,15 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async onMessage(
     @ConnectedSocket() socket: Socket,
     @MessageBody()
-    data: { roomId?: string; body?: string; replyToId?: string; clientId?: string; attachmentUrl?: string; type?: string },
+    data: {
+      roomId?: string;
+      body?: string;
+      replyToId?: string;
+      clientId?: string;
+      attachmentUrl?: string;
+      attachmentMeta?: unknown;
+      type?: string;
+    },
   ) {
     const viewer = this.viewerOf(socket);
     if (!viewer || !data?.roomId) return { ok: false, error: 'Not authorised' };
@@ -165,8 +191,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         body: data.body,
         replyToId: data.replyToId,
         attachmentUrl: data.attachmentUrl,
+        attachmentMeta: data.attachmentMeta,
         type: data.type,
+        operationId: data.clientId,
       });
+
+      // Clear typing indicator for sender
+      this.recordTyping(socket.id, data.roomId, false);
+
       await this.fanOut(data.roomId, message);
       return { ok: true, message, clientId: data.clientId };
     } catch (error) {
@@ -178,11 +210,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async onTyping(@ConnectedSocket() socket: Socket, @MessageBody() data: { roomId?: string; typing?: boolean }) {
     const viewer = this.viewerOf(socket);
     if (!viewer || !data?.roomId) return;
+    const isTyping = data.typing !== false;
+    this.recordTyping(socket.id, data.roomId, isTyping);
+
     socket.to(`room:${data.roomId}`).emit('message:typing', {
       roomId: data.roomId,
       memberId: viewer.memberId,
       name: [viewer.firstName, viewer.lastName].filter(Boolean).join(' ').trim(),
-      typing: data.typing !== false,
+      typing: isTyping,
     });
   }
 
@@ -215,6 +250,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async fanOut(roomId: string, message: unknown) {
     if (!this.io) return;
     this.io.to(`room:${roomId}`).emit('message:new', message);
+
     // Make sure members with a live socket who haven't joined this room yet
     // (e.g. a brand-new DM) still get it and a badge bump.
     const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
@@ -236,8 +272,18 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   // -------------------------------------------------------------------------
-  // Presence bookkeeping
+  // Presence & Typing bookkeeping
   // -------------------------------------------------------------------------
+
+  private recordTyping(socketId: string, roomId: string, isTyping: boolean) {
+    let set = this.socketTypingRooms.get(socketId);
+    if (!set) {
+      set = new Set<string>();
+      this.socketTypingRooms.set(socketId, set);
+    }
+    if (isTyping) set.add(roomId);
+    else set.delete(roomId);
+  }
 
   private viewerOf(socket: Socket): ChatViewer | null {
     return (socket.data?.viewer as ChatViewer) ?? null;

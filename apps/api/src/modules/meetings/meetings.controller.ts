@@ -45,6 +45,22 @@ export class MeetingsController {
     return this.meetingsService.eventsDashboard();
   }
 
+  @Get('supervising-ministers/candidates')
+  @RequirePermissions('events.read')
+  getSupervisingMinisterCandidates() {
+    return this.meetingsService.getSupervisingMinisterCandidates();
+  }
+
+  @RequirePermissions('events.update')
+  @Post(':id/supervising-minister')
+  appointSupervisingMinister(
+    @Param('id') id: string,
+    @Body() body: { memberId?: string | null; random?: boolean },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.appointSupervisingMinister(id, body ?? {}, userId);
+  }
+
   @Get('calendar')
   calendar(
     @Query('from') from: string,

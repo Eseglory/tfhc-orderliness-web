@@ -1,21 +1,30 @@
-import { ResumableUploadsController } from './resumable-uploads.controller';
-import { ResumableUploadsService } from './resumable-uploads.service';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { ResumableUploadsController } from './resumable-uploads.controller';
+import { ResumableUploadsService } from './resumable-uploads.service';
 import { ChatService } from './chat.service';
 import { ChatAttachmentsService } from './chat-attachments.service';
 import { ChatGateway } from './chat.gateway';
 import { ChatController } from './chat.controller';
+import { ChatBufferRepository } from './chat-buffer.repository';
+import { ChatMigrationJob } from './chat-migration.job';
 
 /**
  * Real-time in-app chat: system rooms (General, Executives), custom rooms and
- * 1:1 direct messages, delivered over a Socket.IO gateway with a REST fallback
- * for history and room management.
+ * 1:1 direct messages, delivered over a Socket.IO gateway with high-speed
+ * local SQLite buffering, WAL persistence, midnight migration, and REST fallbacks.
  */
 @Module({
   imports: [AuthModule],
   controllers: [ChatController, ResumableUploadsController],
-  providers: [ResumableUploadsService, ChatService, ChatAttachmentsService, ChatGateway],
-  exports: [ChatService, ChatGateway],
+  providers: [
+    ChatBufferRepository,
+    ChatMigrationJob,
+    ChatService,
+    ChatAttachmentsService,
+    ChatGateway,
+    ResumableUploadsService,
+  ],
+  exports: [ChatService, ChatGateway, ChatBufferRepository, ChatMigrationJob],
 })
 export class ChatModule {}

@@ -14,10 +14,18 @@ type AvailabilityMeeting = {
 };
 
 type AvailabilityResponse = {
-  cycle: { id: string; state: string; opensAt: string; closesAt: string };
+  cycle: {
+    id: string;
+    state: string;
+    opensAt: string;
+    closesAt: string;
+    isOpen?: boolean;
+    nextOpensAt?: string;
+  };
   meetings: AvailabilityMeeting[];
   selectedMeetingIds: string[];
   submitted: boolean;
+  submittedAt?: string | null;
 };
 
 export default function MemberAvailabilityPage() {
@@ -34,7 +42,7 @@ export default function MemberAvailabilityPage() {
     try {
       const response = await fetchApi<AvailabilityResponse>('/availability/current');
       setData(response);
-      setSelected(response.selectedMeetingIds);
+      setSelected(response.selectedMeetingIds || []);
       setError('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Weekly availability has not opened yet.');
@@ -53,6 +61,7 @@ export default function MemberAvailabilityPage() {
 
   const submit = async () => {
     setSaving(true);
+    setError('');
     try {
       await fetchApi('/availability/current', {
         method: 'PUT',
@@ -67,7 +76,14 @@ export default function MemberAvailabilityPage() {
     }
   };
 
-  const closed = data ? data.cycle.state !== 'OPEN' || new Date(data.cycle.closesAt) <= new Date() : false;
+  const isOpen = data
+    ? Boolean(
+        data.cycle.isOpen ??
+          (data.cycle.state === 'OPEN' && new Date(data.cycle.closesAt) > new Date() && new Date(data.cycle.opensAt) <= new Date()),
+      )
+    : false;
+
+  const isSubmitted = Boolean(data?.submitted);
 
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
@@ -80,15 +96,18 @@ export default function MemberAvailabilityPage() {
           >
             <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
           </button>
-          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
+          <div>
+            <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
+            <p className="text-[11px] font-semibold text-on-surface-variant">Open: Monday 12:00 AM – 12:00 PM WAT</p>
+          </div>
         </div>
       </header>
 
       <main className="px-edge-margin pb-32 max-w-3xl mx-auto pt-stack-md">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
-            <p className="font-body-md text-body-md">Loading this week&apos;s services…</p>
+            <span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
+            <p className="font-body-md text-body-md">Loading this week&apos;s schedule…</p>
           </div>
         ) : !data ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
@@ -103,24 +122,73 @@ export default function MemberAvailabilityPage() {
           </div>
         ) : (
           <>
-            <div
-              className={`rounded-xl p-4 mb-stack-md border ${
-                closed ? 'bg-surface-container-low border-outline-variant/30' : 'bg-surface-variant/50 border-surface-variant'
-              }`}
-            >
-              <p className="font-label-md text-label-md font-semibold text-on-surface">
-                {closed ? 'Availability window closed' : 'Let us know which services you plan to attend'}
-              </p>
-              <p className="font-body-md text-[13px] text-on-surface-variant mt-1">
-                {closed
-                  ? "This week's responses are no longer accepted."
-                  : `Respond before ${new Date(data.cycle.closesAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`}
-              </p>
-            </div>
+            {/* Status & Deadline Banner */}
+            {isSubmitted ? (
+              <div className="rounded-2xl p-5 mb-stack-md border border-emerald-300 dark:border-emerald-800 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0 mt-0.5">
+                    verified
+                  </span>
+                  <div className="space-y-1">
+                    <h2 className="font-headline-sm text-base font-extrabold text-emerald-900 dark:text-emerald-100">
+                      Availability Submitted
+                    </h2>
+                    <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed">
+                      You have submitted your availability for this week&apos;s service. No additional check-in is required.
+                    </p>
+                    {isOpen ? (
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1 font-semibold">
+                        Window remains open until Monday at 12:00 PM WAT. You may update your service selection below.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1">
+                        Response recorded. See you at your scheduled service!
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : !isOpen ? (
+              <div className="rounded-2xl p-5 mb-stack-md border border-amber-300 dark:border-amber-800 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-200 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-2xl shrink-0 mt-0.5">
+                    lock_clock
+                  </span>
+                  <div className="space-y-1">
+                    <h2 className="font-headline-sm text-base font-extrabold text-amber-900 dark:text-amber-100">
+                      Availability Closed
+                    </h2>
+                    <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                      The weekly availability window closed Monday at 12:00 PM WAT.
+                    </p>
+                    <p className="text-xs text-amber-900 dark:text-amber-200 font-bold pt-1">
+                      Next window: Monday at 12:00 AM WAT.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl p-5 mb-stack-md border border-blue-200 dark:border-blue-900 bg-blue-50/80 dark:bg-blue-950/40 text-slate-900 dark:text-white shadow-xs">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl shrink-0 mt-0.5">
+                    event_available
+                  </span>
+                  <div className="space-y-1">
+                    <h2 className="font-headline-sm text-base font-extrabold text-blue-950 dark:text-blue-100">
+                      Weekly Availability Open
+                    </h2>
+                    <p className="text-xs sm:text-sm text-blue-900 dark:text-blue-200 font-medium leading-relaxed">
+                      Let us know which services you will attend this week. Submitting your availability serves as your attendance confirmation.
+                    </p>
+                    <p className="text-xs text-blue-800 dark:text-blue-300 font-bold pt-1">
+                      Deadline: Monday at 12:00 PM WAT
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            {error ? (
-              <p className="font-body-md text-body-md text-error mb-stack-sm">{error}</p>
-            ) : null}
+            {error ? <p role="alert" className="font-body-md text-sm font-bold text-error mb-stack-sm">{error}</p> : null}
 
             {data.meetings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 gap-2 text-center text-on-surface-variant">
@@ -128,32 +196,68 @@ export default function MemberAvailabilityPage() {
                 <p className="font-body-md text-body-md">No eligible services are scheduled this week.</p>
               </div>
             ) : (
-              <div className="space-y-gutter">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    This Week&apos;s Gatherings
+                  </h3>
+                  {isOpen ? (
+                    <span className="text-xs font-semibold text-primary">Select all that apply</span>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-400">View only</span>
+                  )}
+                </div>
+
                 {data.meetings.map((m) => {
                   const isSelected = selected.includes(m.id);
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      disabled={closed}
+                      disabled={!isOpen}
                       onClick={() => toggle(m.id)}
-                      className={`w-full text-left bg-surface-container-lowest p-stack-md rounded-xl shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border flex items-center justify-between gap-stack-md transition-colors disabled:opacity-60 ${
-                        isSelected ? 'border-primary' : 'border-surface-container-low'
+                      className={`w-full text-left bg-surface-container-lowest p-4 sm:p-5 rounded-2xl shadow-xs border flex items-center justify-between gap-4 transition-all duration-150 ${
+                        !isOpen ? 'opacity-80 cursor-default' : 'hover:border-primary/50 active:scale-[0.99]'
+                      } ${
+                        isSelected
+                          ? 'border-primary ring-1 ring-primary/30 bg-primary/5 dark:bg-primary/10'
+                          : 'border-outline-variant/20'
                       }`}
                     >
-                      <div>
-                        <h3 className="font-headline-sm text-headline-sm text-primary font-bold">{m.title}</h3>
-                        <div className="mt-1 flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                          <span className="material-symbols-outlined text-[16px]">schedule</span>
-                          <span>{new Date(m.startTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-headline-sm text-base sm:text-lg text-primary font-bold truncate">
+                            {m.title}
+                          </h4>
+                          {isSelected && isSubmitted && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold">
+                              Confirmed
+                            </span>
+                          )}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-on-surface-variant font-body-md text-body-md">
-                          <span className="material-symbols-outlined text-[16px]">location_on</span>
-                          <span>{m.locationName}</span>
+
+                        <div className="flex items-center gap-2 text-on-surface-variant text-xs sm:text-sm font-medium">
+                          <span className="material-symbols-outlined text-[16px] text-primary">schedule</span>
+                          <span>
+                            {new Date(m.startTime).toLocaleString('en-GB', {
+                              timeZone: 'Africa/Lagos',
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })} WAT
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-on-surface-variant text-xs sm:text-sm font-medium">
+                          <span className="material-symbols-outlined text-[16px] text-primary">location_on</span>
+                          <span className="truncate">{m.locationName || "The Father's House Church"}</span>
                         </div>
                       </div>
+
                       <span
-                        className={`material-symbols-outlined text-2xl shrink-0 ${
+                        className={`material-symbols-outlined text-2xl sm:text-3xl shrink-0 transition-colors ${
                           isSelected ? 'text-primary' : 'text-outline-variant'
                         }`}
                       >
@@ -165,20 +269,34 @@ export default function MemberAvailabilityPage() {
               </div>
             )}
 
-            {!closed && data.meetings.length > 0 ? (
-              <div className="mt-section-gap">
+            {isOpen && data.meetings.length > 0 ? (
+              <div className="mt-8 space-y-2">
                 <button
                   onClick={submit}
                   disabled={saving}
-                  className="w-full bg-primary hover:opacity-90 text-on-primary font-label-md text-label-md py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98] font-bold disabled:opacity-60 shadow-[0px_4px_12px_rgba(0,0,0,0.15)]"
+                  className="w-full bg-primary hover:bg-primary/90 text-on-primary font-label-md text-base py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-transform duration-200 active:scale-[0.98] font-bold disabled:opacity-60 shadow-md"
                 >
-                  {saving ? 'Saving…' : 'Submit availability'}
+                  <span className="material-symbols-outlined text-xl">
+                    {isSubmitted ? 'update' : 'send'}
+                  </span>
+                  <span>
+                    {saving
+                      ? 'Saving…'
+                      : isSubmitted
+                      ? 'Update Availability'
+                      : 'Submit Availability'}
+                  </span>
                 </button>
                 {savedAt ? (
-                  <p className="text-center font-label-sm text-label-sm text-on-tertiary-container mt-2">
-                    Saved — you can update this until the window closes.
+                  <p className="text-center font-label-sm text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm">check</span>
+                    <span>Availability recorded successfully! No additional check-in is required.</span>
                   </p>
-                ) : null}
+                ) : (
+                  <p className="text-center text-[11px] text-on-surface-variant">
+                    You can update this until Monday at 12:00 PM WAT.
+                  </p>
+                )}
               </div>
             ) : null}
           </>
@@ -187,3 +305,4 @@ export default function MemberAvailabilityPage() {
     </div>
   );
 }
+

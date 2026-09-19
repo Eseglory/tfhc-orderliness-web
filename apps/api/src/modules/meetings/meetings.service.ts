@@ -38,6 +38,8 @@ interface CreateMeetingDto {
   organizerName?: string;
   coverImageUrl?: string;
   notes?: string;
+  supervisingMinisterId?: string | null;
+  autoAssignSupervisingMinister?: boolean;
   audiences?: AudienceInput[];
 }
 
@@ -65,6 +67,109 @@ export class MeetingsService {
       select: { id: true, subTeamId: true, roleInUnit: true },
     });
     return { memberId, subTeamId: member?.subTeamId ?? null, roleInUnit: member?.roleInUnit ?? null, isStaff: false };
+  }
+
+  // -------------------------------------------------------------------------
+  // Supervising Minister Selection & Appointment
+  // -------------------------------------------------------------------------
+
+  /**
+   * Returns active members who belong to the Executive or Disciplinary Committee
+   * groups or hold an executive role in the unit.
+   */
+  async getSupervisingMinisterCandidates() {
+    return this.prisma.member.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+          { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        preferredName: true,
+        profilePhotoUrl: true,
+        roleInUnit: true,
+        subTeam: { select: { id: true, name: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  }
+
+  /**
+   * Appoints a supervising minister manually or randomly from the Executive & Disciplinary Committee pool.
+   */
+  async appointSupervisingMinister(
+    meetingId: string,
+    dto: { memberId?: string | null; random?: boolean },
+    actorUserId?: string,
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Service/event not found');
+
+    let supervisingMinisterId: string | null = null;
+
+    if (dto.random) {
+      const candidates = await this.getSupervisingMinisterCandidates();
+      if (candidates.length === 0) {
+        throw new BadRequestException('No eligible candidates found in Executive or Disciplinary Committee');
+      }
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      supervisingMinisterId = chosen.id;
+    } else if (dto.memberId) {
+      const candidate = await this.prisma.member.findFirst({
+        where: {
+          id: dto.memberId,
+          status: 'ACTIVE',
+          OR: [
+            { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+            { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+          ],
+        },
+      });
+      if (!candidate) {
+        throw new BadRequestException('Selected supervising minister must be a member of Executive or Disciplinary Committee');
+      }
+      supervisingMinisterId = dto.memberId;
+    } else {
+      supervisingMinisterId = null;
+    }
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: { supervisingMinisterId },
+      include: {
+        category: true,
+        eventType: true,
+        supervisingMinister: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (actorUserId) {
+      await this.audit.record({
+        actorUserId,
+        action: 'MEETING_SUPERVISING_MINISTER_APPOINTED',
+        entity: 'Meeting',
+        entityId: meetingId,
+        newData: { supervisingMinisterId, title: updated.title },
+      });
+    }
+
+    this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
+    return updated;
   }
 
   // -------------------------------------------------------------------------
@@ -154,6 +259,8 @@ export class MeetingsService {
     return this.cache.wrap(`meetings:all:${key}`, 30, async () => {
       const viewer = await this.viewerFor(isStaff, memberId);
       const and: Prisma.MeetingWhereInput[] = [visibilityWhere(viewer)];
+      if (!query.includeArchived) and.push({ archivedAt: null });
+      if (query.from) and.push({ startTime: { gte: new Date(query.from) } });
       if (query.status) and.push({ status: query.status });
       if (query.categoryId) and.push({ categoryId: query.categoryId });
       if (query.eventTypeId) and.push({ eventTypeId: query.eventTypeId });
@@ -198,6 +305,18 @@ export class MeetingsService {
             },
           },
           _count: { select: { attendanceRecords: true, invitations: true } },
+          headcount: true,
+          supervisingMinister: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              preferredName: true,
+              profilePhotoUrl: true,
+              roleInUnit: true,
+              subTeam: { select: { id: true, name: true } },
+            },
+          },
           ...(isStaff ? { audiences: { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } } } : {}),
         },
         orderBy: { startTime: sortDir },
@@ -296,9 +415,24 @@ export class MeetingsService {
         eventType: true,
         serviceSchedule: true,
         meetingSummary: true,
-        audiences: includeAttendance
-          ? { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } }
-          : true,
+        supervisingMinister: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+        headcount: {
+          include: {
+            recordedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+            lastUpdatedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+          },
+        },
+        audiences: { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } },
         invitations: includeAttendance
           ? { include: { member: { select: { firstName: true, lastName: true } } } }
           : false,
@@ -426,12 +560,35 @@ export class MeetingsService {
     const visibility = dto.visibility === 'RESTRICTED' ? 'RESTRICTED' : 'PUBLIC';
     const audiences = await this.resolveAudiences(dto.audiences, visibility);
 
+    let supervisingMinisterId: string | null = dto.supervisingMinisterId ?? null;
+    if (dto.autoAssignSupervisingMinister) {
+      const candidates = await this.getSupervisingMinisterCandidates();
+      if (candidates.length > 0) {
+        supervisingMinisterId = candidates[Math.floor(Math.random() * candidates.length)].id;
+      }
+    } else if (supervisingMinisterId) {
+      const candidate = await this.prisma.member.findFirst({
+        where: {
+          id: supervisingMinisterId,
+          status: 'ACTIVE',
+          OR: [
+            { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+            { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+          ],
+        },
+      });
+      if (!candidate) {
+        throw new BadRequestException('Selected supervising minister must be a member of Executive or Disciplinary Committee');
+      }
+    }
+
     const meeting = await this.prisma.meeting.create({
       data: {
         title: dto.title,
         description: dto.description || null,
         categoryId: dto.categoryId,
         eventTypeId,
+        supervisingMinisterId,
         meetingDate: new Date(dto.meetingDate),
         startTime: new Date(dto.startTime),
         expectedArrivalTime: new Date(dto.expectedArrivalTime),
@@ -456,7 +613,22 @@ export class MeetingsService {
         createdById: actorUserId ?? null,
         audiences: audiences.length ? { create: audiences } : undefined,
       },
-      include: { category: true, eventType: true, audiences: true },
+      include: {
+        category: true,
+        eventType: true,
+        audiences: true,
+        supervisingMinister: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
     });
 
     if (actorUserId) {
@@ -504,11 +676,38 @@ export class MeetingsService {
     const audienceChange = dto.audiences !== undefined || dto.visibility !== undefined;
     const audiences = audienceChange ? await this.resolveAudiences(dto.audiences ?? existing.audiences, visibility) : null;
 
+    let supervisingMinisterId = dto.supervisingMinisterId;
+    if (dto.autoAssignSupervisingMinister) {
+      const candidates = await this.getSupervisingMinisterCandidates();
+      if (candidates.length > 0) {
+        supervisingMinisterId = candidates[Math.floor(Math.random() * candidates.length)].id;
+      }
+    } else if (supervisingMinisterId) {
+      const candidate = await this.prisma.member.findFirst({
+        where: {
+          id: supervisingMinisterId,
+          status: 'ACTIVE',
+          OR: [
+            { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+            { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+          ],
+        },
+      });
+      if (!candidate) {
+        throw new BadRequestException('Selected supervising minister must be a member of Executive or Disciplinary Committee');
+      }
+    }
+
     const data: Prisma.MeetingUpdateInput = {
       ...(dto.title !== undefined ? { title: dto.title } : {}),
       ...(dto.description !== undefined ? { description: dto.description || null } : {}),
       ...(dto.categoryId ? { category: { connect: { id: dto.categoryId } } } : {}),
       ...(dto.eventTypeId ? { eventType: { connect: { id: dto.eventTypeId } } } : {}),
+      ...(supervisingMinisterId !== undefined
+        ? supervisingMinisterId
+          ? { supervisingMinister: { connect: { id: supervisingMinisterId } } }
+          : { supervisingMinister: { disconnect: true } }
+        : {}),
       ...(dto.meetingDate ? { meetingDate: new Date(dto.meetingDate) } : {}),
       ...(dto.startTime ? { startTime: new Date(dto.startTime) } : {}),
       ...(dto.expectedArrivalTime ? { expectedArrivalTime: new Date(dto.expectedArrivalTime) } : {}),
@@ -557,7 +756,26 @@ export class MeetingsService {
           },
         });
       }
-      return tx.meeting.update({ where: { id }, data, include: { category: true, eventType: true, audiences: true } });
+      return tx.meeting.update({
+        where: { id },
+        data,
+        include: {
+          category: true,
+          eventType: true,
+          audiences: true,
+          supervisingMinister: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              preferredName: true,
+              profilePhotoUrl: true,
+              roleInUnit: true,
+              subTeam: { select: { id: true, name: true } },
+            },
+          },
+        },
+      });
     });
 
     await this.audit.record({

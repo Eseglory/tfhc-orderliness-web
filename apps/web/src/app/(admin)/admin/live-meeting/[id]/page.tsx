@@ -14,18 +14,43 @@ import {
   Calendar,
   AlertCircle,
   Activity,
+  Shield,
+  Sparkles,
+  UserCheck,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import { StatusBadge } from '../../../../../components/StatusBadge';
+import { HeadcountModal, HeadcountData } from '../../../../../components/HeadcountModal';
 import { fetchApi } from '../../../../../lib/api';
+import { useAuth } from '../../../../../lib/auth';
+
+interface SupervisingMinisterCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  preferredName?: string | null;
+  roleInUnit?: string | null;
+  subTeam?: { id: string; name: string } | null;
+}
 
 export default function AdminLiveMeetingPage() {
   const params = useParams();
   const meetingId = params?.id as string;
+  const { can } = useAuth();
 
   const [meeting, setMeeting] = useState<any>(null);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [headcountData, setHeadcountData] = useState<HeadcountData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Supervising Minister State
+  const [ministerCandidates, setMinisterCandidates] = useState<SupervisingMinisterCandidate[]>([]);
+  const [showMinisterModal, setShowMinisterModal] = useState(false);
+  const [selectedMinisterId, setSelectedMinisterId] = useState('');
+  const [savingMinister, setSavingMinister] = useState(false);
+
+  // Headcount Modal
+  const [showHeadcountModal, setShowHeadcountModal] = useState(false);
 
   // Manual Attendance Modal
   const [showManualModal, setShowManualModal] = useState(false);
@@ -39,12 +64,14 @@ export default function AdminLiveMeetingPage() {
   const loadData = useCallback(async () => {
     if (!meetingId) return;
     try {
-      const [mtgData, attData] = await Promise.all([
+      const [mtgData, attData, hcRes] = await Promise.all([
         fetchApi(`/meetings/${meetingId}`),
         fetchApi(`/attendance/meeting/${meetingId}`),
+        fetchApi<any>(`/attendance/headcount/${meetingId}`).catch(() => null),
       ]);
       setMeeting(mtgData);
-      setAttendanceRecords(attData);
+      setAttendanceRecords(attData || []);
+      setHeadcountData(hcRes?.headcount || null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -62,9 +89,22 @@ export default function AdminLiveMeetingPage() {
     }
   };
 
+  const loadMinisterCandidates = async () => {
+    try {
+      const data = await fetchApi<SupervisingMinisterCandidate[]>('/meetings/supervising-ministers/candidates');
+      setMinisterCandidates(data || []);
+      if (data && data.length > 0) {
+        setSelectedMinisterId((prev) => prev || data[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     loadData();
     loadMembers();
+    loadMinisterCandidates();
 
     // Auto-refresh attendance stats every 15 seconds
     const interval = setInterval(() => {
@@ -73,6 +113,22 @@ export default function AdminLiveMeetingPage() {
 
     return () => clearInterval(interval);
   }, [meetingId, loadData]);
+
+  const handleAppointMinister = async (options: { memberId?: string | null; random?: boolean }) => {
+    setSavingMinister(true);
+    try {
+      await fetchApi(`/meetings/${meetingId}/supervising-minister`, {
+        method: 'POST',
+        body: JSON.stringify(options),
+      });
+      setShowMinisterModal(false);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to appoint supervising minister');
+    } finally {
+      setSavingMinister(false);
+    }
+  };
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,6 +220,19 @@ export default function AdminLiveMeetingPage() {
               Refresh
             </button>
             <button
+              onClick={() => setShowHeadcountModal(true)}
+              disabled={isFutureMeeting}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                isFutureMeeting
+                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+              }`}
+              title="Record or update official physical service headcount"
+            >
+              <Users className="w-4 h-4" />
+              {headcountData ? 'Edit Official Headcount' : 'Record Official Headcount'}
+            </button>
+            <button
               onClick={() => setShowManualModal(true)}
               disabled={isFutureMeeting}
               className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
@@ -174,10 +243,192 @@ export default function AdminLiveMeetingPage() {
               title={isFutureMeeting ? 'Attendance cannot be clocked for future events' : 'Record Manual Attendance'}
             >
               <Plus className="w-4 h-4" />
-              Record Manual Attendance
+              Record Manual Override
             </button>
           </div>
         </div>
+
+        {/* Supervising Minister Status & Operations Card */}
+        <section className="bg-gradient-to-br from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                <Shield className="w-5 h-5" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-white">Supervising Minister</h2>
+                  <span className="text-[10px] uppercase px-2 py-0.5 rounded-full font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                    Executive &amp; Disciplinary Committee
+                  </span>
+                </div>
+                {meeting?.supervisingMinister ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm font-black text-amber-300">
+                      {meeting.supervisingMinister.firstName} {meeting.supervisingMinister.lastName}
+                    </p>
+                    <span className="text-xs text-slate-400">
+                      ({meeting.supervisingMinister.subTeam?.name || meeting.supervisingMinister.roleInUnit || 'Executive'})
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    No supervising minister appointed yet. Admins can appoint manually or trigger random selection.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleAppointMinister({ random: true })}
+                disabled={savingMinister}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                title="Randomly appoint an eligible minister from Executive or Disciplinary Committee"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                🎲 Random Select
+              </button>
+              <button
+                onClick={() => setShowMinisterModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                {meeting?.supervisingMinister ? 'Change Minister' : 'Appoint Minister'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Official Physical Service Headcount Showcase */}
+        <section className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Users className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    Official General Service Headcount
+                    {headcountData && (
+                      <span className="text-[10px] uppercase px-2 py-0.5 rounded-full font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        Official Record
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Physical attendance count of everyone in the auditorium (members, visitors, children &amp; guests)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowHeadcountModal(true)}
+              disabled={isFutureMeeting}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                isFutureMeeting
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              {headcountData ? 'Update Headcount' : 'Record Headcount Now'}
+            </button>
+          </div>
+
+          {headcountData ? (
+            <div className="pt-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Total */}
+                <div className="bg-slate-950/90 p-4 rounded-2xl border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10">
+                  <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
+                    Total Official Headcount
+                  </span>
+                  <p className="mt-1 text-3xl font-black text-white">{headcountData.totalHeadcount}</p>
+                  <p className="text-[11px] text-emerald-300/80">Authoritative physical count</p>
+                </div>
+
+                {/* Male */}
+                <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">Male</span>
+                  <p className="mt-1 text-2xl font-bold text-slate-100">{headcountData.maleCount ?? '—'}</p>
+                  <p className="text-[10px] text-slate-400">Adult men</p>
+                </div>
+
+                {/* Female */}
+                <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] font-extrabold text-pink-400 uppercase tracking-wider block">Female</span>
+                  <p className="mt-1 text-2xl font-bold text-slate-100">{headcountData.femaleCount ?? '—'}</p>
+                  <p className="text-[10px] text-slate-400">Adult women</p>
+                </div>
+
+                {/* Children */}
+                <div className="bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800">
+                  <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">Children</span>
+                  <p className="mt-1 text-2xl font-bold text-slate-100">{headcountData.childrenCount ?? '—'}</p>
+                  <p className="text-[10px] text-slate-400">Minors/infants</p>
+                </div>
+              </div>
+
+              {/* Distinction & Comparison Banner */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-xs">
+                <div className="space-y-1">
+                  <span className="text-slate-400 font-medium">Physical Headcount vs App Check-ins</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-emerald-400">{headcountData.totalHeadcount} Physical</span>
+                    <span className="text-slate-600">vs</span>
+                    <span className="text-sm font-bold text-indigo-400">{totalPresent} Digital App</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-slate-400 font-medium">Physical / App Variance</span>
+                  <div className="text-sm font-bold text-amber-300">
+                    +{Math.max(0, headcountData.totalHeadcount - totalPresent)} additional attendees
+                  </div>
+                  <span className="text-[11px] text-slate-500">Unregistered members, children &amp; guests</span>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-slate-400 font-medium">Audit Information</span>
+                  <div className="text-slate-300 font-medium text-[11px]">
+                    Recorded by {headcountData.recordedBy?.member ? `${headcountData.recordedBy.member.firstName} ${headcountData.recordedBy.member.lastName}` : (headcountData.recordedBy?.email || 'Authorized Staff')}
+                    {headcountData.recordedAt && ` on ${new Date(headcountData.recordedAt).toLocaleTimeString()}`}
+                  </div>
+                  {headcountData.notes && (
+                    <div className="text-slate-400 italic text-[11px]">
+                      &ldquo;{headcountData.notes}&rdquo;
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="pt-5 pb-2 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-300">
+                  No official physical headcount recorded yet for this service.
+                </p>
+                <p className="text-xs text-slate-400 max-w-xl">
+                  Supervising ministers and ushers should take the physical count in the auditorium and record it here to establish the official church attendance record.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowHeadcountModal(true)}
+                disabled={isFutureMeeting}
+                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition ${
+                  isFutureMeeting
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
+                }`}
+              >
+                Enter Physical Headcount
+              </button>
+            </div>
+          )}
+        </section>
 
         {/* 5 Metric Real-Time Stats Grid - Swipeable on mobile */}
         <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pb-1 sm:pb-0">
@@ -187,7 +438,7 @@ export default function AdminLiveMeetingPage() {
               <Users className="w-4 h-4 text-indigo-600" />
             </div>
             <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{totalPresent}</p>
-            <p className="mt-1 text-[11px] font-bold text-emerald-600">Present members</p>
+            <p className="mt-1 text-[11px] font-bold text-indigo-600">Digital App Check-ins</p>
           </div>
 
           <div className="min-w-[180px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -411,6 +662,116 @@ export default function AdminLiveMeetingPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Official Headcount Modal */}
+        {showHeadcountModal && (
+          <HeadcountModal
+            isOpen={showHeadcountModal}
+            onClose={() => setShowHeadcountModal(false)}
+            meeting={meeting}
+            initialHeadcount={headcountData}
+            onSaved={(saved) => {
+              setHeadcountData(saved);
+              loadData();
+            }}
+          />
+        )}
+
+        {/* Supervising Minister Appointment Modal */}
+        {showMinisterModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+            <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-white space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold">Appoint Supervising Minister</h3>
+                    <p className="text-xs text-slate-400">
+                      Select an eligible minister from Executive or Disciplinary Committee
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowMinisterModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    Eligible Minister Pool ({ministerCandidates.length})
+                  </label>
+                  <select
+                    value={selectedMinisterId}
+                    onChange={(e) => setSelectedMinisterId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">— Select Candidate —</option>
+                    {ministerCandidates.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.firstName} {c.lastName} {c.preferredName ? `(${c.preferredName})` : ''} — {c.subTeam?.name || c.roleInUnit || 'Executive'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Or use automated random assignment:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleAppointMinister({ random: true })}
+                      disabled={savingMinister || ministerCandidates.length === 0}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      🎲 Random Selection
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+                {meeting?.supervisingMinister ? (
+                  <button
+                    type="button"
+                    onClick={() => handleAppointMinister({ memberId: null })}
+                    disabled={savingMinister}
+                    className="text-xs font-bold text-rose-400 hover:text-rose-300 transition"
+                  >
+                    Unassign Minister
+                  </button>
+                ) : <div />}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMinisterModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!selectedMinisterId) return;
+                      handleAppointMinister({ memberId: selectedMinisterId });
+                    }}
+                    disabled={savingMinister || !selectedMinisterId}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-xs text-white shadow-md shadow-indigo-600/30 transition disabled:opacity-50"
+                  >
+                    {savingMinister ? 'Assigning…' : 'Appoint Selected'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

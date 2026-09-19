@@ -43,6 +43,7 @@ import {
   FileCheck,
   Award,
   Share2,
+  Calculator,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import {
@@ -60,6 +61,7 @@ import {
 import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
 import { Modal, ConfirmDialog, useToast } from '../../../../components/ui';
+import { HeadcountModal } from '../../../../components/HeadcountModal';
 
 interface Meeting {
   id: string;
@@ -81,6 +83,26 @@ interface Meeting {
   eventType?: { id?: string; name: string; color: string | null } | null;
   audiences?: Array<{ scope?: string; subTeamId?: string; memberId?: string; subTeam?: { name: string } }>;
   _count?: { attendanceRecords: number; invitations: number };
+  supervisingMinister?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    preferredName?: string | null;
+    roleInUnit?: string | null;
+    subTeam?: { id: string; name: string } | null;
+  } | null;
+  headcount?: {
+    id: string;
+    totalHeadcount: number;
+    male?: number | null;
+    female?: number | null;
+    children?: number | null;
+    notes?: string | null;
+    recordedAt: string;
+    updatedAt: string;
+    recordedBy?: { id: string; name: string; email: string } | null;
+    lastUpdatedBy?: { id: string; name: string; email: string } | null;
+  } | null;
 }
 
 type ViewMode = 'grid' | 'table' | 'compact' | 'timeline' | 'operations';
@@ -143,10 +165,12 @@ function EventsManagementContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Meeting | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Meeting | null>(null);
+  const [headcountMeeting, setHeadcountMeeting] = useState<Meeting | null>(null);
   const [busyId, setBusyId] = useState('');
 
   const canCreate = can('events.create');
   const canEdit = can('events.update');
+  const canHeadcount = can('headcount.record') || can('headcount.read') || can('events.update');
 
   // Load view mode preference
   useEffect(() => {
@@ -241,7 +265,7 @@ function EventsManagementContent() {
       notify('No events available to export.', 'info');
       return;
     }
-    const headers = ['ID', 'Title', 'Type', 'Category', 'Date', 'Time', 'Location', 'Status', 'Attendees'];
+    const headers = ['ID', 'Title', 'Type', 'Category', 'Date', 'Time', 'Location', 'Status', 'Attendees', 'Official Physical Headcount'];
     const rows = meetings.map((m) => [
       m.id,
       `"${m.title.replace(/"/g, '""')}"`,
@@ -252,6 +276,7 @@ function EventsManagementContent() {
       `"${m.locationName.replace(/"/g, '""')}"`,
       m.status,
       m._count?.attendanceRecords || 0,
+      m.headcount?.totalHeadcount ?? 'Not Recorded',
     ]);
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -736,12 +761,36 @@ function EventsManagementContent() {
 
                         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-slate-400 text-[11px]">Checked-in Attendees:</span>
+                            <span className="text-slate-400 text-[11px]">Checked-in App:</span>
                             <strong className="text-slate-900 dark:text-white font-black">
                               {evt._count?.attendanceRecords || 0}
                             </strong>
                           </div>
                           <div className="flex items-center justify-between">
+                            <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                              <Calculator className="w-3 h-3 text-amber-500" />
+                              Physical Headcount:
+                            </span>
+                            {evt.headcount ? (
+                              <strong className="text-amber-400 font-black">
+                                {evt.headcount.totalHeadcount}
+                              </strong>
+                            ) : (
+                              <span className="text-slate-500 text-[11px] italic">Not recorded</span>
+                            )}
+                          </div>
+                          {evt.supervisingMinister && (
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/60">
+                              <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                                <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                                Supervising Minister:
+                              </span>
+                              <span className="font-bold text-indigo-400 text-[11px]">
+                                {evt.supervisingMinister.firstName} {evt.supervisingMinister.lastName}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/60">
                             <span className="text-slate-400 text-[11px]">Attendance Policy:</span>
                             <span className="font-semibold text-slate-700 dark:text-slate-300">
                               {evt.isCompulsory ? 'Compulsory (×' + (evt.pointWeight || 1) + ')' : 'Optional'}
@@ -828,6 +877,19 @@ function EventsManagementContent() {
                             <Flame className="w-3.5 h-3.5" />
                             Live Roster
                           </Link>
+                          {canHeadcount && evt.status !== 'CANCELLED' && (
+                            <button
+                              onClick={() => setHeadcountMeeting(evt)}
+                              className={`p-1.5 rounded-xl transition-colors cursor-pointer border ${
+                                evt.headcount
+                                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-amber-400 border-transparent'
+                              }`}
+                              title={evt.headcount ? `Headcount: ${evt.headcount.totalHeadcount} (Click to Edit)` : 'Record Physical Headcount'}
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <Link
                             href={`/admin/wardrobe/schedule`}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -946,8 +1008,13 @@ function EventsManagementContent() {
                           <span>{dateStr} · {timeStr}</span>
                         </p>
                         <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
-                          <span className="truncate max-w-[180px]">{session.locationName}</span>
-                          <span className="font-bold text-white">{session._count?.attendanceRecords || 0} attendees</span>
+                          <span className="truncate max-w-[140px]">{session.locationName}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white">{session._count?.attendanceRecords || 0} app</span>
+                            {session.headcount && (
+                              <span className="font-black text-amber-400">· {session.headcount.totalHeadcount} physical</span>
+                            )}
+                          </div>
                         </div>
                       </button>
                     );
@@ -980,6 +1047,16 @@ function EventsManagementContent() {
                             <Flame className="w-3.5 h-3.5" />
                             Live Check-in
                           </Link>
+                          {canHeadcount && selectedFocusSession.status !== 'CANCELLED' && (
+                            <button
+                              onClick={() => setHeadcountMeeting(selectedFocusSession)}
+                              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-amber-500 dark:text-amber-400 text-xs font-black shadow-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-700"
+                              title="Record / Edit Official Physical Headcount"
+                            >
+                              <Calculator className="w-3.5 h-3.5" />
+                              {selectedFocusSession.headcount ? `Headcount: ${selectedFocusSession.headcount.totalHeadcount}` : 'Record Headcount'}
+                            </button>
+                          )}
                           {canEdit && (
                             <button
                               onClick={() => {
@@ -996,7 +1073,7 @@ function EventsManagementContent() {
                       </div>
 
                       {/* Information Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
                           <span className="text-slate-400 font-medium">Date &amp; Schedule</span>
                           <p className="font-bold text-slate-900 dark:text-white mt-0.5">
@@ -1014,11 +1091,40 @@ function EventsManagementContent() {
                           <p className="text-slate-400">Radius: {selectedFocusSession.geofenceRadiusMeters}m</p>
                         </div>
                         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
-                          <span className="text-slate-400 font-medium">Checked-in Verified</span>
+                          <span className="text-slate-400 font-medium">App Verified</span>
                           <p className="font-black text-amber-400 text-base mt-0.5">
                             {selectedFocusSession._count?.attendanceRecords || 0}
                           </p>
                           <p className="text-slate-400">{selectedFocusSession.isCompulsory ? 'Compulsory' : 'Optional'}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                          <span className="text-slate-400 font-medium">Official Headcount</span>
+                          <p className="font-black text-emerald-400 text-base mt-0.5">
+                            {selectedFocusSession.headcount ? selectedFocusSession.headcount.totalHeadcount : '—'}
+                          </p>
+                          <p className="text-slate-400 text-[11px] truncate">
+                            {selectedFocusSession.headcount
+                              ? [
+                                  selectedFocusSession.headcount.male != null && `M:${selectedFocusSession.headcount.male}`,
+                                  selectedFocusSession.headcount.female != null && `F:${selectedFocusSession.headcount.female}`,
+                                  selectedFocusSession.headcount.children != null && `C:${selectedFocusSession.headcount.children}`,
+                                ].filter(Boolean).join(' ') || 'Physical count'
+                              : 'Not recorded'}
+                          </p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                          <span className="text-slate-400 font-medium flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                            Supervising Minister
+                          </span>
+                          <p className="font-bold text-indigo-400 text-xs mt-0.5 truncate">
+                            {selectedFocusSession.supervisingMinister
+                              ? `${selectedFocusSession.supervisingMinister.firstName} ${selectedFocusSession.supervisingMinister.lastName}`
+                              : 'Unassigned'}
+                          </p>
+                          <p className="text-slate-400 text-[10px] truncate">
+                            {selectedFocusSession.supervisingMinister?.subTeam?.name || selectedFocusSession.supervisingMinister?.roleInUnit || 'Executive Pool'}
+                          </p>
                         </div>
                       </div>
 
@@ -1170,8 +1276,9 @@ function EventsManagementContent() {
                         <th className="py-3 px-4">GATHERING TITLE &amp; TYPE</th>
                         <th className="py-3 px-4">SCHEDULE DATE / TIME</th>
                         <th className="py-3 px-4">VENUE / MODE</th>
-                        <th className="py-3 px-4 text-center">ATTENDANCE</th>
+                        <th className="py-3 px-4 text-center">POLICY</th>
                         <th className="py-3 px-4 text-center">CHECK-INS</th>
+                        <th className="py-3 px-4 text-center">HEADCOUNT</th>
                         <th className="py-3 px-4 text-center">STATUS</th>
                         <th className="py-3 px-4 text-right">ACTIONS</th>
                       </tr>
@@ -1183,7 +1290,14 @@ function EventsManagementContent() {
                           <tr key={evt.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                             <td className="py-3 px-4">
                               <div className="font-bold text-slate-900 dark:text-white">{evt.title}</div>
-                              <div className="text-[11px] text-amber-500 dark:text-amber-400 font-semibold">{evt.eventType?.name || evt.category?.name || 'General Gathering'}</div>
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <span className="text-amber-500 dark:text-amber-400 font-semibold">{evt.eventType?.name || evt.category?.name || 'General Gathering'}</span>
+                                {evt.supervisingMinister && (
+                                  <span className="text-indigo-400 font-bold">
+                                    · Min: {evt.supervisingMinister.firstName} {evt.supervisingMinister.lastName}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-3 px-4 text-slate-600 dark:text-slate-300 whitespace-nowrap">
                               <div>{new Date(evt.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>
@@ -1199,6 +1313,13 @@ function EventsManagementContent() {
                             </td>
                             <td className="py-3 px-4 text-center font-black text-slate-900 dark:text-white">
                               {evt._count?.attendanceRecords || 0}
+                            </td>
+                            <td className="py-3 px-4 text-center font-black">
+                              {evt.headcount ? (
+                                <span className="text-amber-400 font-black">{evt.headcount.totalHeadcount}</span>
+                              ) : (
+                                <span className="text-slate-500 italic text-[11px]">—</span>
+                              )}
                             </td>
                             <td className="py-3 px-4 text-center">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${badge.color}`}>
@@ -1241,6 +1362,19 @@ function EventsManagementContent() {
                                       >
                                         <Video className="w-3.5 h-3.5" />
                                       </a>
+                                    )}
+                                    {canHeadcount && evt.status !== 'CANCELLED' && (
+                                      <button
+                                        onClick={() => setHeadcountMeeting(evt)}
+                                        className={`p-1 rounded-lg cursor-pointer ${
+                                          evt.headcount
+                                            ? 'text-amber-400 hover:text-amber-300'
+                                            : 'text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                        }`}
+                                        title={evt.headcount ? `Headcount: ${evt.headcount.totalHeadcount}` : 'Record Headcount'}
+                                      >
+                                        <Calculator className="w-3.5 h-3.5" />
+                                      </button>
                                     )}
                                     <Link
                                       href={`/admin/live-meeting/${evt.id}`}
@@ -1307,7 +1441,13 @@ function EventsManagementContent() {
                             <span>•</span>
                             <span>{evt.locationName}</span>
                             <span>•</span>
-                            <span>{evt._count?.attendanceRecords || 0} checked-in</span>
+                            <span>{evt._count?.attendanceRecords || 0} app check-ins</span>
+                            {evt.headcount && (
+                              <>
+                                <span>•</span>
+                                <span className="text-amber-400 font-bold">{evt.headcount.totalHeadcount} physical headcount</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1332,6 +1472,15 @@ function EventsManagementContent() {
                           >
                             <Video className="w-3.5 h-3.5" />
                           </a>
+                        )}
+                        {canHeadcount && evt.status !== 'CANCELLED' && (
+                          <button
+                            onClick={() => setHeadcountMeeting(evt)}
+                            className="p-1 rounded text-slate-400 hover:text-amber-400 cursor-pointer"
+                            title="Record / Edit Headcount"
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                          </button>
                         )}
                         <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border ${badge.color}`}>
                           {badge.label}
@@ -1382,11 +1531,17 @@ function EventsManagementContent() {
                             </span>
                             <span className="flex items-center gap-1">
                               <Users className="w-3.5 h-3.5 text-slate-400" />
-                              {evt._count?.attendanceRecords || 0} Attended
+                              {evt._count?.attendanceRecords || 0} App Check-ins
                             </span>
+                            {evt.headcount && (
+                              <span className="flex items-center gap-1 text-amber-400 font-bold">
+                                <Calculator className="w-3.5 h-3.5" />
+                                {evt.headcount.totalHeadcount} Physical Headcount
+                              </span>
+                            )}
                           </div>
 
-                          <div className="pt-1">
+                          <div className="pt-1 flex items-center gap-3">
                             <Link
                               href={`/admin/live-meeting/${evt.id}`}
                               className="inline-flex items-center gap-1 text-xs font-bold text-amber-500 dark:text-amber-400 hover:underline"
@@ -1394,6 +1549,15 @@ function EventsManagementContent() {
                               <span>Open Live Operations Roster</span>
                               <ChevronRight className="w-3 h-3" />
                             </Link>
+                            {canHeadcount && evt.status !== 'CANCELLED' && (
+                              <button
+                                onClick={() => setHeadcountMeeting(evt)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-amber-400 cursor-pointer"
+                              >
+                                <Calculator className="w-3 h-3" />
+                                <span>{evt.headcount ? 'Edit Headcount' : 'Record Headcount'}</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1514,6 +1678,22 @@ function EventsManagementContent() {
           }}
           onCancel={() => setCancelTarget(null)}
         />
+
+        {/* Headcount Modal */}
+        {headcountMeeting && (
+          <HeadcountModal
+            meetingId={headcountMeeting.id}
+            meetingTitle={headcountMeeting.title}
+            meetingDate={headcountMeeting.startTime}
+            initialHeadcount={headcountMeeting.headcount || null}
+            isOpen={Boolean(headcountMeeting)}
+            onClose={() => setHeadcountMeeting(null)}
+            onSuccess={async () => {
+              await load();
+              notify('Official general service headcount recorded successfully.', 'success');
+            }}
+          />
+        )}
       </div>
     </AdminLayoutShell>
   );

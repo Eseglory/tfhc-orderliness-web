@@ -1,4 +1,12 @@
-import { directKey, viewerCanModerate, viewerIsExecutive, viewerManagesRooms, ChatViewer } from '../src/modules/chat/chat.util';
+import {
+  directKey,
+  viewerCanModerate,
+  viewerIsExecutive,
+  viewerIsDisciplinary,
+  viewerManagesRooms,
+  ChatViewer,
+} from '../src/modules/chat/chat.util';
+import { isDisciplinaryRole } from '../src/common/event-visibility';
 
 const base: ChatViewer = { userId: 'u1', memberId: 'm1', role: 'MEMBER', permissions: [] };
 
@@ -26,5 +34,28 @@ describe('chat.util', () => {
     expect(viewerIsExecutive({ ...base, roleInUnit: 'Financial Secretary' })).toBe(true);
     expect(viewerIsExecutive({ ...base, role: 'ADMIN' })).toBe(true);
     expect(viewerIsExecutive({ ...base, roleInUnit: 'Member' })).toBe(false);
+  });
+
+  test('viewerIsDisciplinary: staff, super admin, permissions and disciplinary roleInUnit qualify', () => {
+    expect(viewerIsDisciplinary(base)).toBe(false);
+    expect(viewerIsDisciplinary({ ...base, role: 'ADMIN' })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, role: 'LEADER' })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, isSuperAdmin: true })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, permissions: ['excuses.review'] })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, permissions: ['flags.manage'] })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, permissions: ['*'] })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, roleInUnit: 'Disciplinary Committee Member' })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, roleInUnit: 'Ethics & Conduct Officer' })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, roleInUnit: 'Tribunal Chair' })).toBe(true);
+    expect(viewerIsDisciplinary({ ...base, roleInUnit: 'Usher' })).toBe(false);
+  });
+
+  test('isDisciplinaryRole recognizes disciplinary keywords', () => {
+    expect(isDisciplinaryRole('Disciplinary Committee')).toBe(true);
+    expect(isDisciplinaryRole('Ethics Lead')).toBe(true);
+    expect(isDisciplinaryRole('Conduct Team')).toBe(true);
+    expect(isDisciplinaryRole('Tribunal Member')).toBe(true);
+    expect(isDisciplinaryRole('General Member')).toBe(false);
+    expect(isDisciplinaryRole(null)).toBe(false);
   });
 });

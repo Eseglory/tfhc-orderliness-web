@@ -4,6 +4,9 @@ import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
 import { WhatsAppEmojiPicker } from './EmojiPicker';
 
+const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024; // 2 MB Hard Limit
+const SAFE_RECORDING_BYTE_LIMIT = 1.85 * 1024 * 1024; // 1.85 MB Auto-stop threshold for Opus/WebM container safety
+
 export function Composer({
   disabled,
   draftKey,
@@ -29,16 +32,18 @@ export function Composer({
   const [text, setText] = useState('');
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [recordedBytes, setRecordedBytes] = useState(0);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
 
-  const fileRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const currentBytesRef = useRef(0);
+  const autoStoppedRef = useRef(false);
   const typingRef = useRef(false);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -156,47 +161,99 @@ export function Composer({
     e.target.value = '';
     setShowAttachMenu(false);
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      return notify('Maximum file size is 5 MB.', 'error');
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return notify('Maximum file size is 2 MB.', 'error');
     }
     void onAttach(file);
   };
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
-      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 24000,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+
+      const preferredMimes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/aac',
+      ];
+      const selectedMime = preferredMimes.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+
+      const recorder = new MediaRecorder(
+        stream,
+        selectedMime
+          ? {
+              mimeType: selectedMime,
+              audioBitsPerSecond: 24000, // 24 kbps Opus voice compression
+            }
+          : undefined,
+      );
+
       chunksRef.current = [];
-      recorder.ondataavailable = (ev) => ev.data.size && chunksRef.current.push(ev.data);
-      recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-        setRecording(false);
-        setElapsed(0);
-        if (blob.size > 1000) {
-          if (blob.size > 5 * 1024 * 1024) {
-            return notify('Maximum file size is 5 MB.', 'error');
+      currentBytesRef.current = 0;
+      autoStoppedRef.current = false;
+      setRecordedBytes(0);
+      setElapsed(0);
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          chunksRef.current.push(ev.data);
+          currentBytesRef.current += ev.data.size;
+          setRecordedBytes(currentBytesRef.current);
+
+          // Real-time 2 MB enforcement: Auto-stop near 1.85 MB threshold
+          if (currentBytesRef.current >= SAFE_RECORDING_BYTE_LIMIT && !autoStoppedRef.current) {
+            autoStoppedRef.current = true;
+            notify('Maximum voice note size approaching 2 MB. Auto-stopping recording...', 'info');
+            stopRecording(true);
           }
-          const ext = (recorder.mimeType || 'audio/webm').includes('mp4') ? 'm4a' : 'webm';
-          void onAttach(new File([blob], `voice-note.${ext}`, { type: blob.type }));
         }
       };
+
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || 'audio/webm;codecs=opus',
+        });
+        setRecording(false);
+        setElapsed(0);
+        setRecordedBytes(0);
+
+        if (blob.size > 500) {
+          if (blob.size > MAX_ATTACHMENT_BYTES) {
+            return notify('Voice note exceeds 2 MB limit.', 'error');
+          }
+          const isMp4 = (recorder.mimeType || '').includes('mp4') || (recorder.mimeType || '').includes('m4a');
+          const isOgg = (recorder.mimeType || '').includes('ogg');
+          const ext = isMp4 ? 'm4a' : isOgg ? 'ogg' : 'webm';
+          void onAttach(new File([blob], `voice-note-${Date.now()}.${ext}`, { type: blob.type }));
+        }
+      };
+
       recorderRef.current = recorder;
-      recorder.start();
+      recorder.start(250); // Collect slices every 250ms for active size tracking
       setRecording(true);
     } catch {
-      notify('Microphone access was denied.', 'error');
+      notify('Microphone access was denied or not available.', 'error');
     }
   };
 
   const stopRecording = (send: boolean) => {
     const recorder = recorderRef.current;
-    if (!recorder) return;
+    if (!recorder || recorder.state === 'inactive') return;
     if (!send) recorder.onstop = () => recorder.stream.getTracks().forEach((t) => t.stop());
     recorder.stop();
     setRecording(false);
     setElapsed(0);
+    setRecordedBytes(0);
   };
 
   if (disabled) {
@@ -206,6 +263,9 @@ export function Composer({
       </div>
     );
   }
+
+  const recordedMb = (recordedBytes / (1024 * 1024)).toFixed(2);
+  const sizePercentage = Math.min(100, Math.round((recordedBytes / MAX_ATTACHMENT_BYTES) * 100));
 
   return (
     <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest p-2.5 sm:px-4 sm:py-3 transition-colors">
@@ -257,8 +317,8 @@ export function Composer({
               <span className="material-symbols-outlined text-[20px]">image</span>
             </div>
             <div>
-              <p className="text-xs font-bold text-on-surface">Photos &amp; Videos</p>
-              <p className="text-[10px] text-on-surface-variant">JPEG, PNG, MP4</p>
+              <p className="text-xs font-bold text-on-surface">Photos &amp; Media</p>
+              <p className="text-[10px] text-on-surface-variant">Max 2 MB</p>
             </div>
           </button>
 
@@ -272,7 +332,7 @@ export function Composer({
             </div>
             <div>
               <p className="text-xs font-bold text-on-surface">Document</p>
-              <p className="text-[10px] text-on-surface-variant">PDF, DOC, XLSX</p>
+              <p className="text-[10px] text-on-surface-variant">PDF, DOC, XLS (Max 2 MB)</p>
             </div>
           </button>
 
@@ -285,8 +345,8 @@ export function Composer({
               <span className="material-symbols-outlined text-[20px]">headphones</span>
             </div>
             <div>
-              <p className="text-xs font-bold text-on-surface">Audio Track</p>
-              <p className="text-[10px] text-on-surface-variant">MP3, WAV, M4A</p>
+              <p className="text-xs font-bold text-on-surface">Audio File</p>
+              <p className="text-[10px] text-on-surface-variant">MP3, M4A, WebM (Max 2 MB)</p>
             </div>
           </button>
         </div>
@@ -316,46 +376,61 @@ export function Composer({
         </div>
       )}
 
-      {/* Voice Recorder Active Mode */}
+      {/* Voice Recorder Active Mode with Real-Time Size Tracking & Waveform */}
       {recording ? (
-        <div className="flex items-center gap-3 px-2 py-1.5 rounded-2xl bg-surface-container-low border border-outline-variant/30">
-          <div className="flex items-center gap-2">
-            <span className="flex h-3 w-3 animate-ping rounded-full bg-red-500" />
-            <span className="text-xs font-bold text-red-600 dark:text-red-400">
-              Recording Voice Note
-            </span>
-          </div>
-
-          <div className="flex-1 flex items-center justify-center gap-1">
-            <div className="flex items-center gap-0.5">
-              {[4, 12, 8, 16, 20, 14, 18, 10, 6, 14, 20, 8].map((h, i) => (
-                <span
-                  key={i}
-                  className="w-1 bg-primary rounded-full animate-pulse"
-                  style={{ height: `${h}px`, animationDelay: `${i * 100}ms` }}
-                />
-              ))}
+        <div className="flex flex-col gap-1.5 px-3 py-2 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-3 w-3 animate-ping rounded-full bg-red-500" />
+              <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                Recording (Opus)
+              </span>
             </div>
-            <span className="ml-2 text-xs font-mono font-bold text-on-surface">
-              {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
-            </span>
+
+            <div className="flex-1 flex items-center justify-center gap-2">
+              <div className="flex items-center gap-0.5">
+                {[4, 12, 8, 16, 20, 14, 18, 10, 6, 14, 20, 8].map((h, i) => (
+                  <span
+                    key={i}
+                    className="w-1 bg-primary rounded-full animate-pulse"
+                    style={{ height: `${h}px`, animationDelay: `${i * 100}ms` }}
+                  />
+                ))}
+              </div>
+              <span className="ml-2 text-xs font-mono font-bold text-on-surface">
+                {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}
+              </span>
+              <span className="text-[10px] font-mono text-on-surface-variant">
+                ({recordedMb} / 2.00 MB)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => stopRecording(false)}
+                className="p-2 rounded-full text-red-500 hover:bg-red-500/10 transition-colors"
+                title="Cancel recording"
+              >
+                <span className="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+              <button
+                onClick={() => stopRecording(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-md hover:bg-primary/90 active:scale-95 transition-all flex items-center gap-1"
+              >
+                <span>Send</span>
+                <span className="material-symbols-outlined text-[16px]">send</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => stopRecording(false)}
-              className="p-2 rounded-full text-red-500 hover:bg-red-500/10 transition-colors"
-              title="Delete recording"
-            >
-              <span className="material-symbols-outlined text-[20px]">delete</span>
-            </button>
-            <button
-              onClick={() => stopRecording(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-md hover:bg-primary/90 active:scale-95 transition-all flex items-center gap-1"
-            >
-              <span>Send</span>
-              <span className="material-symbols-outlined text-[16px]">send</span>
-            </button>
+          {/* Size Limit Progress Bar */}
+          <div className="w-full bg-surface-container rounded-full h-1 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${
+                sizePercentage > 85 ? 'bg-red-500' : sizePercentage > 60 ? 'bg-amber-500' : 'bg-primary'
+              }`}
+              style={{ width: `${sizePercentage}%` }}
+            />
           </div>
         </div>
       ) : (
@@ -427,7 +502,7 @@ export function Composer({
               onClick={startRecording}
               className="rounded-full bg-surface-container p-3 text-on-surface-variant hover:bg-primary hover:text-on-primary active:scale-95 transition-all shrink-0 flex items-center justify-center"
               aria-label="Record voice note"
-              title="Hold / Click to record voice note"
+              title="Click to record voice note (Opus <= 2 MB)"
             >
               <span className="material-symbols-outlined text-[20px]">mic</span>
             </button>

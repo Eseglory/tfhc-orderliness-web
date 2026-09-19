@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
+import { AuditService } from '../../common/rbac/audit.service';
 import { canViewEvent } from '../../common/event-visibility';
 import {
   validateGeofence,
@@ -18,12 +19,29 @@ import {
   AttendanceMethod,
 } from '@tfhc/shared';
 
+export interface RecordServiceHeadcountDto {
+  meetingId: string;
+  totalHeadcount: number;
+  maleCount?: number | null;
+  femaleCount?: number | null;
+  childrenCount?: number | null;
+  notes?: string | null;
+}
+
+export interface HeadcountAnalyticsQuery {
+  days?: number;
+  from?: string;
+  to?: string;
+  categoryId?: string;
+  eventTypeId?: string;
+}
 
 @Injectable()
 export class AttendanceService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
+    private audit: AuditService,
   ) {}
 
   async checkInMember(dto: {
@@ -264,5 +282,310 @@ export class AttendanceService {
       include: { meeting: { include: { category: true } } },
       orderBy: { meeting: { startTime: 'desc' } },
     });
+  }
+
+  async recordServiceHeadcount(dto: RecordServiceHeadcountDto, actorUserId: string) {
+    if (!dto.meetingId || typeof dto.meetingId !== 'string' || !dto.meetingId.trim()) {
+      throw new BadRequestException('A valid service ID is required');
+    }
+    if (typeof dto.totalHeadcount !== 'number' || !Number.isInteger(dto.totalHeadcount) || dto.totalHeadcount < 0) {
+      throw new BadRequestException('Total headcount must be a non-negative whole number');
+    }
+
+    const checkCount = (val: number | null | undefined, name: string) => {
+      if (val !== undefined && val !== null) {
+        if (typeof val !== 'number' || !Number.isInteger(val) || val < 0) {
+          throw new BadRequestException(`${name} must be a non-negative whole number`);
+        }
+      }
+    };
+
+    checkCount(dto.maleCount, 'Male count');
+    checkCount(dto.femaleCount, 'Female count');
+    checkCount(dto.childrenCount, 'Children count');
+
+    const male = dto.maleCount ?? 0;
+    const female = dto.femaleCount ?? 0;
+    const children = dto.childrenCount ?? 0;
+    const demographicSum = male + female + children;
+
+    if (demographicSum > dto.totalHeadcount) {
+      throw new BadRequestException(
+        `Sum of male (${male}), female (${female}), and children (${children}) (${demographicSum}) cannot exceed total headcount (${dto.totalHeadcount})`
+      );
+    }
+
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: dto.meetingId },
+      include: { category: true, eventType: true },
+    });
+    if (!meeting) {
+      throw new NotFoundException('Service/event not found');
+    }
+    if (meeting.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot record or modify headcount for a cancelled service');
+    }
+    if (meeting.startTime > new Date()) {
+      throw new BadRequestException('Headcount cannot be recorded for a future scheduled service');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.serviceHeadcount.findUnique({
+        where: { meetingId: dto.meetingId },
+      });
+
+      let record;
+      const dataPayload = {
+        totalHeadcount: dto.totalHeadcount,
+        maleCount: dto.maleCount ?? null,
+        femaleCount: dto.femaleCount ?? null,
+        childrenCount: dto.childrenCount ?? null,
+        notes: dto.notes ? dto.notes.trim() : null,
+        lastUpdatedById: actorUserId,
+      };
+
+      if (existing) {
+        record = await tx.serviceHeadcount.update({
+          where: { id: existing.id },
+          data: dataPayload,
+          include: {
+            meeting: { include: { category: true, eventType: true } },
+            recordedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+            lastUpdatedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+          },
+        });
+
+        await this.audit.recordWithin(tx, {
+          actorUserId,
+          action: 'SERVICE_HEADCOUNT_UPDATED',
+          entity: 'ServiceHeadcount',
+          entityId: record.id,
+          previousData: JSON.parse(JSON.stringify(existing)),
+          newData: JSON.parse(JSON.stringify(record)),
+          reason: dto.notes || 'Service headcount updated',
+        });
+      } else {
+        record = await tx.serviceHeadcount.create({
+          data: {
+            meetingId: dto.meetingId,
+            ...dataPayload,
+            recordedById: actorUserId,
+          },
+          include: {
+            meeting: { include: { category: true, eventType: true } },
+            recordedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+            lastUpdatedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+          },
+        });
+
+        await this.audit.recordWithin(tx, {
+          actorUserId,
+          action: 'SERVICE_HEADCOUNT_RECORDED',
+          entity: 'ServiceHeadcount',
+          entityId: record.id,
+          previousData: null,
+          newData: JSON.parse(JSON.stringify(record)),
+          reason: dto.notes || 'Official service headcount recorded',
+        });
+      }
+
+      return record;
+    }).then(async (record) => {
+      this.cache.invalidateTags(['attendance', 'analytics', 'dashboard', 'meetings', 'reports']);
+      const appAttendance = await this.prisma.attendanceRecord.findMany({
+        where: { meetingId: dto.meetingId },
+        select: { status: true },
+      });
+      const attendedCount = appAttendance.filter((r) =>
+        ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(r.status)
+      ).length;
+      return {
+        ...record,
+        individualAttendance: {
+          totalCheckIns: appAttendance.length,
+          attendedCount,
+          absentCount: appAttendance.filter((r) => r.status === 'ABSENT').length,
+          excusedCount: appAttendance.filter((r) => r.status === 'EXCUSED').length,
+        },
+        variance: record.totalHeadcount - attendedCount,
+      };
+    });
+  }
+
+  async getServiceHeadcount(meetingId: string) {
+    if (!meetingId || typeof meetingId !== 'string') {
+      throw new BadRequestException('A valid service ID is required');
+    }
+    const [headcount, meeting, appAttendance] = await Promise.all([
+      this.prisma.serviceHeadcount.findUnique({
+        where: { meetingId },
+        include: {
+          recordedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+          lastUpdatedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+        },
+      }),
+      this.prisma.meeting.findUnique({
+        where: { id: meetingId },
+        select: { id: true, title: true, startTime: true, status: true, category: true, eventType: true },
+      }),
+      this.prisma.attendanceRecord.findMany({
+        where: { meetingId },
+        select: { status: true },
+      }),
+    ]);
+
+    if (!meeting) throw new NotFoundException('Service/event not found');
+
+    const attendedCount = appAttendance.filter((r) =>
+      ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(r.status)
+    ).length;
+
+    return {
+      meeting,
+      headcount,
+      individualAttendance: {
+        totalCheckIns: appAttendance.length,
+        attendedCount,
+        absentCount: appAttendance.filter((r) => r.status === 'ABSENT').length,
+        excusedCount: appAttendance.filter((r) => r.status === 'EXCUSED').length,
+      },
+      variance: headcount ? headcount.totalHeadcount - attendedCount : null,
+    };
+  }
+
+  async getHeadcountAnalytics(query: HeadcountAnalyticsQuery) {
+    const days = query.days !== undefined ? Number(query.days) : 90;
+    const now = query.to ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(query.to) ? `${query.to}T23:59:59.999+01:00` : query.to) : new Date();
+    const since = query.from ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(query.from) ? `${query.from}T00:00:00+01:00` : query.from) : new Date(now.getTime() - days * 86400000);
+
+    if (!Number.isFinite(now.getTime()) || !Number.isFinite(since.getTime()) || since > now) {
+      throw new BadRequestException('Choose a valid reporting date range');
+    }
+
+    const whereMeeting: Prisma.MeetingWhereInput = {
+      startTime: { gte: since, lte: now },
+      status: { not: 'CANCELLED' },
+      ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+      ...(query.eventTypeId ? { eventTypeId: query.eventTypeId } : {}),
+    };
+
+    const [headcountRecords, meetings] = await Promise.all([
+      this.prisma.serviceHeadcount.findMany({
+        where: {
+          meeting: whereMeeting,
+        },
+        include: {
+          meeting: {
+            select: {
+              id: true,
+              title: true,
+              startTime: true,
+              status: true,
+              category: { select: { id: true, name: true } },
+              eventType: { select: { id: true, name: true, color: true } },
+            },
+          },
+          recordedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+          lastUpdatedBy: { select: { id: true, email: true, member: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: { meeting: { startTime: 'asc' } },
+      }),
+      this.prisma.meeting.findMany({
+        where: whereMeeting,
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          category: { select: { name: true } },
+          attendanceRecords: { select: { status: true } },
+        },
+      }),
+    ]);
+
+    const appAttendanceByMeeting = new Map<string, number>();
+    for (const m of meetings) {
+      const attended = m.attendanceRecords.filter((r) =>
+        ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(r.status)
+      ).length;
+      appAttendanceByMeeting.set(m.id, attended);
+    }
+
+    let totalHeadcount = 0;
+    let totalMale = 0;
+    let totalFemale = 0;
+    let totalChildren = 0;
+    let totalAppAttendance = 0;
+
+    let highest: { meetingId: string; title: string; date: Date; count: number } | null = null;
+    let lowest: { meetingId: string; title: string; date: Date; count: number } | null = null;
+
+    const services = headcountRecords.map((h) => {
+      const appAtt = appAttendanceByMeeting.get(h.meetingId) ?? 0;
+      totalHeadcount += h.totalHeadcount;
+      totalMale += h.maleCount ?? 0;
+      totalFemale += h.femaleCount ?? 0;
+      totalChildren += h.childrenCount ?? 0;
+      totalAppAttendance += appAtt;
+
+      if (!highest || h.totalHeadcount > highest.count) {
+        highest = {
+          meetingId: h.meetingId,
+          title: h.meeting.title,
+          date: h.meeting.startTime,
+          count: h.totalHeadcount,
+        };
+      }
+      if (!lowest || h.totalHeadcount < lowest.count) {
+        lowest = {
+          meetingId: h.meetingId,
+          title: h.meeting.title,
+          date: h.meeting.startTime,
+          count: h.totalHeadcount,
+        };
+      }
+
+      return {
+        id: h.id,
+        meetingId: h.meetingId,
+        title: h.meeting.title,
+        date: h.meeting.startTime,
+        category: h.meeting.category?.name ?? 'General',
+        eventType: h.meeting.eventType?.name ?? null,
+        totalHeadcount: h.totalHeadcount,
+        maleCount: h.maleCount,
+        femaleCount: h.femaleCount,
+        childrenCount: h.childrenCount,
+        individualAppAttendance: appAtt,
+        variance: h.totalHeadcount - appAtt,
+        notes: h.notes,
+        recordedBy: h.recordedBy ? (h.recordedBy.member ? `${h.recordedBy.member.firstName} ${h.recordedBy.member.lastName}` : h.recordedBy.email) : 'System',
+        recordedAt: h.createdAt,
+        lastUpdatedBy: h.lastUpdatedBy ? (h.lastUpdatedBy.member ? `${h.lastUpdatedBy.member.firstName} ${h.lastUpdatedBy.member.lastName}` : h.lastUpdatedBy.email) : null,
+        lastUpdatedAt: h.updatedAt,
+      };
+    });
+
+    const count = services.length;
+    const averageHeadcount = count > 0 ? Math.round((totalHeadcount / count) * 10) / 10 : 0;
+    const averageAppAttendance = count > 0 ? Math.round((totalAppAttendance / count) * 10) / 10 : 0;
+
+    return {
+      period: { since, until: now, days },
+      summary: {
+        servicesRecordedCount: count,
+        totalHeadcount,
+        averageHeadcount,
+        averageAppAttendance,
+        totalAppAttendance,
+        highestService: highest,
+        lowestService: lowest,
+        demographics: {
+          male: totalMale,
+          female: totalFemale,
+          children: totalChildren,
+        },
+      },
+      services,
+    };
   }
 }

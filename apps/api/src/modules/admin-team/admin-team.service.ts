@@ -18,6 +18,7 @@ import { renderInvitationEmail } from '../mail/templates';
 import { hashInviteToken } from '../../common/invite-token';
 import { webBaseUrl } from '../../common/web-url';
 import { settleWithin } from '../../common/settle-within';
+import { CacheService } from '../../common/cache/cache.service';
 import { InviteAdminDto, UpdateAdminDto } from './admin-team.dto';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,6 +33,7 @@ export class AdminTeamService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly config: ConfigService,
+    private readonly cache: CacheService,
   ) {}
 
   private webBaseUrl(): string {
@@ -300,6 +302,7 @@ export class AdminTeamService {
       });
     });
 
+    this.cache.invalidateTag(`user:${userId}`);
     return this.list().then((team) => team.find((t) => t.id === userId));
   }
 
@@ -334,6 +337,8 @@ export class AdminTeamService {
       entityId: userId,
       reason: reason || null,
     });
+
+    this.cache.invalidateTag(`user:${userId}`);
     return this.list().then((team) => team.find((t) => t.id === userId));
   }
 }
