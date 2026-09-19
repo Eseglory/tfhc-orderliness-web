@@ -2,6 +2,7 @@ services:
   # NestJS API — Prisma/PostgreSQL backend consumed by the web PWA.
   - type: web
     name: tfhc-orderliness-api
+    branch: main
     runtime: docker
     dockerfilePath: ./apps/api/Dockerfile
     dockerContext: .
@@ -48,6 +49,7 @@ services:
   # Next.js mobile-first PWA — installable frontend for members and admins.
   - type: web
     name: tfhc-orderliness-web
+    branch: main
     runtime: docker
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
