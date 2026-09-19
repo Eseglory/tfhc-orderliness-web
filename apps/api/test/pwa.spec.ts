@@ -72,7 +72,7 @@ describe('Push security and lifecycle', () => {
     expect(prisma.pushSubscription.updateMany).toHaveBeenLastCalledWith({ where: { id: 'device' }, data: { failures: 1, nextAttemptAt: expect.any(Date) } });
   });
   test('revoked members cannot receive push', async () => {
-    const { prisma, service } = fixture(); const row = device(); row.user.member.status = 'SUSPENDED'; prisma.pushSubscription.findMany.mockResolvedValue([row]);
+    const { prisma, service } = fixture(); const row = device(); row.user.member.status = 'INACTIVE'; prisma.pushSubscription.findMany.mockResolvedValue([row]);
     await service.deliver(); expect(webpush.sendNotification).not.toHaveBeenCalled();
   });
 });

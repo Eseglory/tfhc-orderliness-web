@@ -72,14 +72,26 @@ export class MembersController {
   }
 
   @Get('me/notifications')
-  async notifications(@CurrentUser('memberId') memberId?: string) {
-    if (!memberId) throw new ForbiddenException('A member profile is required');
+  async notifications(@CurrentUser() user: AuthenticatedUser) {
+    if (!user?.userId) throw new ForbiddenException('Authentication is required');
+    let memberId = user.memberId;
+    if (!memberId) {
+      const member = await this.membersService.findMemberByUserId(user.userId);
+      memberId = member?.id;
+    }
+    if (!memberId) return [];
     return this.membersService.notifications(memberId);
   }
 
   @Put('me/notifications/read')
-  async readNotifications(@CurrentUser('memberId') memberId: string | undefined, @Body() body?: { ids?: string[] }) {
-    if (!memberId) throw new ForbiddenException('A member profile is required');
+  async readNotifications(@CurrentUser() user: AuthenticatedUser, @Body() body?: { ids?: string[] }) {
+    if (!user?.userId) throw new ForbiddenException('Authentication is required');
+    let memberId = user.memberId;
+    if (!memberId) {
+      const member = await this.membersService.findMemberByUserId(user.userId);
+      memberId = member?.id;
+    }
+    if (!memberId) return { count: 0 };
     return this.membersService.readNotifications(memberId, body?.ids);
   }
 

@@ -1,3 +1,4 @@
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { PwaModule } from './modules/pwa/pwa.module';
 import { PushModule } from './modules/push/push.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -80,6 +81,7 @@ import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
     ChatModule,
     PushModule,
     PwaModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
   providers: [

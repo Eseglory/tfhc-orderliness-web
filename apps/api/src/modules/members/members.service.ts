@@ -179,6 +179,10 @@ export class MembersService {
     return { bannerPhotoUrl: null };
   }
 
+  async findMemberByUserId(userId: string) {
+    return this.prisma.member.findUnique({ where: { userId } });
+  }
+
   async notifications(memberId: string) {
     return this.prisma.memberNotification.findMany({ where: { memberId, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, orderBy: { createdAt: 'desc' }, take: 100 });
   }

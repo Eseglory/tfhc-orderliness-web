@@ -13,7 +13,7 @@ export class PushController {
   @Get('config') configuration() { return this.push.configuration(); }
   @Post('subscriptions')
   subscribe(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown, @Req() request: Request) {
-    if (!user.memberId) throw new ForbiddenException('A member profile is required');
+    if (!user?.userId) throw new ForbiddenException('Authentication is required');
     // Signature and expiry have already been validated by JwtAuthGuard.
     const payload = decode(request.headers.authorization?.replace(/^Bearer\s+/i, '') || '') as JwtPayload;
     return this.push.subscribe(user.userId, body, new Date((payload?.exp || 0) * 1000));

@@ -87,21 +87,51 @@ self.addEventListener('periodicsync', event => {
   if (event.tag === 'tfhc-notification-reads') event.waitUntil(self.TFHCPwa.sync());
 });
 
-// No private message bodies or arbitrary destinations on the device lock screen.
+// Handle incoming push notifications safely
 self.addEventListener('push', event => {
-  event.waitUntil(self.registration.showNotification('TFHC Tracker', {
-    body: 'You have new activity. Open the app to view it.',
-    icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
-    tag: 'tfhc-activity', data: { url: '/member/notifications' },
-  }));
+  let title = 'TFHC Tracker';
+  let body = 'You have new activity. Open the app to view it.';
+  let url = '/member/notifications';
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      if (payload && typeof payload === 'object') {
+        if (payload.title) title = String(payload.title);
+        if (payload.body) body = String(payload.body);
+        if (payload.url) url = String(payload.url);
+      }
+    } catch {
+      try {
+        const text = event.data.text();
+        if (text) body = text;
+      } catch {
+        /* fallback to default */
+      }
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'tfhc-activity',
+      data: { url },
+    })
+  );
 });
+
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const target = new URL('/member/notifications', self.location.origin).href;
-  event.waitUntil((async () => {
-    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const existing = windows.find(client => client.url === target);
-    if (existing) return existing.focus();
-    return self.clients.openWindow(target);
-  })());
+  const url = event.notification.data?.url || '/member/notifications';
+  const target = new URL(url, self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const existing = windows.find(client => client.url === target);
+      if (existing) return existing.focus();
+      return self.clients.openWindow(target);
+    })()
+  );
 });

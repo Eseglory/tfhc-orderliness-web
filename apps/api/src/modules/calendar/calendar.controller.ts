@@ -4,6 +4,7 @@ import {
   Post,
   Patch,
   Body,
+  Headers,
   Query,
   UseGuards,
   BadRequestException,
@@ -132,8 +133,10 @@ export class CalendarController {
 
   @Post('integrations/google/webhook')
   @Public()
-  async handleWebhook() {
+  async handleWebhook(@Headers() headers?: Record<string, string>, @Body() body?: unknown) {
     // Idempotent webhook receiver for Google push notifications
-    return { received: true, timestamp: new Date() };
+    const channelId = headers?.['x-goog-channel-id'] || headers?.['x-goog-channel-token'];
+    const resourceState = headers?.['x-goog-resource-state'] || 'sync';
+    return { received: true, provider: 'google-calendar', channelId, resourceState, timestamp: new Date() };
   }
 }
