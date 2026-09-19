@@ -52,12 +52,21 @@ export class MailService implements OnModuleDestroy {
 
     try {
       const fromAddress = this.config.get<string>('SMTP_FROM') || this.config.get<string>('SMTP_USER');
+      const replyTo = this.config.get<string>('SMTP_REPLY_TO') || fromAddress;
       const result = await this.getTransport().sendMail({
         from: fromAddress,
         to: validation.normalizedEmail,
+        replyTo,
         subject: message.subject,
         text: message.text,
         html: message.html,
+        headers: {
+          'X-Mailer': 'TFHC Orderliness Notification System',
+          'X-Auto-Response-Suppress': 'OOF, AutoReply',
+          'X-Entity-Ref-ID': Buffer.from(validation.normalizedEmail).toString('base64url'),
+          'X-Priority': '3',
+          'Importance': 'Normal',
+        },
       });
       if (!result.accepted?.length) throw new Error('Recipient rejected');
       return { messageId: result.messageId };
