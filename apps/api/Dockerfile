@@ -17,6 +17,7 @@ ENV NODE_ENV=production
 ENV PORT=4000
 RUN apk add --no-cache openssl
 COPY --from=builder --chown=node:node /app /app
+RUN mkdir -p /app/data /app/apps/api/data && chown -R node:node /app/data /app/apps/api/data
 USER node
 EXPOSE 4000
 CMD ["node", "apps/api/scripts/start.cjs"]

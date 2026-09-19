@@ -15,9 +15,15 @@ export interface DatabaseSync {
   close(): void;
 }
 
-// node:sqlite is built-in in Node.js 22
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { DatabaseSync: NodeSqliteDatabaseSync } = require('node:sqlite');
+// Safely resolve node:sqlite if available in the Node.js runtime
+let NodeSqliteDatabaseSync: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const sqlite = require('node:sqlite');
+  NodeSqliteDatabaseSync = sqlite?.DatabaseSync ?? null;
+} catch {
+  NodeSqliteDatabaseSync = null;
+}
 
 export interface BufferedMessageRecord {
   id: string;
@@ -50,8 +56,10 @@ export interface BufferStats {
 @Injectable()
 export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(ChatBufferRepository.name);
-  private db!: DatabaseSync;
+  private db: DatabaseSync | null = null;
   private dbPath!: string;
+  private isFallback = false;
+  private memoryStore = new Map<string, BufferedMessageRecord>();
 
   // Prepared statements for high performance
   private insertStmt!: StatementSync;
@@ -81,42 +89,54 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public initDatabase(customPath?: string) {
-    if (this.db) return;
+    if (this.db || this.isFallback) return;
 
-    const resolvedPath =
-      customPath ||
-      this.config.get<string>('CHAT_SHARED_DB_PATH') ||
-      this.config.get<string>('CHAT_BUFFER_DB_PATH') ||
-      (process.env.NODE_ENV === 'test'
-        ? path.join(process.cwd(), `test-data/chat_shared_${Date.now()}_${Math.random().toString(36).slice(2)}.db`)
-        : path.join(process.cwd(), 'data/chat_shared.db'));
-
-    this.dbPath = path.resolve(resolvedPath);
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!NodeSqliteDatabaseSync) {
+      this.logger.warn('[Chat Buffer] node:sqlite not available in runtime; activating in-memory buffer fallback.');
+      this.isFallback = true;
+      return;
     }
 
-    this.db = new NodeSqliteDatabaseSync(this.dbPath);
+    try {
+      const resolvedPath =
+        customPath ||
+        this.config.get<string>('CHAT_SHARED_DB_PATH') ||
+        this.config.get<string>('CHAT_BUFFER_DB_PATH') ||
+        (process.env.NODE_ENV === 'test'
+          ? path.join(process.cwd(), `test-data/chat_shared_${Date.now()}_${Math.random().toString(36).slice(2)}.db`)
+          : path.join(process.cwd(), 'data/chat_shared.db'));
 
-    // Configure SQLite for high concurrency across localhost & production, WAL mode, crash safety
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA busy_timeout = 10000;');
-    this.db.exec('PRAGMA synchronous = NORMAL;');
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA cache_size = -64000;');
-    this.db.exec('PRAGMA wal_autocheckpoint = 1000;');
+      this.dbPath = path.resolve(resolvedPath);
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
 
-    this.initSchema();
-    this.prepareStatements();
+      this.db = new NodeSqliteDatabaseSync(this.dbPath);
 
-    // Startup recovery: any records left in 'PROCESSING' state are safely restored to 'PENDING'
-    const resetCount = this.resetProcessingToPending();
-    if (resetCount > 0) {
-      this.logger.log(`[Startup Recovery] Restored ${resetCount} uncommitted processing messages in SQLite buffer to PENDING.`);
+      // Configure SQLite for high concurrency across localhost & production, WAL mode, crash safety
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.db.exec('PRAGMA busy_timeout = 10000;');
+      this.db.exec('PRAGMA synchronous = NORMAL;');
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA cache_size = -64000;');
+      this.db.exec('PRAGMA wal_autocheckpoint = 1000;');
+
+      this.initSchema();
+      this.prepareStatements();
+
+      // Startup recovery: any records left in 'PROCESSING' state are safely restored to 'PENDING'
+      const resetCount = this.resetProcessingToPending();
+      if (resetCount > 0) {
+        this.logger.log(`[Startup Recovery] Restored ${resetCount} uncommitted processing messages in SQLite buffer to PENDING.`);
+      }
+
+      this.logger.log(`[Shared Realtime SQLite] Connected to shared SQLite database at: ${this.dbPath} (WAL mode, busy_timeout=10000ms)`);
+    } catch (err) {
+      this.logger.warn(`[Chat Buffer] SQLite initialization deferred to memory fallback: ${(err as Error).message}`);
+      this.isFallback = true;
+      this.db = null;
     }
-
-    this.logger.log(`[Shared Realtime SQLite] Connected to shared SQLite database at: ${this.dbPath} (WAL mode, busy_timeout=10000ms)`);
   }
 
   private initSchema() {
@@ -241,6 +261,36 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     replyToId?: string | null;
     createdAt: string;
   }): BufferedMessageRecord {
+    if (this.isFallback || !this.db) {
+      if (msg.clientOperationId) {
+        const existing = this.findByClientOperationId(msg.clientOperationId);
+        if (existing) return existing;
+      }
+      const existingById = this.findById(msg.id);
+      if (existingById) return existingById;
+
+      const record: BufferedMessageRecord = {
+        id: msg.id,
+        clientOperationId: msg.clientOperationId || null,
+        roomId: msg.roomId,
+        senderMemberId: msg.senderMemberId || null,
+        type: msg.type || 'TEXT',
+        body: msg.body || null,
+        attachmentUrl: msg.attachmentUrl || null,
+        attachmentMeta: msg.attachmentMeta || null,
+        replyToId: msg.replyToId || null,
+        editedAt: null,
+        deletedAt: null,
+        createdAt: msg.createdAt,
+        syncStatus: 'PENDING',
+        retryCount: 0,
+        lastError: null,
+        migratedAt: null,
+      };
+      this.memoryStore.set(msg.id, record);
+      return record;
+    }
+
     // Idempotency check on clientOperationId
     if (msg.clientOperationId) {
       const existing = this.findByClientOperationId(msg.clientOperationId);
@@ -269,31 +319,70 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public findById(id: string): BufferedMessageRecord | null {
+    if (this.isFallback || !this.db) {
+      return this.memoryStore.get(id) || null;
+    }
     const row = this.findByIdStmt.get(id) as Record<string, any> | undefined;
     return row ? this.mapRow(row) : null;
   }
 
   public findByClientOperationId(opId: string): BufferedMessageRecord | null {
+    if (this.isFallback || !this.db) {
+      for (const record of this.memoryStore.values()) {
+        if (record.clientOperationId === opId) return record;
+      }
+      return null;
+    }
     const row = this.findByOpIdStmt.get(opId) as Record<string, any> | undefined;
     return row ? this.mapRow(row) : null;
   }
 
   public listRecentByRoom(roomId: string, limit = 50): BufferedMessageRecord[] {
+    if (this.isFallback || !this.db) {
+      return Array.from(this.memoryStore.values())
+        .filter((r) => r.roomId === roomId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, limit);
+    }
     const rows = this.listByRoomStmt.all(roomId, limit) as Array<Record<string, any>>;
     return rows.map((r) => this.mapRow(r));
   }
 
   public getLatestMessage(roomId: string): BufferedMessageRecord | null {
+    if (this.isFallback || !this.db) {
+      const filtered = Array.from(this.memoryStore.values())
+        .filter((r) => r.roomId === roomId && !r.deletedAt)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return filtered[0] || null;
+    }
     const row = this.getLatestByRoomStmt.get(roomId) as Record<string, any> | undefined;
     return row ? this.mapRow(row) : null;
   }
 
   public updateMessage(id: string, body: string, editedAt: string): boolean {
+    if (this.isFallback || !this.db) {
+      const record = this.memoryStore.get(id);
+      if (!record) return false;
+      record.body = body;
+      record.editedAt = editedAt;
+      record.syncStatus = 'PENDING';
+      return true;
+    }
     const res = this.updateBodyStmt.run(body, editedAt, id);
     return Number(res.changes) > 0;
   }
 
   public deleteMessage(id: string, deletedAt: string): boolean {
+    if (this.isFallback || !this.db) {
+      const record = this.memoryStore.get(id);
+      if (!record) return false;
+      record.deletedAt = deletedAt;
+      record.body = null;
+      record.attachmentUrl = null;
+      record.attachmentMeta = null;
+      record.syncStatus = 'PENDING';
+      return true;
+    }
     const res = this.softDeleteStmt.run(deletedAt, id);
     return Number(res.changes) > 0;
   }
@@ -303,28 +392,77 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   // -------------------------------------------------------------------------
 
   public getPendingBatch(batchSize = 100): BufferedMessageRecord[] {
+    if (this.isFallback || !this.db) {
+      return Array.from(this.memoryStore.values())
+        .filter((r) => r.syncStatus === 'PENDING' || (r.syncStatus === 'FAILED' && r.retryCount < 5))
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .slice(0, batchSize);
+    }
     const rows = this.getPendingBatchStmt.all(batchSize) as Array<Record<string, any>>;
     return rows.map((r) => this.mapRow(r));
   }
 
   public markProcessing(id: string) {
+    if (this.isFallback || !this.db) {
+      const record = this.memoryStore.get(id);
+      if (record) record.syncStatus = 'PROCESSING';
+      return;
+    }
     this.markProcessingBatchStmt.run(id);
   }
 
   public markMigrated(id: string, migratedAt: string) {
+    if (this.isFallback || !this.db) {
+      const record = this.memoryStore.get(id);
+      if (record) {
+        record.syncStatus = 'MIGRATED';
+        record.migratedAt = migratedAt;
+        record.lastError = null;
+      }
+      return;
+    }
     this.markMigratedStmt.run(migratedAt, id);
   }
 
   public markFailed(id: string, error: string) {
+    if (this.isFallback || !this.db) {
+      const record = this.memoryStore.get(id);
+      if (record) {
+        record.syncStatus = 'FAILED';
+        record.retryCount += 1;
+        record.lastError = error.slice(0, 500);
+      }
+      return;
+    }
     this.markFailedStmt.run(error.slice(0, 500), id);
   }
 
   public resetProcessingToPending(): number {
+    if (this.isFallback || !this.db) {
+      let count = 0;
+      for (const record of this.memoryStore.values()) {
+        if (record.syncStatus === 'PROCESSING') {
+          record.syncStatus = 'PENDING';
+          count++;
+        }
+      }
+      return count;
+    }
     const res = this.resetProcessingStmt.run();
     return Number(res.changes ?? 0);
   }
 
   public purgeOlderMigrated(olderThanIso: string): number {
+    if (this.isFallback || !this.db) {
+      let count = 0;
+      for (const [id, record] of this.memoryStore.entries()) {
+        if (record.syncStatus === 'MIGRATED' && record.migratedAt && record.migratedAt < olderThanIso) {
+          this.memoryStore.delete(id);
+          count++;
+        }
+      }
+      return count;
+    }
     const res = this.purgeMigratedStmt.run(olderThanIso);
     return Number(res.changes ?? 0);
   }
@@ -344,6 +482,37 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     createdAt: string;
   }>): { inserted: number; skipped: number } {
     if (!messages.length) return { inserted: 0, skipped: 0 };
+
+    if (this.isFallback || !this.db) {
+      let inserted = 0;
+      let skipped = 0;
+      for (const msg of messages) {
+        if (!this.memoryStore.has(msg.id)) {
+          this.memoryStore.set(msg.id, {
+            id: msg.id,
+            clientOperationId: msg.clientOperationId || null,
+            roomId: msg.roomId,
+            senderMemberId: msg.senderMemberId || null,
+            type: msg.type || 'TEXT',
+            body: msg.body || null,
+            attachmentUrl: msg.attachmentUrl || null,
+            attachmentMeta: msg.attachmentMeta || null,
+            replyToId: msg.replyToId || null,
+            editedAt: msg.editedAt || null,
+            deletedAt: msg.deletedAt || null,
+            createdAt: msg.createdAt,
+            syncStatus: 'MIGRATED',
+            retryCount: 0,
+            lastError: null,
+            migratedAt: msg.createdAt,
+          });
+          inserted++;
+        } else {
+          skipped++;
+        }
+      }
+      return { inserted, skipped };
+    }
 
     let inserted = 0;
     let skipped = 0;
@@ -391,16 +560,29 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public countAll(): number {
+    if (this.isFallback || !this.db) {
+      return this.memoryStore.size;
+    }
     const res = this.db.prepare('SELECT COUNT(*) as cnt FROM chat_message_buffer').get() as { cnt: number | bigint };
     return Number(res?.cnt ?? 0);
   }
 
   public getAllIds(): Set<string> {
+    if (this.isFallback || !this.db) {
+      return new Set(this.memoryStore.keys());
+    }
     const rows = this.db.prepare('SELECT id FROM chat_message_buffer').all() as Array<{ id: string }>;
     return new Set(rows.map((r) => String(r.id)));
   }
 
   public getRoomMessageCounts(): Map<string, number> {
+    if (this.isFallback || !this.db) {
+      const map = new Map<string, number>();
+      for (const r of this.memoryStore.values()) {
+        map.set(r.roomId, (map.get(r.roomId) || 0) + 1);
+      }
+      return map;
+    }
     const rows = this.db.prepare('SELECT room_id, COUNT(*) as cnt FROM chat_message_buffer GROUP BY room_id').all() as Array<{ room_id: string; cnt: number | bigint }>;
     const map = new Map<string, number>();
     for (const r of rows) {
@@ -410,6 +592,27 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public getStats(): BufferStats {
+    if (this.isFallback || !this.db) {
+      let pending = 0;
+      let processing = 0;
+      let migrated = 0;
+      let failed = 0;
+      for (const r of this.memoryStore.values()) {
+        if (r.syncStatus === 'PENDING') pending++;
+        else if (r.syncStatus === 'PROCESSING') processing++;
+        else if (r.syncStatus === 'MIGRATED') migrated++;
+        else if (r.syncStatus === 'FAILED') failed++;
+      }
+      return {
+        totalBuffered: this.memoryStore.size,
+        pendingCount: pending,
+        processingCount: processing,
+        migratedCount: migrated,
+        failedCount: failed,
+        dbSizeBytes: 0,
+      };
+    }
+
     const counts = this.db
       .prepare(
         `SELECT
