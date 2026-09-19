@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -16,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RbacService } from '../../common/rbac/rbac.service';
 import { ChatService } from './chat.service';
 import { ChatViewer } from './chat.util';
+import { PushService } from '../push/push.service';
 
 const corsOrigins = (process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean)) ?? [];
 
@@ -57,6 +58,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly prisma: PrismaService,
     private readonly rbac: RbacService,
     private readonly chat: ChatService,
+    @Optional() private readonly pushService?: PushService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -262,6 +264,43 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         if (s && !s.rooms.has(`room:${roomId}`)) {
           s.join(`room:${roomId}`);
           s.emit('message:new', message);
+        }
+      }
+    }
+
+    // Dispatch background Web Push Notification to recipient members who are offline/not in active socket
+    if (this.pushService) {
+      const senderMemberId = (message as any)?.sender?.id || (message as any)?.senderMemberId;
+      const targetMemberIds = recipientIds.filter((id) => id !== senderMemberId);
+
+      if (targetMemberIds.length > 0) {
+        const membersWithUser = await this.prisma.member.findMany({
+          where: { id: { in: targetMemberIds } },
+          select: { id: true, userId: true, firstName: true, lastName: true },
+        });
+
+        const senderName = (message as any)?.sender
+          ? [(message as any).sender.firstName, (message as any).sender.lastName].filter(Boolean).join(' ')
+          : 'New Message';
+        const roomTitle = room.type === 'DIRECT' ? senderName : (room.name || 'Orderliness Chat');
+        const msgPreview =
+          (message as any)?.body ||
+          ((message as any)?.type === 'IMAGE'
+            ? '📷 Sent an image'
+            : (message as any)?.type === 'AUDIO'
+            ? '🎤 Sent a voice note'
+            : 'Sent a message');
+
+        for (const m of membersWithUser) {
+          if (m.userId) {
+            void this.pushService
+              .sendDirectPush(m.userId, {
+                title: roomTitle,
+                body: room.type === 'DIRECT' ? msgPreview : `${senderName}: ${msgPreview}`,
+                url: `/member/chat?roomId=${roomId}`,
+              })
+              .catch(() => undefined);
+          }
         }
       }
     }
