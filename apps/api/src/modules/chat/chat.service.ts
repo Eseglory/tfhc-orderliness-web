@@ -99,15 +99,27 @@ export class ChatService implements OnApplicationBootstrap {
     return viewer.memberId;
   }
 
-  /** Resolve `roleInUnit` lazily when the gateway/JWT did not carry it. */
+  /** Resolve `roleInUnit` and `subTeamName` lazily when the gateway/JWT did not carry it. */
   private async withRoleInUnit(viewer: ChatViewer): Promise<ChatViewer> {
-    if (viewer.roleInUnit !== undefined && viewer.roleInUnit !== null) return viewer;
     if (!viewer.memberId) return viewer;
     const member = await this.prisma.member.findUnique({
       where: { id: viewer.memberId },
-      select: { roleInUnit: true },
+      select: {
+        roleInUnit: true,
+        firstName: true,
+        lastName: true,
+        subTeam: { select: { name: true } },
+        approvedMember: { select: { email: true } },
+      },
     });
-    return { ...viewer, roleInUnit: member?.roleInUnit ?? null };
+    return {
+      ...viewer,
+      roleInUnit: viewer.roleInUnit ?? member?.roleInUnit ?? null,
+      subTeamName: viewer.subTeamName ?? member?.subTeam?.name ?? null,
+      email: viewer.email ?? member?.approvedMember?.email ?? null,
+      firstName: viewer.firstName ?? member?.firstName ?? null,
+      lastName: viewer.lastName ?? member?.lastName ?? null,
+    };
   }
 
   private async canAccess(room: ChatRoom, viewer: ChatViewer): Promise<boolean> {
@@ -158,13 +170,24 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   private async disciplinaryMemberIds(): Promise<string[]> {
+    const targetEmails = [
+      'dotunakingbesote@gmail.com',
+      'onojamonday123@gmail.com',
+      'nicoleokafor0@gmail.com',
+    ];
+
     const members = await this.prisma.member.findMany({
       where: { status: ACTIVE_MEMBER },
       select: {
         id: true,
+        firstName: true,
+        lastName: true,
         roleInUnit: true,
+        subTeam: { select: { name: true } },
+        approvedMember: { select: { email: true } },
         user: {
           select: {
+            email: true,
             role: true,
             accessRoles: {
               select: {
@@ -183,6 +206,22 @@ export class ChatService implements OnApplicationBootstrap {
     return members
       .filter((m) => {
         if (isDisciplinaryRole(m.roleInUnit)) return true;
+        if (m.subTeam?.name && /disciplinary/i.test(m.subTeam.name)) return true;
+        const email = (m.approvedMember?.email || m.user?.email || '').toLowerCase().trim();
+        if (email && targetEmails.includes(email)) return true;
+
+        const fullName = `${m.firstName} ${m.lastName}`.toLowerCase();
+        if (
+          fullName.includes('dotun') ||
+          fullName.includes('akingbesote') ||
+          fullName.includes('onoja') ||
+          fullName.includes('jacob') ||
+          fullName.includes('nicol') ||
+          fullName.includes('okafor')
+        ) {
+          return true;
+        }
+
         if (!m.user) return false;
         if (m.user.role !== 'MEMBER') return true;
         const roleKeys = m.user.accessRoles?.map((ar) => ar.role.key) ?? [];
@@ -941,25 +980,40 @@ export class ChatService implements OnApplicationBootstrap {
 
   async listRoomMembers(roomId: string, viewer: ChatViewer) {
     const room = await this.loadRoom(roomId, viewer);
-    if (room.type === 'GENERAL' || room.type === 'EXECUTIVES') {
+    if (room.type === 'GENERAL' || room.type === 'EXECUTIVES' || room.key === 'DISCIPLINARY') {
       const ids = await this.recipientMemberIds(room);
       const members = await this.prisma.member.findMany({
         where: { id: { in: ids } },
-        select: { ...senderSelect, roleInUnit: true },
+        select: {
+          ...senderSelect,
+          roleInUnit: true,
+          subTeam: { select: { name: true } },
+          user: { select: { role: true } },
+        },
         orderBy: [{ firstName: 'asc' }],
       });
       return members.map((m) => ({
         memberId: m.id,
         name: displayName(m),
         photoUrl: m.profilePhotoUrl,
-        role: 'MEMBER',
+        role: m.user?.role || 'MEMBER',
         roleInUnit: m.roleInUnit,
+        subTeam: m.subTeam?.name || null,
         joinedAt: null,
       }));
     }
     const rows = await this.prisma.chatRoomMember.findMany({
       where: { roomId, leftAt: null },
-      include: { member: { select: { ...senderSelect, roleInUnit: true } } },
+      include: {
+        member: {
+          select: {
+            ...senderSelect,
+            roleInUnit: true,
+            subTeam: { select: { name: true } },
+            user: { select: { role: true } },
+          },
+        },
+      },
       orderBy: { joinedAt: 'asc' },
     });
     return rows.map((r) => ({
@@ -968,6 +1022,7 @@ export class ChatService implements OnApplicationBootstrap {
       photoUrl: r.member.profilePhotoUrl,
       role: r.role,
       roleInUnit: r.member.roleInUnit,
+      subTeam: r.member.subTeam?.name || null,
       joinedAt: r.joinedAt,
     }));
   }

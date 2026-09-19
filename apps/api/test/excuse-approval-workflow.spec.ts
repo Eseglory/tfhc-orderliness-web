@@ -122,6 +122,9 @@ describe('Excuse & Permission Request — Complete Approval Workflow', () => {
 
     prisma = {
       $transaction: jest.fn(async (cb) => cb(mockTx)),
+      user: {
+        findUnique: jest.fn(async ({ where }) => ({ id: where.id, email: 'admin@tfhc.org' })),
+      },
       member: {
         findUnique: jest.fn(async ({ where }) => (where.id === mockMember.id ? mockMember : null)),
       },

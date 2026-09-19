@@ -55,6 +55,7 @@ export function ChatWorkspace({
   const [showInChatSearch, setShowInChatSearch] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [contacts, setContacts] = useState<ChatContact[]>([]);
 
@@ -712,9 +713,17 @@ export function ChatWorkspace({
                   online={isDirectOnline}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
-                    {activeRoom.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
+                      {activeRoom.name}
+                    </p>
+                    {activeRoom.type !== 'DIRECT' && (
+                      <span className="hidden xs:inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        <span className="material-symbols-outlined text-[12px]">group</span>
+                        <span>{activeRoom.memberCount}</span>
+                      </span>
+                    )}
+                  </div>
                   {typingNames.length > 0 ? (
                     <p className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
                       <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is typing…' : 'are typing…'}</span>
@@ -731,8 +740,9 @@ export function ChatWorkspace({
                       )}
                     </p>
                   ) : (
-                    <p className="truncate text-xs text-on-surface-variant">
-                      {activeRoom.memberCount} member{activeRoom.memberCount === 1 ? '' : 's'}
+                    <p className="truncate text-xs text-on-surface-variant flex items-center gap-1.5">
+                      <span>{activeRoom.memberCount} members</span>
+                      <span className="text-primary font-bold hover:underline cursor-pointer">· View members list</span>
                     </p>
                   )}
                 </div>
@@ -756,14 +766,20 @@ export function ChatWorkspace({
                 <button
                   type="button"
                   onClick={() => setShowRoomInfo((v) => !v)}
-                  className={`p-2 rounded-xl transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all ${
                     showRoomInfo
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-on-surface-variant hover:bg-surface-container'
+                      ? 'bg-primary text-on-primary font-bold shadow-xs'
+                      : 'bg-surface-container-low text-on-surface hover:bg-surface-container text-xs font-semibold border border-outline-variant/30'
                   }`}
-                  title="Channel & member info"
+                  title={activeRoom.type === 'DIRECT' ? 'Direct conversation info' : 'View group members'}
+                  aria-label="View group members"
                 >
-                  <span className="material-symbols-outlined text-[20px]">info</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {activeRoom.type === 'DIRECT' ? 'info' : 'groups'}
+                  </span>
+                  {activeRoom.type !== 'DIRECT' && (
+                    <span className="hidden sm:inline text-xs font-bold">Members</span>
+                  )}
                 </button>
 
                 {activeRoom.type === 'CUSTOM' && (
@@ -774,7 +790,7 @@ export function ChatWorkspace({
                     title="Manage Members"
                   >
                     <span className="material-symbols-outlined text-[20px]">
-                      {canManageRoom ? 'manage_accounts' : 'group'}
+                      {canManageRoom ? 'manage_accounts' : 'person_add'}
                     </span>
                   </button>
                 )}
@@ -887,78 +903,173 @@ export function ChatWorkspace({
                 )}
               </div>
 
-              {/* Side Drawer: Room & Contact Info */}
+              {/* Side Drawer / Modal: Room & Member Info */}
               {showRoomInfo && (
-                <div className="w-72 sm:w-80 border-l border-outline-variant/20 bg-surface-container-lowest overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right-4 duration-200">
-                  <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20">
-                    <h4 className="text-sm font-black text-on-surface">Conversation Info</h4>
-                    <button
-                      onClick={() => setShowRoomInfo(false)}
-                      className="p-1 rounded-lg text-on-surface-variant hover:bg-surface-container"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">close</span>
-                    </button>
-                  </div>
-
-                  <div className="text-center space-y-2 py-2">
-                    <Avatar
-                      name={activeRoom.name}
-                      photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
-                      icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
-                      size={64}
-                      online={isDirectOnline}
-                    />
-                    <h3 className="text-base font-bold text-on-surface">{activeRoom.name}</h3>
-                    <p className="text-xs text-on-surface-variant">{activeRoom.description || 'No description provided'}</p>
-                  </div>
-
-                  {activeRoom.type !== 'DIRECT' && (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-on-surface uppercase tracking-wider">
-                          Members ({roomMembers.length || activeRoom.memberCount})
+                <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex justify-end sm:static sm:z-auto sm:bg-transparent sm:backdrop-blur-none animate-in fade-in duration-150">
+                  <div className="w-full max-w-sm sm:w-80 md:w-88 h-full border-l border-outline-variant/20 bg-surface-container-lowest overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right duration-200 flex flex-col shadow-2xl sm:shadow-none">
+                    <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-[20px]">
+                          {activeRoom.type === 'DIRECT' ? 'person' : 'groups'}
                         </span>
+                        <h4 className="text-sm font-black text-on-surface">
+                          {activeRoom.type === 'DIRECT' ? 'Contact Info' : 'Group Members & Info'}
+                        </h4>
                       </div>
-                      {loadingMembers ? (
-                        <p className="text-xs text-on-surface-variant">Loading members…</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {roomMembers.map((member) => {
-                            const isOnline = socket.online.has(member.memberId);
-                            return (
-                              <div
-                                key={member.memberId}
-                                className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <Avatar
-                                    name={member.name}
-                                    photoUrl={member.photoUrl}
-                                    size={30}
-                                    online={isOnline}
-                                  />
-                                  <div className="min-w-0">
-                                    <p className="truncate text-xs font-bold text-on-surface">{member.name}</p>
-                                    <p className="text-[10px] text-on-surface-variant">
-                                      {isOnline ? 'Online' : member.role || 'Member'}
-                                    </p>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => startDirect(member.memberId)}
-                                  className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
-                                  title="Send direct message"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">chat</span>
-                                </button>
-                              </div>
-                            );
-                          })}
+                      <button
+                        onClick={() => setShowRoomInfo(false)}
+                        className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
+                        aria-label="Close"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">close</span>
+                      </button>
+                    </div>
+
+                    <div className="text-center space-y-2 py-2 shrink-0 bg-surface-container-low/50 rounded-2xl p-3 border border-outline-variant/10">
+                      <Avatar
+                        name={activeRoom.name}
+                        photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
+                        icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
+                        size={60}
+                        online={isDirectOnline}
+                      />
+                      <div>
+                        <h3 className="text-base font-bold text-on-surface">{activeRoom.name}</h3>
+                        <p className="text-xs text-on-surface-variant mt-0.5">{activeRoom.description || 'No description provided'}</p>
+                      </div>
+                      {activeRoom.type !== 'DIRECT' && (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                          <span className="material-symbols-outlined text-sm">groups</span>
+                          <span>{roomMembers.length || activeRoom.memberCount} Total Members</span>
                         </div>
                       )}
                     </div>
-                  )}
+
+                    {activeRoom.type !== 'DIRECT' && (
+                      <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold text-on-surface uppercase tracking-wider">
+                            Members List ({roomMembers.length || activeRoom.memberCount})
+                          </span>
+                          {activeRoom.type === 'CUSTOM' && canManageRoom && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowRoomInfo(false);
+                                setShowManage(true);
+                              }}
+                              className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">person_add</span>
+                              <span>Add Members</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Search in Members */}
+                        <div className="relative shrink-0">
+                          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-on-surface-variant">search</span>
+                          <input
+                            type="text"
+                            placeholder="Filter members by name, role, unit…"
+                            value={memberSearch}
+                            onChange={(e) => setMemberSearch(e.target.value)}
+                            className="w-full bg-surface-container-low pl-8 pr-8 py-1.5 rounded-xl border border-outline-variant/30 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary"
+                          />
+                          {memberSearch && (
+                            <button
+                              onClick={() => setMemberSearch('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                            >
+                              <span className="material-symbols-outlined text-xs">close</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {loadingMembers ? (
+                          <div className="py-8 text-center text-xs text-on-surface-variant space-y-2">
+                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+                            <p>Loading members list…</p>
+                          </div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                            {roomMembers
+                              .filter((m) => {
+                                if (!memberSearch.trim()) return true;
+                                const q = memberSearch.toLowerCase().trim();
+                                return (
+                                  (m.name && m.name.toLowerCase().includes(q)) ||
+                                  (m.subTeam && m.subTeam.toLowerCase().includes(q)) ||
+                                  (m.roleInUnit && m.roleInUnit.toLowerCase().includes(q)) ||
+                                  (m.role && m.role.toLowerCase().includes(q))
+                                );
+                              })
+                              .map((member) => {
+                                const isOnline = socket.online.has(member.memberId);
+                                const isDisciplinary =
+                                  (member.subTeam && /disciplinary/i.test(member.subTeam)) ||
+                                  (member.roleInUnit && /disciplinary/i.test(member.roleInUnit));
+                                const isExec =
+                                  (member.subTeam && /executive/i.test(member.subTeam)) ||
+                                  (member.roleInUnit && /executive|leader|coordinator|head/i.test(member.roleInUnit)) ||
+                                  member.role !== 'MEMBER';
+
+                                return (
+                                  <div
+                                    key={member.memberId}
+                                    className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors border border-outline-variant/10 gap-2"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <Avatar
+                                        name={member.name}
+                                        photoUrl={member.photoUrl}
+                                        size={34}
+                                        online={isOnline}
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <p className="truncate text-xs font-bold text-on-surface">{member.name}</p>
+                                          {isDisciplinary && (
+                                            <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                              Disciplinary
+                                            </span>
+                                          )}
+                                          {isExec && !isDisciplinary && (
+                                            <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                              Executive
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-on-surface-variant truncate">
+                                          <span>{member.subTeam || member.roleInUnit || 'Member'}</span>
+                                          {isOnline && (
+                                            <span className="text-emerald-500 font-bold flex items-center gap-0.5">
+                                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                                              <span>Online</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShowRoomInfo(false);
+                                        void startDirect(member.memberId);
+                                      }}
+                                      className="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors shrink-0"
+                                      title={`Message ${member.name}`}
+                                    >
+                                      <span className="material-symbols-outlined text-[18px]">chat</span>
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

@@ -279,7 +279,10 @@ export class ExcusesService implements OnModuleInit {
     if (excuse.status !== ExcuseStatus.PENDING) throw new BadRequestException('This request has already been reviewed');
 
     const requesterEmail = excuse.member.user?.email ?? excuse.member.approvedMember?.normalizedEmail ?? null;
-    const adminUser = await this.prisma.user.findUnique({ where: { id: dto.adminUserId }, select: { email: true } });
+    const adminUser =
+      dto.adminUserId && this.prisma.user?.findUnique
+        ? await this.prisma.user.findUnique({ where: { id: dto.adminUserId }, select: { email: true } })
+        : null;
 
     if (isJacob(requesterEmail)) {
       if (!isDaniel(adminUser?.email)) {

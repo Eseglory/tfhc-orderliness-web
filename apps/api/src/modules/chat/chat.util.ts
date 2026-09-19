@@ -11,11 +11,18 @@ export interface ChatViewer {
   memberId?: string | null;
   role: string;
   roleInUnit?: string | null;
+  subTeamName?: string | null;
   permissions: string[];
   isSuperAdmin?: boolean;
   firstName?: string | null;
   lastName?: string | null;
 }
+
+export const DISCIPLINARY_EMAILS = [
+  'dotunakingbesote@gmail.com',
+  'onojamonday123@gmail.com',
+  'nicoleokafor0@gmail.com',
+];
 
 /** Stable key for a 1:1 conversation, independent of who opened it. */
 export function directKey(memberA: string, memberB: string): string {
@@ -50,14 +57,25 @@ export function viewerIsExecutive(viewer: ChatViewer): boolean {
 
 /**
  * Disciplinary access to the DISCIPLINARY room: any staff account, super admin,
- * or member with a disciplinary committee role/permission.
+ * member in the Disciplinary Committee subTeam, or member with a disciplinary role/permission.
  */
 export function viewerIsDisciplinary(viewer: ChatViewer): boolean {
   if (viewer.role && viewer.role !== 'MEMBER') return true;
   if (viewer.isSuperAdmin) return true;
-  if (viewer.permissions.includes('*') || viewer.permissions.includes('excuses.review') || viewer.permissions.includes('flags.manage')) {
+  if (
+    viewer.permissions.includes('*') ||
+    viewer.permissions.includes('excuses.review') ||
+    viewer.permissions.includes('flags.manage')
+  ) {
+    return true;
+  }
+  if (viewer.email && DISCIPLINARY_EMAILS.includes(viewer.email.toLowerCase().trim())) {
+    return true;
+  }
+  if (viewer.subTeamName && /disciplinary/i.test(viewer.subTeamName)) {
     return true;
   }
   return isDisciplinaryRole(viewer.roleInUnit ?? null);
 }
+
 

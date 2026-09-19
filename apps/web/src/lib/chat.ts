@@ -58,6 +58,7 @@ export interface RoomMember {
   photoUrl: string | null;
   role: string;
   roleInUnit: string | null;
+  subTeam: string | null;
   joinedAt: string | null;
 }
 

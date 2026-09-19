@@ -171,7 +171,7 @@ export class LookupsService implements OnApplicationBootstrap {
       });
     }
 
-    // Auto-assign requested Disciplinary Committee members if they exist
+    // Auto-assign requested Disciplinary Committee members (Dotun, Jacob, Nicole)
     const disciplinaryGroup = await this.prisma.subTeam.findUnique({
       where: { name: 'Disciplinary Committee' },
     });
@@ -186,13 +186,16 @@ export class LookupsService implements OnApplicationBootstrap {
         where: {
           OR: [
             { approvedMember: { email: { in: targetEmails } } },
+            { user: { email: { in: targetEmails } } },
             { firstName: 'Nicole', lastName: 'Okafor' },
-            { firstName: { in: ['Adedotun', 'Adedorun'] } },
+            { firstName: { in: ['Adedotun', 'Adedorun', 'Dotun'] } },
             { firstName: 'Jacob', lastName: 'Onoja' },
+            { firstName: 'Onoja', lastName: 'Jacob' },
           ],
         },
         data: {
           subTeamId: disciplinaryGroup.id,
+          roleInUnit: 'Disciplinary Committee',
         },
       });
     }
