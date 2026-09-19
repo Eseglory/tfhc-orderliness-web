@@ -129,15 +129,68 @@ export function bestNameMatch<T>(
   };
 }
 
-/** MM-DD from "14th March" / "13 September" / "3rd  February". Null if unparseable. */
+/** MM-DD from "14/03" (DD/MM), "03-14" (MM-DD), or words like "14th March" / "13 September" / "3rd February". Null if unparseable. */
 export function parseYearlessBirthday(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+
+  // If provided as DD/MM (slash)
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (slashMatch) {
+    const day = Number(slashMatch[1]);
+    const month = Number(slashMatch[2]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
+      if (!Number.isNaN(parsed.getTime()) && parsed.getUTCDate() === day && parsed.getUTCMonth() + 1 === month) {
+        return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  }
+
+  // If provided as MM-DD (dash)
+  const dashMatch = trimmed.match(/^(\d{2})-(\d{2})$/);
+  if (dashMatch) {
+    const month = Number(dashMatch[1]);
+    const day = Number(dashMatch[2]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
+      if (!Number.isNaN(parsed.getTime()) && parsed.getUTCDate() === day && parsed.getUTCMonth() + 1 === month) {
+        return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  }
+
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-  const m = (raw || '').trim().toLowerCase().match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)/);
+  const m = trimmed.toLowerCase().match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)/);
   if (!m) return null;
   const day = Number(m[1]);
   const month = MONTHS.indexOf(m[2]) + 1;
   if (!month || day < 1 || day > 31) return null;
+  const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.getUTCDate() !== day || parsed.getUTCMonth() + 1 !== month) return null;
   return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Formats a stored MM-DD or DD/MM birthday as DD/MM (e.g. "14/03"). Returns empty string if invalid/missing. */
+export function formatBirthdayDDMM(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  const mmddMatch = trimmed.match(/^(\d{2})-(\d{2})$/);
+  if (mmddMatch) {
+    return `${mmddMatch[2]}/${mmddMatch[1]}`;
+  }
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (slashMatch) {
+    return `${slashMatch[1].padStart(2, '0')}/${slashMatch[2].padStart(2, '0')}`;
+  }
+  const parsed = parseYearlessBirthday(trimmed);
+  if (parsed) {
+    const [m, d] = parsed.split('-');
+    return `${d}/${m}`;
+  }
+  return trimmed;
 }
 
 /**

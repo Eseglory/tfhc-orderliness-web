@@ -12,7 +12,7 @@ export class UpdateMemberDto {
   @IsOptional() @IsString() @MaxLength(100) country?: string;
   @IsOptional() @IsString() @MaxLength(20) postalCode?: string;
   @IsOptional() @IsString() @MaxLength(120) profession?: string;
-  @IsOptional() @IsString() @MaxLength(5) birthday?: string;
+  @IsOptional() @IsString() @MaxLength(10) birthday?: string;
   @IsOptional() @IsString() @MaxLength(10) dateOfBirth?: string;
   @IsOptional() @IsString() @Length(1, 80) firstName?: string;
   @IsOptional() @IsString() @Length(1, 80) lastName?: string;

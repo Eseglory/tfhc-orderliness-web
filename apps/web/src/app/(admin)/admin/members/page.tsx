@@ -248,13 +248,7 @@ export default function AdminMembersPage() {
           'alternatePhoneNumber',
           'profession',
           'birthday',
-          'dateOfBirth',
-        ].map((k) => [
-          k,
-          k === 'dateOfBirth'
-            ? m[k]?.slice(0, 10) || ''
-            : m[k] || '',
-        ])
+        ].map((k) => [k, m[k] || ''])
       )
     );
     setFormError('');

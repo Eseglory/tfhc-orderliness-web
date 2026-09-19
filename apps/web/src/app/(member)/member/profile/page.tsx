@@ -10,6 +10,8 @@ import { fetchApi, logout, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
 import { ChangePasswordCard } from '../../../../components/ChangePasswordCard';
 
+import { formatBirthdayDDMM, parseYearlessBirthday } from '@tfhc/shared';
+
 type Profile = {
   id: string;
   memberCode: string;
@@ -29,7 +31,6 @@ type Profile = {
   profession: string | null;
   gender: string | null;
   birthday: string | null;
-  dateOfBirth: string | null;
   dateJoined: string | null;
   status: string;
   roleInUnit?: string | null;
@@ -52,7 +53,6 @@ type FormState = {
   profession: string;
   gender: string;
   birthday: string;
-  dateOfBirth: string;
 };
 
 const toForm = (p: Profile): FormState => ({
@@ -69,8 +69,7 @@ const toForm = (p: Profile): FormState => ({
   postalCode: p.postalCode ?? '',
   profession: p.profession ?? '',
   gender: p.gender ?? '',
-  birthday: p.birthday ?? '',
-  dateOfBirth: p.dateOfBirth ? p.dateOfBirth.slice(0, 10) : '',
+  birthday: p.birthday ? formatBirthdayDDMM(p.birthday) : '',
 });
 
 export default function MemberProfilePage() {
@@ -114,7 +113,15 @@ export default function MemberProfilePage() {
     setSaving(true);
     setError('');
     try {
-      const payload = Object.fromEntries(Object.entries(form).map(([key, value]) => [key, value.trim()]));
+      const payload: Record<string, any> = Object.fromEntries(
+        Object.entries(form).map(([key, value]) => [key, value.trim()])
+      );
+      if (payload.birthday) {
+        const parsed = parseYearlessBirthday(payload.birthday);
+        if (parsed) {
+          payload.birthday = parsed;
+        }
+      }
       const updated = await fetchApi<Profile>('/members/me/profile', {
         method: 'PUT',
         body: JSON.stringify(payload),
@@ -207,19 +214,17 @@ export default function MemberProfilePage() {
                   ['postalCode', 'Postal / ZIP Code', 'text'],
                   ['profession', 'Profession', 'text'],
                   ['gender', 'Gender', 'text'],
-                  ['birthday', 'Birthday (MM-DD)', 'text'],
-                  ['dateOfBirth', 'Date of birth', 'date'],
+                  ['birthday', 'Birthday (DD/MM)', 'text'],
                 ] as [keyof FormState, string, string][]).map(([key, label, type]) => (
                   <label key={key} className="flex flex-col gap-1">
                     <span className="font-label-sm text-label-sm text-on-surface-variant">{label}</span>
                     <input
                       type={type}
                       required={['firstName', 'lastName', 'phoneNumber'].includes(key)}
-                      pattern={key === 'birthday' ? '[0-9]{2}-[0-9]{2}' : undefined}
-                      placeholder={key === 'birthday' ? '03-14' : undefined}
+                      pattern={key === 'birthday' ? '[0-9]{1,2}/[0-9]{1,2}' : undefined}
+                      placeholder={key === 'birthday' ? 'DD/MM (e.g. 14/03)' : undefined}
                       value={form?.[key] ?? ''}
                       onChange={set(key)}
-                      max={type === 'date' ? new Date().toISOString().slice(0, 10) : undefined}
                       className="h-11 px-3 rounded-lg border border-outline-variant bg-surface focus:border-primary focus:ring-1 focus:ring-primary text-on-surface"
                     />
                   </label>
@@ -249,8 +254,7 @@ export default function MemberProfilePage() {
                     ['home', 'Residential Address', [profile.address, profile.city, profile.state, profile.country, profile.postalCode].filter(Boolean).join(', ') || '—'],
                     ['work', 'Profession', profile.profession || '—'],
                     ['person', 'Gender', profile.gender || '—'],
-                    ['cake', 'Birthday', profile.birthday ? new Date(`2000-${profile.birthday}T00:00:00Z`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' }) : '—'],
-                    ['cake', 'Date of birth', fmtDate(profile.dateOfBirth)],
+                    ['cake', 'Birthday', profile.birthday ? formatBirthdayDDMM(profile.birthday) : '—'],
                     ['event', 'Joined Unit', fmtDate(profile.dateJoined)],
                   ] as [string, string, string][]).map(([icon, label, value], i, arr) => (
                     <div key={label} className={`flex items-center gap-3 p-4 ${i < arr.length - 1 ? 'border-b border-outline-variant/30' : ''}`}>

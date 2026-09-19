@@ -3,7 +3,7 @@ import { BadRequestException, PayloadTooLargeException, Injectable, NotFoundExce
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
-import { MemberStatus, toPascalCase } from '@tfhc/shared';
+import { MemberStatus, toPascalCase, parseYearlessBirthday } from '@tfhc/shared';
 
 import { LookupsService } from '../lookups/lookups.service';
 
@@ -222,10 +222,11 @@ export class MembersService {
     for (const field of ['firstName', 'lastName']) {
       if (dto[field] !== undefined && !text(dto[field], 80, field)) throw new BadRequestException(`${field} is required`);
     }
-    const birthday = text(dto.birthday, 5, 'birthday');
+    let birthday = text(dto.birthday, 20, 'birthday');
     if (birthday) {
-      const parsed = new Date(`2000-${birthday}T00:00:00.000Z`);
-      if (!/^\d{2}-\d{2}$/.test(birthday) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(5, 10) !== birthday) throw new BadRequestException('Invalid birthday; use MM-DD');
+      const parsed = parseYearlessBirthday(birthday);
+      if (!parsed) throw new BadRequestException('Invalid birthday; use DD/MM (e.g. 14/03)');
+      birthday = parsed;
     }
     const phone = text(dto.phoneNumber, 32, 'phone number');
     if (phone !== undefined && !/^[+0-9 ()-]{7,32}$/.test(phone ?? '')) throw new BadRequestException('Invalid phone number');

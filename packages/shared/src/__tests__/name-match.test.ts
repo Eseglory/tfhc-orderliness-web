@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeNameTokens, scoreNameMatch, bestNameMatch, parseYearlessBirthday, toPascalCase } from '../name-match.js';
+import { normalizeNameTokens, scoreNameMatch, bestNameMatch, parseYearlessBirthday, formatBirthdayDDMM, toPascalCase } from '../name-match.js';
 
 
 describe('name matching', () => {
@@ -50,7 +50,22 @@ describe('name matching', () => {
     expect(parseYearlessBirthday('14th March')).toBe('03-14');
     expect(parseYearlessBirthday('13 September')).toBe('09-13');
     expect(parseYearlessBirthday('3rd  February')).toBe('02-03');
+    expect(parseYearlessBirthday('14/03')).toBe('03-14');
+    expect(parseYearlessBirthday('05/11')).toBe('11-05');
+    expect(parseYearlessBirthday('03-14')).toBe('03-14');
+    expect(parseYearlessBirthday('13-01')).toBeNull();
+    expect(parseYearlessBirthday('02-30')).toBeNull();
+    expect(parseYearlessBirthday('31/02')).toBeNull();
     expect(parseYearlessBirthday('sometime')).toBeNull();
+  });
+
+  it('formats birthday to DD/MM', () => {
+    expect(formatBirthdayDDMM('03-14')).toBe('14/03');
+    expect(formatBirthdayDDMM('11-05')).toBe('05/11');
+    expect(formatBirthdayDDMM('14/03')).toBe('14/03');
+    expect(formatBirthdayDDMM('14th March')).toBe('14/03');
+    expect(formatBirthdayDDMM(null)).toBe('');
+    expect(formatBirthdayDDMM(undefined)).toBe('');
   });
 
   it('formats names to Pascal Case correctly', () => {

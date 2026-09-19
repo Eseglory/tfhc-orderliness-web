@@ -47,6 +47,7 @@ import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 import { fetchApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useToast, Spinner, EmptyState, Badge, Button } from '@/components/ui';
+import { formatBirthdayDDMM } from '@tfhc/shared';
 
 interface NoteItem {
   id: string;
@@ -387,7 +388,7 @@ export default function MemberCRMProfilePage() {
                   {member.birthday && (
                     <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
                       <Cake className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{member.birthday}</span>
+                      <span>{formatBirthdayDDMM(member.birthday)}</span>
                     </div>
                   )}
                   {address && (
@@ -520,7 +521,7 @@ export default function MemberCRMProfilePage() {
                   <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
                     <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Birthday</span>
                     <p className="font-extrabold text-slate-900 dark:text-white text-sm">
-                      {member.birthday || 'Not Specified'}
+                      {formatBirthdayDDMM(member.birthday) || 'Not Specified'}
                     </p>
                   </div>
 
@@ -639,7 +640,7 @@ export default function MemberCRMProfilePage() {
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-slate-500">Birthday:</span>
-                    <span className="font-medium text-slate-900 dark:text-white">{member.birthday || 'Not Specified'}</span>
+                    <span className="font-medium text-slate-900 dark:text-white">{formatBirthdayDDMM(member.birthday) || 'Not Specified'}</span>
                   </div>
                 </div>
               </div>

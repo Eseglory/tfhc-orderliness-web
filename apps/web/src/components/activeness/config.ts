@@ -8,7 +8,7 @@ export const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart
 /** Profile fields a member is nudged to complete. */
 export const REQUIRED_PROFILE_FIELDS: { key: string; label: string }[] = [
   { key: 'phoneNumber', label: 'phone number' },
-  { key: 'dateOfBirth', label: 'date of birth' },
+  { key: 'birthday', label: 'birthday' },
   { key: 'gender', label: 'gender' },
   { key: 'address', label: 'address' },
   { key: 'profilePhotoUrl', label: 'profile photo' },
