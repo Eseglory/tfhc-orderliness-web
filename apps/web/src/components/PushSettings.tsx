@@ -9,6 +9,7 @@ export function PushSettings() {
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -18,7 +19,7 @@ export function PushSettings() {
     void fetchApi<{ enabled: boolean; publicKey: string | null }>('/push/config')
       .then((config) => {
         setKey(config.publicKey);
-        if (!config.enabled) setMessage('Device notifications are not configured yet. Activity remains available here.');
+        if (!config.enabled) setMessage('Device notifications are not configured yet. In-app alerts remain active here.');
       })
       .catch(() => setMessage('Connect to check notification settings.'));
 
@@ -43,9 +44,11 @@ export function PushSettings() {
   const toggle = async () => {
     setBusy(true);
     setMessage('');
+    setIsError(false);
     try {
       if (!enabled && (await Notification.requestPermission()) !== 'granted') {
-        setMessage('Notifications are off. You can change permission in browser settings.');
+        setIsError(true);
+        setMessage('Notifications are blocked in your browser. Please allow notifications in site settings.');
         return;
       }
       const registration = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register('/sw.js'));
@@ -58,7 +61,7 @@ export function PushSettings() {
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         }).catch(() => undefined);
         setEnabled(false);
-        setMessage('Device notifications disabled.');
+        setMessage('Device notifications turned off.');
       } else {
         if (!key) throw new Error('Device notifications are not configured yet.');
         const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
@@ -70,10 +73,18 @@ export function PushSettings() {
           throw error;
         }
         setEnabled(true);
-        setMessage('Device notifications enabled for this session.');
+        setMessage('Device push notifications successfully enabled!');
       }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not change notifications.');
+    } catch (error: any) {
+      setIsError(true);
+      const rawMsg = error instanceof Error ? error.message : String(error || '');
+      if (/push service error|AbortError|Registration failed/i.test(rawMsg)) {
+        setMessage(
+          'Notice for Brave / Private browsers: Please enable "Use Google services for push messaging" in brave://settings/privacy to allow lockscreen push, or install this app. In-app alerts are active!'
+        );
+      } else {
+        setMessage(rawMsg || 'Could not configure device push notifications.');
+      }
     } finally {
       setBusy(false);
     }
@@ -82,15 +93,17 @@ export function PushSettings() {
   const sendTestAlert = async () => {
     setTestBusy(true);
     setMessage('');
+    setIsError(false);
     try {
       const res = await fetchApi<{ success: boolean; push?: { sent: number; failed: number } }>('/members/me/notifications/test', {
         method: 'POST',
       });
       if (res?.success) {
-        setMessage('🔔 Test Service Reminder sent! Check your notification list below and your device lock screen.');
+        setMessage('🔔 Test Service Alert delivered! Check your notification list below.');
         window.dispatchEvent(new CustomEvent('tfhc:notifications-synced'));
       }
     } catch (err: any) {
+      setIsError(true);
       setMessage(err?.message || 'Could not send test notification.');
     } finally {
       setTestBusy(false);
@@ -98,47 +111,73 @@ export function PushSettings() {
   };
 
   return (
-    <section aria-label="Device notifications" className="p-4 rounded-xl bg-surface-container space-y-3 border border-outline-variant/15">
+    <section aria-label="Device notifications" className="p-5 rounded-2xl bg-surface-container space-y-4 border border-outline-variant/20 shadow-sm">
       <div className="flex items-center justify-between">
-        <h2 className="font-bold text-on-surface">Device notifications</h2>
-        {enabled && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+            <span className="material-symbols-outlined text-lg">notifications</span>
+          </div>
+          <h2 className="font-bold text-base text-on-surface">Device Notifications</h2>
+        </div>
+        {enabled ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Active
+          </span>
+        ) : (
+          <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant">
+            Off
           </span>
         )}
       </div>
+
       <p className="text-sm text-on-surface-variant leading-relaxed">
-        Receive live alerts for service reminders, meeting check-ins, duty updates, and unit announcements directly on your device.
+        Receive instant alerts for Sunday service duty, meeting check-ins, department headcounts, and urgent church announcements.
       </p>
 
-      <div className="flex items-center gap-3 flex-wrap pt-1">
+      <div className="flex items-center gap-3 flex-wrap pt-2">
         {supported ? (
           <button
-            className="px-4 py-2 rounded-lg bg-primary text-on-primary text-xs font-bold hover:opacity-90 disabled:opacity-50 transition active:scale-95"
+            type="button"
+            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-sm flex items-center gap-2 ${
+              enabled
+                ? 'bg-surface-container-highest hover:bg-surface-container text-on-surface border border-outline-variant/40'
+                : 'bg-primary hover:opacity-95 text-on-primary'
+            } disabled:opacity-50`}
             disabled={busy || (!enabled && !key)}
             onClick={toggle}
           >
-            {busy ? 'Saving…' : enabled ? 'Disable device notifications' : 'Enable device notifications'}
+            <span className="material-symbols-outlined text-base">
+              {enabled ? 'notifications_off' : 'notifications_active'}
+            </span>
+            {busy ? 'Saving…' : enabled ? 'Disable Push Notifications' : 'Enable Push Notifications'}
           </button>
         ) : (
-          <p className="text-xs text-on-surface-variant">Use a supported browser. On iPhone or iPad, add the app to your Home Screen first.</p>
+          <p className="text-xs text-on-surface-variant">Use a supported browser or add the app to your Home Screen to enable native push.</p>
         )}
 
         <button
+          type="button"
           onClick={sendTestAlert}
           disabled={testBusy}
-          className="px-4 py-2 rounded-lg border border-outline-variant bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-bold transition active:scale-95 flex items-center gap-1.5"
+          className="px-4 py-2.5 rounded-xl border border-outline-variant/40 bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-sm font-semibold transition-all active:scale-95 flex items-center gap-2"
         >
-          <span className="material-symbols-outlined text-sm text-amber-500">notifications_active</span>
+          <span className="material-symbols-outlined text-base text-amber-500">send</span>
           {testBusy ? 'Sending…' : 'Send Test Alert Now'}
         </button>
       </div>
 
       {message && (
-        <p role="status" className="text-xs font-medium text-primary mt-2">
+        <div
+          role="status"
+          className={`p-3 rounded-xl text-xs font-medium border leading-relaxed ${
+            isError
+              ? 'bg-error-container/30 text-error border-error/30'
+              : 'bg-primary/10 text-primary border-primary/20'
+          }`}
+        >
           {message}
-        </p>
+        </div>
       )}
     </section>
   );
