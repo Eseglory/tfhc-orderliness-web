@@ -19,7 +19,7 @@ export class ApprovalsController {
   constructor(private readonly approvals: ApprovalsService) {}
 
   @Get('pending')
-  @RequirePermissions('approvals.act')
+  @RequirePermissions('approvals.read')
   pending(@CurrentUser('userId') userId: string, @Query('type') type?: string) {
     return this.approvals.pendingFor(userId, asType(type));
   }
@@ -41,7 +41,7 @@ export class ApprovalsController {
   }
 
   @Post(':id/act')
-  @RequirePermissions('approvals.act')
+  @RequirePermissions('approvals.read')
   act(
     @Param('id') id: string,
     @Body() body: { decision: ApprovalDecision; comment?: string },

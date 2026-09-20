@@ -37,14 +37,11 @@ export async function syncSystemRoles(prisma: PrismaLike): Promise<void> {
       continue;
     }
 
-    const existing = await prisma.accessRolePermission.count({ where: { roleId: role.id } });
-    if (existing === 0) {
-      await prisma.accessRolePermission.createMany({
-        data: def.permissions
-          .filter((p) => ALL_PERMISSION_KEYS.includes(p))
-          .map((permission) => ({ roleId: role.id, permission })),
-        skipDuplicates: true,
-      });
-    }
+    await prisma.accessRolePermission.createMany({
+      data: def.permissions
+        .filter((p) => ALL_PERMISSION_KEYS.includes(p))
+        .map((permission) => ({ roleId: role.id, permission })),
+      skipDuplicates: true,
+    });
   }
 }

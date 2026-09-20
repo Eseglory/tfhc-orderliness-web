@@ -55,7 +55,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   private async resolveUser(payload: JwtPayload): Promise<AuthenticatedUser> {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        include: { member: { include: { approvedMember: true } } },
+        include: {
+          member: { include: { approvedMember: true } },
+          accessRoles: { select: { id: true }, take: 1 },
+        },
       });
 
       if (!user) {
@@ -87,10 +90,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('This account has been deactivated');
       }
 
-      // Members carry no RBAC grants; skip the extra lookup on the hot member path.
-      const access = user.role === 'MEMBER'
-        ? { permissions: [] as string[], roleKeys: [] as string[], roleNames: [] as string[], isSuperAdmin: false }
-        : await this.rbac.resolveAccess(user.id, user.role);
+      // Members without explicit role grants carry no RBAC grants; skip extra lookup on hot plain-member path.
+      const hasGrants = user.role !== 'MEMBER' || (user.accessRoles && user.accessRoles.length > 0);
+      const access = hasGrants
+        ? await this.rbac.resolveAccess(user.id, user.role)
+        : { permissions: [] as string[], roleKeys: [] as string[], roleNames: [] as string[], isSuperAdmin: false };
 
       return {
         userId: user.id,

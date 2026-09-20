@@ -85,7 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (...permissions: string[]) => {
       if (!user) return false;
       const perms = Array.isArray(user.permissions) ? user.permissions : [];
-      if (user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'SUPERADMIN' || perms.includes('*')) return true;
+      // Only Super Admin or wildcard holders bypass granular permission checks
+      if (user.isSuperAdmin || perms.includes('*')) return true;
       return permissions.every((p) => perms.includes(p));
     },
     [user],
@@ -95,7 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (...permissions: string[]) => {
       if (!user) return false;
       const perms = Array.isArray(user.permissions) ? user.permissions : [];
-      if (user.isSuperAdmin || user.role === 'ADMIN' || user.role === 'SUPERADMIN' || perms.includes('*')) return true;
+      // Only Super Admin or wildcard holders bypass granular permission checks
+      if (user.isSuperAdmin || perms.includes('*')) return true;
       return permissions.some((p) => perms.includes(p));
     },
     [user],
@@ -151,7 +153,9 @@ export function isLoveth(user?: CurrentUser | null): boolean {
 }
 
 export function canCreateWardrobe(user?: CurrentUser | null): boolean {
-  const email = user?.email?.toLowerCase();
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('wardrobe.manage')) return true;
+  const email = user.email?.toLowerCase();
   return (
     email === AUTHORIZED_PERSONS.AANU_OYENIRAN ||
     email === AUTHORIZED_PERSONS.VICTORIA_OLANREWAJU ||
@@ -160,7 +164,9 @@ export function canCreateWardrobe(user?: CurrentUser | null): boolean {
 }
 
 export function canCreateEvents(user?: CurrentUser | null): boolean {
-  const email = user?.email?.toLowerCase();
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('events.create')) return true;
+  const email = user.email?.toLowerCase();
   return (
     email === AUTHORIZED_PERSONS.CONFORT_STEPHEN ||
     email === AUTHORIZED_PERSONS.PASEDA_OLUWAFEMI ||
@@ -169,6 +175,33 @@ export function canCreateEvents(user?: CurrentUser | null): boolean {
 }
 
 export function canManageFinance(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*')) return true;
+  return isEseosaGlory(user);
+}
+
+export function canManageApprovals(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (
+    user.isSuperAdmin ||
+    user.permissions?.includes('*') ||
+    user.permissions?.includes('approvals.act') ||
+    user.permissions?.includes('approvals.configure')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function canCreateWelfare(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('welfare.create')) return true;
+  return isLoveth(user);
+}
+
+export function canDisburseWelfare(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('welfare.disburse')) return true;
   return isEseosaGlory(user);
 }
 

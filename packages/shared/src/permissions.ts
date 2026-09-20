@@ -76,6 +76,7 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   { key: 'welfare.read', group: 'Welfare', label: 'View welfare requests', finance: true },
   { key: 'welfare.create', group: 'Welfare', label: 'Create welfare requests', finance: true },
   { key: 'welfare.approve', group: 'Welfare', label: 'Approve welfare requests', finance: true },
+  { key: 'welfare.disburse', group: 'Welfare', label: 'Disburse welfare funds', finance: true },
 
   // Messaging
   { key: 'messages.read', group: 'Communication', label: 'Use in-app messaging' },
@@ -143,6 +144,10 @@ export const SYSTEM_ROLE = {
   SECRETARY: 'SECRETARY',
   DISCIPLINARY_COMMITTEE: 'DISCIPLINARY_COMMITTEE',
   VIEWER: 'VIEWER',
+  WARDROBE_MANAGER: 'WARDROBE_MANAGER',
+  EVENT_MANAGER: 'EVENT_MANAGER',
+  APPROVAL_MANAGER: 'APPROVAL_MANAGER',
+  WELFARE_SECRETARY: 'WELFARE_SECRETARY',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
@@ -225,6 +230,45 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
     description:
       'Read-only access across all administrative modules: roster lookup, events, attendance, reports, dues, and requests. Cannot modify or delete records.',
     permissions: [...READ_ONLY_KEYS],
+  },
+  WARDROBE_MANAGER: {
+    name: 'Wardrobe Manager',
+    description:
+      'Full management of clothing catalogue, timetable schedules, and outfits. View-only access across other modules.',
+    permissions: [...READ_ONLY_KEYS, 'wardrobe.manage'],
+  },
+  EVENT_MANAGER: {
+    name: 'Event & Service Manager',
+    description:
+      'Full management of events, services, gatherings, locations, live attendance, and headcounts. View-only access across other modules.',
+    permissions: [
+      ...READ_ONLY_KEYS,
+      'events.create',
+      'events.update',
+      'events.delete',
+      'events.cancel',
+      'events.manage_types',
+      'attendance.manage',
+      'headcount.record',
+    ],
+  },
+  APPROVAL_MANAGER: {
+    name: 'Approval Manager',
+    description:
+      'Full management of approval requests, queues, absence excuses, and attendance corrections. View-only access across other modules.',
+    permissions: [
+      ...READ_ONLY_KEYS,
+      'approvals.act',
+      'approvals.configure',
+      'excuses.review',
+      'corrections.review',
+    ],
+  },
+  WELFARE_SECRETARY: {
+    name: 'Welfare Secretary',
+    description:
+      'Submission and tracking of welfare fund requests on behalf of the Welfare unit. View-only access across other modules.',
+    permissions: [...READ_ONLY_KEYS, 'welfare.create'],
   },
 };
 

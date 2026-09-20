@@ -52,11 +52,13 @@ export function isConfortOrPaseda(email?: string | null): boolean {
 /**
  * Enforce that only Eseosa Glory has CRUD authority over Finance.
  */
-export function isFinanceCrudAuthorized(user?: { email?: string | null } | null): boolean {
-  return isEseosaGlory(user?.email);
+export function isFinanceCrudAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*')) return true;
+  return isEseosaGlory(user.email);
 }
 
-export function assertFinanceCrudAuthority(user: { email?: string | null }) {
+export function assertFinanceCrudAuthority(user: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] }) {
   if (!isFinanceCrudAuthorized(user)) {
     throw new ForbiddenException(
       'Finance CRUD authority is restricted exclusively to the Platform Owner (Eseosa Glory).'
@@ -67,14 +69,16 @@ export function assertFinanceCrudAuthority(user: { email?: string | null }) {
 /**
  * Enforce that only Aanu and Victoria (and Super Admin Eseosa Glory) can create wardrobe records.
  */
-export function isWardrobeCreateAuthorized(user?: { email?: string | null } | null): boolean {
-  return isAanuOrVictoria(user?.email);
+export function isWardrobeCreateAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('wardrobe.manage')) return true;
+  return isAanuOrVictoria(user.email);
 }
 
-export function assertWardrobeCreateAuthority(user: { email?: string | null }) {
+export function assertWardrobeCreateAuthority(user: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] }) {
   if (!isWardrobeCreateAuthorized(user)) {
     throw new ForbiddenException(
-      'Only Aanu and Victoria are authorized to create wardrobe records.'
+      'Only Aanu and Victoria are authorized to manage wardrobe records.'
     );
   }
 }
@@ -82,11 +86,13 @@ export function assertWardrobeCreateAuthority(user: { email?: string | null }) {
 /**
  * Enforce that only Confort and Paseda (and Super Admin Eseosa Glory) can create services/meetings under Events.
  */
-export function isEventCreateAuthorized(user?: { email?: string | null } | null): boolean {
-  return isConfortOrPaseda(user?.email);
+export function isEventCreateAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*') || user.permissions?.includes('events.create')) return true;
+  return isConfortOrPaseda(user.email);
 }
 
-export function assertEventCreateAuthority(user: { email?: string | null }, eventType = 'events') {
+export function assertEventCreateAuthority(user: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] }, eventType = 'events') {
   if (!isEventCreateAuthorized(user)) {
     throw new ForbiddenException(
       `Only Confort and Paseda are authorized to create ${eventType} under Events.`

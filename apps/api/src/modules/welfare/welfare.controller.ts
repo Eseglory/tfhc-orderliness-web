@@ -16,6 +16,7 @@ export class WelfareController {
   }
 
   @Post()
+  @RequirePermissions('welfare.create')
   create(
     @Body() body: any,
     @CurrentUser('memberId') memberId: string | undefined,
@@ -38,5 +39,15 @@ export class WelfareController {
   ) {
     const isStaff = permissions.includes('*') || permissions.includes('welfare.read');
     return this.welfare.getOne(id, memberId, isStaff);
+  }
+
+  @Post(':id/disburse')
+  @RequirePermissions('welfare.disburse')
+  disburse(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: any,
+  ) {
+    return this.welfare.disburse(id, user, body);
   }
 }

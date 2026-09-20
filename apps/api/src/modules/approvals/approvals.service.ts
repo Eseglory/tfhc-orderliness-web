@@ -186,6 +186,14 @@ export class ApprovalsService {
       const actorUser = await tx.user.findUnique({ where: { id: actorUserId }, select: { email: true } });
       const actorEmail = actorUser?.email ?? null;
 
+      // Self-approval is strictly forbidden across all approval workflows
+      if (
+        actorUserId === request.requestedByUserId ||
+        (requesterEmail && actorEmail && requesterEmail.trim().toLowerCase() === actorEmail.trim().toLowerCase())
+      ) {
+        throw new ForbiddenException('Self-approval is strictly forbidden. A requester cannot approve or reject their own request.');
+      }
+
       // Rule: Jacob's requests can ONLY be approved by Daniel
       if (isJacob(requesterEmail)) {
         if (!isDaniel(actorEmail)) {
@@ -193,11 +201,8 @@ export class ApprovalsService {
         }
       }
 
-      // Rule: Loveth's fund and expense requests can ONLY be approved by Eseosa Glory or Daniel. Self-approval is forbidden.
+      // Rule: Loveth's fund and expense requests can ONLY be approved by Eseosa Glory or Daniel.
       if (isLoveth(requesterEmail) && (request.requestType === 'EXPENSE' || request.requestType === 'WELFARE_FUND')) {
-        if (actorUserId === request.requestedByUserId || isLoveth(actorEmail)) {
-          throw new ForbiddenException('Self-approval is not permitted for financial requests.');
-        }
         if (!isEseosaGlory(actorEmail) && !isDaniel(actorEmail)) {
           throw new ForbiddenException(
             "Only Eseosa Glory and Daniel are authorized to approve Loveth's fund and expense requests."
@@ -248,6 +253,40 @@ export class ApprovalsService {
       reason: trimmed,
       newData: { step: result.stepName, requestType: result.request.requestType, terminal: result.terminal },
     });
+
+    // Notify on intermediate step progression (e.g. Stage 1 Daniel -> Stage 2 Super Admin)
+    if (!result.terminal && result.request.requestType === 'WELFARE_FUND') {
+      try {
+        const eseosa = await this.prisma.user.findFirst({
+          where: { email: { equals: 'engreseglory@gmail.com', mode: 'insensitive' } },
+          include: { member: true },
+        });
+        if (eseosa?.member?.id) {
+          await this.prisma.memberNotification.create({
+            data: {
+              memberId: eseosa.member.id,
+              type: 'WELFARE',
+              title: `Welfare Request (Stage 2 Required): ${result.request.summary}`,
+              body: `Daniel has approved Stage 1. This request is now waiting for your final Super Admin approval.`,
+              data: { url: '/admin/welfare' },
+            },
+          });
+        }
+        if (result.request.requestedByMemberId) {
+          await this.prisma.memberNotification.create({
+            data: {
+              memberId: result.request.requestedByMemberId,
+              type: 'WELFARE',
+              title: `Welfare Request Progress: ${result.request.summary}`,
+              body: `Daniel has approved Stage 1 of your request. It is now awaiting final review by the Super Admin.`,
+              data: { url: '/member/welfare' },
+            },
+          });
+        }
+      } catch (e) {
+        this.logger.warn('Failed to send intermediate welfare approval notification', e as Error);
+      }
+    }
 
     if (result.terminal) {
       const finalizer = this.finalizers.get(result.request.entityType);

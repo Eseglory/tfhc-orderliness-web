@@ -711,22 +711,33 @@ model ApprovalAction {
 
 model WelfareRequest {
   id                 String          @id @default(uuid())
+  reference          String?         @unique
+  title              String?
   requestedByMemberId String
   requestedByMember  Member          @relation(fields: [requestedByMemberId], references: [id], onDelete: Cascade)
   beneficiaryName    String?
   amount             Float
+  currency           String          @default("NGN")
   purpose            String
   description        String?
+  requestedFor       String?
+  requiredByDate     DateTime?
   supportingDocUrl   String?
   status             ApprovalStatus  @default(PENDING)
   approvalRequestId  String?         @unique
   approvalRequest    ApprovalRequest? @relation(fields: [approvalRequestId], references: [id], onDelete: SetNull)
   decidedAt          DateTime?
+  disbursedAt        DateTime?
+  disbursedByUserId  String?
+  disbursementRef    String?
+  disbursementNotes  String?
+  disbursementChannel String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
   @@index([status])
   @@index([requestedByMemberId])
+  @@index([reference])
   @@map("welfare_requests")
 }
 
