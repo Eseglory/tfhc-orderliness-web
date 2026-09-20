@@ -47,3 +47,19 @@ Logs are retained under the ignored `.validation/notification-repair/` directory
 - Presence is connection-based. Persisted last-seen and full group receipt counts in live updates remain incomplete.
 - Multiple API instances would require a cross-instance socket adapter and shared ephemeral presence/typing state. The current deployment is single-instance; PostgreSQL durability alone does not distribute live events.
 - Comprehensive production latency comparisons, media/call tests, closed-app push proof and the full Glory acceptance checklist remain required. No claim of 100% completion is made.
+
+## Production rollout evidence
+
+Release `42950f7` reached Render live as `dep-danrmvgae00c739r2s80`; Vercel production deployment `dpl_66LvSZykQjUUz9n2fjax1pywreRb` is READY at the existing domain. An earlier attempt correctly stopped on a previously failed headcount migration. Its full schema, and the following supervising-minister schema, already existed. Columns, nullability, indexes and foreign keys were inspected before resolving those two migration records as applied. The additive chat migration then applied successfully.
+
+At 2026-09-20 10:58 UTC, production verification through Glory's actual login showed:
+
+- Authenticated Socket.IO connection and receipt of the labelled General verification message.
+- One message despite two submissions using the same client ID.
+- Signed webhook results `PROCESSED` then `ALREADY_PROCESSED`, with exactly one notification for Glory.
+- All ten original message IDs preserved; PostgreSQL and rebuilt SQLite both contained eleven messages after reconciliation, with zero sync failures.
+- No registered push device for Glory, so device display and click-through remain unverified.
+- HTTP send acknowledgement took 7,132 ms. This is too slow for the requested target. The socket receipt timestamp was overwritten by the retry in this first probe and is not a valid first-delivery latency measurement.
+- Frontend login, service worker, API health and webhook health returned HTTP 200. API health took 588 ms in that warm probe. Webhook signing and VAPID configuration were enabled.
+
+The follow-up removes receipt/reaction joins that cannot yet contain recipient acknowledgements for a new message, and skips redundant notification transactions when the primary send transaction already committed them. A non-serialized marker is only a performance hint; messages and notifications remain durable in PostgreSQL. General service posts no longer create a second notification broadcast outside the availability-filtered reminder dispatcher. Send persistence and fan-out durations are logged without message content.

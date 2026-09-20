@@ -22,6 +22,8 @@ import {
 import { ChatBufferRepository } from './chat-buffer.repository';
 import { ChatMigrationJob } from './chat-migration.job';
 
+export const CHAT_NOTIFICATIONS_COMMITTED = Symbol('chatNotificationsCommitted');
+
 const MESSAGE_MAX = 4000;
 const PAGE_DEFAULT = 30;
 const PAGE_MAX = 100;
@@ -541,6 +543,7 @@ export class ChatService implements OnApplicationBootstrap {
       operationId?: string;
     },
   ) {
+    const started = Date.now();
     const room = await this.loadRoom(roomId, viewer);
     const membership = await this.ensureMembership(room, viewer);
     const memberId = membership.memberId;
@@ -600,8 +603,6 @@ export class ChatService implements OnApplicationBootstrap {
         replyToId: dto.replyToId || null,
       },
       include: {
-        reactions: true,
-        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
@@ -658,7 +659,8 @@ export class ChatService implements OnApplicationBootstrap {
       data: { lastReadAt: new Date(createdAt) },
     }).catch(() => undefined);
 
-    return this.toMessageDto(persisted, viewer);
+    this.logger.log(`ChatStored message=${persisted.id} durationMs=${Date.now() - started}`);
+    return Object.defineProperty(this.toMessageDto(persisted, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
   }
 
   async forwardMessage(messageId: string, targetRoomId: string, viewer: ChatViewer, operationId: string) {

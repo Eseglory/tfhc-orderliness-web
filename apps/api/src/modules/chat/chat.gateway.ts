@@ -15,7 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Namespace, Server, Socket } from 'socket.io';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RbacService } from '../../common/rbac/rbac.service';
-import { ChatService } from './chat.service';
+import { ChatService, CHAT_NOTIFICATIONS_COMMITTED } from './chat.service';
 import { ChatViewer } from './chat.util';
 import { PushService } from '../push/push.service';
 
@@ -281,7 +281,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   // Fan-out — used by both the gateway and the REST controller
   // -------------------------------------------------------------------------
 
-  async fanOut(roomId: string, message: unknown) {
+  async fanOut(roomId: string, message: unknown, createNotifications = true) {
+    const started = Date.now();
     if (!this.io) return;
     // Resolve current membership before broadcasting; removed members may still
     // have an old socket room subscription.
@@ -310,7 +311,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       body: (dto.body || 'New attachment').slice(0, 500),
       data: { roomId, messageId: dto.id, url: `/member/chat?roomId=${roomId}` },
     }));
-    if (notifications.length) {
+    if (createNotifications && notifications.length && !(message as { [CHAT_NOTIFICATIONS_COMMITTED]?: boolean })[CHAT_NOTIFICATIONS_COMMITTED]) {
       await this.prisma.$transaction(async tx => {
         const idempotencyKey = `chat:${dto.id}:notifications`;
         const claim = await tx.communicationDelivery.createMany({ data: [{
@@ -326,6 +327,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
     for (const memberId of recipientIds) this.notifyMember(memberId);
     void this.pushService?.deliver();
+    this.logger.log(`ChatFanOut message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
   }
 
   notifyMember(memberId: string) {

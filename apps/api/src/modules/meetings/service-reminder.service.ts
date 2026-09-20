@@ -105,7 +105,7 @@ export class ServiceReminderService {
         });
         if (message) {
           result.chatCreated++;
-          await this.gateway?.fanOut(room.id, { ...message, sender: null, mine: false });
+          await this.gateway?.fanOut(room.id, { ...message, sender: null, mine: false }, false);
         }
       }
     }
