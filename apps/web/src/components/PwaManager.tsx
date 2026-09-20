@@ -22,6 +22,7 @@ export function PwaManager() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
   const [showIosModal, setShowIosModal] = useState(false);
+  const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
   useEffect(() => {
     startMetrics();
@@ -164,123 +165,145 @@ export function PwaManager() {
     return null;
   }
 
+  const hasNotice = Boolean(waiting || queue.syncing || queue.pending > 0 || queue.failed > 0 || issue || poor || (!isStandalone && (install || isIos)));
+  const isMemberApp = pathname.startsWith('/member');
+
   return (
     <>
-      <aside aria-label="App status" className="bg-surface-container/70 dark:bg-slate-900/80 backdrop-blur-md text-on-surface px-4 py-2 border-b border-outline-variant/15 text-xs">
-        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
-          {/* Left: Device & Offline Navigation Button */}
-          <div className="flex items-center gap-2">
-            <Link
-              href="/member/settings"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-lowest dark:bg-slate-800 text-xs font-bold text-on-surface border border-outline-variant/30 hover:border-primary hover:text-primary transition-all shadow-xs active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[16px] text-primary">settings</span>
-              <span>Settings &amp; Device Access</span>
-            </Link>
-
-            {/* Status Message */}
-            {(issue || queue.syncing || queue.message || queue.pending > 0 || queue.failed > 0 || poor) && (
-              <span role="status" aria-live="polite" className="text-on-surface-variant font-medium text-[11px] truncate max-w-xs sm:max-w-md">
-                {issue || (queue.syncing ? 'Syncing changes…' : queue.message)}
-                {queue.pending > 0 && ` (${queue.pending} pending)`}
-                {queue.failed > 0 && ` (${queue.failed} need review)`}
-                {poor && ' • Limited connection'}
-              </span>
-            )}
-          </div>
-
-          {/* Right: Actions (Install, Sync, Update) */}
-          <div className="flex flex-wrap items-center gap-2">
-            {(queue.pending > 0 || queue.failed > 0) && (
-              <>
-                <button
-                  disabled={!online || queue.syncing}
-                  onClick={() => void flushQueue()}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-xs font-bold hover:bg-amber-500/25 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-[15px]">sync</span>
-                  <span>Retry Sync</span>
-                </button>
+      {hasNotice && (
+        <aside aria-label="App status" className="bg-surface-container/80 dark:bg-slate-900/90 backdrop-blur-md text-on-surface px-3 py-1.5 sm:px-4 sm:py-2 border-b border-outline-variant/15 text-xs">
+          <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            {/* Left: Device & Offline Navigation Button (only in member app) */}
+            <div className="flex items-center gap-2 min-w-0">
+              {isMemberApp && (
                 <Link
-                  href="/member/notifications"
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container-lowest text-xs font-bold border border-outline-variant/30 text-on-surface hover:text-primary transition-all active:scale-95 shadow-xs"
+                  href="/member/settings"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-surface-container-lowest dark:bg-slate-800 text-[11px] sm:text-xs font-bold text-on-surface border border-outline-variant/30 hover:border-primary hover:text-primary transition-all shadow-xs active:scale-95 shrink-0"
                 >
-                  <span className="material-symbols-outlined text-[15px]">notifications</span>
-                  <span>Review Activity</span>
+                  <span className="material-symbols-outlined text-[15px] text-primary">settings</span>
+                  <span className="hidden sm:inline">Settings &amp; Device Access</span>
+                  <span className="sm:hidden">Settings</span>
                 </Link>
-                {queue.failed > 0 && (
+              )}
+
+              {/* Status Message */}
+              {(issue || queue.syncing || queue.message || queue.pending > 0 || queue.failed > 0 || poor) && (
+                <span role="status" aria-live="polite" className="text-on-surface-variant font-medium text-[11px] truncate max-w-[200px] sm:max-w-md">
+                  {issue || (queue.syncing ? 'Syncing changes…' : queue.message)}
+                  {queue.pending > 0 && ` (${queue.pending} pending)`}
+                  {queue.failed > 0 && ` (${queue.failed} need review)`}
+                  {poor && ' • Limited connection'}
+                </span>
+              )}
+            </div>
+
+            {/* Right: Actions (Install, Sync, Update) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+              {(queue.pending > 0 || queue.failed > 0) && (
+                <>
                   <button
-                    onClick={() => void discardFailed().catch(() => setIssue('Could not clear failed changes.'))}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 text-xs font-semibold hover:bg-rose-500/20 active:scale-95"
+                    disabled={!online || queue.syncing}
+                    onClick={() => void flushQueue()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-[11px] sm:text-xs font-bold hover:bg-amber-500/25 transition-all active:scale-95 disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
-                    <span>Discard Failed</span>
+                    <span className="material-symbols-outlined text-[14px]">sync</span>
+                    <span>Sync</span>
                   </button>
-                )}
-              </>
-            )}
+                  <Link
+                    href="/member/notifications"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-surface-container-lowest text-[11px] sm:text-xs font-bold border border-outline-variant/30 text-on-surface hover:text-primary transition-all active:scale-95 shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">notifications</span>
+                    <span className="hidden sm:inline">Review</span>
+                  </Link>
+                </>
+              )}
 
-            {waiting && (
-              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-2.5 py-1">
-                <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Update available</span>
+              {waiting && (
+                <div className="inline-flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-2 py-0.5 sm:px-2.5 sm:py-1">
+                  <span className="hidden sm:inline text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Update available</span>
+                  <button
+                    disabled={queue.syncing}
+                    onClick={update}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-600 text-white text-[11px] sm:text-xs font-bold shadow-xs hover:bg-emerald-700 active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">refresh</span>
+                    <span>Update &amp; Reload</span>
+                  </button>
+                </div>
+              )}
+
+              {!isStandalone && install && (
                 <button
-                  disabled={queue.syncing}
-                  onClick={update}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-xs hover:bg-emerald-700 active:scale-95 transition-all"
+                  onClick={async () => {
+                    try { await install.prompt(); await install.userChoice; } catch { /* Dismissal is harmless. */ }
+                    setInstall(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-primary text-on-primary text-[11px] sm:text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
                 >
-                  <span className="material-symbols-outlined text-[14px]">refresh</span>
-                  <span>Update &amp; Reload</span>
+                  <span className="material-symbols-outlined text-[15px]">install_mobile</span>
+                  <span>Install App</span>
                 </button>
-              </div>
-            )}
+              )}
 
-            {!isStandalone && install && (
-              <button
-                onClick={async () => {
-                  try { await install.prompt(); await install.userChoice; } catch { /* Dismissal is harmless. */ }
-                  setInstall(null);
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">install_mobile</span>
-                <span>Install App</span>
-              </button>
-            )}
-
-            {!isStandalone && !install && isIos && (
-              <button
-                onClick={() => setShowIosModal(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">add_to_home_screen</span>
-                <span>Install on iOS</span>
-              </button>
-            )}
+              {!isStandalone && !install && isIos && (
+                <button
+                  onClick={() => setShowIosModal(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] sm:text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[15px]">add_to_home_screen</span>
+                  <span>Install</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      )}
 
-      {/* Prominent Version Update Notification Banner */}
-      {waiting && (
+      {/* Prominent Version Update Notification Banner (Mobile Responsive) */}
+      {waiting && !dismissedUpdate && (
         <div
           role="alert"
           aria-live="assertive"
-          className="fixed bottom-5 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 rounded-2xl bg-[#0b1c30] text-white p-4 shadow-2xl border border-slate-700/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-300"
+          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md z-[70] rounded-2xl bg-[#0b1c30] text-white p-3.5 sm:p-4 shadow-2xl border border-slate-700/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-300 ${
+            isMemberApp
+              ? 'bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+              : 'bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+          }`}
         >
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2320c]/20 text-[#f2320c]">
-              <span className="material-symbols-outlined text-2xl animate-spin">sync</span>
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2320c]/20 text-[#f2320c]">
+              <span className="material-symbols-outlined text-xl sm:text-2xl animate-spin">sync</span>
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-extrabold text-white leading-tight">New version available</h4>
-              <p className="text-xs text-slate-300 mt-0.5">
-                A new version of TFHC-ORDERLINESS is available.
-              </p>
-              <div className="mt-3 flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs sm:text-sm font-extrabold text-white leading-tight">New version available</h4>
                 <button
+                  type="button"
+                  onClick={() => setDismissedUpdate(true)}
+                  className="p-1 -mr-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="Dismiss notification"
+                  aria-label="Dismiss notification"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-300 mt-0.5">
+                A new version of TFHC-ORDERLINESS is available with the latest updates.
+              </p>
+              <div className="mt-2.5 sm:mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDismissedUpdate(true)}
+                  className="px-3 py-2 sm:py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-[11px] sm:text-xs font-semibold active:scale-95 transition-all cursor-pointer"
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
                   onClick={update}
                   disabled={queue.syncing}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-extrabold text-xs shadow-lg shadow-red-500/25 active:scale-95 transition-all uppercase tracking-wider"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-extrabold text-[11px] sm:text-xs shadow-lg shadow-red-500/25 active:scale-95 transition-all uppercase tracking-wider cursor-pointer disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-sm">system_update</span>
                   <span>UPDATE NOW</span>
