@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
 import { WhatsAppEmojiPicker } from './EmojiPicker';
@@ -7,6 +7,24 @@ import { compressImageIfNeeded } from '../../lib/image-compress';
 
 const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB Hard Limit
 const SAFE_RECORDING_BYTE_LIMIT = 2.85 * 1024 * 1024; // 2.85 MB Auto-stop threshold for Opus/WebM container safety
+
+export interface ComposerMember {
+  memberId: string;
+  name: string;
+  photoUrl?: string | null;
+  role?: string;
+  roleInUnit?: string | null;
+  subTeam?: string | null;
+}
+
+export interface MentionOption {
+  type: 'all' | 'member';
+  id: string;
+  name: string;
+  photoUrl?: string | null;
+  badge?: string;
+  description?: string;
+}
 
 export function Composer({
   disabled,
@@ -18,6 +36,9 @@ export function Composer({
   onSend,
   onAttach,
   onTyping,
+  members = [],
+  isGroup = true,
+  currentMemberId,
 }: {
   disabled?: boolean;
   draftKey?: string;
@@ -28,6 +49,9 @@ export function Composer({
   onSend: (text: string) => void | Promise<void>;
   onAttach: (file: File) => void | Promise<void>;
   onTyping: (typing: boolean) => void;
+  members?: ComposerMember[];
+  isGroup?: boolean;
+  currentMemberId?: string;
 }) {
   const { notify } = useToast();
   const [text, setText] = useState('');
@@ -39,6 +63,15 @@ export function Composer({
   const [recordedBytes, setRecordedBytes] = useState(0);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+
+  // WhatsApp @ Mention state
+  const [mentionState, setMentionState] = useState<{
+    query: string;
+    atIndex: number;
+    cursor: number;
+  } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionBoxRef = useRef<HTMLDivElement>(null);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +87,109 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
+
+  const updateMentionState = (val: string, cursorIndex?: number) => {
+    const el = textareaRef.current;
+    const cursor = cursorIndex !== undefined ? cursorIndex : (el?.selectionStart ?? val.length);
+    const textBeforeCursor = val.slice(0, cursor);
+
+    // Look for @ preceded by start of line or whitespace, followed by up to 25 chars without newlines
+    const match = textBeforeCursor.match(/(?:^|\s)@([a-zA-Z0-9_\s]{0,25})$/);
+    if (match) {
+      const queryWithSpaces = match[1];
+      if (queryWithSpaces.includes('\n') || queryWithSpaces.includes('  ')) {
+        setMentionState(null);
+        return;
+      }
+      const atIndex = textBeforeCursor.lastIndexOf('@');
+      const query = queryWithSpaces.trim().toLowerCase();
+      setMentionState({ query, atIndex, cursor });
+      setMentionIndex(0);
+    } else {
+      setMentionState(null);
+    }
+  };
+
+  const filteredMentions = useMemo<MentionOption[]>(() => {
+    if (!mentionState) return [];
+    const q = mentionState.query;
+    const options: MentionOption[] = [];
+
+    // 1. @all option (for group conversations)
+    if (isGroup !== false && (q === '' || 'all'.startsWith(q) || 'everyone'.startsWith(q))) {
+      options.push({
+        type: 'all',
+        id: 'ALL',
+        name: 'all',
+        badge: 'Notify Everyone',
+        description: `Alert and tag all ${members?.length ? `${members.length} ` : ''}members in this room`,
+      });
+    }
+
+    // 2. Member options
+    if (members && members.length > 0) {
+      const memberOptions: MentionOption[] = members
+        .filter((m) => m.memberId !== currentMemberId)
+        .filter((m) => {
+          if (!q) return true;
+          const nameMatch = m.name?.toLowerCase().includes(q);
+          const subTeamMatch = m.subTeam?.toLowerCase().includes(q);
+          const roleMatch = m.roleInUnit?.toLowerCase().includes(q);
+          return nameMatch || subTeamMatch || roleMatch;
+        })
+        .map((m) => ({
+          type: 'member' as const,
+          id: m.memberId,
+          name: m.name,
+          photoUrl: m.photoUrl,
+          badge: m.subTeam || m.roleInUnit || (m.role && m.role !== 'MEMBER' ? m.role : undefined),
+          description: m.roleInUnit || m.subTeam || undefined,
+        }));
+
+      if (q) {
+        memberOptions.sort((a, b) => {
+          const aStarts = a.name.toLowerCase().startsWith(q) ? -1 : 1;
+          const bStarts = b.name.toLowerCase().startsWith(q) ? -1 : 1;
+          return aStarts - bStarts;
+        });
+      }
+
+      options.push(...memberOptions);
+    }
+
+    return options;
+  }, [mentionState, isGroup, members, currentMemberId]);
+
+  const selectMention = (option: MentionOption) => {
+    if (!mentionState) return;
+    const replacement = option.type === 'all' ? '@all ' : `@${option.name} `;
+    const before = text.slice(0, mentionState.atIndex);
+    const after = text.slice(mentionState.cursor);
+    const next = before + replacement + after;
+
+    setText(next);
+    handleChange(next);
+    setMentionState(null);
+
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        const newPos = before.length + replacement.length;
+        el.focus();
+        el.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+  };
+
+  useEffect(() => {
+    const clickOut = (ev: MouseEvent) => {
+      if (mentionBoxRef.current && !mentionBoxRef.current.contains(ev.target as Node)) {
+        setMentionState(null);
+      }
+    };
+    if (mentionState) document.addEventListener('mousedown', clickOut);
+    return () => document.removeEventListener('mousedown', clickOut);
+  }, [mentionState]);
 
   useEffect(() => {
     if (!voicePreview) { setVoiceUrl(''); return; }
@@ -121,6 +257,7 @@ export function Composer({
 
   const handleChange = (v: string) => {
     setText(v);
+    updateMentionState(v);
     if (draftKey && typeof window !== 'undefined' && !editing) {
       if (v.trim()) {
         localStorage.setItem(`chat_draft:${draftKey}`, v);
@@ -404,6 +541,109 @@ export function Composer({
         <button type="button" onClick={async () => { try { await onAttach(voicePreview); setVoicePreview(null); } catch { notify('Voice message retained. Try sending again.', 'error'); } }} className="rounded-lg bg-primary px-3 py-2 text-white">Send voice message</button>
       </div>}
       {/* Voice Recorder Active Mode with Real-Time Size Tracking & Waveform */}
+      {/* WhatsApp-Style Interactive @ Mention Dropdown Popover */}
+      {mentionState && filteredMentions.length > 0 && (
+        <div
+          ref={mentionBoxRef}
+          className="absolute bottom-full left-2 right-2 sm:left-4 sm:right-4 mb-2 z-50 max-h-60 sm:max-h-72 overflow-y-auto rounded-2xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl backdrop-blur-xl p-1.5 animate-in fade-in slide-in-from-bottom-2 duration-150"
+          role="listbox"
+          aria-label="Member mentions"
+        >
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant flex items-center justify-between border-b border-outline-variant/20 mb-1">
+            <span className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[14px] text-primary">alternate_email</span>
+              Mention Members
+            </span>
+            <span className="text-[10px] lowercase font-normal opacity-70">
+              {filteredMentions.length} available · ↑↓ / Enter
+            </span>
+          </div>
+
+          <div className="space-y-0.5">
+            {filteredMentions.map((item, idx) => {
+              const isSelected = idx === mentionIndex;
+              if (item.type === 'all') {
+                return (
+                  <button
+                    key="all"
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectMention(item)}
+                    onMouseEnter={() => setMentionIndex(idx)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all ${
+                      isSelected
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                        : 'hover:bg-surface-container text-on-surface'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-red-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">campaign</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-primary">@all</span>
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                          Notify Everyone
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant truncate">
+                        {item.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectMention(item)}
+                  onMouseEnter={() => setMentionIndex(idx)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all ${
+                    isSelected
+                      ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
+                      : 'hover:bg-surface-container text-on-surface'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center font-bold text-xs overflow-hidden shrink-0">
+                    {item.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.photoUrl}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      item.name.slice(0, 2).toUpperCase()
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-xs text-on-surface truncate">
+                        @{item.name}
+                      </span>
+                      {item.badge && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-surface-container-high text-on-surface-variant truncate max-w-[130px]">
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && item.description !== item.badge && (
+                      <p className="text-[10px] text-on-surface-variant truncate">
+                        {item.description}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {recording ? (
         <div className="flex flex-col gap-1.5 px-3 py-2 rounded-2xl bg-surface-container-low border border-outline-variant/30">
           <div className="flex items-center justify-between gap-3">
@@ -500,7 +740,34 @@ export function Composer({
               rows={1}
               value={text}
               onChange={(e) => handleChange(e.target.value)}
+              onKeyUp={(e) => updateMentionState(e.currentTarget.value, e.currentTarget.selectionStart)}
+              onClick={(e) => updateMentionState(e.currentTarget.value, e.currentTarget.selectionStart)}
+              onSelect={(e) => updateMentionState(e.currentTarget.value, e.currentTarget.selectionStart)}
               onKeyDown={(e) => {
+                if (mentionState && filteredMentions.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setMentionIndex((prev) => (prev + 1) % filteredMentions.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setMentionIndex((prev) => (prev - 1 + filteredMentions.length) % filteredMentions.length);
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    const selected = filteredMentions[mentionIndex] || filteredMentions[0];
+                    if (selected) selectMention(selected);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setMentionState(null);
+                    return;
+                  }
+                }
+
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   void submit();

@@ -156,10 +156,10 @@ export function ChatWorkspace({
   }, []);
 
   useEffect(() => {
-    if (showRoomInfo && activeId) {
+    if (activeId) {
       void loadRoomMembers(activeId);
     }
-  }, [showRoomInfo, activeId, loadRoomMembers]);
+  }, [activeId, loadRoomMembers]);
 
   const loadMore = async () => {
     if (!activeId || !nextCursor || loadingMore) return;
@@ -1242,6 +1242,9 @@ export function ChatWorkspace({
               onSend={handleSendText}
               onAttach={handleAttach}
               onTyping={(t) => activeId && socket.sendTyping(activeId, t)}
+              members={roomMembers}
+              isGroup={activeRoom.type !== 'DIRECT'}
+              currentMemberId={user?.memberId}
             />
           </>
         )}

@@ -596,6 +596,38 @@ export class ChatService implements OnApplicationBootstrap {
     const messageId = randomUUID();
     const createdAt = new Date().toISOString();
 
+    const isAllMentioned = /@(?:all|everyone)\b/i.test(body);
+    const recipients = (await this.recipientMemberIds(room)).filter(id => id !== memberId);
+
+    // Identify explicitly mentioned members
+    const mentionedMemberIds = new Set<string>();
+    if (isAllMentioned) {
+      recipients.forEach(id => mentionedMemberIds.add(id));
+    } else if (recipients.length > 0 && body.includes('@')) {
+      const recipientMembers = await this.prisma.member.findMany({
+        where: { id: { in: recipients } },
+        select: { id: true, firstName: true, lastName: true, preferredName: true },
+      });
+      const lowerBody = body.toLowerCase();
+      for (const rm of recipientMembers) {
+        const fullName = `${rm.firstName} ${rm.lastName}`.trim().toLowerCase();
+        const firstName = rm.firstName?.trim().toLowerCase();
+        const preferred = rm.preferredName?.trim().toLowerCase();
+        if (
+          (fullName && lowerBody.includes(`@${fullName}`)) ||
+          (firstName && (lowerBody.includes(`@${firstName} `) || lowerBody.endsWith(`@${firstName}`))) ||
+          (preferred && (lowerBody.includes(`@${preferred} `) || lowerBody.endsWith(`@${preferred}`)))
+        ) {
+          mentionedMemberIds.add(rm.id);
+        }
+      }
+    }
+
+    const baseMeta = dto.attachmentMeta && typeof dto.attachmentMeta === 'object' ? (dto.attachmentMeta as Record<string, unknown>) : {};
+    const finalAttachmentMeta = (mentionedMemberIds.size > 0 || isAllMentioned)
+      ? ({ ...baseMeta, mentions: Array.from(mentionedMemberIds), isAllMentioned } as Prisma.InputJsonValue)
+      : (dto.attachmentMeta && typeof dto.attachmentMeta === 'object' ? (dto.attachmentMeta as Prisma.InputJsonValue) : Prisma.DbNull);
+
     // PostgreSQL is authoritative; never acknowledge ephemeral-only messages.
     const createArgs = {
       data: {
@@ -606,10 +638,7 @@ export class ChatService implements OnApplicationBootstrap {
         type,
         body: body || null,
         attachmentUrl,
-        attachmentMeta:
-          dto.attachmentMeta && typeof dto.attachmentMeta === 'object'
-            ? (dto.attachmentMeta as Prisma.InputJsonValue)
-            : Prisma.DbNull,
+        attachmentMeta: finalAttachmentMeta,
         replyToId: dto.replyToId || null,
       },
       include: {
@@ -618,7 +647,6 @@ export class ChatService implements OnApplicationBootstrap {
       },
     };
 
-    const recipients = (await this.recipientMemberIds(room)).filter(id => id !== memberId);
     let persisted: any = null;
     try {
       persisted = await this.prisma.$transaction(async tx => {
@@ -635,12 +663,36 @@ export class ChatService implements OnApplicationBootstrap {
       const claim = await tx.communicationDelivery.createMany({ data: [{
         idempotencyKey, channel: 'PUSH', recipient: roomId, templateKey: 'CHAT_INAPP', status: 'SENT', attemptedAt: new Date(),
       }], skipDuplicates: true });
-      if (claim.count && recipients.length) await tx.memberNotification.createMany({ data: recipients.map(recipient => ({
-        memberId: recipient, type: 'CHAT_MESSAGE',
-        title: room.type === 'DIRECT' ? this.viewerName(viewer) : room.name || 'General',
-        body: (saved.body || 'New attachment').slice(0, 500),
-        data: { roomId, messageId: saved.id, url: `/member/chat?roomId=${roomId}` },
-      })) });
+      if (claim.count && recipients.length) {
+        const senderName = this.viewerName(viewer);
+        await tx.memberNotification.createMany({ data: recipients.map(recipient => {
+          const isMentioned = mentionedMemberIds.has(recipient);
+          let notifTitle = room.type === 'DIRECT' ? senderName : room.name || 'General';
+          let notifBody = (saved.body || 'New attachment').slice(0, 500);
+
+          if (isAllMentioned) {
+            notifTitle = `📢 @all in ${room.name || 'General'}`;
+            notifBody = `${senderName}: ${saved.body || 'Announcement'}`.slice(0, 500);
+          } else if (isMentioned) {
+            notifTitle = `💬 ${senderName} mentioned you in ${room.name || 'General'}`;
+            notifBody = saved.body ? saved.body.slice(0, 500) : 'Mentioned you in a message';
+          }
+
+          return {
+            memberId: recipient,
+            type: 'CHAT_MESSAGE',
+            title: notifTitle,
+            body: notifBody,
+            data: {
+              roomId,
+              messageId: saved.id,
+              url: `/member/chat?roomId=${roomId}`,
+              isMentioned,
+              isAllMentioned,
+            },
+          };
+        }) });
+      }
       return saved;
       });
     } catch (error: any) {

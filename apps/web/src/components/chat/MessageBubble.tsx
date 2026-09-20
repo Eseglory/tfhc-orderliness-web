@@ -22,6 +22,60 @@ export function SystemLine({ text }: { text: string }) {
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
+function renderMessageTextWithMentions(text: string, isMine?: boolean) {
+  const parts: React.ReactNode[] = [];
+  const regex = /(@all\b|@everyone\b|@[a-zA-Z0-9_\.\-]+(?:\s+[a-zA-Z0-9_\.\-]+)?)/gi;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    const isAll = /^@(all|everyone)$/i.test(token);
+
+    if (isAll) {
+      parts.push(
+        <span
+          key={match.index}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md font-bold text-[12px] shadow-2xs ${
+            isMine
+              ? 'bg-white/25 text-white ring-1 ring-white/40'
+              : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[13px]">campaign</span>
+          {token}
+        </span>
+      );
+    } else {
+      parts.push(
+        <span
+          key={match.index}
+          className={`inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded-md font-semibold text-[12px] shadow-2xs ${
+            isMine
+              ? 'bg-white/20 text-white font-bold ring-1 ring-white/40'
+              : 'bg-primary/15 text-primary font-bold dark:bg-primary/25 dark:text-primary-container ring-1 ring-primary/20'
+          }`}
+        >
+          {token}
+        </span>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+}
+
 export function MessageBubble({
   message,
   showSender,
@@ -208,7 +262,11 @@ export function MessageBubble({
                 )}
 
                 {/* Text Body */}
-                {message.body && <p className="whitespace-pre-wrap break-words leading-relaxed">{message.body}</p>}
+                {message.body && (
+                  <p className="whitespace-pre-wrap break-words leading-relaxed">
+                    {renderMessageTextWithMentions(message.body, mine)}
+                  </p>
+                )}
               </>
             )}
 
