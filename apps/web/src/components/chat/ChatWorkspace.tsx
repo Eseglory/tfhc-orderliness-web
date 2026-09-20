@@ -441,7 +441,7 @@ export function ChatWorkspace({
       className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
       style={bottomInset !== '0rem' ? { height: `calc(100vh - 4rem - ${bottomInset})` } : undefined}
     >
-      {forwarding && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Forward message">
+      {forwarding && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="Forward message">
         <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-surface-container-lowest p-5">
           <h2 className="mb-3 font-bold">Forward to</h2>
           {rooms.map(room => <button key={room.id} disabled={forwardBusy} className="block w-full rounded-xl p-3 text-left hover:bg-surface-container" onClick={async () => {
@@ -1031,7 +1031,7 @@ export function ChatWorkspace({
 
               {/* Side Drawer / Modal: Room & Member Info */}
               {showRoomInfo && (
-                <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex justify-end sm:static sm:z-auto sm:bg-transparent sm:backdrop-blur-none animate-in fade-in duration-150">
+                <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-xs flex justify-end sm:static sm:z-auto sm:bg-transparent sm:backdrop-blur-none animate-in fade-in duration-150">
                   <div className="w-full max-w-sm sm:w-80 md:w-88 h-full border-l border-outline-variant/20 bg-surface-container-lowest overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right duration-200 flex flex-col shadow-2xl sm:shadow-none">
                     <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20 shrink-0">
                       <div className="flex items-center gap-2">

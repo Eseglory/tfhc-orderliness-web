@@ -328,11 +328,11 @@ export function WebRtcCallModal({
   if (!call) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
       {/* Hidden audio element for remote audio */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
-      <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[420px]">
+      <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[360px] max-h-[85vh] overflow-y-auto">
         {/* Call Header */}
         <div className="text-center space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-[11px] font-bold text-slate-300">

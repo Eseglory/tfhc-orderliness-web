@@ -477,7 +477,7 @@ export function EventForm({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto animate-fadeIn">
       <div className="relative w-full max-w-2xl my-8 bg-[#0a0f1d] border border-slate-800/90 rounded-[2rem] shadow-2xl shadow-black/80 overflow-hidden text-white">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-800/80 bg-slate-900/40">

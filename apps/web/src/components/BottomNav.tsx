@@ -21,7 +21,7 @@ export const BottomNav: React.FC = () => {
   const isProfile = pathname.startsWith('/member/profile');
 
   return (
-    <nav aria-label="Member Navigation" className="fixed bottom-0 inset-x-0 sm:bottom-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md w-full z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t sm:border border-slate-200/80 dark:border-slate-800 sm:rounded-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.06)] sm:shadow-[0_8px_32px_rgba(0,0,0,0.18)]">
+    <nav aria-label="Member Navigation" className="fixed bottom-0 inset-x-0 sm:bottom-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:max-w-md w-full z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t sm:border border-slate-200/80 dark:border-slate-800 sm:rounded-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.06)] sm:shadow-[0_8px_32px_rgba(0,0,0,0.18)] pb-[env(safe-area-inset-bottom,0px)]">
       <div className="grid grid-cols-5 items-center justify-items-center h-16 sm:h-16 px-1">
         {/* 1. Home */}
         <Link

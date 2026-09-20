@@ -252,8 +252,8 @@ export default function MyAttendancePage() {
 
       {/* Submit Excuse Modal matching Stitch Screen 9 (submit_excuse/code.html) */}
       {showExcuseModal && (
-        <div className="fixed inset-0 bg-primary/80 z-50 flex items-center justify-center p-edge-margin backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-lg p-6 border border-outline-variant/30 relative">
+        <div className="fixed inset-0 bg-primary/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl p-6 border border-outline-variant/30 relative max-h-[85vh] overflow-y-auto">
             <h3 className="font-headline-sm text-headline-sm font-bold text-primary mb-2">Submit Absence Excuse</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-4">
               Provide a valid reason for your absence for admin review.
@@ -291,8 +291,8 @@ export default function MyAttendancePage() {
 
       {/* Correction Request Modal matching Stitch Screen 10 (correction_request/code.html) */}
       {showCorrectionModal && (
-        <div className="fixed inset-0 bg-primary/80 z-50 flex items-center justify-center p-edge-margin backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface-container-lowest rounded-xl shadow-lg p-6 border border-outline-variant/30 relative">
+        <div className="fixed inset-0 bg-primary/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl p-6 border border-outline-variant/30 relative max-h-[85vh] overflow-y-auto">
             <h3 className="font-headline-sm text-headline-sm font-bold text-primary mb-2">Request Attendance Correction</h3>
             <p className="font-body-md text-body-md text-on-surface-variant mb-4">
               If your attendance was marked incorrectly due to network/GPS issues, submit a correction request.

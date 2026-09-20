@@ -89,7 +89,7 @@ export function MessageBubble({
     <>
       {lightbox && message.attachmentUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
           onClick={() => setLightbox(false)}
         >
           <div className="relative max-h-[90vh] max-w-[90vw]">

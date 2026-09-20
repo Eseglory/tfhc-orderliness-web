@@ -315,10 +315,10 @@ function DeclareModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/70 p-4 backdrop-blur-sm animate-in fade-in duration-150"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md rounded-t-3xl bg-surface-container-lowest p-6 shadow-2xl sm:rounded-3xl border border-outline-variant/20 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-md rounded-3xl bg-surface-container-lowest p-6 shadow-2xl border border-outline-variant/20 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">

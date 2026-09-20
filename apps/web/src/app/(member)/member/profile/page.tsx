@@ -141,7 +141,7 @@ export default function MemberProfilePage() {
   const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString() : '—');
 
   return (
-    <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-[90px]">
+    <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md pb-32">
       {signingOut && <AuthTransition action="out" />}
       <header className="flex justify-between items-center w-full px-edge-margin h-16 bg-background top-0 z-40 sticky border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
@@ -293,12 +293,21 @@ export default function MemberProfilePage() {
                 </div>
                 <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
               </Link>
+              <Link href="/member/settings" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[18px]">settings</span>
+                  </div>
+                  <span className="font-body-md text-body-md text-primary font-medium">Device Permissions &amp; App Settings</span>
+                </div>
+                <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+              </Link>
               <Link href="/member/offline" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
                     <span className="material-symbols-outlined text-[18px]">offline_pin</span>
                   </div>
-                  <span className="font-body-md text-body-md text-primary font-medium">Offline &amp; Device Settings</span>
+                  <span className="font-body-md text-body-md text-primary font-medium">Offline &amp; Device Storage</span>
                 </div>
                 <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
               </Link>

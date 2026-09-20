@@ -165,7 +165,7 @@ export function PwaManager() {
     return null;
   }
 
-  const hasNotice = Boolean(waiting || queue.syncing || queue.pending > 0 || queue.failed > 0 || issue || poor || (!isStandalone && (install || isIos)));
+  const hasNotice = Boolean(queue.syncing || queue.pending > 0 || queue.failed > 0 || issue || poor);
   const isMemberApp = pathname.startsWith('/member');
 
   return (
@@ -245,16 +245,6 @@ export function PwaManager() {
                   <span>Install App</span>
                 </button>
               )}
-
-              {!isStandalone && !install && isIos && (
-                <button
-                  onClick={() => setShowIosModal(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] sm:text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[15px]">add_to_home_screen</span>
-                  <span>Install</span>
-                </button>
-              )}
             </div>
           </div>
         </aside>
@@ -265,10 +255,10 @@ export function PwaManager() {
         <div
           role="alert"
           aria-live="assertive"
-          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md z-[70] rounded-2xl bg-[#0b1c30] text-white p-3.5 sm:p-4 shadow-2xl border border-slate-700/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-300 ${
+          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md z-[80] rounded-2xl bg-[#0b1c30] text-white p-3.5 sm:p-4 shadow-2xl border border-slate-700/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-5 duration-300 ${
             isMemberApp
-              ? 'bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
-              : 'bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+              ? 'bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+              : 'bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
           }`}
         >
           <div className="flex items-start gap-3">
@@ -320,14 +310,14 @@ export function PwaManager() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="ios-install-title"
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in"
           onClick={() => setShowIosModal(false)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-slate-900 p-6 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-0 sm:zoom-in-95"
+            className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 p-6 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-[#f2320c] dark:bg-red-950/50">
                   <span className="material-symbols-outlined text-xl">install_mobile</span>
@@ -336,7 +326,7 @@ export function PwaManager() {
               </div>
               <button
                 onClick={() => setShowIosModal(false)}
-                className="rounded-full p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                className="rounded-full p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                 aria-label="Close"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
@@ -367,8 +357,9 @@ export function PwaManager() {
             </div>
 
             <button
+              type="button"
               onClick={() => setShowIosModal(false)}
-              className="mt-6 w-full rounded-2xl bg-[#0b1c30] dark:bg-slate-800 py-3 text-center text-xs font-extrabold text-white transition-all active:scale-98 shadow-sm"
+              className="mt-6 w-full rounded-2xl bg-[#0b1c30] hover:bg-[#162a42] dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 py-3 text-center text-xs font-extrabold text-white transition-all active:scale-95 shadow-md shrink-0 cursor-pointer"
             >
               Got it
             </button>
