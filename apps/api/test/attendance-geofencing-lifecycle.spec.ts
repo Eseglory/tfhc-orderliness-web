@@ -58,6 +58,53 @@ describe('Attendance, Geofencing & Lifecycle Enterprise Suite', () => {
     audiences: [],
   };
 
+  const houseAustinMeetingId = 'meeting-house-austin';
+  const houseAustinVenue = {
+    name: 'House Austin of Blessing',
+    latitude: 6.4474,
+    longitude: 3.4723,
+    radiusMeters: 100,
+  };
+
+  const mockHouseAustinMeeting = {
+    id: houseAustinMeetingId,
+    title: 'House Austin of Blessing',
+    status: 'ACTIVE',
+    startTime: new Date(Date.now() - 30 * 60 * 1000),
+    expectedArrivalTime: new Date(Date.now() - 45 * 60 * 1000),
+    attendanceOpenTime: new Date(Date.now() - 60 * 60 * 1000),
+    attendanceCloseTime: new Date(Date.now() + 60 * 60 * 1000),
+    gracePeriodMinutes: 15,
+    locationName: houseAustinVenue.name,
+    latitude: houseAustinVenue.latitude,
+    longitude: houseAustinVenue.longitude,
+    geofenceRadiusMeters: houseAustinVenue.radiusMeters,
+    pointWeight: 1.0,
+    visibility: 'PUBLIC',
+    category: { pointWeight: 1.0 },
+    audiences: [],
+  };
+
+  const unrestrictedMeetingId = 'meeting-unrestricted';
+  const mockUnrestrictedMeeting = {
+    id: unrestrictedMeetingId,
+    title: 'Global Online / Flexible Service',
+    status: 'ACTIVE',
+    startTime: new Date(Date.now() - 30 * 60 * 1000),
+    expectedArrivalTime: new Date(Date.now() - 45 * 60 * 1000),
+    attendanceOpenTime: new Date(Date.now() - 60 * 60 * 1000),
+    attendanceCloseTime: new Date(Date.now() + 60 * 60 * 1000),
+    gracePeriodMinutes: 15,
+    locationName: 'Online / No Location Restriction',
+    latitude: 6.6697906,
+    longitude: 3.3581822,
+    geofenceRadiusMeters: 100000, // 100km / flexible
+    pointWeight: 1.0,
+    visibility: 'PUBLIC',
+    category: { pointWeight: 1.0 },
+    audiences: [],
+  };
+
   const mockActiveMember = {
     id: memberId,
     memberCode: 'TFHC-001',
@@ -82,6 +129,12 @@ describe('Attendance, Geofencing & Lifecycle Enterprise Suite', () => {
       findUnique: jest.fn().mockImplementation(({ where }) => {
         if (where.id === activeMeetingId) return Promise.resolve(mockActiveMeeting);
         if (where.id === futureMeetingId) return Promise.resolve(mockFutureMeeting);
+        if (where.id === houseAustinMeetingId) return Promise.resolve(mockHouseAustinMeeting);
+        if (where.id === unrestrictedMeetingId) return Promise.resolve(mockUnrestrictedMeeting);
+        return Promise.resolve(null);
+      }),
+      findFirst: jest.fn().mockImplementation(({ where }) => {
+        if (where.status === 'ACTIVE') return Promise.resolve(mockActiveMeeting);
         return Promise.resolve(null);
       }),
     },
@@ -116,6 +169,15 @@ describe('Attendance, Geofencing & Lifecycle Enterprise Suite', () => {
           }
         }
         return Promise.resolve(data);
+      }),
+      delete: jest.fn().mockImplementation(({ where }) => {
+        for (const [key, val] of attendanceStore.entries()) {
+          if (val.id === where.id) {
+            attendanceStore.delete(key);
+            return Promise.resolve(val);
+          }
+        }
+        return Promise.resolve(null);
       }),
     },
     auditLog: {
@@ -373,6 +435,106 @@ describe('Attendance, Geofencing & Lifecycle Enterprise Suite', () => {
       const history = await service.getMemberAttendance(memberId);
       expect(history.length).toBe(1);
       expect(history[0].meetingId).toBe(activeMeetingId);
+    });
+  });
+
+  describe('6. Attendance Status & Clock-Out Lifecycle', () => {
+    it('should return clockedIn: false when member has not clocked in', async () => {
+      const status = await service.getAttendanceStatus(memberId, activeMeetingId);
+      expect(status.clockedIn).toBe(false);
+      expect(status.hasActiveSession).toBe(false);
+      expect(status.record).toBeNull();
+    });
+
+    it('should return clockedIn: true after successful check-in', async () => {
+      await service.checkInMember({
+        memberId,
+        meetingId: activeMeetingId,
+        latitude: churchVenue.latitude,
+        longitude: churchVenue.longitude,
+        gpsAccuracy: 10,
+      });
+
+      const status = await service.getAttendanceStatus(memberId, activeMeetingId);
+      expect(status.clockedIn).toBe(true);
+      expect(status.hasActiveSession).toBe(true);
+      expect(status.record).not.toBeNull();
+      expect(status.record.memberId).toBe(memberId);
+    });
+
+    it('should clock out member and transition back to clockedIn: false', async () => {
+      await service.checkInMember({
+        memberId,
+        meetingId: activeMeetingId,
+        latitude: churchVenue.latitude,
+        longitude: churchVenue.longitude,
+        gpsAccuracy: 10,
+      });
+
+      const before = await service.getAttendanceStatus(memberId, activeMeetingId);
+      expect(before.clockedIn).toBe(true);
+
+      const clockOutRes = await service.clockOutMember(memberId, activeMeetingId);
+      expect(clockOutRes.clockedOut).toBe(true);
+      expect(clockOutRes.clockedIn).toBe(false);
+
+      const after = await service.getAttendanceStatus(memberId, activeMeetingId);
+      expect(after.clockedIn).toBe(false);
+      expect(after.record).toBeNull();
+    });
+  });
+
+  describe('7. Per-Event Location Geofencing (House Austin of Blessing)', () => {
+    it('should allow check-in when member is within House Austin of Blessing venue (30m away)', async () => {
+      // 30m offset from House Austin coordinates
+      const memberLat = houseAustinVenue.latitude + 0.0002;
+      const memberLng = houseAustinVenue.longitude + 0.0002;
+
+      const result = await service.checkInMember({
+        memberId,
+        meetingId: houseAustinMeetingId,
+        latitude: memberLat,
+        longitude: memberLng,
+        gpsAccuracy: 10,
+        deviceInfo: 'iPhone Test Device',
+      });
+
+      expect(result).toBeDefined();
+      expect(result.memberId).toBe(memberId);
+      expect(result.meetingId).toBe(houseAustinMeetingId);
+      expect(result.distanceFromVenue).toBeLessThanOrEqual(houseAustinVenue.radiusMeters);
+      expect(result.method).toBe(AttendanceMethod.SYSTEM_GEO);
+    });
+
+    it('should REJECT check-in to House Austin when member is at church headquarters (15km away)', async () => {
+      await expect(
+        service.checkInMember({
+          memberId,
+          meetingId: houseAustinMeetingId,
+          latitude: churchVenue.latitude,
+          longitude: churchVenue.longitude,
+          gpsAccuracy: 15,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should ALLOW check-in to an unrestricted event even from 20km away without failing geofence', async () => {
+      // 20km offset from church headquarters
+      const distantLat = churchVenue.latitude + 0.18;
+      const distantLng = churchVenue.longitude + 0.18;
+
+      const result = await service.checkInMember({
+        memberId,
+        meetingId: unrestrictedMeetingId,
+        latitude: distantLat,
+        longitude: distantLng,
+        gpsAccuracy: 25,
+        deviceInfo: 'Remote Laptop',
+      });
+
+      expect(result).toBeDefined();
+      expect(result.memberId).toBe(memberId);
+      expect(result.meetingId).toBe(unrestrictedMeetingId);
     });
   });
 });

@@ -205,14 +205,29 @@ export class ChatService implements OnApplicationBootstrap {
         },
       },
     });
+    const excludedEmails = [
+      'koladeinfo@gmail.com',
+      'engreseglory@gmail.com',
+      'gloryeseosa@gmail.com',
+    ];
+
     return members
       .filter((m) => {
-        if (isDisciplinaryRole(m.roleInUnit)) return true;
-        if (m.subTeam?.name && /disciplinary/i.test(m.subTeam.name)) return true;
         const email = (m.approvedMember?.email || m.user?.email || '').toLowerCase().trim();
-        if (email && targetEmails.includes(email)) return true;
+        if (email && excludedEmails.includes(email)) return false;
 
         const fullName = `${m.firstName} ${m.lastName}`.toLowerCase();
+        if (
+          fullName.includes('kolade') ||
+          (fullName.includes('glory') && !fullName.includes('dotun') && !fullName.includes('jacob') && !fullName.includes('nicole'))
+        ) {
+          return false;
+        }
+
+        if (isDisciplinaryRole(m.roleInUnit)) return true;
+        if (m.subTeam?.name && /disciplinary/i.test(m.subTeam.name)) return true;
+        if (email && targetEmails.includes(email)) return true;
+
         if (
           fullName.includes('dotun') ||
           fullName.includes('akingbesote') ||
@@ -225,17 +240,12 @@ export class ChatService implements OnApplicationBootstrap {
         }
 
         if (!m.user) return false;
-        if (m.user.role !== 'MEMBER') return true;
         const roleKeys = m.user.accessRoles?.map((ar) => ar.role.key) ?? [];
-        if (
-          roleKeys.includes('DISCIPLINARY_COMMITTEE') ||
-          roleKeys.includes('SUPER_ADMIN') ||
-          roleKeys.includes('ADMINISTRATION')
-        ) {
+        if (roleKeys.includes('DISCIPLINARY_COMMITTEE')) {
           return true;
         }
         const perms = m.user.accessRoles?.flatMap((ar) => ar.role.permissions.map((p) => p.permission)) ?? [];
-        return perms.includes('*') || perms.includes('excuses.review') || perms.includes('flags.manage');
+        return perms.includes('excuses.review') || perms.includes('flags.manage');
       })
       .map((m) => m.id);
   }

@@ -1,6 +1,6 @@
 /* Public resources only. Bump VERSION whenever this policy or shell changes. */
 importScripts('/pwa-runtime.js');
-const VERSION = 'v11';
+const VERSION = 'v12';
 const PREFIX = 'tfhc-pwa-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const ASSETS = `${PREFIX}assets-${VERSION}`;

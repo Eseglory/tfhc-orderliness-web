@@ -13,6 +13,7 @@ import { AuditService } from '../../common/rbac/audit.service';
 import { canViewEvent } from '../../common/event-visibility';
 import {
   validateGeofence,
+  calculateHaversineDistanceMeters,
   classifyAttendanceStatus,
   calculateAttendancePoints,
   AttendanceStatus,
@@ -124,15 +125,32 @@ export class AttendanceService {
     }
 
     // 4. Server-Side Geofence Validation (Haversine Formula)
-    const geofenceResult = validateGeofence(
-      { latitude: dto.latitude, longitude: dto.longitude },
-      { latitude: meeting.latitude, longitude: meeting.longitude },
-      meeting.geofenceRadiusMeters,
-      dto.gpsAccuracy ?? 0
-    );
+    const isGeofenceRequired =
+      meeting.geofenceRadiusMeters > 0 &&
+      meeting.geofenceRadiusMeters < 50000 &&
+      !meeting.locationName?.toLowerCase().includes('virtual') &&
+      !meeting.locationName?.toLowerCase().includes('online');
 
-    if (!geofenceResult.isWithinGeofence) {
-      throw new BadRequestException(geofenceResult.message);
+    let distanceFromVenue = 0;
+    if (isGeofenceRequired) {
+      const geofenceResult = validateGeofence(
+        { latitude: dto.latitude, longitude: dto.longitude },
+        { latitude: meeting.latitude, longitude: meeting.longitude },
+        meeting.geofenceRadiusMeters,
+        dto.gpsAccuracy ?? 0
+      );
+
+      if (!geofenceResult.isWithinGeofence) {
+        throw new BadRequestException(geofenceResult.message);
+      }
+      distanceFromVenue = geofenceResult.distanceMeters;
+    } else {
+      if (meeting.latitude && meeting.longitude && dto.latitude && dto.longitude) {
+        distanceFromVenue = calculateHaversineDistanceMeters(
+          { latitude: dto.latitude, longitude: dto.longitude },
+          { latitude: meeting.latitude, longitude: meeting.longitude }
+        );
+      }
     }
 
     // 6. Time-based Attendance Classification
@@ -168,7 +186,7 @@ export class AttendanceService {
         gpsLat: dto.latitude,
         gpsLong: dto.longitude,
         gpsAccuracy: dto.gpsAccuracy,
-        distanceFromVenue: geofenceResult.distanceMeters,
+        distanceFromVenue,
         method: AttendanceMethod.SYSTEM_GEO,
         pointsEarned,
         deviceInfo: dto.deviceInfo,
@@ -265,6 +283,106 @@ export class AttendanceService {
       this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
       return record;
     });
+  }
+
+  async getAttendanceStatus(memberId: string, meetingId?: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    const now = new Date();
+
+    let targetMeetingId = meetingId;
+    let meeting: any = null;
+
+    if (targetMeetingId) {
+      meeting = await this.prisma.meeting.findUnique({
+        where: { id: targetMeetingId },
+        include: { category: true },
+      });
+    } else {
+      // Find current open/active meeting
+      meeting = await this.prisma.meeting.findFirst({
+        where: {
+          status: 'ACTIVE',
+          attendanceOpenTime: { lte: now },
+          attendanceCloseTime: { gte: now },
+        },
+        include: { category: true },
+        orderBy: { startTime: 'asc' },
+      });
+      targetMeetingId = meeting?.id;
+    }
+
+    if (!targetMeetingId) {
+      return {
+        clockedIn: false,
+        hasActiveSession: false,
+        record: null,
+        meeting: null,
+      };
+    }
+
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: {
+        memberId_meetingId: {
+          memberId,
+          meetingId: targetMeetingId,
+        },
+      },
+      include: {
+        meeting: { include: { category: true } },
+      },
+    });
+
+    const isClockedIn = Boolean(record && record.actualArrivalTime);
+
+    return {
+      clockedIn: isClockedIn,
+      hasActiveSession: isClockedIn,
+      record: record ?? null,
+      meeting: meeting ?? record?.meeting ?? null,
+    };
+  }
+
+  async clockOutMember(memberId: string, meetingId?: string, deviceInfo?: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+
+    let targetMeetingId = meetingId;
+    if (!targetMeetingId) {
+      const activeStatus = await this.getAttendanceStatus(memberId);
+      targetMeetingId = activeStatus.record?.meetingId || activeStatus.meeting?.id;
+    }
+
+    if (!targetMeetingId) {
+      throw new BadRequestException('No meeting selected or active for clock out');
+    }
+
+    const existing = await this.prisma.attendanceRecord.findUnique({
+      where: {
+        memberId_meetingId: {
+          memberId,
+          meetingId: targetMeetingId,
+        },
+      },
+      include: { meeting: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('No active clock-in record found for this meeting');
+    }
+
+    // Remove the attendance record to end the active clock-in session cleanly
+    await this.prisma.attendanceRecord.delete({
+      where: { id: existing.id },
+    });
+
+    this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
+
+    return {
+      clockedOut: true,
+      clockedIn: false,
+      hasActiveSession: false,
+      message: 'Successfully clocked out of attendance session',
+      meetingId: targetMeetingId,
+    };
   }
 
   async getMeetingAttendance(meetingId: string) {

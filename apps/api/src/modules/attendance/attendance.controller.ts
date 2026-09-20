@@ -13,6 +13,14 @@ import { Role } from '@tfhc/shared';
 export class AttendanceController {
   constructor(private attendanceService: AttendanceService) {}
 
+  @Get('status')
+  async getAttendanceStatus(
+    @CurrentUser('memberId') memberId: string,
+    @Query('meetingId') meetingId?: string,
+  ) {
+    return this.attendanceService.getAttendanceStatus(memberId, meetingId);
+  }
+
   @Post('check-in')
   async checkIn(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.attendanceService.checkInMember({
@@ -25,6 +33,14 @@ export class AttendanceController {
       gpsAccuracy: body?.gpsAccuracy,
       deviceInfo: body?.deviceInfo,
     });
+  }
+
+  @Post('clock-out')
+  async clockOut(
+    @CurrentUser('memberId') memberId: string,
+    @Body() body: any,
+  ) {
+    return this.attendanceService.clockOutMember(memberId, body?.meetingId, body?.deviceInfo);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)

@@ -89,7 +89,7 @@ export const BottomNav: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="text-[10px] font-semibold tracking-tight leading-none">Notices</span>
+          <span className="text-[10px] font-semibold tracking-tight leading-none">Chat</span>
         </Link>
 
         {/* 5. Profile */}

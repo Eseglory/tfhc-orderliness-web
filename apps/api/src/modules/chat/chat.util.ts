@@ -55,27 +55,46 @@ export function viewerIsExecutive(viewer: ChatViewer): boolean {
   return isExecutiveRole(viewer.roleInUnit ?? null);
 }
 
+export const DISCIPLINARY_EXCLUDED_EMAILS = [
+  'koladeinfo@gmail.com',
+  'engreseglory@gmail.com',
+  'gloryeseosa@gmail.com',
+];
+
 /**
- * Disciplinary access to the DISCIPLINARY room: any staff account, super admin,
- * member in the Disciplinary Committee subTeam, or member with a disciplinary role/permission.
+ * Disciplinary access to the DISCIPLINARY room: strictly for members belonging
+ * to the Disciplinary Committee, designated committee emails, or members with
+ * explicit disciplinary unit roles / permissions. General admins and excluded users
+ * (such as Kolade Abiodun and Glory) do not have access.
  */
 export function viewerIsDisciplinary(viewer: ChatViewer): boolean {
-  if (viewer.role && viewer.role !== 'MEMBER') return true;
-  if (viewer.isSuperAdmin) return true;
-  if (
-    viewer.permissions.includes('*') ||
-    viewer.permissions.includes('excuses.review') ||
-    viewer.permissions.includes('flags.manage')
-  ) {
-    return true;
+  const email = viewer.email?.toLowerCase().trim();
+  if (email && DISCIPLINARY_EXCLUDED_EMAILS.includes(email)) {
+    return false;
   }
-  if (viewer.email && DISCIPLINARY_EMAILS.includes(viewer.email.toLowerCase().trim())) {
+  const fullName = `${viewer.firstName || ''} ${viewer.lastName || ''}`.toLowerCase();
+  if (
+    fullName.includes('kolade') ||
+    (fullName.includes('glory') && !fullName.includes('dotun') && !fullName.includes('jacob') && !fullName.includes('nicole'))
+  ) {
+    return false;
+  }
+  if (email && DISCIPLINARY_EMAILS.includes(email)) {
     return true;
   }
   if (viewer.subTeamName && /disciplinary/i.test(viewer.subTeamName)) {
     return true;
   }
-  return isDisciplinaryRole(viewer.roleInUnit ?? null);
+  if (isDisciplinaryRole(viewer.roleInUnit ?? null)) {
+    return true;
+  }
+  if (
+    viewer.permissions.includes('excuses.review') ||
+    viewer.permissions.includes('flags.manage')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 

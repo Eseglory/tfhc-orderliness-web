@@ -26,6 +26,22 @@ export default function OfflinePage() {
       </header>
 
       <main className="flex-1 px-edge-margin py-stack-md flex flex-col gap-section-gap w-full max-w-3xl mx-auto space-y-4">
+        {/* Quick Link to Comprehensive Settings */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0b1c30] to-[#162a42] text-white flex items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-[#f2320c] text-2xl">settings</span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-300">New Settings Centre</p>
+              <h2 className="text-sm font-extrabold text-white">Full Settings &amp; Device Permissions</h2>
+            </div>
+          </div>
+          <Link
+            href="/member/settings"
+            className="px-3 py-1.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white text-xs font-bold shrink-0 transition-all active:scale-95"
+          >
+            Open Settings
+          </Link>
+        </div>
         {/* PWA Installation Guidance */}
         <section className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-5 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] space-y-2">
           <div className="flex items-center gap-2">

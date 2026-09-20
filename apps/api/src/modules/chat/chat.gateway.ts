@@ -278,6 +278,125 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   // -------------------------------------------------------------------------
+  // WebRTC Peer-to-Peer Signaling (Voice & Video Calls)
+  // -------------------------------------------------------------------------
+
+  @SubscribeMessage('call:initiate')
+  async onCallInitiate(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { roomId: string; targetMemberId?: string; isVideo?: boolean },
+  ) {
+    const viewer = this.viewerOf(socket);
+    if (!viewer?.memberId) return { ok: false, error: 'Unauthorized' };
+
+    const callId = randomUUID();
+    const caller = {
+      memberId: viewer.memberId,
+      name: `${viewer.firstName ?? ''} ${viewer.lastName ?? ''}`.trim() || 'Member',
+    };
+
+    if (data.targetMemberId) {
+      const targetSockets = this.online.get(data.targetMemberId);
+      if (targetSockets && targetSockets.size > 0) {
+        for (const sid of targetSockets) {
+          this.liveSockets.get(sid)?.emit('call:incoming', {
+            callId,
+            roomId: data.roomId,
+            caller,
+            isVideo: Boolean(data.isVideo),
+          });
+        }
+        return { ok: true, callId };
+      }
+      return { ok: false, error: 'User is currently offline' };
+    }
+
+    socket.to(`room:${data.roomId}`).emit('call:incoming', {
+      callId,
+      roomId: data.roomId,
+      caller,
+      isVideo: Boolean(data.isVideo),
+    });
+    return { ok: true, callId };
+  }
+
+  @SubscribeMessage('call:signal')
+  onCallSignal(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { targetMemberId?: string; roomId?: string; signal: any; callId: string },
+  ) {
+    const viewer = this.viewerOf(socket);
+    if (!viewer?.memberId) return;
+
+    if (data.targetMemberId) {
+      const targetSockets = this.online.get(data.targetMemberId);
+      if (targetSockets) {
+        for (const sid of targetSockets) {
+          this.liveSockets.get(sid)?.emit('call:signal', {
+            fromMemberId: viewer.memberId,
+            signal: data.signal,
+            callId: data.callId,
+          });
+        }
+      }
+    } else if (data.roomId) {
+      socket.to(`room:${data.roomId}`).emit('call:signal', {
+        fromMemberId: viewer.memberId,
+        signal: data.signal,
+        callId: data.callId,
+      });
+    }
+  }
+
+  @SubscribeMessage('call:reject')
+  onCallReject(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
+  ) {
+    const viewer = this.viewerOf(socket);
+    if (data.targetMemberId) {
+      const targetSockets = this.online.get(data.targetMemberId);
+      if (targetSockets) {
+        for (const sid of targetSockets) {
+          this.liveSockets.get(sid)?.emit('call:rejected', {
+            callId: data.callId,
+            byMemberId: viewer?.memberId,
+          });
+        }
+      }
+    } else if (data.roomId) {
+      socket.to(`room:${data.roomId}`).emit('call:rejected', {
+        callId: data.callId,
+        byMemberId: viewer?.memberId,
+      });
+    }
+  }
+
+  @SubscribeMessage('call:end')
+  onCallEnd(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
+  ) {
+    const viewer = this.viewerOf(socket);
+    if (data.targetMemberId) {
+      const targetSockets = this.online.get(data.targetMemberId);
+      if (targetSockets) {
+        for (const sid of targetSockets) {
+          this.liveSockets.get(sid)?.emit('call:ended', {
+            callId: data.callId,
+            byMemberId: viewer?.memberId,
+          });
+        }
+      }
+    } else if (data.roomId) {
+      socket.to(`room:${data.roomId}`).emit('call:ended', {
+        callId: data.callId,
+        byMemberId: viewer?.memberId,
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Fan-out — used by both the gateway and the REST controller
   // -------------------------------------------------------------------------
 

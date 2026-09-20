@@ -142,12 +142,16 @@ export const SYSTEM_ROLE = {
   FINANCE: 'FINANCE',
   SECRETARY: 'SECRETARY',
   DISCIPLINARY_COMMITTEE: 'DISCIPLINARY_COMMITTEE',
+  VIEWER: 'VIEWER',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
 
 const NON_FINANCE_KEYS = PERMISSION_CATALOG.filter((p) => !p.finance).map((p) => p.key);
 const FINANCE_KEYS = PERMISSION_CATALOG.filter((p) => p.finance).map((p) => p.key);
+const READ_ONLY_KEYS = PERMISSION_CATALOG.filter((p) =>
+  p.key.endsWith('.read') || p.key.endsWith('.view') || p.key.endsWith('.export'),
+).map((p) => p.key);
 
 export const SYSTEM_ROLE_DEFINITIONS: Record<
   SystemRoleKey,
@@ -215,6 +219,12 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       'lookups.read',
       'welfare.read',
     ],
+  },
+  VIEWER: {
+    name: 'View-Only Admin',
+    description:
+      'Read-only access across all administrative modules: roster lookup, events, attendance, reports, dues, and requests. Cannot modify or delete records.',
+    permissions: [...READ_ONLY_KEYS],
   },
 };
 

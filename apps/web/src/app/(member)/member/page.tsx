@@ -58,12 +58,15 @@ export default function MemberDashboard() {
     cycle?: { state?: string; closesAt?: string; isOpen?: boolean };
   } | null>(null);
 
+  const [hasClockedIn, setHasClockedIn] = useState(false);
+
   useEffect(() => {
     const ac = new AbortController();
     const get = <T,>(url: string) => fetchApi<T>(url, { signal: ac.signal });
     get<Performance>('/scoring/my-performance').then(setPerf).catch(() => {});
     get<any>('/wardrobe/next').then((res) => setNextWardrobe(res?.data || res || null)).catch(() => {});
-    get<{ activeMeeting: any; today: any[]; upcoming: any[] }>('/calendar/today-upcoming').then((res) => {
+    get<{ activeMeeting: any; today: any[]; upcoming: any[] }>('/calendar/today-upcoming').then(async (res) => {
+      let targetMeeting = null;
       if (res?.activeMeeting) {
         const now = new Date();
         const m = res.activeMeeting;
@@ -72,6 +75,7 @@ export default function MemberDashboard() {
         const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
         if (now >= openTime && now <= cutoffTime && !['CANCELLED', 'CLOSED'].includes(m.status)) {
           setActiveMeeting(m);
+          targetMeeting = m;
         } else {
           setActiveMeeting(null);
         }
@@ -86,7 +90,21 @@ export default function MemberDashboard() {
         return cutoffTime > now;
       });
       const nextScheduled = todayPending.find((m) => m.status === 'SCHEDULED' || m.status === 'ACTIVE');
-      if (nextScheduled) setNextTodayService(nextScheduled);
+      if (nextScheduled) {
+        setNextTodayService(nextScheduled);
+        if (!targetMeeting) targetMeeting = nextScheduled;
+      }
+
+      if (targetMeeting?.id) {
+        try {
+          const statusRes = await get<{ clockedIn: boolean }>(`/attendance/status?meetingId=${encodeURIComponent(targetMeeting.id)}`);
+          if (statusRes && statusRes.clockedIn) {
+            setHasClockedIn(true);
+          }
+        } catch {
+          // Non-blocking
+        }
+      }
 
       // Deduplicate by ID
       const seenIds = new Set<string>();
@@ -129,6 +147,7 @@ export default function MemberDashboard() {
 
   // Cohesive, curated Church Tools icons and colors
   const churchTools = [
+    { href: '/member/chat', label: 'Chat', icon: 'forum', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
     { href: '/member/wardrobe', label: 'Wardrobe', icon: 'apparel', iconColor: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/50' },
     { href: '/member/my-attendance', label: 'Attendance', icon: 'fact_check', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
     { href: '/member/meetings', label: 'Events', icon: 'event', iconColor: 'text-[#0b1c30] dark:text-blue-400', bg: 'bg-slate-100 dark:bg-slate-800' },
@@ -141,6 +160,7 @@ export default function MemberDashboard() {
     { href: '/member/analytics', label: 'Analytics', icon: 'monitoring', iconColor: 'text-[#0b1c30] dark:text-blue-400', bg: 'bg-slate-100 dark:bg-slate-800' },
     { href: '/member/rewards', label: 'Milestones', icon: 'workspace_premium', iconColor: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/50' },
     { href: '/member/files', label: 'Files', icon: 'folder_open', iconColor: 'text-slate-600 dark:text-slate-400', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/settings', label: 'Settings', icon: 'settings', iconColor: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-800' },
     { href: '/member/offline', label: 'Offline', icon: 'offline_pin', iconColor: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/50' },
   ];
 
@@ -191,7 +211,12 @@ export default function MemberDashboard() {
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  {availabilityData?.submitted ? (
+                  {hasClockedIn ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-bold ring-1 ring-emerald-500/30">
+                      <span className="material-symbols-outlined text-xs text-emerald-600">check_circle</span>
+                      Clocked In
+                    </span>
+                  ) : availabilityData?.submitted ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
                       <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
                       Confirmed for Service
@@ -248,24 +273,32 @@ export default function MemberDashboard() {
 
             <Link
               href={
-                availabilityData?.submitted
+                hasClockedIn
+                  ? '/member/check-in'
+                  : availabilityData?.submitted
                   ? (activeMeeting ? `/member/meetings/${activeMeeting.id}` : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/availability')
                   : (activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/calendar')
               }
               className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 px-4 text-sm font-extrabold transition-all active:scale-[0.98] shadow-sm ${
-                !availabilityData?.submitted && activeMeeting
+                hasClockedIn
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
+                  : !availabilityData?.submitted && activeMeeting
                   ? 'bg-[#f2320c] hover:bg-[#d82a08] text-white shadow-red-600/25'
                   : 'bg-[#0b1c30] hover:bg-[#162a42] text-white shadow-slate-900/10'
               }`}
             >
               <span className="material-symbols-outlined text-lg">
-                {availabilityData?.submitted
+                {hasClockedIn
+                  ? 'fact_check'
+                  : availabilityData?.submitted
                   ? 'event_available'
                   : activeMeeting
                   ? 'location_on'
                   : 'calendar_month'}
               </span>
-              {availabilityData?.submitted
+              {hasClockedIn
+                ? 'Clocked In • View Attendance / Clock Out'
+                : availabilityData?.submitted
                 ? 'View Service Details'
                 : activeMeeting
                 ? 'Check In Now'

@@ -151,3 +151,27 @@
     transform: translateX(100%);
   }
 }
+
+/* ==========================================================================
+   Clock-In Attendance Pulse Animation (Accessible with prefers-reduced-motion)
+   ========================================================================== */
+@keyframes clockinPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(0.99);
+  }
+}
+
+.animate-clockin-pulse {
+  animation: clockinPulse 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-clockin-pulse {
+    animation: none;
+  }
+}

@@ -16,6 +16,7 @@ import { MessageBubble, SystemLine } from './MessageBubble';
 import { useUpload } from '../UploadProgress';
 import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
+import { WebRtcCallModal } from './WebRtcCallModal';
 
 const ROOM_ICON: Record<string, string> = {
   GENERAL: 'forum',
@@ -819,6 +820,53 @@ export function ChatWorkspace({
 
               {/* Action Buttons */}
               <div className="flex items-center gap-1">
+                {/* Voice & Video Call Buttons */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!activeRoom) return;
+                    const targetMemberId = activeRoom.type === 'DIRECT' ? activeRoom.direct?.memberId : undefined;
+                    window.dispatchEvent(
+                      new CustomEvent('tfhc:start-call', {
+                        detail: {
+                          roomId: activeRoom.id,
+                          targetMemberId,
+                          peerName: activeRoom.name,
+                          isVideo: false,
+                        },
+                      })
+                    );
+                  }}
+                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
+                  title="Voice Call"
+                  aria-label="Voice Call"
+                >
+                  <span className="material-symbols-outlined text-[20px]">call</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!activeRoom) return;
+                    const targetMemberId = activeRoom.type === 'DIRECT' ? activeRoom.direct?.memberId : undefined;
+                    window.dispatchEvent(
+                      new CustomEvent('tfhc:start-call', {
+                        detail: {
+                          roomId: activeRoom.id,
+                          targetMemberId,
+                          peerName: activeRoom.name,
+                          isVideo: true,
+                        },
+                      })
+                    );
+                  }}
+                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
+                  title="Video Call"
+                  aria-label="Video Call"
+                >
+                  <span className="material-symbols-outlined text-[20px]">videocam</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setShowInChatSearch((v) => !v)}
@@ -1194,6 +1242,7 @@ export function ChatWorkspace({
           onChanged={loadRooms}
         />
       )}
+      <WebRtcCallModal socket={socket.socket} currentMemberId={user?.memberId} />
     </div>
   );
 }

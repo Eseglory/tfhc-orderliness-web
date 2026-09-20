@@ -275,9 +275,13 @@ export function useChatSocket(events: ChatSocketEvents) {
   );
 
   return useMemo(
-    () => ({ connected, online, subscribe, sendTyping, sendRead, sendMessage }),
+    () => ({ connected, online, subscribe, sendTyping, sendRead, sendMessage, socket: sharedSocket }),
     [connected, online, subscribe, sendTyping, sendRead, sendMessage],
   );
+}
+
+export function getSharedSocket(): Socket | null {
+  return sharedSocket;
 }
 
 /** Realtime unread badges with a quiet disconnected fallback. */

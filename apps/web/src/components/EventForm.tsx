@@ -219,8 +219,35 @@ export function EventForm({
   const [error, setError] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [activePreset, setActivePreset] = useState<'service' | 'sync' | 'rehearsal' | 'conference' | 'custom'>('custom');
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
 
   const set = <K extends keyof EventFormValue>(k: K, val: EventFormValue[K]) => setV((s) => ({ ...s, [k]: val }));
+
+  const captureCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setGpsError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setGpsLoading(true);
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsLoading(false);
+        const lat = Math.round(pos.coords.latitude * 10000000) / 10000000;
+        const lng = Math.round(pos.coords.longitude * 10000000) / 10000000;
+        set('latitude', lat);
+        set('longitude', lng);
+        setGpsAccuracy(Math.round(pos.coords.accuracy));
+      },
+      (err) => {
+        setGpsLoading(false);
+        setGpsError(err.message || 'Unable to retrieve your location. Check device permissions.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   useEffect(() => {
     if (open) {
@@ -229,6 +256,9 @@ export function EventForm({
       setActivePreset('custom');
       setMemberSearch('');
       setCopySuccess(false);
+      setGpsAccuracy(null);
+      setGpsError(null);
+      setGpsLoading(false);
     }
   }, [open, initial]);
 
@@ -807,28 +837,199 @@ export function EventForm({
 
           {/* Venue & Geofencing (If In-Person or Hybrid) */}
           {v.mode !== 'VIRTUAL' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
-                <MapPin className="w-4 h-4 text-amber-400" />
-                Physical Venue &amp; GPS Geofence
+            <div className="space-y-4 p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300">
+                  <MapPin className="w-4 h-4 text-amber-400" />
+                  Physical Venue &amp; Geofencing
+                </div>
+                {/* Geofence Mode Toggle */}
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/80 border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => set('geofenceRadiusMeters', v.geofenceRadiusMeters >= 50000 ? 100 : v.geofenceRadiusMeters || 100)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      v.geofenceRadiusMeters < 50000
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Require Within Venue
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => set('geofenceRadiusMeters', 100000)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      v.geofenceRadiusMeters >= 50000
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    No Location Restriction
+                  </button>
+                </div>
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase text-slate-400">Venue Name</label>
-                  <input className={darkInputClass} value={v.locationName} onChange={(e) => set('locationName', e.target.value)} />
+                  <input
+                    className={darkInputClass}
+                    value={v.locationName}
+                    onChange={(e) => set('locationName', e.target.value)}
+                    placeholder="e.g. House Austin of Blessing / Main Auditorium"
+                  />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 sm:col-span-2">
                   <label className="text-[10px] font-bold uppercase text-slate-400">Address</label>
-                  <input className={darkInputClass} value={v.address} onChange={(e) => set('address', e.target.value)} placeholder="Physical address" />
+                  <input
+                    className={darkInputClass}
+                    value={v.address}
+                    onChange={(e) => set('address', e.target.value)}
+                    placeholder="Full physical address or landmark"
+                  />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-400">Geofence Radius (Meters)</label>
-                  <input type="number" className={darkInputClass} value={v.geofenceRadiusMeters} onChange={(e) => set('geofenceRadiusMeters', Number(e.target.value))} />
+              </div>
+
+              {/* Geofence & GPS Coordinates Section */}
+              {v.geofenceRadiusMeters < 50000 ? (
+                <div className="pt-2 border-t border-slate-800/60 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <p className="text-xs font-bold text-slate-200">GPS Venue Coordinates</p>
+                      <p className="text-[11px] text-slate-400">
+                        Members must be physically within the geofence radius to clock in.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={captureCurrentLocation}
+                      disabled={gpsLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {gpsLoading ? (
+                        <>
+                          <span className="w-3.5 h-3.5 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                          <span>Locating Device…</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[16px]">my_location</span>
+                          <span>Use My Current Location</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Accuracy or Error Feedback */}
+                  {gpsAccuracy !== null && (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                        gpsAccuracy <= 50
+                          ? 'bg-emerald-950/40 border border-emerald-800/50 text-emerald-300'
+                          : 'bg-amber-950/40 border border-amber-800/50 text-amber-300'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {gpsAccuracy <= 50 ? 'check_circle' : 'warning'}
+                      </span>
+                      <span>
+                        GPS captured with accuracy of <strong>±{gpsAccuracy}m</strong>.
+                        {gpsAccuracy > 50 &&
+                          ' Warning: Accuracy below 50m is recommended for high reliability.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {gpsError && (
+                    <div className="p-2.5 rounded-xl text-xs flex items-center gap-2 bg-rose-950/40 border border-rose-800/50 text-rose-300">
+                      <span className="material-symbols-outlined text-[18px]">error</span>
+                      <span>{gpsError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">
+                        Latitude (-90.0 to 90.0)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.0000001"
+                        className={darkInputClass}
+                        value={v.latitude}
+                        onChange={(e) => set('latitude', parseFloat(e.target.value) || 0)}
+                        placeholder="e.g. 6.6697906"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">
+                        Longitude (-180.0 to 180.0)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.0000001"
+                        className={darkInputClass}
+                        value={v.longitude}
+                        onChange={(e) => set('longitude', parseFloat(e.target.value) || 0)}
+                        placeholder="e.g. 3.3581822"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Geofence Radius with Badges */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">
+                        Geofence Radius (Meters)
+                      </label>
+                      <span className="text-xs font-bold text-amber-400">{v.geofenceRadiusMeters}m</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="10"
+                        max="10000"
+                        className={darkInputClass}
+                        value={v.geofenceRadiusMeters}
+                        onChange={(e) => set('geofenceRadiusMeters', Math.max(10, Number(e.target.value)))}
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        {[50, 100, 250, 500].map((radius) => (
+                          <button
+                            key={radius}
+                            type="button"
+                            onClick={() => set('geofenceRadiusMeters', radius)}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              v.geofenceRadiusMeters === radius
+                                ? 'bg-amber-500 text-slate-950 shadow-xs'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            {radius}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-slate-400">Organiser Name</label>
-                  <input className={darkInputClass} value={v.organizerName} onChange={(e) => set('organizerName', e.target.value)} placeholder="e.g. Protocol / Media Unit" />
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-amber-400">public</span>
+                  <span>
+                    No location restriction is enforced for this event. Members can clock in from any location.
+                  </span>
                 </div>
+              )}
+
+              <div className="space-y-1 pt-1">
+                <label className="text-[10px] font-bold uppercase text-slate-400">Organiser Name</label>
+                <input
+                  className={darkInputClass}
+                  value={v.organizerName}
+                  onChange={(e) => set('organizerName', e.target.value)}
+                  placeholder="e.g. Protocol / Media Unit"
+                />
               </div>
             </div>
           )}

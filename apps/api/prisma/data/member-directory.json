@@ -231,6 +231,18 @@
         "Folawewo David",
         "Wewo David"
       ]
+    },
+    {
+      "firstName": "Kolade",
+      "lastName": "Abiodun",
+      "email": "koladeinfo@gmail.com",
+      "phoneNumber": "08035792258",
+      "birthday": "26th December",
+      "profession": "Researcher",
+      "roleInUnit": "Administrator",
+      "aliases": [
+        "Abiodun Kolade"
+      ]
     }
   ],
   "skipped": []
