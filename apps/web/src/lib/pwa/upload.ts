@@ -2,6 +2,8 @@ import { ApiError, fetchApi, getAuthToken } from '../api';
 import type { ChatMessage } from '../chat';
 import { pwaRuntime } from './runtime';
 import { recordPwaMetric } from './metrics';
+import { compressImageIfNeeded } from '../image-compress';
+
 export async function cancelUpload(roomId: string, file: File) {
   const token = getAuthToken();
   if (!token) throw new Error('Sign in to cancel this upload.');
@@ -14,8 +16,10 @@ export async function cancelUpload(roomId: string, file: File) {
   await fetchApi(`/chat/uploads/${meta.uploadId}`, { method: 'DELETE', signal: AbortSignal.timeout(15000) });
   await store.remove('uploads', key);
 }
-export async function resumableUpload(roomId: string, file: File, options: { signal?: AbortSignal; progress?(percent: number): void; replyToId?: string } = {}) {
-  if (file.size < 1 || file.size > 2 * 1024 * 1024) throw new Error('Choose a file of 2 MB or smaller.');
+
+export async function resumableUpload(roomId: string, inputFile: File, options: { signal?: AbortSignal; progress?(percent: number): void; replyToId?: string } = {}) {
+  const file = await compressImageIfNeeded(inputFile);
+  if (file.size < 1 || file.size > 3 * 1024 * 1024) throw new Error('Choose a file of 3 MB or smaller.');
   const token = getAuthToken();
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))).map(byte => byte.toString(16).padStart(2, '0')).join('');
   const owner = JSON.parse(atob((token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub;
@@ -59,5 +63,17 @@ export async function resumableUpload(roomId: string, file: File, options: { sig
   }
   const message = await request<ChatMessage>(`/chat/uploads/${state.uploadId}/complete`, { method: 'POST' });
   await store.remove('uploads', key);
+  if (message?.attachmentUrl) {
+    try {
+      await store.save(`file:${message.id}`, {
+        id: message.id,
+        url: message.attachmentUrl,
+        meta: message.attachmentMeta,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      }, undefined, 'media', 14 * 86400000);
+    } catch {}
+  }
   return message;
 }

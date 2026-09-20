@@ -10,7 +10,7 @@ export const CHUNK_SIZE = 256 * 1024;
 export class ResumableUploadsService {
   constructor(private prisma: PrismaService, private chat: ChatService, private attachments: ChatAttachmentsService, private gateway: ChatGateway) {}
   async begin(viewer: ChatViewer, input: { uploadId?: string; roomId?: string; name?: string; mime?: string; size?: number; sha256?: string; replyToId?: string }) {
-    if (!Number.isInteger(input?.size) || input.size < 1 || input.size > 2 * 1024 * 1024) throw new PayloadTooLargeException('Files must be between 1 byte and 2 MB');
+    if (!Number.isInteger(input?.size) || input.size < 1 || input.size > 3 * 1024 * 1024) throw new PayloadTooLargeException('Files must be between 1 byte and 3 MB');
     if (typeof input.roomId !== 'string' || typeof input.name !== 'string' || !input.name || input.name.length > 200 ||
         typeof input.mime !== 'string' || input.mime.length > 150 || !/^[a-f0-9]{64}$/.test(input.sha256 || '')) throw new BadRequestException('Invalid upload metadata');
     if (!/^[a-f0-9-]{36}$/.test(input.uploadId || '')) throw new BadRequestException('Upload ID required');

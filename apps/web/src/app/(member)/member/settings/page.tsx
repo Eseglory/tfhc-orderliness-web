@@ -695,7 +695,7 @@ export default function MemberSettingsPage() {
               Supported Attachments: Images (PNG, JPG, WebP), Audio (MP3, WebM voice notes), PDF &amp; Documents
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Attachments in chat are limited to 2 MB per file for fast mobile transmission. Media is encrypted and stored safely on church infrastructure.
+              Attachments in chat are limited to 3 MB per file for fast mobile transmission. Media is encrypted and stored safely on church infrastructure.
             </p>
           </div>
         </section>

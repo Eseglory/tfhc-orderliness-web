@@ -3,9 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
 import { WhatsAppEmojiPicker } from './EmojiPicker';
+import { compressImageIfNeeded } from '../../lib/image-compress';
 
-const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024; // 2 MB Hard Limit
-const SAFE_RECORDING_BYTE_LIMIT = 1.85 * 1024 * 1024; // 1.85 MB Auto-stop threshold for Opus/WebM container safety
+const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB Hard Limit
+const SAFE_RECORDING_BYTE_LIMIT = 2.85 * 1024 * 1024; // 2.85 MB Auto-stop threshold for Opus/WebM container safety
 
 export function Composer({
   disabled,
@@ -176,13 +177,14 @@ export function Composer({
     }
   };
 
-  const handleFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFile = e.target.files?.[0];
     e.target.value = '';
     setShowAttachMenu(false);
-    if (!file) return;
+    if (!rawFile) return;
+    const file = await compressImageIfNeeded(rawFile);
     if (file.size > MAX_ATTACHMENT_BYTES) {
-      return notify('Maximum file size is 2 MB.', 'error');
+      return notify('Maximum file size is 3 MB.', 'error');
     }
     void onAttach(file);
   };
@@ -229,10 +231,10 @@ export function Composer({
           currentBytesRef.current += ev.data.size;
           setRecordedBytes(currentBytesRef.current);
 
-          // Real-time 2 MB enforcement: Auto-stop near 1.85 MB threshold
+          // Real-time 3 MB enforcement: Auto-stop near 2.85 MB threshold
           if (currentBytesRef.current >= SAFE_RECORDING_BYTE_LIMIT && !autoStoppedRef.current) {
             autoStoppedRef.current = true;
-            notify('Maximum voice note size approaching 2 MB. Auto-stopping recording...', 'info');
+            notify('Maximum voice note size approaching 3 MB. Auto-stopping recording...', 'info');
             stopRecording(true);
           }
         }
@@ -249,7 +251,7 @@ export function Composer({
 
         if (blob.size > 500) {
           if (blob.size > MAX_ATTACHMENT_BYTES) {
-            return notify('Voice note exceeds 2 MB limit.', 'error');
+            return notify('Voice note exceeds 3 MB limit.', 'error');
           }
           const isMp4 = (recorder.mimeType || '').includes('mp4') || (recorder.mimeType || '').includes('m4a');
           const isOgg = (recorder.mimeType || '').includes('ogg');

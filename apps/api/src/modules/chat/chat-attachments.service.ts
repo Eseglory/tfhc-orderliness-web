@@ -5,7 +5,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const sharp: typeof import('sharp').default = require('sharp');
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB Hard Limit
+const MAX_FILE_BYTES = 3 * 1024 * 1024; // 3 MB Hard Limit
 const AUDIO_MIME = new Set(['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/x-m4a', 'audio/aac']);
 const DOCUMENT_MIME = new Set([
   'application/pdf',
@@ -32,9 +32,9 @@ export class ChatAttachmentsService {
   ): Promise<PreparedAttachment> {
     if (!file || !file.buffer?.length) throw new BadRequestException('No file uploaded');
     
-    // Server-side hard validation: 2 MB maximum
+    // Server-side hard validation: 3 MB maximum
     if (file.size > MAX_FILE_BYTES || file.buffer.length > MAX_FILE_BYTES) {
-      throw new BadRequestException('Maximum file size is 2 MB.');
+      throw new BadRequestException('Maximum file size is 3 MB.');
     }
 
     const mime = (file.mimetype || '').split(';')[0].trim().toLowerCase();
@@ -84,7 +84,7 @@ export class ChatAttachmentsService {
       };
     }
 
-    throw new BadRequestException('Unsupported attachment format. Only images, audio, and documents up to 2 MB are supported.');
+    throw new BadRequestException('Unsupported attachment format. Only images, audio, and documents up to 3 MB are supported.');
   }
 }
 
