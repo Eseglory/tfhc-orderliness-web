@@ -202,7 +202,7 @@ export default function MemberDashboard() {
         </div>
       </header>
 
-      <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 py-4 max-w-4xl mx-auto">
+      <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 pt-4 pb-28 sm:pb-8 max-w-4xl mx-auto">
         {/* Active Service Attendance Reminder Modal / Banner */}
 
         {/* Dynamic Gathering / Check-in Hero Widget */}

@@ -74,12 +74,12 @@ export function ServiceReminderModal() {
     const dismiss = () => { sessionStorage.setItem(`dismissed_scheduled_${scheduled.id}`, 'true'); setScheduled(null); };
     const destination = scheduled.data?.url;
     const href = destination?.startsWith('/member/') ? destination : '/member/notifications';
-    return <aside aria-label="Upcoming service reminder" className="fixed bottom-20 right-4 left-4 z-50 rounded-2xl border border-primary/30 bg-surface p-5 text-on-surface shadow-xl md:left-auto md:max-w-md">
+    return <aside aria-label="Upcoming service reminder" className="fixed bottom-24 md:bottom-6 right-4 left-4 z-50 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 text-slate-900 dark:text-white shadow-2xl md:left-auto md:max-w-md">
       <h4 className="font-bold">{scheduled.title}</h4>
-      <p className="my-3 text-sm">{scheduled.body}</p>
+      <p className="my-3 text-sm text-slate-600 dark:text-slate-300">{scheduled.body}</p>
       <div className="flex items-center gap-4">
-        <Link href={href} onClick={dismiss} className="rounded-xl bg-primary px-4 py-2 text-white">View service</Link>
-        <button onClick={dismiss}>Dismiss</button>
+        <Link href={href} onClick={dismiss} className="rounded-xl bg-[#f2320c] hover:bg-[#d82a08] px-4 py-2 text-white font-bold text-sm shadow-md shadow-red-500/20">View service</Link>
+        <button onClick={dismiss} className="text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white">Dismiss</button>
       </div>
     </aside>;
   }
@@ -100,8 +100,8 @@ export function ServiceReminderModal() {
   };
 
   return (
-    <aside aria-label="Service Reminder" className="fixed bottom-20 md:bottom-6 right-4 left-4 md:left-auto md:max-w-md z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="bg-surface border-2 border-primary/30 rounded-2xl p-5 shadow-2xl backdrop-blur-xl bg-surface/95 dark:bg-surface/95 text-on-surface">
+    <aside aria-label="Service Reminder" className="fixed bottom-24 md:bottom-6 right-4 left-4 md:left-auto md:max-w-md z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+      <div className="bg-white dark:bg-slate-900 border-2 border-red-500/30 rounded-3xl p-5 shadow-2xl text-slate-900 dark:text-white">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center gap-2">
             <span className="flex h-3 w-3 relative">

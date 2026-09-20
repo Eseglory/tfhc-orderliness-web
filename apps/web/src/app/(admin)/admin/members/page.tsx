@@ -1077,7 +1077,7 @@ export default function AdminMembersPage() {
 
         {/* Google Access Modal */}
         {accessMember && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[100] flex items-center justify-center p-4">
             <form
               role="dialog"
               aria-modal="true"
@@ -1164,7 +1164,7 @@ export default function AdminMembersPage() {
 
         {/* Create/Edit Member Modal */}
         {showMemberModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-150">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 max-h-[90dvh] overflow-y-auto shadow-2xl">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">

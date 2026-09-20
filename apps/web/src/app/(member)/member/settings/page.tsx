@@ -354,7 +354,7 @@ export default function MemberSettingsPage() {
         </button>
       </header>
 
-      <main className="flex-1 px-4 sm:px-6 py-6 flex flex-col gap-6 w-full max-w-4xl mx-auto">
+      <main className="flex-1 px-4 sm:px-6 pt-6 pb-32 sm:pb-8 flex flex-col gap-6 w-full max-w-4xl mx-auto">
         {/* Device & Environment Detection Banner */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs">
           <div className="flex items-center gap-3">

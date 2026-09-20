@@ -252,13 +252,13 @@ export default function MyAttendancePage() {
 
       {/* Submit Excuse Modal matching Stitch Screen 9 (submit_excuse/code.html) */}
       {showExcuseModal && (
-        <div className="fixed inset-0 bg-primary/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl p-6 border border-outline-variant/30 relative max-h-[85vh] overflow-y-auto">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-primary mb-2">Submit Absence Excuse</h3>
-            <p className="font-body-md text-body-md text-on-surface-variant mb-4">
+        <div className="fixed inset-0 bg-black/75 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 relative max-h-[85vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Submit Absence Excuse</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               Provide a valid reason for your absence for admin review.
             </p>
-            {message && <div className="p-2 mb-3 bg-secondary/10 text-secondary text-sm rounded text-center">{message}</div>}
+            {message && <div className="p-2 mb-3 bg-red-50 dark:bg-red-950/40 text-[#f2320c] text-xs font-semibold rounded-xl text-center border border-red-200 dark:border-red-900/50">{message}</div>}
             <form onSubmit={handleSubmitExcuse} className="flex flex-col gap-4">
               <textarea
                 required
@@ -266,20 +266,20 @@ export default function MyAttendancePage() {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="State your reason (e.g. Official Work Assignment, Health Issue...)"
-                className="w-full bg-surface border border-outline-variant rounded-lg p-3 text-on-surface font-body-md"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#f2320c]"
               />
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowExcuseModal(false)}
-                  className="flex-1 bg-surface-variant text-on-surface-variant font-label-md text-label-md py-3 rounded-lg"
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-sm py-3 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg font-bold"
+                  className="flex-1 bg-[#f2320c] hover:bg-[#d82a08] text-white font-bold text-sm py-3 rounded-xl transition-colors shadow-md shadow-red-500/20 disabled:opacity-50"
                 >
                   {submitting ? 'Submitting...' : 'Submit'}
                 </button>
@@ -291,23 +291,23 @@ export default function MyAttendancePage() {
 
       {/* Correction Request Modal matching Stitch Screen 10 (correction_request/code.html) */}
       {showCorrectionModal && (
-        <div className="fixed inset-0 bg-primary/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl p-6 border border-outline-variant/30 relative max-h-[85vh] overflow-y-auto">
-            <h3 className="font-headline-sm text-headline-sm font-bold text-primary mb-2">Request Attendance Correction</h3>
-            <p className="font-body-md text-body-md text-on-surface-variant mb-4">
+        <div className="fixed inset-0 bg-black/75 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 relative max-h-[85vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Request Attendance Correction</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               If your attendance was marked incorrectly due to network/GPS issues, submit a correction request.
             </p>
-            {message && <div className="p-2 mb-3 bg-secondary/10 text-secondary text-sm rounded text-center">{message}</div>}
+            {message && <div className="p-2 mb-3 bg-red-50 dark:bg-red-950/40 text-[#f2320c] text-xs font-semibold rounded-xl text-center border border-red-200 dark:border-red-900/50">{message}</div>}
             <form onSubmit={handleSubmitCorrection} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="requested-status" className="font-label-md text-label-md text-on-surface-variant uppercase font-bold">
+                <label htmlFor="requested-status" className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                   Correct Status To
                 </label>
                 <select
                   id="requested-status"
                   value={requestedStatus}
                   onChange={(e) => setRequestedStatus(e.target.value)}
-                  className="w-full bg-surface border border-outline-variant rounded-lg p-3 text-on-surface font-body-md"
+                  className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#f2320c]"
                 >
                   <option value="EARLY">Early</option>
                   <option value="ON_TIME">On Time</option>
@@ -321,20 +321,20 @@ export default function MyAttendancePage() {
                 value={correctionNote}
                 onChange={(e) => setCorrectionNote(e.target.value)}
                 placeholder="Explain the discrepancy (e.g. Present at 8:40 AM but scanner timed out...)"
-                className="w-full bg-surface border border-outline-variant rounded-lg p-3 text-on-surface font-body-md"
+                className="w-full bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#f2320c]"
               />
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowCorrectionModal(false)}
-                  className="flex-1 bg-surface-variant text-on-surface-variant font-label-md text-label-md py-3 rounded-lg"
+                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-sm py-3 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg font-bold"
+                  className="flex-1 bg-[#f2320c] hover:bg-[#d82a08] text-white font-bold text-sm py-3 rounded-xl transition-colors shadow-md shadow-red-500/20 disabled:opacity-50"
                 >
                   {submitting ? 'Submitting...' : 'Submit Request'}
                 </button>

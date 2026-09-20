@@ -95,7 +95,7 @@ export default function MemberWelfarePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-5 px-4 py-4">
+      <main className="mx-auto max-w-2xl space-y-5 px-4 pt-4 pb-28 sm:pb-8">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-primary">Request &amp; Welfare Support</h2>
           <p className="text-xs text-on-surface-variant mt-0.5">Submit assistance requests or complaints for church leadership review.</p>

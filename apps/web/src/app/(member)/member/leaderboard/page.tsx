@@ -36,7 +36,7 @@ export default function MemberLeaderboardPage() {
   const rest = leaderboardData.slice(3);
 
   return (
-    <div className="bg-background text-on-background min-h-screen pb-safe antialiased flex flex-col font-body-md">
+    <div className="bg-background text-on-background min-h-screen pb-36 antialiased flex flex-col font-body-md">
       {/* TopAppBar */}
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">

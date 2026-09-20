@@ -215,10 +215,10 @@ export function NewRoomModal({
               <button
                 type="button"
                 onClick={() => setSelectedSubTeam('ALL')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all active:scale-95 ${
                   selectedSubTeam === 'ALL'
-                    ? 'bg-primary text-on-primary shadow-xs'
-                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                    ? 'bg-[#f2320c] text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 All Members ({contacts.length})
@@ -230,10 +230,10 @@ export function NewRoomModal({
                     key={st}
                     type="button"
                     onClick={() => setSelectedSubTeam(st)}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
+                    className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all active:scale-95 ${
                       selectedSubTeam === st
-                        ? 'bg-primary text-on-primary shadow-xs'
-                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                        ? 'bg-[#f2320c] text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     {st} ({count})
@@ -250,27 +250,27 @@ export function NewRoomModal({
             onChange={(e) => setQ(e.target.value)}
           />
 
-          <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-outline-variant/30 p-1">
+          <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-1.5">
             {filtered.length === 0 ? (
-              <p className="py-6 text-center text-xs text-on-surface-variant">No matching members found.</p>
+              <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">No matching members found.</p>
             ) : (
               filtered.map((c) => (
                 <button
                   key={c.memberId}
                   type="button"
                   onClick={() => toggle(c.memberId)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-surface-container transition-colors"
+                  className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-white dark:hover:bg-slate-800/80 transition-all active:scale-98 shadow-2xs hover:shadow-xs"
                 >
                   <input
                     type="checkbox"
                     readOnly
                     checked={picked.has(c.memberId)}
-                    className="h-4 w-4 rounded accent-primary pointer-events-none"
+                    className="h-4 w-4 rounded accent-[#f2320c] pointer-events-none"
                   />
                   <Avatar name={c.name} photoUrl={c.photoUrl} size={32} />
                   <div className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-on-surface">{c.name}</span>
-                    <span className="block truncate text-xs text-on-surface-variant">
+                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{c.name}</span>
+                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
                       {[c.subTeam, c.roleInUnit].filter(Boolean).join(' · ') || 'Member'}
                     </span>
                   </div>
@@ -421,10 +421,10 @@ export function ManageMembersModal({
             <button
               type="button"
               onClick={() => setSelectedSubTeam('ALL')}
-              className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all ${
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-xl transition-all ${
                 selectedSubTeam === 'ALL'
-                  ? 'bg-primary text-on-primary'
-                  : 'bg-surface-container text-on-surface-variant'
+                  ? 'bg-[#f2320c] text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               All ({candidates.length})
@@ -434,10 +434,10 @@ export function ManageMembersModal({
                 key={st}
                 type="button"
                 onClick={() => setSelectedSubTeam(st)}
-                className={`px-2 py-0.5 text-[11px] font-semibold rounded-md transition-all ${
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-xl transition-all ${
                   selectedSubTeam === st
-                    ? 'bg-primary text-on-primary'
-                    : 'bg-surface-container text-on-surface-variant'
+                    ? 'bg-[#f2320c] text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
                 {st}
@@ -446,7 +446,7 @@ export function ManageMembersModal({
             <button
               type="button"
               onClick={selectAllCandidates}
-              className="text-[11px] font-bold text-primary hover:underline ml-auto"
+              className="text-[11px] font-bold text-[#f2320c] hover:underline ml-auto"
             >
               Select All
             </button>
@@ -460,27 +460,27 @@ export function ManageMembersModal({
           onChange={(e) => setQ(e.target.value)}
         />
 
-        <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-outline-variant/30 p-1">
+        <div className="mt-2 max-h-44 space-y-1 overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-1.5">
           {filteredCandidates.length === 0 ? (
-            <p className="py-4 text-center text-xs text-on-surface-variant">No candidates to add.</p>
+            <p className="py-4 text-center text-xs text-slate-500 dark:text-slate-400">No candidates to add.</p>
           ) : (
             filteredCandidates.map((c) => (
               <button
                 key={c.memberId}
                 type="button"
                 onClick={() => toggleCandidate(c.memberId)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-surface-container transition-colors"
+                className="flex w-full items-center gap-3 rounded-xl px-2.5 py-1.5 text-left hover:bg-white dark:hover:bg-slate-800/80 transition-all shadow-2xs hover:shadow-xs"
               >
                 <input
                   type="checkbox"
                   readOnly
                   checked={pickedToAdd.has(c.memberId)}
-                  className="h-4 w-4 rounded accent-primary pointer-events-none"
+                  className="h-4 w-4 rounded accent-[#f2320c] pointer-events-none"
                 />
                 <Avatar name={c.name} photoUrl={c.photoUrl} size={28} />
                 <div className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-on-surface">{c.name}</span>
-                  <span className="block truncate text-xs text-on-surface-variant">
+                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{c.name}</span>
+                  <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
                     {[c.subTeam, c.roleInUnit].filter(Boolean).join(' · ')}
                   </span>
                 </div>

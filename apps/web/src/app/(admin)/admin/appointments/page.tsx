@@ -971,7 +971,7 @@ export default function AppointmentsPage() {
 
         {/* Schedule New Appointment Modal (Dark Glassmorphism Theme) */}
         {createModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
             <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="px-6 py-5 border-b border-slate-800/80 flex items-start justify-between gap-4 bg-slate-900/50">
@@ -1202,7 +1202,7 @@ export default function AppointmentsPage() {
 
         {/* Reschedule Modal (Dark Glassmorphism Theme) */}
         {rescheduleModalOpen && selectedAppointment && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
             <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-lg w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
               <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
                 <div className="flex items-center gap-3">
@@ -1294,7 +1294,7 @@ export default function AppointmentsPage() {
 
         {/* Cancel Appointment Dialog (Dark Glassmorphism Theme) */}
         {cancellingAppointment && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-[#090d16] text-white border border-slate-800/90 rounded-[2rem] max-w-md w-full shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
               <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/50">
                 <div className="flex items-center gap-3">

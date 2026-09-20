@@ -9,11 +9,11 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const buttonStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-on-primary hover:opacity-90 disabled:opacity-50',
+  primary: 'bg-[#f2320c] text-white hover:bg-[#d82a08] shadow-xs disabled:opacity-50',
   secondary:
-    'bg-surface-container text-on-surface border border-outline-variant/40 hover:bg-surface-container-high disabled:opacity-50',
-  ghost: 'text-on-surface-variant hover:bg-surface-container disabled:opacity-50',
-  danger: 'bg-error text-on-error hover:opacity-90 disabled:opacity-50',
+    'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50',
+  ghost: 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white disabled:opacity-50',
+  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-50',
 };
 
 export function Button({
@@ -27,7 +27,7 @@ export function Button({
     <button
       {...props}
       disabled={props.disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${buttonStyles[variant]} ${className}`}
     >
       {loading && <Spinner className="h-4 w-4" />}
       {children}
@@ -63,14 +63,14 @@ export function Field({
 }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-sm font-semibold text-on-surface">
+      <span className="text-sm font-semibold text-slate-900 dark:text-white">
         {label}
-        {required && <span className="text-error"> *</span>}
+        {required && <span className="text-[#f2320c]"> *</span>}
       </span>
       {children}
-      {hint && !error && <span className="block text-xs text-on-surface-variant">{hint}</span>}
+      {hint && !error && <span className="block text-xs text-slate-500 dark:text-slate-400">{hint}</span>}
       {error && (
-        <span role="alert" className="block text-xs font-medium text-error">
+        <span role="alert" className="block text-xs font-medium text-red-600 dark:text-red-400">
           {error}
         </span>
       )}
@@ -79,7 +79,7 @@ export function Field({
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20';
+  'w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-[#f2320c] focus:outline-none focus:ring-2 focus:ring-[#f2320c]/20 shadow-xs';
 
 /* -------------------------------------------------------------------------- */
 /*  Modal                                                                      */
@@ -138,7 +138,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -147,31 +147,32 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-[92dvh] w-full ${widths[size]} flex-col overflow-hidden rounded-t-2xl bg-surface-container-lowest shadow-xl outline-none sm:rounded-2xl`}
+        className={`flex max-h-[88vh] w-full ${widths[size]} flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xl border border-slate-200/80 dark:border-slate-800 outline-none animate-in zoom-in-95 duration-150`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-outline-variant/20 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 dark:border-slate-800 px-5 py-4 shrink-0 bg-white dark:bg-slate-900">
           <div>
-            <h2 className="text-lg font-bold text-on-surface">{title}</h2>
-            {description && <p className="mt-0.5 text-sm text-on-surface-variant">{description}</p>}
+            <h2 className="text-lg font-black text-[#0b1c30] dark:text-white leading-tight">{title}</h2>
+            {description && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{description}</p>}
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container"
+            className="rounded-xl p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
             </svg>
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 bg-white dark:bg-slate-900">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-outline-variant/20 bg-surface-container-low/50 px-5 py-3">
+          <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 px-5 py-3.5 shrink-0">
             {footer}
           </div>
         )}
       </div>
-    </div>, document.body
+    </div>,
+    document.body
   );
 }
 

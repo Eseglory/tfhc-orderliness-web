@@ -439,24 +439,52 @@ export function ChatWorkspace({
   return (
     <div
       className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
-      style={bottomInset !== '0rem' ? { height: `calc(100vh - 4rem - ${bottomInset})` } : undefined}
+      style={bottomInset !== '0rem' ? { height: `calc(100dvh - 4rem - ${bottomInset})` } : undefined}
     >
-      {forwarding && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-label="Forward message">
-        <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-surface-container-lowest p-5">
-          <h2 className="mb-3 font-bold">Forward to</h2>
-          {rooms.map(room => <button key={room.id} disabled={forwardBusy} className="block w-full rounded-xl p-3 text-left hover:bg-surface-container" onClick={async () => {
-            setForwardBusy(true);
-            try {
-              const saved = await chatApi.forward(forwarding.message.id, room.id, forwarding.clientId);
-              if (activeIdRef.current === room.id) mergeSaved('', saved);
-              setForwarding(null);
-              notify('Message forwarded.', 'success');
-            } catch { notify('Could not forward the message. Try again.', 'error'); }
-            finally { setForwardBusy(false); }
-          }}>{room.name}</button>)}
-          <button disabled={forwardBusy} className="mt-3 rounded-xl p-3" onClick={() => setForwarding(null)}>Cancel</button>
+      {forwarding && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label="Forward message">
+          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 text-slate-900 dark:text-white flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <h2 className="text-base font-extrabold">Forward message to</h2>
+              <button onClick={() => setForwarding(null)} className="p-1 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1.5 py-3">
+              {rooms.map((room) => (
+                <button
+                  key={room.id}
+                  disabled={forwardBusy}
+                  className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-medium text-sm disabled:opacity-50"
+                  onClick={async () => {
+                    setForwardBusy(true);
+                    try {
+                      const saved = await chatApi.forward(forwarding.message.id, room.id, forwarding.clientId);
+                      if (activeIdRef.current === room.id) mergeSaved('', saved);
+                      setForwarding(null);
+                      notify('Message forwarded.', 'success');
+                    } catch {
+                      notify('Could not forward the message. Try again.', 'error');
+                    } finally {
+                      setForwardBusy(false);
+                    }
+                  }}
+                >
+                  <span className="material-symbols-outlined text-primary text-xl">forum</span>
+                  <span className="truncate flex-1">{room.name}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              disabled={forwardBusy}
+              className="mt-3 w-full rounded-xl py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs shrink-0 active:scale-95 transition-all"
+              onClick={() => setForwarding(null)}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      </div>}
+      )}
       {/* Sidebar: Conversation List */}
       <aside
         className={`flex w-full flex-col border-r border-outline-variant/20 bg-surface-container-lowest sm:w-84 md:w-96 shrink-0 ${
@@ -1031,8 +1059,8 @@ export function ChatWorkspace({
 
               {/* Side Drawer / Modal: Room & Member Info */}
               {showRoomInfo && (
-                <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-xs flex justify-end sm:static sm:z-auto sm:bg-transparent sm:backdrop-blur-none animate-in fade-in duration-150">
-                  <div className="w-full max-w-sm sm:w-80 md:w-88 h-full border-l border-outline-variant/20 bg-surface-container-lowest overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right duration-200 flex flex-col shadow-2xl sm:shadow-none">
+                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex justify-end sm:static sm:z-auto sm:bg-transparent sm:backdrop-blur-none animate-in fade-in duration-150">
+                  <div className="w-full max-w-sm sm:w-80 md:w-88 h-full border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto p-4 space-y-4 animate-in slide-in-from-right duration-200 flex flex-col shadow-2xl sm:shadow-none">
                     <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20 shrink-0">
                       <div className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary text-[20px]">
