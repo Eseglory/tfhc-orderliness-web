@@ -10,7 +10,6 @@ import { EngagementNudge } from '../../../components/activeness/EngagementNudge'
 import { ProfileCompletionReminder } from '../../../components/activeness/ProfileCompletionReminder';
 import { CampaignAlert } from '../../../components/activeness/CampaignAlert';
 import { MonthlyDuesAlert } from '../../../components/activeness/MonthlyDuesAlert';
-import { ActiveServiceReminderModal } from '../../../components/ActiveServiceReminderModal';
 import { MemberAttendanceTrendChart } from '../../../components/member/MemberAttendanceTrendChart';
 import { MemberAttendancePieChart } from '../../../components/member/MemberAttendancePieChart';
 
@@ -46,7 +45,11 @@ export default function MemberDashboard() {
     const refresh = () => fetchApi('/members/me/notifications').then((items: any[]) => setHasUnread(items.some((i) => i.status === 'UNREAD'))).catch(() => {});
     refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    window.addEventListener('tfhc:notifications-synced', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('tfhc:notifications-synced', refresh);
+    };
   }, []);
 
   const [availabilityData, setAvailabilityData] = useState<{
@@ -181,7 +184,6 @@ export default function MemberDashboard() {
 
       <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 py-4 max-w-4xl mx-auto">
         {/* Active Service Attendance Reminder Modal / Banner */}
-        <ActiveServiceReminderModal />
 
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">

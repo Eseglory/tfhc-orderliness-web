@@ -5,6 +5,12 @@ dist
 .next
 **/.next
 .git
+.validation
+apps/api/data
+apps/api/test-data
+**/*.db
+**/*.db-wal
+**/*.db-shm
 .env
 *.log
 coverage

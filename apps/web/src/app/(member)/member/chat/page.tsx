@@ -6,7 +6,8 @@ import { ToastProvider } from '../../../../components/ui';
 import { ChatWorkspace } from '../../../../components/chat/ChatWorkspace';
 
 function MemberChat() {
-  const room = useSearchParams().get('room');
+  const searchParams = useSearchParams();
+  const room = searchParams.get('room') || searchParams.get('roomId');
   return (
     <AuthProvider>
       <ToastProvider>

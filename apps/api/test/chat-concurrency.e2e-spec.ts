@@ -128,15 +128,21 @@ describe('Messaging Multi-User Concurrency & Stress E2E Test', () => {
     });
 
     // 2. Fire 10 concurrent messages via REST from all 10 users
-    const sendPromises = users.map((u, idx) =>
-      http()
+    const latencies: number[] = [];
+    const sendPromises = users.map(async (u, idx) => {
+      const started = performance.now();
+      const response = await http()
         .post(`/chat/rooms/${generalRoomId}/messages`)
         .set(auth(u.token))
-        .send({ body: `Concurrent message ${idx} from ${u.email}` }),
-    );
+        .send({ body: `Concurrent message ${idx} from ${u.email}` });
+      latencies.push(performance.now() - started);
+      return response;
+    });
 
     const responses = await Promise.all(sendPromises);
     responses.forEach((res) => expect(res.status).toBe(201));
+    latencies.sort((a, b) => a - b);
+    console.log(JSON.stringify({ benchmark: 'local-chat-send', users: NUM_USERS, concurrency: NUM_USERS, samples: latencies.length, p50Ms: Math.round(latencies[4]), p95Ms: Math.round(latencies[9]), maxMs: Math.round(latencies[9]) }));
 
     // Wait for fan-out to deliver to user 0
     await new Promise((r) => setTimeout(r, 500));

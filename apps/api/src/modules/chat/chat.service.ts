@@ -278,7 +278,7 @@ export class ChatService implements OnApplicationBootstrap {
     const joined = await this.prisma.chatRoom.findMany({
       where: {
         type: { in: ['CUSTOM', 'DIRECT'] },
-        key: { notIn: ['GENERAL', 'EXECUTIVES', 'DISCIPLINARY'] },
+        OR: [{ key: null }, { key: { notIn: ['GENERAL', 'EXECUTIVES', 'DISCIPLINARY'] } }],
         isActive: true,
         members: { some: { memberId, leftAt: null } },
       },
@@ -311,42 +311,6 @@ export class ChatService implements OnApplicationBootstrap {
       include: { sender: { select: senderSelect } },
     });
     const lastMessageMap = new Map(latestMessages.map((m) => [m.roomId, m]));
-
-    // Check if SQLite buffer has a more recent unmigrated message for any room
-    for (const roomId of roomIds) {
-      const bufferedLatest = this.bufferRepo.getLatestMessage(roomId);
-      if (bufferedLatest) {
-        const pgLatest = lastMessageMap.get(roomId);
-        const bufTime = new Date(bufferedLatest.createdAt).getTime();
-        const pgTime = pgLatest ? new Date(pgLatest.createdAt).getTime() : 0;
-        if (bufTime > pgTime) {
-          // If buffered is newer, look up sender details
-          let senderInfo: SenderRow | null = null;
-          if (bufferedLatest.senderMemberId) {
-            const s = await this.prisma.member.findUnique({
-              where: { id: bufferedLatest.senderMemberId },
-              select: senderSelect,
-            });
-            if (s) senderInfo = s;
-          }
-          lastMessageMap.set(roomId, {
-            id: bufferedLatest.id,
-            clientOperationId: bufferedLatest.clientOperationId,
-            roomId: bufferedLatest.roomId,
-            senderMemberId: bufferedLatest.senderMemberId,
-            type: bufferedLatest.type as ChatMessageType,
-            body: bufferedLatest.body,
-            attachmentUrl: bufferedLatest.attachmentUrl,
-            attachmentMeta: bufferedLatest.attachmentMeta as Prisma.JsonValue,
-            replyToId: bufferedLatest.replyToId,
-            editedAt: bufferedLatest.editedAt ? new Date(bufferedLatest.editedAt) : null,
-            deletedAt: bufferedLatest.deletedAt ? new Date(bufferedLatest.deletedAt) : null,
-            createdAt: new Date(bufferedLatest.createdAt),
-            sender: senderInfo,
-          } as any);
-        }
-      }
-    }
 
     // 3. Batched unread counts in 1 single SQL aggregation query
     const unreadMap = new Map<string, number>();
@@ -534,18 +498,22 @@ export class ChatService implements OnApplicationBootstrap {
   async listMessages(
     roomId: string,
     viewer: ChatViewer,
-    opts: { cursor?: string; limit?: number } = {},
+    opts: { cursor?: string; limit?: number; search?: string } = {},
   ) {
     const room = await this.loadRoom(roomId, viewer);
     await this.ensureMembership(room, viewer);
     const take = Math.min(Math.max(Number(opts.limit) || PAGE_DEFAULT, 1), PAGE_MAX);
 
     const rows = await this.prisma.chatMessage.findMany({
-      where: { roomId },
-      orderBy: { createdAt: 'desc' },
+      where: { roomId, hiddenFor: { none: { memberId: viewer.memberId } },
+        ...(opts.search ? { body: { contains: opts.search.slice(0, 200), mode: 'insensitive' as const }, deletedAt: null } : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: take + 1,
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       include: {
+        reactions: true,
+        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
@@ -554,44 +522,9 @@ export class ChatService implements OnApplicationBootstrap {
     const hasMore = rows.length > take;
     const page = hasMore ? rows.slice(0, take) : rows;
 
-    // Check SQLite buffer for any recent messages in this room not yet in Postgres page
-    const existingIds = new Set(page.map((m) => m.id));
-    const bufferedRecent = this.bufferRepo.listRecentByRoom(roomId, 20);
-
-    const pendingToAdd: any[] = [];
-    for (const b of bufferedRecent) {
-      if (!existingIds.has(b.id) && !opts.cursor) {
-        let sender: SenderRow | null = null;
-        if (b.senderMemberId) {
-          sender = await this.prisma.member.findUnique({
-            where: { id: b.senderMemberId },
-            select: senderSelect,
-          });
-        }
-        pendingToAdd.push({
-          id: b.id,
-          roomId: b.roomId,
-          type: b.type as ChatMessageType,
-          body: b.body,
-          attachmentUrl: b.attachmentUrl,
-          attachmentMeta: b.attachmentMeta,
-          replyToId: b.replyToId,
-          replyTo: null,
-          editedAt: b.editedAt ? new Date(b.editedAt) : null,
-          deletedAt: b.deletedAt ? new Date(b.deletedAt) : null,
-          createdAt: new Date(b.createdAt),
-          senderMemberId: b.senderMemberId,
-          sender,
-        });
-      }
-    }
-
-    const combined = [...pendingToAdd, ...page];
-    combined.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
     return {
-      messages: combined.map((m) => this.toMessageDto(m, viewer)),
-      nextCursor: hasMore ? page[0]?.id ?? null : null,
+      messages: [...page].reverse().map((m) => this.toMessageDto(m, viewer)),
+      nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
       hasMore,
     };
   }
@@ -612,30 +545,8 @@ export class ChatService implements OnApplicationBootstrap {
     const membership = await this.ensureMembership(room, viewer);
     const memberId = membership.memberId;
 
-    // 1. Idempotency check: SQLite buffer first (fastest), then Postgres
+    // Resolve retries against authoritative storage.
     if (dto.operationId) {
-      const buffered = this.bufferRepo.findByClientOperationId(dto.operationId);
-      if (buffered) {
-        if (buffered.roomId !== roomId || buffered.senderMemberId !== memberId) {
-          throw new ForbiddenException('Operation belongs to another sender');
-        }
-        const sender = await this.prisma.member.findUnique({
-          where: { id: memberId },
-          select: senderSelect,
-        });
-        return this.toMessageDto(
-          {
-            ...buffered,
-            editedAt: buffered.editedAt ? new Date(buffered.editedAt) : null,
-            deletedAt: buffered.deletedAt ? new Date(buffered.deletedAt) : null,
-            createdAt: new Date(buffered.createdAt),
-            sender,
-            replyTo: null,
-          } as any,
-          viewer,
-        );
-      }
-
       const existing = await this.prisma.chatMessage.findUnique({
         where: { clientOperationId: dto.operationId },
         include: {
@@ -672,24 +583,7 @@ export class ChatService implements OnApplicationBootstrap {
     const messageId = randomUUID();
     const createdAt = new Date().toISOString();
 
-    // 2. High-speed local persistence: write into SQLite realtime buffer immediately
-    this.bufferRepo.saveMessage({
-      id: messageId,
-      clientOperationId: dto.operationId || null,
-      roomId,
-      senderMemberId: memberId,
-      type,
-      body: body || null,
-      attachmentUrl,
-      attachmentMeta:
-        dto.attachmentMeta && typeof dto.attachmentMeta === 'object'
-          ? (dto.attachmentMeta as Record<string, unknown>)
-          : null,
-      replyToId: dto.replyToId || null,
-      createdAt,
-    });
-
-    // 3. Concurrently ensure PostgreSQL persistence
+    // PostgreSQL is authoritative; never acknowledge ephemeral-only messages.
     const createArgs = {
       data: {
         id: messageId,
@@ -706,36 +600,56 @@ export class ChatService implements OnApplicationBootstrap {
         replyToId: dto.replyToId || null,
       },
       include: {
+        reactions: true,
+        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
     };
 
+    const recipients = (await this.recipientMemberIds(room)).filter(id => id !== memberId);
     let persisted: any = null;
     try {
-      persisted = dto.operationId
-        ? await this.prisma.chatMessage.upsert({
+      persisted = await this.prisma.$transaction(async tx => {
+      const saved = dto.operationId
+        ? await tx.chatMessage.upsert({
             where: { clientOperationId: dto.operationId },
             create: createArgs.data,
             update: {},
             include: createArgs.include,
           })
-        : await this.prisma.chatMessage.create(createArgs);
-
-      // Mark as migrated in SQLite since DB write succeeded directly
-      this.bufferRepo.markMigrated(messageId, new Date().toISOString());
+        : await tx.chatMessage.create(createArgs);
+      if (saved.roomId !== roomId || saved.senderMemberId !== memberId) throw new ForbiddenException('Operation belongs to another sender');
+      const idempotencyKey = `chat:${saved.id}:notifications`;
+      const claim = await tx.communicationDelivery.createMany({ data: [{
+        idempotencyKey, channel: 'PUSH', recipient: roomId, templateKey: 'CHAT_INAPP', status: 'SENT', attemptedAt: new Date(),
+      }], skipDuplicates: true });
+      if (claim.count && recipients.length) await tx.memberNotification.createMany({ data: recipients.map(recipient => ({
+        memberId: recipient, type: 'CHAT_MESSAGE',
+        title: room.type === 'DIRECT' ? this.viewerName(viewer) : room.name || 'General',
+        body: (saved.body || 'New attachment').slice(0, 500),
+        data: { roomId, messageId: saved.id, url: `/member/chat?roomId=${roomId}` },
+      })) });
+      return saved;
+      });
     } catch (error: any) {
-      if (error?.code === 'P2002' && dto.operationId) {
-        persisted = await this.prisma.chatMessage.findUnique({
-          where: { clientOperationId: dto.operationId },
-          include: createArgs.include,
-        });
-        if (persisted) {
-          this.bufferRepo.markMigrated(messageId, new Date().toISOString());
-        }
-      } else {
-        this.logger.warn(`Postgres synchronous write deferred to buffer: ${error?.message}`);
-      }
+      if (error?.code !== 'P2002' || !dto.operationId) throw error;
+      persisted = await this.prisma.chatMessage.findUnique({
+        where: { clientOperationId: dto.operationId }, include: createArgs.include,
+      });
+      if (!persisted) throw error;
+    }
+    if (persisted.roomId !== roomId || persisted.senderMemberId !== memberId) {
+      throw new ForbiddenException('Operation belongs to another sender');
+    }
+    try {
+      this.bufferRepo.saveMessage({
+        ...persisted, createdAt: persisted.createdAt.toISOString(),
+        attachmentMeta: persisted.attachmentMeta as Record<string, unknown> | null,
+      });
+      this.bufferRepo.markMigrated(persisted.id, new Date().toISOString());
+    } catch {
+      this.logger.warn('ChatCacheWriteFailed; message persisted in PostgreSQL');
     }
 
     // 4. Update the author's read receipt
@@ -744,33 +658,54 @@ export class ChatService implements OnApplicationBootstrap {
       data: { lastReadAt: new Date(createdAt) },
     }).catch(() => undefined);
 
-    if (persisted) {
-      return this.toMessageDto(persisted, viewer);
-    }
+    return this.toMessageDto(persisted, viewer);
+  }
 
-    // Fallback DTO from SQLite record if direct Postgres write is processing in background
-    const sender = await this.prisma.member.findUnique({
-      where: { id: memberId },
-      select: senderSelect,
+  async forwardMessage(messageId: string, targetRoomId: string, viewer: ChatViewer, operationId: string) {
+    if (!operationId || operationId.length > 100) throw new BadRequestException('A client message ID is required');
+    const source = await this.prisma.chatMessage.findFirst({
+      where: { id: messageId, deletedAt: null, hiddenFor: { none: { memberId: this.requireMember(viewer) } } },
     });
+    if (!source) throw new NotFoundException('Message not found');
+    await this.loadRoom(source.roomId, viewer);
+    if (source.type === 'SYSTEM') throw new BadRequestException('System messages cannot be forwarded');
+    return this.postMessage(targetRoomId, viewer, {
+      operationId, body: source.body || undefined, type: source.type,
+      attachmentUrl: source.attachmentUrl || undefined,
+      attachmentMeta: { ...(source.attachmentMeta as Record<string, unknown> || {}), forwarded: true },
+    });
+  }
 
-    return {
-      id: messageId,
-      roomId,
-      type,
-      body: body || null,
-      attachmentUrl,
-      attachmentMeta: dto.attachmentMeta ?? null,
-      replyToId: dto.replyToId || null,
-      replyTo: null,
-      editedAt: null,
-      deletedAt: null,
-      createdAt: new Date(createdAt),
-      sender: sender
-        ? { memberId: sender.id, name: displayName(sender), photoUrl: sender.profilePhotoUrl }
-        : null,
-      mine: true,
-    };
+  async react(messageId: string, viewer: ChatViewer, emoji: string, remove = false) {
+    if (!['👍', '❤️', '😂', '😮', '😢', '🙏'].includes(emoji)) throw new BadRequestException('Unsupported reaction');
+    const message = await this.prisma.chatMessage.findUnique({ where: { id: messageId } });
+    if (!message || message.deletedAt) throw new NotFoundException('Message not found');
+    await this.loadRoom(message.roomId, viewer);
+    const memberId = this.requireMember(viewer);
+    if (remove) await this.prisma.chatMessageReaction.deleteMany({ where: { messageId, memberId, emoji } });
+    else await this.prisma.chatMessageReaction.upsert({ where: { messageId_memberId_emoji: { messageId, memberId, emoji } }, create: { messageId, memberId, emoji }, update: {} });
+    const rows = await this.prisma.chatMessageReaction.findMany({ where: { messageId } });
+    return { messageId, roomId: message.roomId, reactions: rows };
+  }
+
+  async hideMessage(messageId: string, viewer: ChatViewer) {
+    const message = await this.prisma.chatMessage.findUnique({ where: { id: messageId } });
+    if (!message) throw new NotFoundException('Message not found');
+    await this.loadRoom(message.roomId, viewer);
+    const memberId = this.requireMember(viewer);
+    await this.prisma.chatMessageHidden.upsert({ where: { messageId_memberId: { messageId, memberId } }, create: { messageId, memberId }, update: {} });
+    return { hidden: true };
+  }
+
+  async markDelivered(roomId: string, viewer: ChatViewer, messageId: string) {
+    const room = await this.loadRoom(roomId, viewer);
+    await this.ensureMembership(room, viewer);
+    const message = await this.prisma.chatMessage.findFirst({ where: { id: messageId, roomId } });
+    if (!message) throw new NotFoundException('Message not found');
+    await this.prisma.chatRoomMember.updateMany({ where: { roomId, memberId: viewer.memberId,
+      OR: [{ lastDeliveredAt: null }, { lastDeliveredAt: { lt: message.createdAt } }],
+    }, data: { lastDeliveredAt: message.createdAt } });
+    return { roomId, memberId: viewer.memberId, lastDeliveredAt: message.createdAt };
   }
 
   async editMessage(messageId: string, viewer: ChatViewer, body: string) {
@@ -783,17 +718,24 @@ export class ChatService implements OnApplicationBootstrap {
     if (!trimmed) throw new BadRequestException('Message cannot be empty');
     if (trimmed.length > MESSAGE_MAX) throw new BadRequestException(`Message exceeds ${MESSAGE_MAX} characters`);
 
+    await this.loadRoom(message.roomId, viewer);
     const now = new Date();
-    this.bufferRepo.updateMessage(messageId, trimmed, now.toISOString());
 
     const updated = await this.prisma.chatMessage.update({
       where: { id: messageId },
       data: { body: trimmed, editedAt: now },
       include: {
+        reactions: true,
+        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
     });
+    try {
+      if (updated.deletedAt) this.bufferRepo.deleteMessage(messageId, updated.deletedAt.toISOString());
+      else if (updated.editedAt) this.bufferRepo.updateMessage(messageId, updated.body || '', updated.editedAt.toISOString());
+      this.bufferRepo.markMigrated(messageId, new Date().toISOString());
+    } catch { this.logger.warn('ChatCacheUpdateFailed; primary update retained'); }
     return this.toMessageDto(updated, viewer);
   }
 
@@ -806,13 +748,15 @@ export class ChatService implements OnApplicationBootstrap {
     const canModerate = viewerCanModerate(viewer);
     if (!isOwner && !canModerate) throw new ForbiddenException('You cannot delete this message');
 
+    await this.loadRoom(message.roomId, viewer);
     const now = new Date();
-    this.bufferRepo.deleteMessage(messageId, now.toISOString());
 
     const updated = await this.prisma.chatMessage.update({
       where: { id: messageId },
       data: { deletedAt: now, body: null, attachmentUrl: null, attachmentMeta: Prisma.DbNull },
       include: {
+        reactions: true,
+        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
@@ -828,6 +772,11 @@ export class ChatService implements OnApplicationBootstrap {
         newData: { deletedAt: updated.deletedAt },
       });
     }
+    try {
+      if (updated.deletedAt) this.bufferRepo.deleteMessage(messageId, updated.deletedAt.toISOString());
+      else if (updated.editedAt) this.bufferRepo.updateMessage(messageId, updated.body || '', updated.editedAt.toISOString());
+      this.bufferRepo.markMigrated(messageId, new Date().toISOString());
+    } catch { this.logger.warn('ChatCacheUpdateFailed; primary update retained'); }
     return this.toMessageDto(updated, viewer);
   }
 
@@ -846,12 +795,22 @@ export class ChatService implements OnApplicationBootstrap {
         where: { id: opts.messageId, roomId },
         select: { createdAt: true },
       });
-      if (msg) readAt = msg.createdAt;
+      if (!msg) throw new NotFoundException('Message not found in this conversation');
+      readAt = msg.createdAt;
     }
-    await this.prisma.chatRoomMember.update({
-      where: { roomId_memberId: { roomId, memberId } },
+    await this.prisma.chatRoomMember.updateMany({
+      where: { roomId, memberId, OR: [{ lastReadAt: null }, { lastReadAt: { lt: readAt } }] },
       data: { lastReadAt: readAt },
     });
+    // Notification creation can lag message creation. Match the message watermark,
+    // not notification time, so reading an older page never clears newer alerts.
+    await this.prisma.$executeRaw`
+      UPDATE "member_notifications" AS n SET status = 'READ', "readAt" = NOW()
+      FROM "chat_messages" AS m
+      WHERE n."memberId" = ${memberId} AND n.type = 'CHAT_MESSAGE'
+        AND n.status = 'UNREAD' AND n.data->>'messageId' = m.id
+        AND m."roomId" = ${roomId} AND m."createdAt" <= ${readAt}
+    `;
     return { roomId, lastReadAt: readAt };
   }
 
@@ -893,8 +852,8 @@ export class ChatService implements OnApplicationBootstrap {
     viewer: ChatViewer,
     dto: { name?: string; description?: string; imageUrl?: string; memberIds?: string[] },
   ) {
-    if (viewer.email?.toLowerCase() !== 'engreseglory@gmail.com') {
-      throw new ForbiddenException('Only engreseglory@gmail.com is authorized to create chat rooms');
+    if (!viewerManagesRooms(viewer)) {
+      throw new ForbiddenException('You do not have permission to create chat rooms');
     }
     const creatorMemberId = this.requireMember(viewer);
     const name = (dto.name ?? '').trim();
@@ -1100,11 +1059,18 @@ export class ChatService implements OnApplicationBootstrap {
   // -------------------------------------------------------------------------
 
   public getBufferStats() {
-    return this.bufferRepo.getStats();
+    return {
+      ...this.bufferRepo.getStats(),
+      lastPrimaryImport: this.bufferRepo.getSyncCheckpoint(),
+      lastRun: this.bufferRepo.getSyncSummary(),
+      schedule: '00:00 and 12:00',
+      timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
+      authority: 'PostgreSQL',
+    };
   }
 
   public triggerMigration() {
-    return this.migrationJob.runMigration('manual');
+    return this.migrationJob.reconcileWithPrimaryDatabase('manual');
   }
 
   private viewerName(viewer: ChatViewer): string {
@@ -1116,26 +1082,13 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   private async systemMessage(roomId: string, body: string) {
-    const messageId = randomUUID();
-    const createdAt = new Date().toISOString();
-
-    this.bufferRepo.saveMessage({
-      id: messageId,
-      roomId,
-      senderMemberId: null,
-      type: 'SYSTEM',
-      body,
-      createdAt,
-    });
-
-    await this.prisma.chatMessage.create({
-      data: { id: messageId, roomId, type: 'SYSTEM', body },
-    }).catch(() => undefined);
+    return this.prisma.chatMessage.create({ data: { roomId, type: 'SYSTEM', body } });
   }
 
   private toMessageDto(
     m: {
       id: string;
+      clientOperationId?: string | null;
       roomId: string;
       type: ChatMessageType;
       body: string | null;
@@ -1146,6 +1099,8 @@ export class ChatService implements OnApplicationBootstrap {
       deletedAt: Date | null;
       createdAt: Date;
       senderMemberId: string | null;
+      reactions?: { emoji: string; memberId: string }[];
+      room?: { members: { memberId: string; lastReadAt: Date | null; lastDeliveredAt: Date | null }[] };
       sender?: SenderRow | null;
       replyTo?: ({ id: string; body: string | null; deletedAt: Date | null; sender?: SenderRow | null }) | null;
     },
@@ -1153,7 +1108,12 @@ export class ChatService implements OnApplicationBootstrap {
   ) {
     return {
       id: m.id,
+      clientId: m.clientOperationId || null,
       roomId: m.roomId,
+      reactions: (m.reactions || []).reduce((counts, r) => ({ ...counts, [r.emoji]: (counts[r.emoji] || 0) + 1 }), {} as Record<string, number>),
+      myReactions: (m.reactions || []).filter(r => r.memberId === viewer.memberId).map(r => r.emoji),
+      readBy: (m.room?.members || []).filter(r => r.memberId !== m.senderMemberId && r.lastReadAt && r.lastReadAt >= m.createdAt).length,
+      deliveredTo: (m.room?.members || []).filter(r => r.memberId !== m.senderMemberId && r.lastDeliveredAt && r.lastDeliveredAt >= m.createdAt).length,
       type: m.type,
       body: m.deletedAt ? null : m.body,
       attachmentUrl: m.deletedAt ? null : m.attachmentUrl,

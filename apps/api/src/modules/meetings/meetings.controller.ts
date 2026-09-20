@@ -31,6 +31,19 @@ export class MeetingsController {
     return this.serviceReminderService.getReminderStats(id);
   }
 
+  @RequirePermissions('events.create')
+  @Post(':id/reminders/trigger')
+  triggerReminders(
+    @Param('id') id: string,
+    @Body() body: { window?: '24h' | '12h' | '1h' | 'active'; targetMemberId?: string },
+  ) {
+    const window = body?.window || '24h';
+    if (window === 'active') {
+      return this.serviceReminderService.dispatchActiveServiceReminders(id);
+    }
+    return this.serviceReminderService.dispatchServiceReminderWindow(id, window, body?.targetMemberId);
+  }
+
   @Get('categories')
   getCategories() {
     return this.meetingsService.getCategories();

@@ -37,7 +37,7 @@ export class ChatAttachmentsService {
       throw new BadRequestException('Maximum file size is 2 MB.');
     }
 
-    const mime = (file.mimetype || '').toLowerCase();
+    const mime = (file.mimetype || '').split(';')[0].trim().toLowerCase();
 
     if (mime.startsWith('image/')) {
       let output: Buffer;

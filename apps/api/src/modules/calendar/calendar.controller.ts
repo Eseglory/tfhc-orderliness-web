@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CalendarService } from './calendar.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -134,9 +135,6 @@ export class CalendarController {
   @Post('integrations/google/webhook')
   @Public()
   async handleWebhook(@Headers() headers?: Record<string, string>, @Body() body?: unknown) {
-    // Idempotent webhook receiver for Google push notifications
-    const channelId = headers?.['x-goog-channel-id'] || headers?.['x-goog-channel-token'];
-    const resourceState = headers?.['x-goog-resource-state'] || 'sync';
-    return { received: true, provider: 'google-calendar', channelId, resourceState, timestamp: new Date() };
+    throw new ServiceUnavailableException('Google Calendar push watches are not configured');
   }
 }

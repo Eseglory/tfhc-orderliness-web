@@ -1,368 +1,162 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { PushService } from '../push/push.service';
 import { ChatService } from '../chat/chat.service';
-import { MeetingStatus, MemberStatus } from '@tfhc/shared';
+import { ChatGateway } from '../chat/chat.gateway';
+import { MeetingStatus, MemberStatus, validateEmail } from '@tfhc/shared';
 import { canViewEvent } from '../../common/event-visibility';
-import { validateEmail } from '@tfhc/shared';
-import * as webpush from 'web-push';
+import { renderBrandedEmail } from '../mail/templates';
 import { ConfigService } from '@nestjs/config';
+
+export type ReminderWindow = '24h' | '12h' | '1h';
 
 @Injectable()
 export class ServiceReminderService {
   private readonly logger = new Logger(ServiceReminderService.name);
-
+  private isEvaluating = false;
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly config: ConfigService,
     @Optional() private readonly pushService?: PushService,
     @Optional() private readonly chatService?: ChatService,
+    @Optional() private readonly gateway?: ChatGateway,
   ) {}
 
-  /**
-   * Dispatches active service reminders across all 4 channels (Push, Email, Chat, In-App Notification)
-   * strictly for members who marked "Available" for the given service.
-   * Fully idempotent: prevents duplicate notifications per (meetingId, memberId, channel).
-   */
-  async dispatchActiveServiceReminders(meetingId: string): Promise<{
-    targetedMembersCount: number;
-    pushSent: number;
-    emailSent: number;
-    chatCreated: number;
-    inAppCreated: number;
-  }> {
-    // 1. Fetch meeting
-    const meeting = await this.prisma.meeting.findUnique({
-      where: { id: meetingId },
-      include: { audiences: true, category: true },
-    });
-
-    if (!meeting || meeting.status === MeetingStatus.CANCELLED || meeting.status === MeetingStatus.CLOSED) {
-      this.logger.warn(`Skipping reminder dispatch for meeting ${meetingId}: meeting does not exist or is cancelled/closed.`);
-      return { targetedMembersCount: 0, pushSent: 0, emailSent: 0, chatCreated: 0, inAppCreated: 0 };
-    }
-
-    // 2. Identify eligible members who indicated Available (COMMITTED / attending)
-    // and have not yet recorded attendance.
-    const candidates = await this.prisma.member.findMany({
-      where: {
-        status: MemberStatus.ACTIVE,
-        // Exclude members who already attended
-        attendanceRecords: { none: { meetingId } },
-        OR: [
-          // Explicit event response: attending = true
-          { eventResponses: { some: { meetingId, attending: true } } },
-          // OR no event response, but weekly service commitment = COMMITTED
-          {
-            AND: [
-              { eventResponses: { none: { meetingId } } },
-              { serviceCommitments: { some: { meetingId, status: 'COMMITTED' } } },
-            ],
-          },
-        ],
-      },
-      include: {
-        user: { select: { id: true, email: true, isActive: true } },
-        approvedMember: { select: { normalizedEmail: true, status: true } },
-      },
-    });
-
-    // 3. Filter by event audience/visibility rules
-    const eligibleMembers = candidates.filter((m) =>
-      canViewEvent(meeting.visibility, meeting.audiences, {
-        memberId: m.id,
-        subTeamId: m.subTeamId,
-        roleInUnit: m.roleInUnit,
-      }),
-    );
-
-    if (eligibleMembers.length === 0) {
-      this.logger.log(`No eligible available members pending reminder for meeting ${meeting.title} (${meetingId}).`);
-      return { targetedMembersCount: 0, pushSent: 0, emailSent: 0, chatCreated: 0, inAppCreated: 0 };
-    }
-
-    let pushSent = 0;
-    let emailSent = 0;
-    let chatCreated = 0;
-    let inAppCreated = 0;
-
-    const formattedTime = new Date(meeting.startTime).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-    const formattedDate = new Date(meeting.meetingDate || meeting.startTime).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-
-    const inAppTitle = `Service Attendance Reminder`;
-    const inAppBody = `${meeting.title} is now active. Please take your attendance.`;
-    const emailSubject = `Service Attendance Reminder: ${meeting.title}`;
-    const emailText = `The ${meeting.title} is now active (${formattedDate} at ${formattedTime}).\n\nSince you indicated that you are available for this service, please remember to take your attendance when attendance opens.\n\nLocation: ${meeting.locationName}\n\nThank you.`;
-    const emailHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-        <h2 style="color: #1e293b; margin-top: 0;">Service Attendance Reminder</h2>
-        <p style="color: #334155; font-size: 16px; line-height: 1.5;">
-          The <strong>${meeting.title}</strong> is now active.
-        </p>
-        <p style="color: #475569; font-size: 14px; line-height: 1.5;">
-          Since you indicated that you are available for this service (${formattedDate} at ${formattedTime} at ${meeting.locationName}), please remember to take your attendance when attendance opens.
-        </p>
-        <div style="margin-top: 24px;">
-          <a href="${this.config.get<string>('APP_URL') || 'https://tfhc-orderliness.vercel.app'}/member/check-in?meetingId=${meeting.id}" 
-             style="background-color: #2563eb; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-            Take Attendance
-          </a>
-        </div>
-      </div>
-    `;
-
-    // Ensure general chat room exists for system broadcast/reminder
-    const generalRoom = await this.prisma.chatRoom.findUnique({ where: { key: 'GENERAL' } });
-
-    for (const member of eligibleMembers) {
-      // -----------------------------------------------------------------------
-      // Channel 1: In-App Notification (Notification Center)
-      // -----------------------------------------------------------------------
-      const inAppIdempotencyKey = `service-rem-${meeting.id}-${member.id}-inapp`;
-      let notificationId: string | null = null;
-
-      const existingInAppDelivery = await this.prisma.communicationDelivery.findUnique({
-        where: { idempotencyKey: inAppIdempotencyKey },
-      });
-
-      if (!existingInAppDelivery) {
+  @Cron(CronExpression.EVERY_MINUTE, { disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
+  async evaluateUpcomingReminders(now = new Date()): Promise<{ processed: number; remindersSent: number }> {
+    if (this.isEvaluating) return { processed: 0, remindersSent: 0 };
+    this.isEvaluating = true;
+    try {
+      const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'recurring_services_config' } });
+      if (setting && JSON.parse(setting.value).remindersEnabled === false) return { processed: 0, remindersSent: 0 };
+      const meetings = await this.prisma.meeting.findMany({ where: {
+        status: { in: ['ACTIVE', 'SCHEDULED'] },
+        OR: [{ serviceScheduleId: null }, { serviceSchedule: { enabled: true } }],
+        startTime: { gt: now, lte: new Date(now.getTime() + 24 * 3600000) },
+      }, orderBy: { startTime: 'asc' } });
+      let remindersSent = 0;
+      for (const meeting of meetings) {
+        const hours = (meeting.startTime.getTime() - now.getTime()) / 3600000;
+        // Never send early. Catch up only the most recent window after downtime.
+        const window: ReminderWindow = hours > 12 ? '24h' : hours > 1 ? '12h' : '1h';
         try {
-          const notification = await this.prisma.memberNotification.create({
-            data: {
-              memberId: member.id,
-              type: 'SERVICE_ATTENDANCE_REMINDER',
-              title: inAppTitle,
-              body: inAppBody,
-              data: {
-                meetingId: meeting.id,
-                serviceTitle: meeting.title,
-                startTime: meeting.startTime,
-                attendanceOpenTime: meeting.attendanceOpenTime,
-                attendanceCloseTime: meeting.attendanceCloseTime,
-                locationName: meeting.locationName,
-              },
-            },
-          });
-          notificationId = notification.id;
-
-          await this.prisma.communicationDelivery.create({
-            data: {
-              notificationId: notification.id,
-              channel: 'PUSH',
-              recipient: member.id,
-              templateKey: 'SERVICE_ATTENDANCE_REMINDER_INAPP',
-              idempotencyKey: inAppIdempotencyKey,
-              status: 'SENT',
-              attemptedAt: new Date(),
-            },
-          });
-          inAppCreated++;
-        } catch (err: any) {
-          if (err?.code !== 'P2002') {
-            this.logger.error(`Failed to create in-app notification for member ${member.id}: ${err?.message}`);
-          }
+          const result = await this.dispatchServiceReminderWindow(meeting.id, window);
+          remindersSent += result.inAppCreated + result.emailSent;
+        } catch (error) {
+          this.logger.error(`ServiceReminderFailed meeting=${meeting.id} window=${window}`);
         }
       }
+      return { processed: meetings.length, remindersSent };
+    } finally { this.isEvaluating = false; }
+  }
 
-      // -----------------------------------------------------------------------
-      // Channel 2: Push Notification
-      // -----------------------------------------------------------------------
-      const pushIdempotencyKey = `service-rem-${meeting.id}-${member.id}-push`;
-      const existingPush = await this.prisma.communicationDelivery.findUnique({
-        where: { idempotencyKey: pushIdempotencyKey },
-      });
+  async dispatchServiceReminderWindow(meetingId: string, window: ReminderWindow, targetMemberId?: string) {
+    if (!['24h', '12h', '1h'].includes(window)) throw new BadRequestException('Invalid reminder window');
+    return this.dispatch(meetingId, window, targetMemberId);
+  }
 
-      if (!existingPush) {
-        const userId = member.user?.id;
-        if (userId) {
-          const subscriptions = await this.prisma.pushSubscription.findMany({
-            where: { userId, sessionExpiresAt: { gt: new Date() } },
-          });
+  async dispatchActiveServiceReminders(meetingId: string) {
+    return this.dispatch(meetingId, 'active');
+  }
 
-          if (subscriptions.length > 0) {
-            const vapidPub = this.config.get<string>('VAPID_PUBLIC_KEY');
-            const vapidPriv = this.config.get<string>('VAPID_PRIVATE_KEY');
-            const vapidSub = this.config.get<string>('VAPID_SUBJECT');
+  private async dispatch(meetingId: string, window: ReminderWindow | 'active', targetMemberId?: string) {
+    const result = { targetedMembersCount: 0, pushSent: 0, emailSent: 0, chatCreated: 0, inAppCreated: 0 };
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId }, include: { audiences: true, category: true } });
+    if (!meeting || ['CANCELLED', 'CLOSED'].includes(meeting.status)) return result;
+    const candidates = await this.prisma.member.findMany({ where: {
+      status: MemberStatus.ACTIVE, ...(targetMemberId ? { id: targetMemberId } : {}),
+      user: { isActive: true },
+      attendanceRecords: { none: { meetingId, status: { notIn: ['ABSENT', 'EXCUSED', 'EXEMPT'] } } },
+      OR: [
+        { eventResponses: { some: { meetingId, attending: true } } },
+        { AND: [{ eventResponses: { none: { meetingId } } }, { serviceCommitments: { some: { meetingId, status: 'COMMITTED' } } }] },
+      ],
+    }, include: { user: true, approvedMember: true } });
+    const members = candidates.filter(m => (!m.approvedMember || m.approvedMember.status === 'ACTIVE') && canViewEvent(meeting.visibility, meeting.audiences, {
+      memberId: m.id, subTeamId: m.subTeamId, roleInUnit: m.roleInUnit,
+    }));
+    result.targetedMembersCount = members.length;
+    const timezone = this.config.get<string>('TFHC_TIMEZONE') || 'Africa/Lagos';
+    const format = (date: Date) => date.toLocaleString('en-GB', { timeZone: timezone, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    const date = format(meeting.startTime);
+    const arrival = format(meeting.expectedArrivalTime || meeting.startTime);
+    const title = window === 'active' ? `Service Attendance Open: ${meeting.title}` : `Service Reminder (${window}): ${meeting.title}`;
+    const body = `${meeting.title} starts ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName}. Please prepare for your responsibilities.`;
+    const path = `/member/check-in?meetingId=${meeting.id}`;
+    const appUrl = this.config.get<string>('APP_URL') || this.config.get<string>('APP_WEB_URL') || 'https://tfhc-orderliness-web.vercel.app';
 
-            let pushSuccess = false;
-            let pushErrorMsg: string | null = null;
-
-            if (vapidPub && vapidPriv && vapidSub) {
-              const vapidDetails = { publicKey: vapidPub, privateKey: vapidPriv, subject: vapidSub };
-              for (const sub of subscriptions) {
-                try {
-                  await webpush.sendNotification(
-                    { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-                    JSON.stringify({
-                      title: inAppTitle,
-                      body: inAppBody,
-                      url: `/member/check-in?meetingId=${meeting.id}`,
-                    }),
-                    { vapidDetails, TTL: 300, topic: 'tfhc-service-reminder', timeout: 10000 },
-                  );
-                  pushSuccess = true;
-                } catch (pushErr: any) {
-                  pushErrorMsg = pushErr?.message || 'Push provider failed';
-                  this.logger.warn(`Push send failed for endpoint ${sub.endpoint.slice(0, 30)}: ${pushErr?.message}`);
-                }
-              }
-            }
-
-            try {
-              await this.prisma.communicationDelivery.create({
-                data: {
-                  notificationId,
-                  channel: 'PUSH',
-                  recipient: userId,
-                  templateKey: 'SERVICE_ATTENDANCE_REMINDER_PUSH',
-                  idempotencyKey: pushIdempotencyKey,
-                  status: pushSuccess ? 'SENT' : (vapidPub ? 'FAILED' : 'SENT'),
-                  failureReason: pushSuccess ? null : pushErrorMsg,
-                  attemptedAt: new Date(),
-                },
-              });
-              if (pushSuccess || !vapidPub) pushSent++;
-            } catch (err: any) {
-              if (err?.code !== 'P2002') this.logger.error(`Error saving push delivery: ${err?.message}`);
-            }
-          } else {
-            await this.prisma.communicationDelivery.create({
-              data: {
-                notificationId,
-                channel: 'PUSH',
-                recipient: userId,
-                templateKey: 'SERVICE_ATTENDANCE_REMINDER_PUSH',
-                idempotencyKey: pushIdempotencyKey,
-                status: 'SENT',
-                attemptedAt: new Date(),
-              },
-            }).catch(() => undefined);
-            pushSent++;
-          }
-        }
-      }
-
-      // -----------------------------------------------------------------------
-      // Channel 3: Email Notification
-      // -----------------------------------------------------------------------
-      const emailIdempotencyKey = `service-rem-${meeting.id}-${member.id}-email`;
-      const existingEmail = await this.prisma.communicationDelivery.findUnique({
-        where: { idempotencyKey: emailIdempotencyKey },
-      });
-
-      if (!existingEmail) {
-        const rawEmail = member.approvedMember?.normalizedEmail || member.user?.email || (member as any).email;
-        const validation = validateEmail(rawEmail, { allowTestDomains: process.env.NODE_ENV !== 'production' });
-
-        if (validation.isValid && validation.normalizedEmail) {
-          let emailStatus: 'SENT' | 'FAILED' = 'FAILED';
-          let failureReason: string | null = null;
-
-          try {
-            await this.mailService.sendEmail({
-              to: validation.normalizedEmail,
-              subject: emailSubject,
-              text: emailText,
-              html: emailHtml,
-            });
-            emailStatus = 'SENT';
-            emailSent++;
-          } catch (mErr: any) {
-            failureReason = mErr?.message || 'SMTP delivery failed';
-            this.logger.warn(`Failed to send email reminder to ${validation.normalizedEmail}: ${failureReason}`);
-          }
-
-          try {
-            await this.prisma.communicationDelivery.create({
-              data: {
-                notificationId,
-                channel: 'EMAIL',
-                recipient: validation.normalizedEmail,
-                templateKey: 'SERVICE_ATTENDANCE_REMINDER_EMAIL',
-                idempotencyKey: emailIdempotencyKey,
-                status: emailStatus,
-                failureReason,
-                attemptedAt: new Date(),
-              },
-            });
-          } catch (err: any) {
-            if (err?.code !== 'P2002') this.logger.error(`Error saving email delivery: ${err?.message}`);
-          }
-        } else {
-          await this.prisma.communicationDelivery.create({
-            data: {
-              notificationId,
-              channel: 'EMAIL',
-              recipient: rawEmail || 'missing_email',
-              templateKey: 'SERVICE_ATTENDANCE_REMINDER_EMAIL',
-              idempotencyKey: emailIdempotencyKey,
-              status: 'FAILED',
-              failureReason: `Invalid or missing email: ${validation.reason || 'none'}`,
-              attemptedAt: new Date(),
-            },
-          }).catch(() => undefined);
-        }
-      }
-
-      // -----------------------------------------------------------------------
-      // Channel 4: In-App Chat
-      // -----------------------------------------------------------------------
-      const chatIdempotencyKey = `service-rem-${meeting.id}-${member.id}-chat`;
-      const existingChat = await this.prisma.communicationDelivery.findUnique({
-        where: { idempotencyKey: chatIdempotencyKey },
-      });
-
-      if (!existingChat) {
-        if (generalRoom && this.chatService) {
-          const chatMsg = `🔔 Service Reminder: The ${meeting.title} is now active. You indicated that you are available for this service. Please take your attendance when attendance opens.`;
-          try {
-            await this.chatService.postSystemMessage(generalRoom.id, chatMsg);
-          } catch (cErr: any) {
-            this.logger.warn(`Chat system message post failed: ${cErr?.message}`);
-          }
-        }
-
-        try {
-          await this.prisma.communicationDelivery.create({
-            data: {
-              notificationId,
-              channel: 'SMS',
-              recipient: member.id,
-              templateKey: 'SERVICE_ATTENDANCE_REMINDER_CHAT',
-              idempotencyKey: chatIdempotencyKey,
-              status: 'SENT',
-              attemptedAt: new Date(),
-            },
-          });
-          chatCreated++;
-        } catch (err: any) {
-          if (err?.code !== 'P2002') this.logger.error(`Error saving chat delivery record: ${err?.message}`);
+    // Do not expose restricted event details to the general group. A targeted
+    // diagnostic trigger must not notify the entire church.
+    if (window === '24h' && !targetMemberId && meeting.visibility === 'PUBLIC' && members.length) {
+      const room = await this.prisma.chatRoom.findUnique({ where: { key: 'GENERAL' } });
+      if (room) {
+        const idempotencyKey = `service-rem-${meeting.id}-24h-general-chat`;
+        const message = await this.prisma.$transaction(async tx => {
+          const claim = await tx.communicationDelivery.createMany({ data: [{ channel: 'PUSH', recipient: room.id,
+            templateKey: 'SERVICE_REMINDER_GENERAL_CHAT', idempotencyKey, status: 'PENDING' }], skipDuplicates: true });
+          if (!claim.count) return null;
+          const message = await tx.chatMessage.create({ data: { roomId: room.id, type: 'SYSTEM',
+            body: `${body} Everyone scheduled and available to serve should prepare ahead and be ready for assigned responsibilities.` } });
+          await tx.communicationDelivery.update({ where: { idempotencyKey }, data: { status: 'SENT', attemptedAt: new Date() } });
+          return message;
+        });
+        if (message) {
+          result.chatCreated++;
+          await this.gateway?.fanOut(room.id, { ...message, sender: null, mine: false });
         }
       }
     }
-
-    this.logger.log(
-      `Dispatched active service reminders for ${meeting.title}: ${eligibleMembers.length} targeted, ` +
-      `push: ${pushSent}, email: ${emailSent}, chat: ${chatCreated}, in-app: ${inAppCreated}`,
-    );
-
-    return {
-      targetedMembersCount: eligibleMembers.length,
-      pushSent,
-      emailSent,
-      chatCreated,
-      inAppCreated,
-    };
+    for (const member of members) {
+      const prefix = window === 'active' ? `service-rem-${meeting.id}-${member.id}` : `service-rem-${meeting.id}-${window}-${member.id}`;
+      const notification = await this.prisma.$transaction(async tx => {
+        const key = `${prefix}-inapp`;
+        const claim = await tx.communicationDelivery.createMany({ data: [{ channel: 'PUSH', recipient: member.id,
+          templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_INAPP`, idempotencyKey: key, status: 'PENDING' }], skipDuplicates: true });
+        if (!claim.count) return null;
+        const item = await tx.memberNotification.create({ data: { memberId: member.id,
+          type: window === 'active' ? 'SERVICE_ATTENDANCE_REMINDER' : 'SERVICE_REMINDER', title, body,
+          data: { meetingId, window, url: path, startTime: meeting.startTime.toISOString() }, expiresAt: meeting.attendanceCloseTime } });
+        await tx.communicationDelivery.update({ where: { idempotencyKey: key }, data: {
+          notificationId: item.id, status: 'SENT', attemptedAt: new Date(),
+        } });
+        return item;
+      });
+      if (notification) {
+        result.inAppCreated++;
+        this.gateway?.notifyMember(member.id);
+      }
+      const email = validateEmail(member.approvedMember?.normalizedEmail || member.user?.email, { allowTestDomains: process.env.NODE_ENV !== 'production' });
+      if (!email.isValid) continue;
+      const key = `${prefix}-email`;
+      // Claim BEFORE contacting SMTP. Concurrent jobs cannot send twice. An
+      // ambiguous SMTP result stays FAILED for review, never blindly resent.
+      const claim = await this.prisma.communicationDelivery.createMany({ data: [{ channel: 'EMAIL', recipient: email.normalizedEmail,
+        templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_EMAIL`, idempotencyKey: key,
+        notificationId: notification?.id, provider: 'SMTP', status: 'PENDING', attemptedAt: new Date() }], skipDuplicates: true });
+      if (!claim.count) continue;
+      const rendered = renderBrandedEmail({ category: 'alert', heading: title, recipientName: member.firstName,
+        paragraphs: [body, 'You are receiving this reminder because you indicated availability for this service.'],
+        details: [{ label: 'Service', value: meeting.title }, { label: 'Starts', value: date }, { label: 'Arrival', value: arrival }],
+        cta: { label: 'View service', url: `${appUrl}${path}`, tone: 'success' },
+      });
+      try {
+        const sent = await this.mailService.sendEmail({ to: email.normalizedEmail, subject: title, text: rendered.text, html: rendered.html });
+        await this.prisma.communicationDelivery.update({ where: { idempotencyKey: key }, data: { status: 'SENT', providerRef: sent.messageId } });
+        result.emailSent++;
+      } catch {
+        await this.prisma.communicationDelivery.update({ where: { idempotencyKey: key }, data: {
+          status: 'FAILED', failureReason: 'SMTP delivery failed; reconcile provider acceptance before retrying.',
+        } });
+        this.logger.error(`EmailFailed delivery=${key}`);
+      }
+    }
+    // One durable push path prevents the old direct + scheduled duplicate.
+    void this.pushService?.deliver();
+    this.logger.log(`ServiceReminderProcessed meeting=${meetingId} window=${window} notifications=${result.inAppCreated} emails=${result.emailSent}`);
+    return result;
   }
 
   /**
@@ -487,10 +281,10 @@ export class ServiceReminderService {
       },
     });
 
-    const pushDeliveries = deliveries.filter((d) => d.templateKey === 'SERVICE_ATTENDANCE_REMINDER_PUSH');
-    const emailDeliveries = deliveries.filter((d) => d.templateKey === 'SERVICE_ATTENDANCE_REMINDER_EMAIL');
-    const chatDeliveries = deliveries.filter((d) => d.templateKey === 'SERVICE_ATTENDANCE_REMINDER_CHAT');
-    const inAppDeliveries = deliveries.filter((d) => d.templateKey === 'SERVICE_ATTENDANCE_REMINDER_INAPP');
+    const pushDeliveries = deliveries.filter((d) => d.templateKey.includes('PUSH'));
+    const emailDeliveries = deliveries.filter((d) => d.templateKey.includes('EMAIL'));
+    const chatDeliveries = deliveries.filter((d) => d.templateKey.includes('CHAT'));
+    const inAppDeliveries = deliveries.filter((d) => d.templateKey.includes('INAPP'));
 
     const attendanceRecords = await this.prisma.attendanceRecord.findMany({
       where: { meetingId },

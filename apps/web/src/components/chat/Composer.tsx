@@ -30,7 +30,10 @@ export function Composer({
 }) {
   const { notify } = useToast();
   const [text, setText] = useState('');
+  const submitting = useRef(false);
   const [recording, setRecording] = useState(false);
+  const [voicePreview, setVoicePreview] = useState<File | null>(null);
+  const [voiceUrl, setVoiceUrl] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [recordedBytes, setRecordedBytes] = useState(0);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -45,10 +48,24 @@ export function Composer({
   const currentBytesRef = useRef(0);
   const autoStoppedRef = useRef(false);
   const typingRef = useRef(false);
+  const lastTypingSent = useRef(0);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiRef = useRef<HTMLDivElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!voicePreview) { setVoiceUrl(''); return; }
+    const url = URL.createObjectURL(voicePreview);
+    setVoiceUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [voicePreview]);
+  useEffect(() => () => {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    const recorder = recorderRef.current;
+    if (recorder?.state === 'recording') { recorder.onstop = null; recorder.stop(); }
+    recorder?.stream.getTracks().forEach(track => track.stop());
+  }, []);
 
   // Restore draft from localStorage
   useEffect(() => {
@@ -95,7 +112,8 @@ export function Composer({
   }, [showEmojis, showAttachMenu]);
 
   const emitTyping = (typing: boolean) => {
-    if (typingRef.current === typing) return;
+    if (typingRef.current === typing && (!typing || Date.now() - lastTypingSent.current < 2000)) return;
+    lastTypingSent.current = Date.now();
     typingRef.current = typing;
     onTyping(typing);
   };
@@ -125,18 +143,20 @@ export function Composer({
 
   const submit = async () => {
     const value = text.trim();
-    if (!value) return;
+    if (!value || submitting.current) return;
+    submitting.current = true;
     emitTyping(false);
-    setText('');
-    if (draftKey && typeof window !== 'undefined') {
-      localStorage.removeItem(`chat_draft:${draftKey}`);
-    }
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     try {
+      // onSend resolves after durable queueing; keep the draft until that succeeds.
       await onSend(value);
+      if (!textareaRef.current || textareaRef.current.value.trim() === value) {
+        setText('');
+        if (draftKey) localStorage.removeItem(`chat_draft:${draftKey}`);
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      }
     } catch {
-      setText(value);
-    }
+      notify('Could not save this message. Your draft is still here.', 'error');
+    } finally { submitting.current = false; }
   };
 
   const insertEmoji = (emoji: string) => {
@@ -234,7 +254,7 @@ export function Composer({
           const isMp4 = (recorder.mimeType || '').includes('mp4') || (recorder.mimeType || '').includes('m4a');
           const isOgg = (recorder.mimeType || '').includes('ogg');
           const ext = isMp4 ? 'm4a' : isOgg ? 'ogg' : 'webm';
-          void onAttach(new File([blob], `voice-note-${Date.now()}.${ext}`, { type: blob.type }));
+          setVoicePreview(new File([blob], `voice-note-${Date.now()}.${ext}`, { type: blob.type }));
         }
       };
 
@@ -376,6 +396,11 @@ export function Composer({
         </div>
       )}
 
+      {voicePreview && <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border p-3" aria-label="Voice message preview">
+        <audio controls preload="metadata" src={voiceUrl} className="max-w-full" />
+        <button type="button" onClick={() => setVoicePreview(null)} className="px-3 py-2">Cancel</button>
+        <button type="button" onClick={async () => { try { await onAttach(voicePreview); setVoicePreview(null); } catch { notify('Voice message retained. Try sending again.', 'error'); } }} className="rounded-lg bg-primary px-3 py-2 text-white">Send voice message</button>
+      </div>}
       {/* Voice Recorder Active Mode with Real-Time Size Tracking & Waveform */}
       {recording ? (
         <div className="flex flex-col gap-1.5 px-3 py-2 rounded-2xl bg-surface-container-low border border-outline-variant/30">

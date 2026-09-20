@@ -88,6 +88,30 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     this.close();
   }
 
+  private checkpoint: string | null = null;
+  getSyncCheckpoint(): string | null {
+    if (!this.db) return this.checkpoint;
+    this.db.exec('CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    return (this.db.prepare('SELECT value FROM chat_sync_meta WHERE key = ?').get('primary_checkpoint') as { value: string } | undefined)?.value || null;
+  }
+  setSyncCheckpoint(value: string) {
+    if (!this.db) { this.checkpoint = value; return; }
+    this.db.exec('CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    this.db.prepare('INSERT INTO chat_sync_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('primary_checkpoint', value);
+  }
+
+  getSyncSummary(): Record<string, unknown> | null {
+    if (!this.db) return null;
+    this.db.exec('CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    const row = this.db.prepare('SELECT value FROM chat_sync_meta WHERE key = ?').get('last_summary') as { value: string } | undefined;
+    return row ? JSON.parse(row.value) : null;
+  }
+  setSyncSummary(summary: unknown) {
+    if (!this.db) return;
+    this.db.exec('CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    this.db.prepare('INSERT INTO chat_sync_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run('last_summary', JSON.stringify(summary));
+  }
+
   public initDatabase(customPath?: string) {
     if (this.db || this.isFallback) return;
 
@@ -117,7 +141,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
       // Configure SQLite for high concurrency across localhost & production, WAL mode, crash safety
       this.db.exec('PRAGMA journal_mode = WAL;');
       this.db.exec('PRAGMA busy_timeout = 10000;');
-      this.db.exec('PRAGMA synchronous = NORMAL;');
+      this.db.exec('PRAGMA synchronous = FULL;');
       this.db.exec('PRAGMA foreign_keys = ON;');
       this.db.exec('PRAGMA cache_size = -64000;');
       this.db.exec('PRAGMA wal_autocheckpoint = 1000;');
@@ -523,6 +547,13 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
         attachment_url, attachment_meta, reply_to_id, edited_at, deleted_at,
         created_at, sync_status, migrated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MIGRATED', ?)
+      ON CONFLICT(id) DO UPDATE SET body = excluded.body,
+        attachment_url = excluded.attachment_url, attachment_meta = excluded.attachment_meta,
+        edited_at = excluded.edited_at, deleted_at = excluded.deleted_at
+      WHERE chat_message_buffer.sync_status = 'MIGRATED'
+        AND chat_message_buffer.room_id = excluded.room_id
+        AND (COALESCE(excluded.edited_at, '') > COALESCE(chat_message_buffer.edited_at, '')
+          OR COALESCE(excluded.deleted_at, '') > COALESCE(chat_message_buffer.deleted_at, ''))
     `);
 
     this.db.exec('BEGIN TRANSACTION;');

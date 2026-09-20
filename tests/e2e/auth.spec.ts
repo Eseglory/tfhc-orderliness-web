@@ -41,21 +41,14 @@ async function tokenFor(email: string) {
 
 async function completeRegistration(page: Page, email: string, password: string) {
   await page.goto('/register', { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('First name').fill('Reggie');
-  await page.getByPlaceholder('Last name').fill('Ster');
-  await page.getByPlaceholder(/approved list/).fill(email);
-  await page.getByPlaceholder('Phone number').fill('08055550000');
+  await page.getByPlaceholder('Church member email address').fill(email);
   await page.getByPlaceholder(/^Password/).fill(password);
-  await page.getByPlaceholder('Confirm password').fill(password);
   await page.getByRole('button', { name: /Create account/ }).click();
-  // argon2 hashing + a DB transaction — generous on a loaded CI host.
-  await expect(page.getByText('Check your inbox')).toBeVisible({ timeout: 30000 });
-  const link = await page.locator('a[href*="/verify-email?token="]').getAttribute('href');
-  expect(link).toBeTruthy();
-  return link as string;
+  await expect(page).toHaveURL(/\/member$/, { timeout: 30000 });
+  return page.url();
 }
 
-test('self-registration: approved email → verify link → member dashboard', async ({ page }) => {
+test('self-registration: approved email links existing member and opens dashboard', async ({ page }) => {
   test.setTimeout(60000);
   const link = await completeRegistration(page, REGISTER_EMAIL, PASSWORD);
   await page.goto(link, { waitUntil: 'domcontentloaded' });
@@ -65,14 +58,10 @@ test('self-registration: approved email → verify link → member dashboard', a
 
 test('registration is refused for an email that is not approved', async ({ page }) => {
   await page.goto('/register', { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('First name').fill('No');
-  await page.getByPlaceholder('Last name').fill('Body');
-  await page.getByPlaceholder(/approved list/).fill('not-approved@tfhc.org');
-  await page.getByPlaceholder('Phone number').fill('08000000000');
+  await page.getByPlaceholder('Church member email address').fill('not-approved@tfhc.org');
   await page.getByPlaceholder(/^Password/).fill(PASSWORD);
-  await page.getByPlaceholder('Confirm password').fill(PASSWORD);
   await page.getByRole('button', { name: /Create account/ }).click();
-  await expect(page.getByText(/approved/i)).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'not authorized' })).toContainText(/lookup/i);
 });
 
 test('forgot password shows a neutral confirmation and never reveals accounts', async ({ page }) => {
@@ -103,7 +92,7 @@ test('password reset: emailed link → new password works, old one does not', as
 
   // Old password rejected, new one accepted.
   expect((await request.post(`${apiURL}/auth/login`, { data: { email: REGISTER_EMAIL, password: PASSWORD } })).status()).toBe(401);
-  expect((await request.post(`${apiURL}/auth/login`, { data: { email: REGISTER_EMAIL, password: NEW_PW } })).status()).toBe(201);
+  expect((await request.post(`${apiURL}/auth/login`, { data: { email: REGISTER_EMAIL, password: NEW_PW } })).status()).toBe(200);
 });
 
 test('changing the password signs other sessions out', async ({ page, context, request }) => {
@@ -116,7 +105,12 @@ test('changing the password signs other sessions out', async ({ page, context, r
   const other = await context.browser()!.newContext();
   const otherPage = await other.newPage();
   const stale = await tokenFor(REGISTER_EMAIL);
-  await otherPage.addInitScript((t) => localStorage.setItem('tfhc_token', t), stale);
+  await otherPage.addInitScript((t) => {
+    if (!sessionStorage.getItem('test-stale-session-seeded')) {
+      localStorage.setItem('tfhc_token', t);
+      sessionStorage.setItem('test-stale-session-seeded', 'true');
+    }
+  }, stale);
 
   // Cross a second boundary so the change is unambiguously newer than the tokens.
   await page.waitForTimeout(1200);
@@ -129,6 +123,7 @@ test('changing the password signs other sessions out', async ({ page, context, r
   await page.getByRole('button', { name: 'Update password' }).click();
   await expect(page.getByText(/Password updated/)).toBeVisible();
 
+  expect((await request.get(`${apiURL}/auth/me`, { headers: { Authorization: `Bearer ${stale}` } })).status()).toBe(401);
   // The stale session is bounced to the sign-in screen.
   await otherPage.goto('/member', { waitUntil: 'domcontentloaded' });
   await expect(otherPage).toHaveURL(/\/login(\?.*)?$/);

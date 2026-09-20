@@ -170,6 +170,7 @@ describe('AuthService.loginUser member rules', () => {
 
   it('auto-verifies pre-approved member on valid password login', async () => {
     const prisma = {
+      approvedMember: { update: jest.fn().mockResolvedValue({}) },
       user: {
         findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: true, emailVerifiedAt: null, isActive: true, member: { id: 'mem1', status: 'ACTIVE', approvedMember: { status: 'ACTIVE', normalizedEmail: 'm@tfhc.org' } } })),
         update: jest.fn(async () => ({ id: 'u1' })),

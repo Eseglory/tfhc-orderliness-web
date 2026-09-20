@@ -30,6 +30,10 @@ export function MessageBubble({
   onEdit,
   onDelete,
   onReact,
+  onRetry,
+  onHide,
+  onForward,
+  onJumpToReply,
 }: {
   message: ChatMessage;
   showSender: boolean;
@@ -37,14 +41,16 @@ export function MessageBubble({
   onReply: (m: ChatMessage) => void;
   onEdit: (m: ChatMessage) => void;
   onDelete: (m: ChatMessage) => void;
+  onRetry?: (m: ChatMessage) => void;
+  onHide?: (m: ChatMessage) => void;
+  onForward?: (m: ChatMessage) => void;
+  onJumpToReply?: (id: string) => void;
   onReact?: (m: ChatMessage, emoji: string) => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [reactions, setReactions] = useState<Record<string, number>>(
-    (message as any).reactions || {}
-  );
+  const reactions = message.reactions || {};
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioSpeed, setAudioSpeed] = useState<1 | 1.5 | 2>(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -70,13 +76,6 @@ export function MessageBubble({
   };
 
   const handleToggleReaction = (emoji: string) => {
-    setReactions((prev) => {
-      const current = prev[emoji] || 0;
-      return {
-        ...prev,
-        [emoji]: current > 0 ? current - 1 : current + 1,
-      };
-    });
     if (onReact) onReact(message, emoji);
   };
 
@@ -140,9 +139,10 @@ export function MessageBubble({
                   : 'bg-surface-container-lowest text-on-surface rounded-tl-xs border border-outline-variant/20'
             }`}
           >
+            {message.attachmentMeta?.forwarded === true && <p className="mb-1 text-xs italic opacity-75">Forwarded</p>}
             {/* Quoted Reply */}
             {message.replyTo && !deleted && (
-              <div
+              <button type="button" onClick={() => onJumpToReply?.(message.replyTo!.id)} aria-label="Go to original message"
                 className={`mb-2 rounded-xl border-l-4 px-2.5 py-1.5 text-xs ${
                   mine
                     ? 'border-white/80 bg-black/15 text-white'
@@ -151,7 +151,7 @@ export function MessageBubble({
               >
                 <span className="block font-bold opacity-90">{message.replyTo.senderName ?? 'Reply'}</span>
                 <span className="block truncate opacity-80">{message.replyTo.body ?? 'Attachment'}</span>
-              </div>
+              </button>
             )}
 
             {deleted ? (
@@ -167,6 +167,8 @@ export function MessageBubble({
                   <img
                     src={message.attachmentUrl}
                     alt={meta?.name || 'Shared image'}
+                    loading="lazy"
+                    decoding="async"
                     onClick={() => setLightbox(true)}
                     className="mb-1.5 max-h-72 w-full cursor-pointer rounded-xl object-cover transition-all hover:brightness-95 active:scale-[0.99]"
                   />
@@ -174,62 +176,7 @@ export function MessageBubble({
 
                 {/* WhatsApp Style Audio / Voice Note Player */}
                 {message.type === 'AUDIO' && message.attachmentUrl && (
-                  <div
-                    className={`mb-1.5 flex items-center gap-3 rounded-xl p-2.5 ${
-                      mine ? 'bg-black/15' : 'bg-surface-container-low border border-outline-variant/20'
-                    }`}
-                  >
-                    <audio
-                      ref={audioRef}
-                      src={message.attachmentUrl}
-                      onPlay={() => setAudioPlaying(true)}
-                      onPause={() => setAudioPlaying(false)}
-                      onEnded={() => setAudioPlaying(false)}
-                      hidden
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!audioRef.current) return;
-                        if (audioPlaying) audioRef.current.pause();
-                        else audioRef.current.play();
-                      }}
-                      className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 shadow-sm transition-transform active:scale-95 ${
-                        mine ? 'bg-white text-primary' : 'bg-primary text-white'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[24px]">
-                        {audioPlaying ? 'pause' : 'play_arrow'}
-                      </span>
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-0.5 h-6">
-                        {[12, 20, 8, 16, 24, 14, 18, 22, 10, 16, 20, 14, 8, 18, 12].map((h, idx) => (
-                          <span
-                            key={idx}
-                            className={`w-1 rounded-full ${mine ? 'bg-white/70' : 'bg-primary/70'} ${
-                              audioPlaying ? 'animate-pulse' : ''
-                            }`}
-                            style={{ height: `${h}px` }}
-                          />
-                        ))}
-                      </div>
-                      <p className={`text-[10px] font-mono mt-0.5 ${mine ? 'text-white/80' : 'text-on-surface-variant'}`}>
-                        Voice Message
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={toggleAudioSpeed}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-black shrink-0 ${
-                        mine ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface'
-                      }`}
-                    >
-                      {audioSpeed}x
-                    </button>
-                  </div>
+                  <audio controls preload="metadata" src={message.attachmentUrl} className="mb-2 max-w-full" aria-label="Voice message playback" />
                 )}
 
                 {/* Document Attachment */}
@@ -273,12 +220,12 @@ export function MessageBubble({
             >
               {message.editedAt && !deleted && <span className="italic">edited</span>}
               <span>{formatMessageTime(message.createdAt)}</span>
-              {message.pending ? (
+              {message.failed ? <button onClick={() => onRetry?.(message)} className="underline" aria-label="Retry message">Failed · Retry</button> : message.pending ? (
                 <span className="material-symbols-outlined text-[12px] opacity-75">schedule</span>
               ) : mine ? (
                 /* WhatsApp double tick with cyan/teal read indicator */
-                <span className="material-symbols-outlined text-[15px] font-bold text-cyan-200" title="Delivered & Read">
-                  done_all
+                <span className="material-symbols-outlined text-[15px] font-bold" title={message.readBy ? `Read by ${message.readBy}` : message.deliveredTo ? `Delivered to ${message.deliveredTo}` : 'Sent'}>
+                  {message.readBy || message.deliveredTo ? 'done_all' : 'done'}
                 </span>
               ) : null}
             </div>
@@ -375,6 +322,8 @@ export function MessageBubble({
                     </button>
                   )}
 
+                  {onForward && <button onClick={() => { onForward(message); setMenu(false); }} className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2">Forward</button>}
+                  {onHide && <button onClick={() => { onHide(message); setMenu(false); }} className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2">Delete for me</button>}
                   {(mine || canModerate) && (
                     <button
                       onClick={() => {
@@ -384,7 +333,7 @@ export function MessageBubble({
                       className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">delete</span>
-                      <span>Delete message</span>
+                      <span>Delete for everyone</span>
                     </button>
                   )}
                 </div>

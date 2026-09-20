@@ -1,3 +1,4 @@
+import { ServiceReminderModule } from './service-reminder.module';
 import { AbsenceProcessingModule } from '../../jobs/absence-processing.module';
 import { Module } from '@nestjs/common';
 import { MeetingsService } from './meetings.service';
@@ -8,9 +9,9 @@ import { ChatModule } from '../chat/chat.module';
 import { CalendarModule } from '../calendar/calendar.module';
 
 @Module({
-  imports: [AbsenceProcessingModule, CalendarModule, PushModule, ChatModule],
-  providers: [MeetingsService, ServiceReminderService],
+  imports: [ServiceReminderModule, AbsenceProcessingModule, CalendarModule, PushModule, ChatModule],
+  providers: [MeetingsService],
   controllers: [MeetingsController],
-  exports: [MeetingsService, ServiceReminderService],
+  exports: [MeetingsService, ServiceReminderModule],
 })
 export class MeetingsModule {}

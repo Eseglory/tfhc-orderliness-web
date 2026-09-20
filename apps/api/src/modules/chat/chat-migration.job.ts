@@ -50,7 +50,15 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    */
   public async seedFromPrimaryDatabase(): Promise<{ totalDiscovered: number; inserted: number; skipped: number }> {
     try {
+      const checkpoint = this.bufferRepo.getSyncCheckpoint();
+      const startedAt = new Date().toISOString();
+      let cursor: string | undefined;
+      let totalDiscovered = 0, inserted = 0, skipped = 0;
+      do {
       const existingMessages = await this.prisma.chatMessage.findMany({
+        take: 50,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        ...(checkpoint ? { where: { OR: ['createdAt', 'editedAt', 'deletedAt'].map(field => ({ [field]: { gte: new Date(new Date(checkpoint).getTime() - 60000) } })) } } : {}),
         select: {
           id: true,
           clientOperationId: true,
@@ -65,14 +73,10 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
           deletedAt: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
 
-      if (existingMessages.length === 0) {
-        this.logger.log('[Legacy Seed] Primary Database has 0 existing chat messages.');
-        return { totalDiscovered: 0, inserted: 0, skipped: 0 };
-      }
-
+      if (!existingMessages.length) break;
       const formatted = existingMessages.map((m) => ({
         id: m.id,
         clientOperationId: m.clientOperationId,
@@ -88,14 +92,16 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
         createdAt: m.createdAt.toISOString(),
       }));
 
-      const { inserted, skipped } = this.bufferRepo.seedLegacyMessages(formatted);
-      const totalInSqlite = this.bufferRepo.countAll();
-
-      this.logger.log(
-        `[Legacy Seed Complete] Primary DB records=${existingMessages.length}, Inserted into SQLite=${inserted}, Already Present=${skipped}, Total SQLite Hot Store Count=${totalInSqlite}`,
-      );
-
-      return { totalDiscovered: existingMessages.length, inserted, skipped };
+      const batch = this.bufferRepo.seedLegacyMessages(formatted);
+      inserted += batch.inserted;
+      skipped += batch.skipped;
+      totalDiscovered += existingMessages.length;
+      cursor = existingMessages[existingMessages.length - 1].id;
+      if (existingMessages.length < 50) break;
+      } while (cursor);
+      this.bufferRepo.setSyncCheckpoint(startedAt);
+      this.logger.log(`ChatSyncImported records=${totalDiscovered} inserted=${inserted} skipped=${skipped}`);
+      return { totalDiscovered, inserted, skipped };
     } catch (err: any) {
       this.logger.error(`[Legacy Seed Failed] Could not seed historical messages from Primary DB: ${err.message}`);
       return { totalDiscovered: 0, inserted: 0, skipped: 0 };
@@ -115,7 +121,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
       this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
       return true;
     } catch (err: any) {
-      if (err?.code === 'P2002') {
+      if (err?.code === 'P2002' && await this.matchesPrimary(msg)) {
         this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
         return true;
       }
@@ -231,7 +237,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
             migratedCount++;
           } catch (err: any) {
             // Check if failure was due to duplicate message (already in Postgres)
-            if (err?.code === 'P2002') {
+            if (err?.code === 'P2002' && await this.matchesPrimary(msg)) {
               duplicatesPrevented++;
               this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
               migratedCount++;
@@ -255,18 +261,17 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
         `[Chat Migration Finished] Trigger=${trigger}, Duration=${durationMs}ms, Processed=${totalProcessed}, Migrated=${migratedCount}, DuplicatesPrevented=${duplicatesPrevented}, Failed=${failedCount}`,
       );
 
-      return {
-        startedAt,
-        completedAt,
-        totalProcessed,
-        migratedCount,
-        failedCount,
-        duplicatesPrevented,
-        durationMs,
-      };
+      const summary = { startedAt, completedAt, totalProcessed, migratedCount, failedCount, duplicatesPrevented, durationMs };
+      this.bufferRepo.setSyncSummary(summary);
+      return summary;
     } finally {
       this.isMigrating = false;
     }
+  }
+
+  private async matchesPrimary(msg: BufferedMessageRecord): Promise<boolean> {
+    const saved = await this.prisma.chatMessage.findUnique({ where: msg.clientOperationId ? { clientOperationId: msg.clientOperationId } : { id: msg.id } });
+    return Boolean(saved && saved.roomId === msg.roomId && saved.senderMemberId === msg.senderMemberId && saved.body === msg.body);
   }
 
   private async migrateSingleMessage(msg: BufferedMessageRecord): Promise<void> {
@@ -289,25 +294,21 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
     };
 
     if (msg.clientOperationId) {
-      await this.prisma.chatMessage.upsert({
+      const saved = await this.prisma.chatMessage.upsert({
         where: { clientOperationId: msg.clientOperationId },
         create: createData,
-        update: {
-          body: msg.body,
-          editedAt: msg.editedAt ? new Date(msg.editedAt) : undefined,
-          deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : undefined,
-        },
+        update: {},
       });
+      if (saved.roomId && (saved.roomId !== msg.roomId || saved.senderMemberId !== msg.senderMemberId)) throw new Error('Sync conflict: immutable message identity differs');
+      if (saved.body !== undefined && saved.body !== msg.body) this.logger.warn(`ChatSyncConflict id=${msg.id}; primary content preserved; local record retained`);
     } else {
-      await this.prisma.chatMessage.upsert({
+      const saved = await this.prisma.chatMessage.upsert({
         where: { id: msg.id },
         create: createData,
-        update: {
-          body: msg.body,
-          editedAt: msg.editedAt ? new Date(msg.editedAt) : undefined,
-          deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : undefined,
-        },
+        update: {},
       });
+      if (saved.roomId && (saved.roomId !== msg.roomId || saved.senderMemberId !== msg.senderMemberId)) throw new Error('Sync conflict: immutable message identity differs');
+      if (saved.body !== undefined && saved.body !== msg.body) this.logger.warn(`ChatSyncConflict id=${msg.id}; primary content preserved; local record retained`);
     }
   }
 }

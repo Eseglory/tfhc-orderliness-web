@@ -254,6 +254,58 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
       new Promise((_, rej) => setTimeout(() => rej(new Error('no realtime delivery')), 4000)),
     ]);
     expect((evt as any).body).toBe(`realtime ${run}`);
+    expect((evt as any).mine).toBe(false);
+    expect((evt as any).sender.memberId).toBe(aliceId);
+  });
+
+  test('retries over HTTP and Socket.IO share one persisted operation', async () => {
+    const room = (await http().post(`/chat/direct/${bobId}`).set(auth(aliceToken)).expect(201)).body;
+    const clientId = `retry-${run}`;
+    const first = (await http().post(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken))
+      .send({ body: 'Lost acknowledgement', clientId }).expect(201)).body;
+    const sender = await socket(aliceToken);
+    const second = await new Promise<any>(resolve => sender.emit('message:send', {
+      roomId: room.id, body: 'Lost acknowledgement', clientId,
+    }, resolve));
+    expect(second.ok).toBe(true);
+    expect(second.message.id).toBe(first.id);
+    expect(await db.chatMessage.count({ where: { clientOperationId: clientId } })).toBe(1);
+    expect(await db.memberNotification.count({ where: {
+      memberId: bobId, data: { path: ['messageId'], equals: first.id },
+    } })).toBe(1);
+  });
+
+  test('reactions survive reload, hidden messages stay private, and delivery receipts require acknowledgement', async () => {
+    const room = (await http().post(`/chat/direct/${bobId}`).set(auth(aliceToken)).expect(201)).body;
+    const message = (await http().post(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).send({ body: `persisted interaction ${run}` }).expect(201)).body;
+    await http().post(`/chat/messages/${message.id}/reactions`).set(auth(bobToken)).send({ emoji: '🙏' }).expect(201);
+    await http().post(`/chat/messages/${message.id}/reactions`).set(auth(bobToken)).send({ emoji: '🙏' }).expect(201);
+    let history = (await http().get(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).expect(200)).body;
+    expect(history.messages.find((m: any) => m.id === message.id).reactions).toEqual({ '🙏': 1 });
+    const receiver = await socket(bobToken);
+    await new Promise(resolve => receiver.emit('message:delivered', { roomId: room.id, messageId: message.id }, resolve));
+    history = (await http().get(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).expect(200)).body;
+    expect(history.messages.find((m: any) => m.id === message.id).deliveredTo).toBe(1);
+    await http().post(`/chat/messages/${message.id}/hide`).set(auth(bobToken)).expect(201);
+    const bobHistory = (await http().get(`/chat/rooms/${room.id}/messages`).set(auth(bobToken)).expect(200)).body;
+    expect(bobHistory.messages.some((m: any) => m.id === message.id)).toBe(false);
+    expect(await db.chatMessage.findUnique({ where: { id: message.id } })).not.toBeNull();
+    const search = (await http().get(`/chat/rooms/${room.id}/messages?search=${encodeURIComponent('persisted interaction')}`).set(auth(aliceToken)).expect(200)).body;
+    expect(search.messages.some((m: any) => m.id === message.id)).toBe(true);
+  });
+
+  test('forwarding checks both rooms and retries without duplication', async () => {
+    const room = (await http().post(`/chat/direct/${bobId}`).set(auth(aliceToken)).expect(201)).body;
+    const source = (await http().post(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).send({ body: 'Forward safely' }).expect(201)).body;
+    const general = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL');
+    const command = { roomId: general.id, clientId: `forward-${run}` };
+    const first = (await http().post(`/chat/messages/${source.id}/forward`).set(auth(aliceToken)).send(command).expect(201)).body;
+    const second = (await http().post(`/chat/messages/${source.id}/forward`).set(auth(aliceToken)).send(command).expect(201)).body;
+    expect(second.id).toBe(first.id);
+    expect(first.attachmentMeta.forwarded).toBe(true);
+    expect(first.body).toBe(source.body);
+    const restricted = (await http().get('/chat/rooms').set(auth(execToken)).expect(200)).body.find((r: any) => r.key === 'EXECUTIVES');
+    await http().post(`/chat/messages/${source.id}/forward`).set(auth(aliceToken)).send({ roomId: restricted.id, clientId: `restricted-${run}` }).expect(403);
   });
 
   test('media & attachments: strictly enforce 2 MB hard limit and support documents', async () => {

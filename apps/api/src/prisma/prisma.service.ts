@@ -3,6 +3,19 @@ import { PrismaClient } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    const raw = process.env.DATABASE_URL;
+    let url = raw;
+    if (raw) {
+      const parsed = new URL(raw);
+      // Bound each API process, including overlapping deploy instances, below
+      // the hosted session pool limit. Respect explicit operator overrides.
+      if (!parsed.searchParams.has('connection_limit')) parsed.searchParams.set('connection_limit', '3');
+      url = parsed.toString();
+    }
+    super(url ? { datasources: { db: { url } } } : undefined);
+  }
+
   async onModuleInit() {
     const url = process.env.DATABASE_URL || '';
     if (process.env.NODE_ENV === 'test') {

@@ -79,6 +79,9 @@ export class AuthService {
       }
 
       const existingUser = approved.member?.user || (await tx.user.findUnique({ where: { email: normalizedEmail } }));
+      if (existingUser) {
+        throw new ConflictException('An account already exists. Sign in or use password recovery.');
+      }
 
       let member = approved.member;
       if (!member) {
@@ -146,17 +149,9 @@ export class AuthService {
         isActive: true,
       };
 
-      let user: any;
-      if (existingUser) {
-        user = await tx.user.update({
-          where: { id: existingUser.id },
-          data: verifyFields,
-        });
-      } else {
-        user = await tx.user.create({
-          data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
-        });
-      }
+      const user = await tx.user.create({
+        data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
+      });
 
       await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
 
@@ -323,6 +318,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (user.role === Role.MEMBER && !user.passwordAuthEnabled) {
+      throw new ForbiddenException({ code: 'PASSWORD_AUTH_DISABLED', message: 'Use Google sign-in or password recovery to access this account.' });
     }
 
     if (!user.isActive && !user.inviteTokenHash) {

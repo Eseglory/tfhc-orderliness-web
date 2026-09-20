@@ -12,6 +12,7 @@ export interface ChatSender {
 
 export interface ChatMessage {
   id: string;
+  clientId?: string | null;
   roomId: string;
   type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'SYSTEM';
   body: string | null;
@@ -25,6 +26,11 @@ export interface ChatMessage {
   sender: ChatSender | null;
   mine: boolean;
   pending?: boolean;
+  failed?: boolean;
+  readBy?: number;
+  deliveredTo?: number;
+  reactions?: Record<string, number>;
+  myReactions?: string[];
 }
 
 export interface ChatRoom {
@@ -63,11 +69,12 @@ export interface RoomMember {
 }
 
 export const chatApi = {
+  forward: (id: string, roomId: string, clientId: string) => fetchApi<ChatMessage>(`/chat/messages/${id}/forward`, { method: 'POST', body: JSON.stringify({ roomId, clientId }) }),
   rooms: () => fetchApi<ChatRoom[]>('/chat/rooms'),
   room: (id: string) => fetchApi<ChatRoom>(`/chat/rooms/${id}`),
-  messages: (id: string, cursor?: string, limit = 30) =>
+  messages: (id: string, cursor?: string, limit = 30, search?: string) =>
     fetchApi<{ messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean }>(
-      `/chat/rooms/${id}/messages?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+      `/chat/rooms/${id}/messages?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
     ),
   send: (id: string, body: { body?: string; replyToId?: string; clientId?: string }) =>
     fetchApi<ChatMessage>(`/chat/rooms/${id}/messages`, { method: 'POST', body: JSON.stringify(body) }),
@@ -78,6 +85,8 @@ export const chatApi = {
       method: 'POST',
       body: JSON.stringify({ messageId }),
     }),
+  react: (id: string, emoji: string, remove: boolean) => fetchApi(`/chat/messages/${id}/reactions`, { method: 'POST', body: JSON.stringify({ emoji, remove }) }),
+  hide: (id: string) => fetchApi(`/chat/messages/${id}/hide`, { method: 'POST' }),
   edit: (messageId: string, body: string) =>
     fetchApi<ChatMessage>(`/chat/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
   remove: (messageId: string) => fetchApi<ChatMessage>(`/chat/messages/${messageId}`, { method: 'DELETE' }),
@@ -101,9 +110,16 @@ export interface ChatSocketEvents {
   onMessageUpdate?: (m: ChatMessage) => void;
   onTyping?: (e: { roomId: string; memberId: string; name: string; typing: boolean }) => void;
   onRead?: (e: { roomId: string; memberId: string; lastReadAt: string }) => void;
+  onDelivered?: (e: { roomId: string; memberId: string; lastDeliveredAt: string }) => void;
+  onReactions?: (e: { messageId: string; reactions: { memberId: string; emoji: string }[] }) => void;
   onPresence?: (e: { memberId: string; online: boolean }) => void;
+  onUnread?: () => void;
   onReady?: (e: { memberId: string; rooms: string[]; online: string[] }) => void;
 }
+
+let sharedSocket: Socket | null = null;
+let socketUsers = 0;
+let lastReady: { memberId: string; rooms: string[]; online: string[] } | null = null;
 
 /**
  * Opens a single authenticated `/chat` socket for the lifetime of the caller.
@@ -121,14 +137,31 @@ export function useChatSocket(events: ChatSocketEvents) {
     const token = getAuthToken();
     if (!token) return;
 
-    const socket = io(`${API_BASE_URL}/chat`, {
+    const firstSocket = !sharedSocket;
+    const socket = sharedSocket || (sharedSocket = io(`${API_BASE_URL}/chat`, {
       transports: ['websocket', 'polling'],
-      auth: { token },
+      auth: (callback) => callback({ token: getAuthToken() }),
+      tryAllTransports: true,
       reconnectionAttempts: Infinity,
       reconnectionDelayMax: 30000,
       randomizationFactor: 0.5,
       reconnectionDelay: 1000,
-    });
+    }));
+    socketUsers++;
+    if (firstSocket) {
+      socket.on('message:new', (m: ChatMessage) => socket.emit('message:delivered', { roomId: m.roomId, messageId: m.id }));
+      socket.on('notification:new', () => window.dispatchEvent(new Event('tfhc:notifications-synced')));
+    }
+    const listeners: Array<[string, (...args: any[]) => void]> = [];
+    const on = (event: string, callback: (...args: any[]) => void) => {
+      listeners.push([event, callback]);
+      socket.on(event, callback);
+    };
+    setConnected(socket.connected);
+    if (socket.connected && lastReady) {
+      setOnline(new Set(lastReady.online));
+      handlers.current.onReady?.(lastReady);
+    }
     socketRef.current = socket;
     const resume = () => {
       if (navigator.onLine && document.visibilityState === 'visible' && !socket.connected) {
@@ -148,21 +181,27 @@ export function useChatSocket(events: ChatSocketEvents) {
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('tfhc:logout', signedOut);
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
-    socket.on('ready', (e: { memberId: string; rooms: string[]; online: string[] }) => {
+    on('connect', () => setConnected(true));
+    on('disconnect', () => setConnected(false));
+    on('ready', (e: { memberId: string; rooms: string[]; online: string[] }) => {
+      lastReady = e;
       setOnline(new Set(e.online ?? []));
       handlers.current.onReady?.(e);
     });
-    socket.on('message:new', (m: ChatMessage) => handlers.current.onMessage?.(m));
-    socket.on('message:update', (m: ChatMessage) => handlers.current.onMessageUpdate?.(m));
-    socket.on('message:typing', (e: { roomId: string; memberId: string; name: string; typing: boolean }) =>
+    on('message:new', (m: ChatMessage) => {
+      handlers.current.onMessage?.(m);
+    });
+    on('message:delivered', e => handlers.current.onDelivered?.(e));
+    on('message:reactions', e => handlers.current.onReactions?.(e));
+    on('message:update', (m: ChatMessage) => handlers.current.onMessageUpdate?.({ ...m, mine: m.sender?.memberId === lastReady?.memberId }));
+    on('message:typing', (e: { roomId: string; memberId: string; name: string; typing: boolean }) =>
       handlers.current.onTyping?.(e),
     );
-    socket.on('message:read', (e: { roomId: string; memberId: string; lastReadAt: string }) =>
+    on('unread:update', () => handlers.current.onUnread?.());
+    on('message:read', (e: { roomId: string; memberId: string; lastReadAt: string }) =>
       handlers.current.onRead?.(e),
     );
-    socket.on('presence:update', (e: { memberId: string; online: boolean }) => {
+    on('presence:update', (e: { memberId: string; online: boolean }) => {
       setOnline((prev) => {
         const next = new Set(prev);
         if (e.online) next.add(e.memberId);
@@ -176,8 +215,14 @@ export function useChatSocket(events: ChatSocketEvents) {
       window.removeEventListener('online', resume);
       document.removeEventListener('visibilitychange', resume);
       window.removeEventListener('tfhc:logout', signedOut);
-      socket.removeAllListeners();
-      socket.disconnect();
+      listeners.forEach(([event, callback]) => socket.off(event, callback));
+      socketUsers--;
+      if (!socketUsers) {
+        socket.disconnect();
+        socket.removeAllListeners();
+        sharedSocket = null;
+        lastReady = null;
+      }
       socketRef.current = null;
     };
   }, []);
@@ -206,15 +251,15 @@ export function useChatSocket(events: ChatSocketEvents) {
       const socket = socketRef.current;
       if (socket && socket.connected) {
         return new Promise<ChatMessage>((resolve, reject) => {
-          socket.emit(
-            'message:send',
-            payload,
-            (res: { ok: boolean; message?: ChatMessage; error?: string }) => {
-              if (res && res.ok && res.message) {
-                resolve(res.message);
-              } else {
-                reject(new Error(res?.error || 'WebSocket message failed'));
-              }
+          socket.timeout(10000).emit(
+            'message:send', payload,
+            (error: Error | null, res: { ok: boolean; message?: ChatMessage; error?: string }) => {
+              if (error) {
+                // Both transports use the same operation key, so retrying a lost
+                // acknowledgement cannot insert another message.
+                chatApi.send(payload.roomId, payload).then(resolve, reject);
+              } else if (res?.ok && res.message) resolve(res.message);
+              else reject(new Error(res?.error || 'Message could not be sent'));
             },
           );
         });
@@ -235,9 +280,15 @@ export function useChatSocket(events: ChatSocketEvents) {
   );
 }
 
-/** Lightweight unread badge source for the nav — polls + refreshes on focus. */
+/** Realtime unread badges with a quiet disconnected fallback. */
 export function useChatUnread(): number {
   const [total, setTotal] = useState(0);
+  const refreshRef = useRef<() => void>(() => undefined);
+  const { connected } = useChatSocket({
+    onMessage: () => refreshRef.current(),
+    onReady: () => refreshRef.current(),
+    onUnread: () => refreshRef.current(),
+  });
   useEffect(() => {
     let alive = true;
     const refresh = () => {
@@ -247,15 +298,18 @@ export function useChatUnread(): number {
         .then((r) => alive && setTotal(r.total))
         .catch(() => undefined);
     };
+    refreshRef.current = refresh;
     refresh();
-    const timer = setInterval(refresh, 30000);
+    const timer = setInterval(() => { if (!connected) refresh(); }, 60000);
+    window.addEventListener('tfhc:chat-read', refresh);
     window.addEventListener('focus', refresh);
     return () => {
       alive = false;
       clearInterval(timer);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('tfhc:chat-read', refresh);
     };
-  }, []);
+  }, [connected]);
   return total;
 }
 

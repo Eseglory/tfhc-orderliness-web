@@ -2,19 +2,24 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// 1. Run migrations safely (non-blocking if it fails or times out)
+// 1. Refuse startup when schema deployment fails.
 try {
   const migrateScript = path.resolve(__dirname, 'migrate-deploy.cjs');
   if (fs.existsSync(migrateScript)) {
     console.log('[Startup] Executing database migration step...');
-    spawnSync(process.execPath, [migrateScript], {
+    const result = spawnSync(process.execPath, [migrateScript], {
       stdio: 'inherit',
-      timeout: 30000,
+      timeout: 130000,
       env: process.env,
     });
+    if (result.error || result.status !== 0) {
+      console.error('[Startup FATAL] Database migration failed; API will not start.');
+      process.exit(1);
+    }
   }
 } catch (err) {
-  console.warn('[Startup] Migration notice:', err.message);
+  console.error('[Startup FATAL] Migration failed:', err.message);
+  process.exit(1);
 }
 
 // 2. Locate compiled main.js

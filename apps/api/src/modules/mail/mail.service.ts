@@ -53,7 +53,7 @@ export class MailService implements OnModuleDestroy {
     try {
       const fromAddress = this.config.get<string>('SMTP_FROM') || this.config.get<string>('SMTP_USER');
       const replyTo = this.config.get<string>('SMTP_REPLY_TO') || fromAddress;
-      const result = await this.getTransport().sendMail({
+      const mail = {
         from: fromAddress,
         to: validation.normalizedEmail,
         replyTo,
@@ -67,8 +67,23 @@ export class MailService implements OnModuleDestroy {
           'X-Priority': '3',
           'Importance': 'Normal',
         },
-      });
+      };
+      let result: any;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try { result = await this.getTransport().sendMail(mail); break; }
+        catch (error: any) {
+          // Retry only definite pre-acceptance failures. A lost DATA response
+          // could already have delivered mail and must not cause a duplicate.
+          const safe = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(error?.code) ||
+            (error?.command === 'CONN' && error?.code === 'ETIMEDOUT') ||
+            (Number(error?.responseCode) >= 400 && Number(error?.responseCode) < 500);
+          if (!safe || attempt === 3) throw error;
+          this.logger.warn(`EmailRetry attempt=${attempt} code=${error.code || error.responseCode}`);
+          await new Promise(resolve => setTimeout(resolve, 500 * 2 ** (attempt - 1)));
+        }
+      }
       if (!result.accepted?.length) throw new Error('Recipient rejected');
+      this.logger.log(`EmailAccepted messageId=${result.messageId}`);
       return { messageId: result.messageId };
     } catch (error) {
       if (error instanceof BadRequestException) throw error;

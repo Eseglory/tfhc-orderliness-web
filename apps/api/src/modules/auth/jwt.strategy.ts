@@ -53,8 +53,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   private async resolveUser(payload: JwtPayload): Promise<AuthenticatedUser> {
-    const cacheKey = `auth:user:${payload.sub}:${payload.iat ?? 0}`;
-    return this.cache.wrap(cacheKey, 15, async () => {
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
         include: { member: { include: { approvedMember: true } } },
@@ -107,6 +105,5 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         accessRoles: access.roleKeys,
         isSuperAdmin: access.isSuperAdmin,
       };
-    }, ['auth', `user:${payload.sub}`]);
   }
 }

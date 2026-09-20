@@ -65,6 +65,13 @@ export function PushSettings() {
       } else {
         if (!key) throw new Error('Device notifications are not configured yet.');
         const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
+        const existingKey = subscription?.options.applicationServerKey;
+        if (subscription && existingKey &&
+            (existingKey.byteLength !== bytes.length || new Uint8Array(existingKey).some((value, index) => value !== bytes[index]))) {
+          await fetchApi('/push/subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint: subscription.endpoint }) });
+          await subscription.unsubscribe();
+          subscription = null;
+        }
         subscription = subscription || (await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes }));
         try {
           await fetchApi('/push/subscriptions', { method: 'POST', body: JSON.stringify(subscription.toJSON()) });

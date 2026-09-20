@@ -266,7 +266,8 @@ export class RecurringServicesService implements OnApplicationBootstrap {
     return { created, configured: true };
   }
 
-  @Cron(CronExpression.EVERY_MINUTE, { disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true' })
+  // Scheduled dispatch is owned by ServiceReminderService (24h, 12h, 1h).
+  // Retained for compatibility with existing diagnostic callers.
   async sendDueReminders(now = new Date()) {
     const config = await this.configuration();
     if (!config?.remindersEnabled || !config.reminderMinutes.length) return { sent: 0 };

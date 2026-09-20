@@ -12,7 +12,7 @@ function fixture() {
   const prisma = {
     pushSubscription: { findUnique: jest.fn().mockResolvedValue(null), count: jest.fn().mockResolvedValue(0), create: jest.fn(), update: jest.fn(),
       deleteMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-    memberNotification: { findFirst: jest.fn().mockResolvedValue({ id: 'notification' }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    memberNotification: { findFirst: jest.fn().mockResolvedValue({ id: 'notification', title: 'Service reminder', body: 'Starts soon', data: { url: '/member/notifications' } }), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
   };
   return { prisma, service: new PushService(prisma as any, config as any) };
 }
@@ -50,11 +50,11 @@ describe('Push security and lifecycle', () => {
     const { prisma } = fixture(); await new PushService(prisma as any, { get: () => undefined } as any).deliver();
     expect(prisma.pushSubscription.findMany).not.toHaveBeenCalled(); expect(webpush.sendNotification).not.toHaveBeenCalled();
   });
-  test('delivery uses a generic payload and records its cursor', async () => {
+  test('delivery includes the persisted notification payload and records its cursor', async () => {
     const { prisma, service } = fixture(); prisma.pushSubscription.findMany.mockResolvedValue([device()]);
     await service.deliver();
-    expect(webpush.sendNotification).toHaveBeenCalledWith(subscription, undefined, expect.objectContaining({ TTL: 300, timeout: 10000 }));
-    expect(prisma.pushSubscription.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: { lastNotifiedAt: expect.any(Date), failures: 0 } }));
+    expect(webpush.sendNotification).toHaveBeenCalledWith(subscription, JSON.stringify({ title: 'Service reminder', body: 'Starts soon', url: '/member/notifications' }), expect.objectContaining({ TTL: 300, timeout: 10000 }));
+    expect(prisma.pushSubscription.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: { lastNotifiedAt: expect.any(Date), failures: 0, nextAttemptAt: expect.any(Date) } }));
   });
   test('another process holding the delivery lease prevents duplicate sends', async () => {
     const { prisma, service } = fixture(); prisma.pushSubscription.findMany.mockResolvedValue([device()]);

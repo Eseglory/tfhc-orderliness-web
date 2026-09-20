@@ -10,6 +10,7 @@ import {
   dayLabel,
   useChatSocket,
 } from '../../lib/chat';
+import { queueChatMessage, queuedChatMessages, acknowledgeChatMessage } from '../../lib/chat-outbox';
 import { Avatar } from './Avatar';
 import { MessageBubble, SystemLine } from './MessageBubble';
 import { useUpload } from '../UploadProgress';
@@ -45,6 +46,8 @@ export function ChatWorkspace({
 
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [activeId, setActiveId] = useState<string | null>(deepLinkRoomId ?? null);
+  const [forwarding, setForwarding] = useState<{ message: ChatMessage; clientId: string } | null>(null);
+  const [forwardBusy, setForwardBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingRoom, setLoadingRoom] = useState(false);
@@ -52,6 +55,7 @@ export function ChatWorkspace({
   const [search, setSearch] = useState('');
   const [roomFilter, setRoomFilter] = useState<'ALL' | 'UNREAD' | 'DIRECT' | 'GROUPS'>('ALL');
   const [inChatSearch, setInChatSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
   const [showInChatSearch, setShowInChatSearch] = useState(false);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
@@ -100,8 +104,9 @@ export function ChatWorkspace({
 
   const markRoomRead = useCallback(
     (roomId: string, messageId?: string) => {
+      if (document.visibilityState !== 'visible') return;
       setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, unreadCount: 0 } : r)));
-      chatApi.markRead(roomId, messageId).catch(() => undefined);
+      chatApi.markRead(roomId, messageId).then(() => window.dispatchEvent(new Event('tfhc:chat-read'))).catch(() => undefined);
       socket.sendRead(roomId, messageId);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,11 +125,12 @@ export function ChatWorkspace({
       setShowRoomInfo(false);
       setLoadingRoom(true);
       socket.subscribe(roomId);
-      markRoomRead(roomId);
       try {
         const page = await chatApi.messages(roomId);
+        if (activeIdRef.current !== roomId) return;
         setMessages(page.messages);
         setNextCursor(page.nextCursor);
+        if (page.messages.length) markRoomRead(roomId, page.messages[page.messages.length - 1].id);
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not load messages.', 'error');
       } finally {
@@ -175,16 +181,17 @@ export function ChatWorkspace({
 
   const socket = useChatSocket({
     onReady: ({ online: list }) => {
+      void loadRooms();
       // Refresh room list unread & latest messages when socket reconnects
       if (!activeIdRef.current) return;
       const current = activeIdRef.current;
       chatApi.messages(current).then((page) => {
         if (activeIdRef.current !== current) return;
         setMessages((previous) => {
-          const ids = new Set(page.messages.map(m => m.id));
+          const ids = new Set(page.messages.flatMap(m => [m.id, m.clientId].filter(Boolean)));
           const newest = page.messages[page.messages.length - 1]?.createdAt ?? '';
-          return [...page.messages, ...previous.filter(message => message.pending ||
-            (!ids.has(message.id) && message.createdAt > newest))];
+          return [...page.messages, ...previous.filter(message => !ids.has(message.id) &&
+            (message.pending || message.failed || message.createdAt > newest))];
         });
         setNextCursor(page.nextCursor);
       }).catch(() => undefined);
@@ -192,9 +199,8 @@ export function ChatWorkspace({
     onMessage: (m) => {
       if (m.roomId === activeIdRef.current) {
         setMessages((prev) => {
-          if (prev.some((x) => x.id === m.id)) return prev;
-          if (m.mine && prev.some((x) => x.pending && x.body === m.body)) return prev;
-          return [...prev, m];
+          const remaining = prev.filter(x => x.id !== m.id && (!m.clientId || x.id !== m.clientId));
+          return [...remaining, m];
         });
         markRoomRead(m.roomId, m.id);
         scrollToBottom(true);
@@ -202,7 +208,7 @@ export function ChatWorkspace({
       setRooms((prev) => {
         const found = prev.find((r) => r.id === m.roomId);
         const bump =
-          found && m.roomId !== activeIdRef.current && !m.mine
+          found && found.lastMessage?.id !== m.id && m.roomId !== activeIdRef.current && !m.mine
             ? { ...found, lastMessage: m, unreadCount: found.unreadCount + 1 }
             : found
               ? { ...found, lastMessage: m }
@@ -214,6 +220,18 @@ export function ChatWorkspace({
         return [bump, ...prev.filter((r) => r.id !== m.roomId)];
       });
     },
+    onRead: e => {
+      if (e.memberId === user?.memberId) return;
+      setMessages(previous => previous.map(m => m.mine && m.roomId === e.roomId && m.createdAt <= e.lastReadAt ? { ...m, readBy: Math.max(1, m.readBy || 0) } : m));
+    },
+    onDelivered: e => {
+      if (e.memberId === user?.memberId) return;
+      setMessages(previous => previous.map(m => m.mine && m.roomId === e.roomId && m.createdAt <= e.lastDeliveredAt ? { ...m, deliveredTo: Math.max(1, m.deliveredTo || 0) } : m));
+    },
+    onReactions: e => setMessages(previous => previous.map(m => m.id === e.messageId ? {
+      ...m, reactions: e.reactions.reduce((counts, r) => ({ ...counts, [r.emoji]: (counts[r.emoji] || 0) + 1 }), {} as Record<string, number>),
+      myReactions: e.reactions.filter(r => r.memberId === user?.memberId).map(r => r.emoji),
+    } : m)),
     onMessageUpdate: (m) => {
       setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)));
       setRooms((prev) => prev.map((r) => (r.lastMessage?.id === m.id ? { ...r, lastMessage: m } : r)));
@@ -251,11 +269,44 @@ export function ChatWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkRoomId, rooms]);
 
-  const mergeSaved = (tempId: string, saved: ChatMessage) =>
+  const mergeSaved = useCallback((tempId: string, saved: ChatMessage) =>
     setMessages((prev) => {
-      const next = prev.filter((m) => m.id !== tempId);
+      const next = prev.filter((m) => m.id !== tempId && (!saved.clientId || m.id !== saved.clientId));
       return next.some((m) => m.id === saved.id) ? next : [...next, saved];
-    });
+    }), []);
+
+  const draining = useRef(false);
+  const drainOutbox = useCallback(async () => {
+    if (draining.current || !navigator.onLine) return;
+    draining.current = true;
+    try {
+      for (const item of await queuedChatMessages()) {
+        try {
+          const saved = await chatApi.send(item.roomId, item);
+          await acknowledgeChatMessage(item.clientId);
+          if (activeIdRef.current === item.roomId) mergeSaved(item.clientId, saved);
+        } catch { break; } // Preserve all unacknowledged records, in order.
+      }
+    } finally { draining.current = false; }
+  }, [mergeSaved]);
+
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const queued = await queuedChatMessages();
+        setMessages(previous => [...previous, ...queued.filter(q => q.roomId === activeId && !previous.some(m => m.id === q.clientId || m.clientId === q.clientId)).map(q => ({
+          id: q.clientId, clientId: q.clientId, roomId: q.roomId, body: q.body, type: 'TEXT' as const,
+          attachmentUrl: null, attachmentMeta: null, replyToId: q.replyToId || null, replyTo: null,
+          editedAt: null, deletedAt: null, createdAt: q.createdAt, sender: null, mine: true, failed: true,
+        }))]);
+        await drainOutbox();
+      } catch { /* Do not remove queued data when a session or key is unavailable. */ }
+    };
+    if (!loadingRoom) void restore();
+    const resume = () => { void restore(); };
+    window.addEventListener('online', resume);
+    return () => window.removeEventListener('online', resume);
+  }, [activeId, loadingRoom, socket.connected, drainOutbox]);
 
   const handleSendText = async (text: string) => {
     const roomId = activeIdRef.current;
@@ -271,10 +322,11 @@ export function ChatWorkspace({
       }
       return;
     }
-    const clientId = `cli_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const clientId = crypto.randomUUID();
     const tempId = clientId;
     const optimistic: ChatMessage = {
       id: tempId,
+      clientId,
       roomId,
       type: 'TEXT',
       body: text,
@@ -289,23 +341,19 @@ export function ChatWorkspace({
       mine: true,
       pending: true,
     };
+    // The draft is cleared only after the encrypted queue transaction commits.
+    await queueChatMessage({ clientId, roomId, body: text, replyToId: replyTo?.id, createdAt: optimistic.createdAt });
     setMessages((prev) => [...prev, optimistic]);
     scrollToBottom(true);
     const replyId = replyTo?.id;
     setReplyTo(null);
-    try {
-      const saved = await socket.sendMessage({
-        roomId,
-        body: text,
-        replyToId: replyId,
-        clientId,
-      });
-      mergeSaved(tempId, saved);
-    } catch (e) {
-      setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      notify(e instanceof Error ? e.message : 'Message failed to send.', 'error');
-      throw e;
-    }
+    void socket.sendMessage({ roomId, body: text, replyToId: replyId, clientId }).then(async saved => {
+      await acknowledgeChatMessage(clientId);
+      if (activeIdRef.current === roomId) mergeSaved(tempId, saved);
+    }).catch(() => {
+      setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, pending: false, failed: true } : m));
+      notify(navigator.onLine ? 'Message saved on this device. Retry to send.' : 'Message queued on this device until you reconnect.', 'info');
+    });
   };
 
   const upload = useUpload(message => { mergeSaved('', message); scrollToBottom(true); });
@@ -360,12 +408,17 @@ export function ChatWorkspace({
 
   const totalUnread = rooms.reduce((s, r) => s + r.unreadCount, 0);
 
-  // Filter messages by in-chat search query if active
-  const displayedMessages = useMemo(() => {
-    if (!inChatSearch.trim()) return messages;
-    const q = inChatSearch.toLowerCase();
-    return messages.filter((m) => m.body?.toLowerCase().includes(q) || m.sender?.name.toLowerCase().includes(q));
-  }, [messages, inChatSearch]);
+  useEffect(() => {
+    let active = true;
+    if (!activeId || !inChatSearch.trim()) { setSearchResults([]); return; }
+    const timer = setTimeout(() => {
+      chatApi.messages(activeId, undefined, 50, inChatSearch.trim()).then(page => {
+        if (active) setSearchResults(page.messages);
+      }).catch(() => { if (active) notify('Message search failed.', 'error'); });
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [activeId, inChatSearch, notify]);
+  const displayedMessages = inChatSearch.trim() ? searchResults : messages;
 
   const grouped: { day: string; items: ChatMessage[] }[] = [];
   for (const m of displayedMessages) {
@@ -387,6 +440,22 @@ export function ChatWorkspace({
       className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
       style={bottomInset !== '0rem' ? { height: `calc(100vh - 4rem - ${bottomInset})` } : undefined}
     >
+      {forwarding && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Forward message">
+        <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl bg-surface-container-lowest p-5">
+          <h2 className="mb-3 font-bold">Forward to</h2>
+          {rooms.map(room => <button key={room.id} disabled={forwardBusy} className="block w-full rounded-xl p-3 text-left hover:bg-surface-container" onClick={async () => {
+            setForwardBusy(true);
+            try {
+              const saved = await chatApi.forward(forwarding.message.id, room.id, forwarding.clientId);
+              if (activeIdRef.current === room.id) mergeSaved('', saved);
+              setForwarding(null);
+              notify('Message forwarded.', 'success');
+            } catch { notify('Could not forward the message. Try again.', 'error'); }
+            finally { setForwardBusy(false); }
+          }}>{room.name}</button>)}
+          <button disabled={forwardBusy} className="mt-3 rounded-xl p-3" onClick={() => setForwarding(null)}>Cancel</button>
+        </div>
+      </div>}
       {/* Sidebar: Conversation List */}
       <aside
         className={`flex w-full flex-col border-r border-outline-variant/20 bg-surface-container-lowest sm:w-84 md:w-96 shrink-0 ${
@@ -867,17 +936,26 @@ export function ChatWorkspace({
                         const showSender =
                           !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
                         return (
-                          <div key={m.id} className="py-0.5">
+                          <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5">
                             <MessageBubble
                               message={m}
                               showSender={showSender}
                               canModerate={canModerate}
                               onReply={setReplyTo}
+                              onForward={message => setForwarding({ message, clientId: crypto.randomUUID() })}
+                              onJumpToReply={id => {
+                                const target = document.getElementById(`chat-message-${id}`);
+                                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                else notify('Load older messages to view the original message.', 'info');
+                              }}
                               onEdit={(msg) => {
                                 setEditing(msg);
                                 setReplyTo(null);
                               }}
                               onDelete={handleDelete}
+                              onRetry={() => { void drainOutbox(); }}
+                              onReact={(message, emoji) => { void chatApi.react(message.id, emoji, message.myReactions?.includes(emoji) || false).catch(() => notify('Reaction could not be saved.', 'error')); }}
+                              onHide={message => { void chatApi.hide(message.id).then(() => setMessages(prev => prev.filter(m => m.id !== message.id))).catch(() => notify('Message could not be hidden.', 'error')); }}
                             />
                           </div>
                         );
@@ -1079,7 +1157,7 @@ export function ChatWorkspace({
 
             {/* Composer Input Area */}
             <Composer
-              draftKey={activeId ? `chat:${activeId}` : undefined}
+              draftKey={activeId && user?.memberId ? `chat:${user.memberId}:${activeId}` : undefined}
               disabled={!activeRoom.isActive}
               replyTo={replyTo}
               editing={editing}

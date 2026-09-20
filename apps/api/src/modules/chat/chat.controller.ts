@@ -44,6 +44,16 @@ export class ChatController {
     private readonly gateway: ChatGateway,
   ) {}
 
+  @Get('sync/status')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('messages.manage_rooms')
+  syncStatus() { return this.chat.getBufferStats(); }
+
+  @Post('sync/reconcile')
+  @UseGuards(PermissionsGuard)
+  @RequirePermissions('messages.manage_rooms')
+  reconcile() { return this.chat.triggerMigration(); }
+
   // ---- Rooms -------------------------------------------------------------
 
   @Get('rooms')
@@ -82,8 +92,9 @@ export class ChatController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
   ) {
-    return this.chat.listMessages(id, viewerFrom(user), { cursor, limit: limit ? Number(limit) : undefined });
+    return this.chat.listMessages(id, viewerFrom(user), { cursor, limit: limit ? Number(limit) : undefined, search });
   }
 
   @Post('rooms/:id/messages')
@@ -95,6 +106,7 @@ export class ChatController {
       attachmentUrl: body?.attachmentUrl,
       attachmentMeta: body?.attachmentMeta,
       replyToId: body?.replyToId,
+      operationId: body?.clientId,
     });
     await this.gateway.fanOut(id, message);
     return message;
@@ -125,7 +137,7 @@ export class ChatController {
   async markRead(@Param('id') id: string, @Body() body: any, @CurrentUser() user: AuthenticatedUser) {
     const viewer = viewerFrom(user);
     const res = await this.chat.markRead(id, viewer, { messageId: body?.messageId });
-    this.gateway.emitRoomEvent(id, 'message:read', {
+    await this.gateway.emitRoomEvent(id, 'message:read', {
       roomId: id,
       memberId: viewer.memberId,
       lastReadAt: res.lastReadAt,
@@ -140,17 +152,36 @@ export class ChatController {
 
   // ---- Messages --------------------------------------------------------
 
+  @Post('messages/:id/forward')
+  async forward(@Param('id') id: string, @Body() body: { roomId: string; clientId: string }, @CurrentUser() user: AuthenticatedUser) {
+    const message = await this.chat.forwardMessage(id, body.roomId, viewerFrom(user), body.clientId);
+    await this.gateway.fanOut(message.roomId, message);
+    return message;
+  }
+
+  @Post('messages/:id/reactions')
+  async react(@Param('id') id: string, @Body() body: { emoji: string; remove?: boolean }, @CurrentUser() user: AuthenticatedUser) {
+    const result = await this.chat.react(id, viewerFrom(user), body.emoji, body.remove === true);
+    await this.gateway.emitRoomEvent(result.roomId, 'message:reactions', result);
+    return result;
+  }
+
+  @Post('messages/:id/hide')
+  hide(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.chat.hideMessage(id, viewerFrom(user));
+  }
+
   @Patch('messages/:id')
   async edit(@Param('id') id: string, @Body() body: any, @CurrentUser() user: AuthenticatedUser) {
     const message = await this.chat.editMessage(id, viewerFrom(user), body?.body ?? '');
-    this.gateway.emitRoomEvent(message.roomId, 'message:update', message);
+    await this.gateway.emitRoomEvent(message.roomId, 'message:update', message);
     return message;
   }
 
   @Delete('messages/:id')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     const message = await this.chat.deleteMessage(id, viewerFrom(user));
-    this.gateway.emitRoomEvent(message.roomId, 'message:update', message);
+    await this.gateway.emitRoomEvent(message.roomId, 'message:update', message);
     return message;
   }
 

@@ -25,7 +25,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { baseURL: `http://127.0.0.1:${webPort}`, trace: 'retain-on-failure', screenshot: 'only-on-failure', serviceWorkers: 'block' },
   projects: [
-    { name: 'chromium', testMatch: ['invitations.spec.ts', 'member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts', 'auth.spec.ts'], use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', testMatch: ['chat-reliability.spec.ts', 'invitations.spec.ts', 'member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts', 'auth.spec.ts'], use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile-web', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
     { name: 'webkit', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['Desktop Safari'] } },
     { name: 'mobile-safari', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['iPhone 13'] } },

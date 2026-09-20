@@ -135,15 +135,16 @@ test.describe('Activity queue UI', () => {
     submitted = route.request().postDataJSON(); read = true; return route.fulfill({ json: { count: 1 } });
   });
   await page.goto('/member/notifications');
-  await expect(page.getByRole('heading', { name: 'Test activity · Unread' })).toBeVisible();
+  await expect(page.getByText('1 new', { exact: true })).toBeVisible();
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Mark all as read' }).click();
+  await page.getByRole('button', { name: 'Mark all read' }).click();
   await expect(page.getByText('Changes pending. These notifications will be marked read when the app reconnects.')).toBeVisible();
   expect(read).toBe(false);
   await context.setOffline(false);
   // WebKit can dispatch online before its network process is ready. Allow the
   // documented 15-second foreground retry to recover that first failed request.
-  await expect(page.getByRole('heading', { name: 'Test activity', exact: true })).toBeVisible({ timeout: 20000 });
+  await expect.poll(() => read, { timeout: 20000 }).toBe(true);
+  await expect(page.getByText('1 new', { exact: true })).not.toBeVisible();
   expect(submitted).toEqual({ ids: ['notification-1'] });
 });
 

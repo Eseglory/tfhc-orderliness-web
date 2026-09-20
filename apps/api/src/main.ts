@@ -14,7 +14,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // This is a pure JSON API consumed by a separately-hosted web
   // client, not an HTML-serving origin, so the default CSP (which assumes

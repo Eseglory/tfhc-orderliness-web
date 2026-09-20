@@ -259,6 +259,8 @@ model Member {
   appointments       Appointment[]
   chatMemberships    ChatRoomMember[]
   chatMessages       ChatMessage[]
+  chatReactions      ChatMessageReaction[]
+  hiddenChatMessages ChatMessageHidden[]
   supervisedMeetings Meeting[]           @relation("MeetingSupervisingMinister")
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -1134,6 +1136,7 @@ model ChatRoomMember {
   member     Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
   role       ChatMemberRole @default(MEMBER)
   lastReadAt DateTime?
+  lastDeliveredAt DateTime?
   mutedUntil DateTime?
   joinedAt   DateTime       @default(now())
   leftAt     DateTime?
@@ -1158,6 +1161,8 @@ model ChatMessage {
   replyToId      String?
   replyTo        ChatMessage?    @relation("ChatMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        ChatMessage[]   @relation("ChatMessageReplies")
+  reactions      ChatMessageReaction[]
+  hiddenFor      ChatMessageHidden[]
   editedAt       DateTime?
   deletedAt      DateTime?
   createdAt      DateTime        @default(now())
@@ -1506,3 +1511,26 @@ model WardrobeColor {
   @@map("wardrobe_colors")
 }
 
+
+model ChatMessageReaction {
+  messageId String
+  memberId String
+  emoji String
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([messageId, memberId, emoji])
+  @@index([memberId])
+  @@map("chat_message_reactions")
+}
+
+model ChatMessageHidden {
+  messageId String
+  memberId String
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([messageId, memberId])
+  @@index([memberId])
+  @@map("chat_message_hidden")
+}

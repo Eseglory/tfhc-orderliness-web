@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Request } from 'express';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Post, Req, RawBodyRequest } from '@nestjs/common';
 import { Public } from '../../common/decorators/public.decorator';
 import { WebhookEventPayload, WebhooksService } from './webhooks.service';
 
@@ -26,9 +27,10 @@ export class WebhooksController {
   @Public()
   @HttpCode(HttpStatus.OK)
   async handleInbound(
+    @Req() request: RawBodyRequest<Request>,
     @Body() event: WebhookEventPayload,
     @Headers('x-webhook-signature') signature?: string,
   ) {
-    return this.webhooksService.handleInboundWebhook(event, signature);
+    return this.webhooksService.handleInboundWebhook(event, signature, request.rawBody);
   }
 }

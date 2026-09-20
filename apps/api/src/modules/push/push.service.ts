@@ -55,8 +55,6 @@ export function validateSubscription(value: unknown): { endpoint: string; keys: 
   }
 }
 
-let cachedFallbackVapid: { publicKey: string; privateKey: string; subject: string } | null = null;
-
 @Injectable()
 export class PushService {
   private readonly logger = new Logger(PushService.name);
@@ -70,17 +68,8 @@ export class PushService {
     if (publicKey && privateKey) {
       return { publicKey, privateKey, subject };
     }
-    // Generate an in-memory persistent fallback key pair if not configured in environment
-    if (!cachedFallbackVapid) {
-      try {
-        const keys = webpush.generateVAPIDKeys();
-        cachedFallbackVapid = { publicKey: keys.publicKey, privateKey: keys.privateKey, subject };
-        this.logger.log('Generated default VAPID keypair for web push notifications.');
-      } catch (err: any) {
-        this.logger.warn(`Failed generating VAPID keys: ${err?.message}`);
-      }
-    }
-    return cachedFallbackVapid;
+    // Subscription keys must remain stable across restarts and deployments.
+    return null;
   }
 
   configuration() {
@@ -162,6 +151,7 @@ export class PushService {
       } catch (err: any) {
         failed++;
         const status = Number(err?.statusCode || 0);
+        this.logger.warn(`PushFailed status=${status}`);
         if ([404, 410].includes(status)) {
           await this.prisma.pushSubscription.deleteMany({ where: { id: sub.id } });
         }
@@ -214,20 +204,25 @@ export class PushService {
                     createdAt: { gt: subscription.lastNotifiedAt, lte: now },
                     OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
                   },
-                  select: { id: true },
+                  orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+                  select: { id: true, title: true, body: true, data: true },
                 })
               : null;
-            if (!hasActivity) return;
+            if (!hasActivity) {
+              await this.prisma.pushSubscription.updateMany({ where: { id: subscription.id }, data: { nextAttemptAt: now } });
+              return;
+            }
             try {
               // Generic notification: no personal or business data is sent to push providers.
               await webpush.sendNotification(
                 { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
-                undefined,
+                JSON.stringify({ title: hasActivity.title, body: hasActivity.body,
+                  url: (hasActivity.data as { url?: string } | null)?.url || '/member/notifications' }),
                 { vapidDetails, TTL: 300, topic: 'tfhc-activity', timeout: 10000 }
               );
               await this.prisma.pushSubscription.updateMany({
                 where: { id: subscription.id },
-                data: { lastNotifiedAt: now, failures: 0 },
+                data: { lastNotifiedAt: now, failures: 0, nextAttemptAt: now },
               });
               this.logger.log('push_delivered');
             } catch (error: any) {

@@ -245,6 +245,19 @@ describe('Active Service Reminder for Available Members Suite', () => {
       },
     };
 
+    mockPrisma.$transaction = (fn: any) => fn(mockPrisma);
+    mockPrisma.communicationDelivery.createMany = async ({ data }: any) => {
+      let count = 0;
+      for (const row of data) {
+        if (!deliveries.some(d => d.idempotencyKey === row.idempotencyKey)) { deliveries.push({ ...row }); count++; }
+      }
+      return { count };
+    };
+    mockPrisma.communicationDelivery.update = async ({ where, data }: any) => {
+      const row = deliveries.find(d => d.idempotencyKey === where.idempotencyKey);
+      Object.assign(row, data); return row;
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ServiceReminderService,
@@ -275,7 +288,7 @@ describe('Active Service Reminder for Available Members Suite', () => {
 
     expect(result.targetedMembersCount).toBe(3); // John, Jane, Mark (who hasn't attended yet)
     expect(result.emailSent).toBe(3);
-    expect(result.chatCreated).toBe(3);
+    expect(result.chatCreated).toBe(0);
     expect(result.inAppCreated).toBe(3);
 
     // Verify John and Jane received notifications
@@ -303,11 +316,8 @@ describe('Active Service Reminder for Available Members Suite', () => {
       expect.objectContaining({ to: 'mary@example.com' }),
     );
 
-    // Verify Chat System message was posted
-    expect(mockChatService.postSystemMessage).toHaveBeenCalledWith(
-      'room-gen',
-      expect.stringContaining('Sunday Service is now active'),
-    );
+    // Active attendance reminders do not repeatedly announce to General.
+    expect(mockChatService.postSystemMessage).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------
@@ -406,7 +416,8 @@ describe('Active Service Reminder for Available Members Suite', () => {
     const johnEmail = deliveries.find((d) => d.idempotencyKey === 'service-rem-meeting-sunday-mem-john-email');
 
     expect(johnInApp?.status).toBe('SENT');
-    expect(johnPush?.status).toBe('SENT');
+    expect(johnPush).toBeUndefined();
+    expect(mockPushService.deliver).toHaveBeenCalled();
     expect(johnEmail?.status).toBe('FAILED');
     expect(johnEmail?.failureReason).toBeDefined();
   });
@@ -456,7 +467,7 @@ describe('Active Service Reminder for Available Members Suite', () => {
     expect(stats).toBeDefined();
     expect(stats?.totalAvailableMembers).toBe(3); // John, Jane, Mark
     expect(stats?.reminder.email.sent).toBe(3);
-    expect(stats?.reminder.chat.created).toBe(3);
+    expect(stats?.reminder.chat.created).toBe(0);
     expect(stats?.reminder.inApp.created).toBe(3);
     expect(stats?.attendance.taken).toBe(1); // John
     expect(stats?.attendance.notYetTaken).toBe(2); // Jane, Mark

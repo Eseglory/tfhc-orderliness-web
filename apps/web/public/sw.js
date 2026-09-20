@@ -125,7 +125,11 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || '/member/notifications';
-  const target = new URL(url, self.location.origin).href;
+  let target = new URL('/member/notifications', self.location.origin).href;
+  try {
+    const candidate = new URL(url, self.location.origin);
+    if (candidate.origin === self.location.origin) target = candidate.href;
+  } catch { /* Keep the safe activity destination. */ }
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

@@ -29,6 +29,7 @@ describe('ChatMigrationJob (Idempotent Midnight Migration from SQLite to Postgre
     mockPrisma = {
       chatMessage: {
         upsert: jest.fn().mockResolvedValue({ id: 'persisted-id' }),
+        findUnique: jest.fn().mockResolvedValue({ roomId: 'room-1', senderMemberId: 'member-1', body: 'Duplicate test' }),
       },
     };
 

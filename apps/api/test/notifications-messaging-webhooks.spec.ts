@@ -34,56 +34,22 @@ describe('Notifications, Push & Webhooks Integration (E2E)', () => {
 
       expect(res.body).toMatchObject({
         status: 'healthy',
-        webhooksEnabled: true,
+        webhooksEnabled: false,
       });
       expect(Array.isArray(res.body.supportedEndpoints)).toBe(true);
     });
 
-    it('POST /webhooks/google-calendar should accept push notifications from Google', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/webhooks/google-calendar')
-        .set('x-goog-channel-id', 'test-channel-uuid-1234')
-        .set('x-goog-resource-state', 'sync')
-        .send({})
-        .expect(200);
-
-      expect(res.body).toMatchObject({
-        received: true,
-        provider: 'google-calendar',
-        channelId: 'test-channel-uuid-1234',
-        resourceState: 'sync',
-      });
+    it('does not pretend an unconfigured Google watch was processed', async () => {
+      await request(app.getHttpServer()).post('/webhooks/google-calendar').send({}).expect(503);
     });
 
-    it('POST /calendar/integrations/google/webhook should maintain backwards compatibility', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/calendar/integrations/google/webhook')
-        .set('x-goog-channel-id', 'legacy-channel-5678')
-        .set('x-goog-resource-state', 'exists')
-        .send({})
-        .expect(201);
-
-      expect(res.body).toMatchObject({
-        received: true,
-        provider: 'google-calendar',
-        channelId: 'legacy-channel-5678',
-      });
+    it('legacy Google webhook also reports unconfigured watches', async () => {
+      await request(app.getHttpServer()).post('/calendar/integrations/google/webhook').send({}).expect(503);
     });
 
-    it('POST /webhooks/inbound should process inbound webhook events', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/webhooks/inbound')
-        .send({
-          event: 'TEST_EVENT',
-          data: { test: true },
-        })
-        .expect(200);
-
-      expect(res.body).toMatchObject({
-        received: true,
-        event: 'TEST_EVENT',
-        status: 'PROCESSED',
-      });
+    it('rejects inbound events when no webhook secret is configured', async () => {
+      await request(app.getHttpServer()).post('/webhooks/inbound')
+        .send({ event: 'TEST_EVENT', data: { test: true } }).expect(503);
     });
   });
 

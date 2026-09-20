@@ -3,7 +3,7 @@ const path = require('node:path');
 
 if (!process.env.DATABASE_URL && !process.env.MIGRATION_DATABASE_URL) {
   console.log('No database URL configured for migration deployment.');
-  process.exit(0);
+  process.exit(1);
 }
 
 try {
@@ -30,12 +30,12 @@ try {
   ], {
     env: { ...process.env, DATABASE_URL: dbUrl },
     stdio: 'inherit',
-    timeout: 30000,
+    timeout: 120000,
   });
 
-  if (result.error) console.warn('Migration command notice:', result.error.message);
-  process.exit(0);
+  if (result.error) console.error('Migration command failed:', result.error.message);
+  process.exit(result.error ? 1 : (result.status ?? 1));
 } catch (err) {
-  console.warn('Migration step notice:', err.message);
-  process.exit(0);
+  console.error('Migration step failed:', err.message);
+  process.exit(1);
 }

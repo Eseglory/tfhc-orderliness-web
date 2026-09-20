@@ -6,7 +6,7 @@ import { ChatWorkspace } from '../../../../components/chat/ChatWorkspace';
 
 function AdminChatContent() {
   const searchParams = useSearchParams();
-  const room = searchParams.get('room');
+  const room = searchParams.get('room') || searchParams.get('roomId');
 
   return (
     <div className="h-[calc(100vh-12rem)] min-h-[550px] rounded-2xl border border-outline-variant/30 bg-surface-container-lowest overflow-hidden shadow-sm flex flex-col">

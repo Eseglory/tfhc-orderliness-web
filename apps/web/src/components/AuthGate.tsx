@@ -35,7 +35,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         router.replace('/member');
       }
     }
-  }, [mounted, pathname, protectedRoute, router, user]);
+  }, [mounted, pathname, protectedRoute, router, user, loading, error]);
 
   if (!protectedRoute) {
     return <>{children}</>;

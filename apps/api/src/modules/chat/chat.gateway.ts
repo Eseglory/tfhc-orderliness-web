@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Logger, Optional } from '@nestjs/common';
 import {
   ConnectedSocket,
@@ -39,6 +40,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly online = new Map<string, Set<string>>();
 
   /** socketId -> Set of roomIds where this socket actively signaled typing */
+  private readonly typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly socketTypingRooms = new Map<string, Set<string>>();
 
   afterInit(server: Namespace | Server) {
@@ -93,6 +95,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!viewer?.memberId) return;
 
     // Clear any active typing indicators for this socket
+    for (const [key, timer] of this.typingTimers) if (key.startsWith(`${socket.id}:`)) { clearTimeout(timer); this.typingTimers.delete(key); }
     const typingRooms = this.socketTypingRooms.get(socket.id);
     if (typingRooms) {
       for (const roomId of typingRooms) {
@@ -121,7 +124,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       (socket.handshake.query?.token as string | undefined);
     if (!raw) return null;
 
-    let payload: { sub?: string };
+    let payload: { sub?: string; iat?: number; exp?: number };
     try {
       payload = await this.jwt.verifyAsync(raw, { secret: this.config.getOrThrow<string>('JWT_SECRET') });
     } catch {
@@ -133,7 +136,11 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       where: { id: payload.sub },
       include: { member: { include: { approvedMember: true } } },
     });
-    if (!user) return null;
+    if (!user || !user.isActive) return null;
+    if (user.passwordChangedAt && typeof payload.iat === 'number' && Math.floor(user.passwordChangedAt.getTime() / 1000) > payload.iat) return null;
+    if (user.role === 'MEMBER' && (user.googleSubject || user.passwordAuthEnabled) &&
+        (user.member?.approvedMember?.status !== 'ACTIVE' || user.member.approvedMember.normalizedEmail !== user.email.toLowerCase())) return null;
+    socket.data.expiresAt = payload.exp ? payload.exp * 1000 : 0;
     if (user.role === 'MEMBER' && (!user.member || user.member.status !== 'ACTIVE')) return null;
     if (user.role !== 'MEMBER' && !user.isActive) return null;
 
@@ -212,10 +219,23 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async onTyping(@ConnectedSocket() socket: Socket, @MessageBody() data: { roomId?: string; typing?: boolean }) {
     const viewer = this.viewerOf(socket);
     if (!viewer || !data?.roomId) return;
+    try { await this.chat.loadRoom(data.roomId, viewer); } catch { return; }
     const isTyping = data.typing !== false;
     this.recordTyping(socket.id, data.roomId, isTyping);
+    const timerKey = `${socket.id}:${data.roomId}`;
+    clearTimeout(this.typingTimers.get(timerKey));
+    this.typingTimers.delete(timerKey);
+    if (isTyping) {
+      const timer = setTimeout(() => {
+        this.recordTyping(socket.id, data.roomId!, false);
+        this.typingTimers.delete(timerKey);
+        void this.emitRoomEvent(data.roomId!, 'message:typing', { roomId: data.roomId, memberId: viewer.memberId, typing: false }).catch(() => undefined);
+      }, 5000);
+      timer.unref();
+      this.typingTimers.set(timerKey, timer);
+    }
 
-    socket.to(`room:${data.roomId}`).emit('message:typing', {
+    await this.emitRoomEvent(data.roomId, 'message:typing', {
       roomId: data.roomId,
       memberId: viewer.memberId,
       name: [viewer.firstName, viewer.lastName].filter(Boolean).join(' ').trim(),
@@ -229,15 +249,27 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!viewer || !data?.roomId) return { ok: false };
     try {
       const res = await this.chat.markRead(data.roomId, viewer, { messageId: data.messageId });
-      socket.to(`room:${data.roomId}`).emit('message:read', {
+      await this.emitRoomEvent(data.roomId, 'message:read', {
         roomId: data.roomId,
         memberId: viewer.memberId,
         lastReadAt: res.lastReadAt,
       });
+      this.io.to(`user:${viewer.userId}`).emit('unread:update');
       return { ok: true, ...res };
     } catch {
       return { ok: false };
     }
+  }
+
+  @SubscribeMessage('message:delivered')
+  async onDelivered(@ConnectedSocket() socket: Socket, @MessageBody() data: { roomId?: string; messageId?: string }) {
+    const viewer = this.viewerOf(socket);
+    if (!viewer || !data?.roomId || !data?.messageId) return { ok: false };
+    try {
+      const receipt = await this.chat.markDelivered(data.roomId, viewer, data.messageId);
+      await this.emitRoomEvent(data.roomId, 'message:delivered', receipt);
+      return { ok: true };
+    } catch { return { ok: false }; }
   }
 
   @SubscribeMessage('presence:list')
@@ -251,7 +283,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   async fanOut(roomId: string, message: unknown) {
     if (!this.io) return;
-    this.io.to(`room:${roomId}`).emit('message:new', message);
+    // Resolve current membership before broadcasting; removed members may still
+    // have an old socket room subscription.
 
     // Make sure members with a live socket who haven't joined this room yet
     // (e.g. a brand-new DM) still get it and a badge bump.
@@ -260,54 +293,59 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const recipientIds = await this.chat.recipientMemberIds(room);
     for (const memberId of recipientIds) {
       for (const socketId of this.online.get(memberId) ?? []) {
-        const s = this.liveSockets.get(socketId);
-        if (s && !s.rooms.has(`room:${roomId}`)) {
-          s.join(`room:${roomId}`);
-          s.emit('message:new', message);
-        }
+        const socket = this.liveSockets.get(socketId);
+        if (!socket || !this.viewerOf(socket)) continue;
+        await socket.join(`room:${roomId}`);
+        const dto = message as { sender?: { memberId?: string } };
+        socket.emit('message:new', { ...message as object, mine: dto.sender?.memberId === memberId });
       }
     }
 
-    // Dispatch background Web Push Notification to recipient members who are offline/not in active socket
-    if (this.pushService) {
-      const senderMemberId = (message as any)?.sender?.id || (message as any)?.senderMemberId;
-      const targetMemberIds = recipientIds.filter((id) => id !== senderMemberId);
+    // Persist once per recipient. Push uses the existing durable notification
+    // dispatcher rather than a second, untracked fire-and-forget delivery.
+    const dto = message as { id: string; body?: string; sender?: { memberId?: string; name?: string } };
+    const notifications = recipientIds.filter(id => id !== dto.sender?.memberId).map(memberId => ({
+      id: randomUUID(), memberId, type: 'CHAT_MESSAGE',
+      title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
+      body: (dto.body || 'New attachment').slice(0, 500),
+      data: { roomId, messageId: dto.id, url: `/member/chat?roomId=${roomId}` },
+    }));
+    if (notifications.length) {
+      await this.prisma.$transaction(async tx => {
+        const idempotencyKey = `chat:${dto.id}:notifications`;
+        const claim = await tx.communicationDelivery.createMany({ data: [{
+          idempotencyKey, channel: 'PUSH', recipient: roomId,
+          templateKey: 'CHAT_INAPP', status: 'PENDING',
+        }], skipDuplicates: true });
+        if (!claim.count) return;
+        await tx.memberNotification.createMany({ data: notifications });
+        await tx.communicationDelivery.update({ where: { idempotencyKey }, data: {
+          status: 'SENT', attemptedAt: new Date(),
+        } });
+      });
+    }
+    for (const memberId of recipientIds) this.notifyMember(memberId);
+    void this.pushService?.deliver();
+  }
 
-      if (targetMemberIds.length > 0) {
-        const membersWithUser = await this.prisma.member.findMany({
-          where: { id: { in: targetMemberIds } },
-          select: { id: true, userId: true, firstName: true, lastName: true },
-        });
-
-        const senderName = (message as any)?.sender
-          ? [(message as any).sender.firstName, (message as any).sender.lastName].filter(Boolean).join(' ')
-          : 'New Message';
-        const roomTitle = room.type === 'DIRECT' ? senderName : (room.name || 'Orderliness Chat');
-        const msgPreview =
-          (message as any)?.body ||
-          ((message as any)?.type === 'IMAGE'
-            ? '📷 Sent an image'
-            : (message as any)?.type === 'AUDIO'
-            ? '🎤 Sent a voice note'
-            : 'Sent a message');
-
-        for (const m of membersWithUser) {
-          if (m.userId) {
-            void this.pushService
-              .sendDirectPush(m.userId, {
-                title: roomTitle,
-                body: room.type === 'DIRECT' ? msgPreview : `${senderName}: ${msgPreview}`,
-                url: `/member/chat?roomId=${roomId}`,
-              })
-              .catch(() => undefined);
-          }
-        }
-      }
+  notifyMember(memberId: string) {
+    for (const socketId of this.online.get(memberId) ?? []) {
+      this.liveSockets.get(socketId)?.emit('notification:new');
     }
   }
 
-  emitRoomEvent(roomId: string, event: string, payload: unknown) {
-    this.io?.to(`room:${roomId}`).emit(event, payload);
+  async emitRoomEvent(roomId: string, event: string, payload: unknown) {
+    if (!this.io) return;
+    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+    if (!room) return;
+    for (const memberId of await this.chat.recipientMemberIds(room)) {
+      for (const id of this.online.get(memberId) ?? []) {
+        const socket = this.liveSockets.get(id);
+        if (!socket || !this.viewerOf(socket)) continue;
+        const message = payload as { sender?: { memberId?: string } };
+        socket.emit(event, event === 'message:update' ? { ...payload as object, mine: message.sender?.memberId === memberId } : payload);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -325,6 +363,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   private viewerOf(socket: Socket): ChatViewer | null {
+    if (socket.data?.expiresAt && socket.data.expiresAt <= Date.now()) {
+      socket.disconnect(true);
+      return null;
+    }
     return (socket.data?.viewer as ChatViewer) ?? null;
   }
 
