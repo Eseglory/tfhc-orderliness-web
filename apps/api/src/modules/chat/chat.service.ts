@@ -798,7 +798,13 @@ export class ChatService implements OnApplicationBootstrap {
   async markDelivered(roomId: string, viewer: ChatViewer, messageId: string) {
     const room = await this.loadRoom(roomId, viewer);
     await this.ensureMembership(room, viewer);
-    const message = await this.prisma.chatMessage.findFirst({ where: { id: messageId, roomId } });
+    let message = await this.prisma.chatMessage.findFirst({ where: { id: messageId, roomId } });
+    if (!message) {
+      const buffered = this.bufferRepo.findById(messageId);
+      if (buffered && buffered.roomId === roomId) {
+        message = { id: buffered.id, createdAt: new Date(buffered.createdAt) } as any;
+      }
+    }
     if (!message) throw new NotFoundException('Message not found');
     await this.prisma.chatRoomMember.updateMany({ where: { roomId, memberId: viewer.memberId,
       OR: [{ lastDeliveredAt: null }, { lastDeliveredAt: { lt: message.createdAt } }],
@@ -889,10 +895,16 @@ export class ChatService implements OnApplicationBootstrap {
 
     let readAt = new Date();
     if (opts.messageId) {
-      const msg = await this.prisma.chatMessage.findFirst({
+      let msg = await this.prisma.chatMessage.findFirst({
         where: { id: opts.messageId, roomId },
         select: { createdAt: true },
       });
+      if (!msg) {
+        const buffered = this.bufferRepo.findById(opts.messageId);
+        if (buffered && buffered.roomId === roomId) {
+          msg = { createdAt: new Date(buffered.createdAt) };
+        }
+      }
       if (!msg) throw new NotFoundException('Message not found in this conversation');
       readAt = msg.createdAt;
     }
