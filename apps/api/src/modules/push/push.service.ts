@@ -127,11 +127,30 @@ export class PushService {
     return { subscribed: false };
   }
 
-  async sendDirectPush(userId: string, payload: { title: string; body: string; url?: string }) {
+  async sendDirectPush(
+    target: string | { userId?: string; memberId?: string },
+    payload: { title: string; body: string; url?: string }
+  ) {
     const vapidDetails = this.vapid();
     if (!vapidDetails) return { sent: 0, failed: 0 };
+
+    let resolvedUserId: string | null = null;
+    if (typeof target === 'string') {
+      resolvedUserId = target;
+    } else if (target.userId) {
+      resolvedUserId = target.userId;
+    } else if (target.memberId) {
+      const member = await this.prisma.member.findUnique({
+        where: { id: target.memberId },
+        select: { userId: true },
+      });
+      resolvedUserId = member?.userId || null;
+    }
+
+    if (!resolvedUserId) return { sent: 0, failed: 0 };
+
     const subscriptions = await this.prisma.pushSubscription.findMany({
-      where: { userId, sessionExpiresAt: { gt: new Date() } },
+      where: { userId: resolvedUserId, sessionExpiresAt: { gt: new Date() } },
     });
     let sent = 0;
     let failed = 0;
@@ -148,6 +167,11 @@ export class PushService {
           { vapidDetails, TTL: 300, topic: 'tfhc-activity', timeout: 10000 }
         );
         sent++;
+        await this.prisma.pushSubscription.update({
+          where: { id: sub.id },
+          data: { lastNotifiedAt: new Date(), failures: 0 },
+        });
+        this.logger.log(`PushDelivered user=${resolvedUserId} endpoint=${sub.endpoint.slice(0, 30)}...`);
       } catch (err: any) {
         failed++;
         const status = Number(err?.statusCode || 0);

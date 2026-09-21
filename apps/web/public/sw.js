@@ -1,6 +1,6 @@
 /* Public resources only. Bump VERSION whenever this policy or shell changes. */
 importScripts('/pwa-runtime.js');
-const VERSION = 'v12';
+const VERSION = 'v13';
 const PREFIX = 'tfhc-pwa-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const ASSETS = `${PREFIX}assets-${VERSION}`;
@@ -111,6 +111,10 @@ self.addEventListener('push', event => {
     }
   }
 
+  if ('setAppBadge' in self.navigator) {
+    try { self.navigator.setAppBadge().catch(() => {}); } catch {}
+  }
+
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -124,6 +128,9 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  if ('clearAppBadge' in self.navigator) {
+    try { self.navigator.clearAppBadge().catch(() => {}); } catch {}
+  }
   const url = event.notification.data?.url || '/member/notifications';
   let target = new URL('/member/notifications', self.location.origin).href;
   try {

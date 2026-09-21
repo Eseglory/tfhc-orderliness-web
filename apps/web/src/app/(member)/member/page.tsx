@@ -12,6 +12,9 @@ import { CampaignAlert } from '../../../components/activeness/CampaignAlert';
 import { MonthlyDuesAlert } from '../../../components/activeness/MonthlyDuesAlert';
 import { MemberAttendanceTrendChart } from '../../../components/member/MemberAttendanceTrendChart';
 import { MemberAttendancePieChart } from '../../../components/member/MemberAttendancePieChart';
+import { useNotifications } from '../../../lib/useNotifications';
+import { useChatUnread } from '../../../lib/chat';
+import { PushPromptBanner } from '../../../components/PushPromptBanner';
 
 type Performance = {
   member?: { firstName: string; profilePhotoUrl: string | null; subTeam?: { name: string } | null };
@@ -39,18 +42,8 @@ export default function MemberDashboard() {
   const [nextWardrobe, setNextWardrobe] = useState<any>(null);
   const [upcoming, setUpcoming] = useState<any[]>([]);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
-  const [hasUnread, setHasUnread] = useState(false);
-
-  useEffect(() => {
-    const refresh = () => fetchApi('/members/me/notifications').then((items: any[]) => setHasUnread(items.some((i) => i.status === 'UNREAD'))).catch(() => {});
-    refresh();
-    window.addEventListener('focus', refresh);
-    window.addEventListener('tfhc:notifications-synced', refresh);
-    return () => {
-      window.removeEventListener('focus', refresh);
-      window.removeEventListener('tfhc:notifications-synced', refresh);
-    };
-  }, []);
+  const { unreadCount: notificationUnread } = useNotifications();
+  const chatUnread = useChatUnread();
 
   const [availabilityData, setAvailabilityData] = useState<{
     submitted?: boolean;
@@ -195,15 +188,17 @@ export default function MemberDashboard() {
           )}
           <Link href="/member/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors active:scale-95">
             <span className="material-symbols-outlined text-[22px]">notifications</span>
-            {hasUnread && (
-              <span aria-label="Unread notifications" className="absolute top-2 right-2 h-2.5 w-2.5 rounded-full bg-[#f2320c] ring-2 ring-white dark:ring-slate-900 animate-pulse" />
+            {notificationUnread > 0 && (
+              <span aria-label={`${notificationUnread} unread notifications`} className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#f2320c] text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                {notificationUnread > 99 ? '99+' : notificationUnread}
+              </span>
             )}
           </Link>
         </div>
       </header>
 
       <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 pt-4 pb-28 sm:pb-8 max-w-4xl mx-auto">
-        {/* Active Service Attendance Reminder Modal / Banner */}
+        <PushPromptBanner />
 
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
@@ -493,8 +488,13 @@ export default function MemberDashboard() {
                 href={action.href}
                 className="group flex flex-col items-center gap-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 sm:p-3 transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm hover:border-[#f2320c]/40 active:scale-95"
               >
-                <div className={`flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl ${action.bg} ${action.iconColor} transition-transform group-hover:scale-105`}>
+                <div className={`relative flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-2xl ${action.bg} ${action.iconColor} transition-transform group-hover:scale-105`}>
                   <span className="material-symbols-outlined text-[22px] sm:text-[24px]">{action.icon}</span>
+                  {action.href === '/member/chat' && chatUnread > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#f2320c] text-white font-bold text-[10px] flex items-center justify-center shadow-xs">
+                      {chatUnread > 99 ? '99+' : chatUnread}
+                    </span>
+                  )}
                 </div>
                 <span className="text-[11px] sm:text-xs font-bold text-slate-800 dark:text-slate-200 truncate w-full tracking-tight">
                   {action.label}

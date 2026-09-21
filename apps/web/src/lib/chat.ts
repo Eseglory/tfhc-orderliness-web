@@ -151,6 +151,10 @@ export function useChatSocket(events: ChatSocketEvents) {
     if (firstSocket) {
       socket.on('message:new', (m: ChatMessage) => socket.emit('message:delivered', { roomId: m.roomId, messageId: m.id }));
       socket.on('notification:new', () => window.dispatchEvent(new Event('tfhc:notifications-synced')));
+      socket.on('unread:update', () => {
+        window.dispatchEvent(new Event('tfhc:unread-update'));
+        window.dispatchEvent(new Event('tfhc:notifications-synced'));
+      });
     }
     const listeners: Array<[string, (...args: any[]) => void]> = [];
     const on = (event: string, callback: (...args: any[]) => void) => {
@@ -296,7 +300,7 @@ export function useChatUnread(): number {
   useEffect(() => {
     let alive = true;
     const refresh = () => {
-      if (!getAuthToken() || !navigator.onLine || document.visibilityState !== 'visible') return;
+      if (!getAuthToken() || !navigator.onLine) return;
       chatApi
         .unread()
         .then((r) => alive && setTotal(r.total))
@@ -306,11 +310,13 @@ export function useChatUnread(): number {
     refresh();
     const timer = setInterval(() => { if (!connected) refresh(); }, 60000);
     window.addEventListener('tfhc:chat-read', refresh);
+    window.addEventListener('tfhc:unread-update', refresh);
     window.addEventListener('focus', refresh);
     return () => {
       alive = false;
       clearInterval(timer);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('tfhc:unread-update', refresh);
       window.removeEventListener('tfhc:chat-read', refresh);
     };
   }, [connected]);

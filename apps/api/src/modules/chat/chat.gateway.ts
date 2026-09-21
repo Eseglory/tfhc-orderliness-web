@@ -411,19 +411,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
     if (!room) return;
     const recipientIds = await this.chat.recipientMemberIds(room);
+    const dto = message as { id: string; body?: string; sender?: { memberId?: string; name?: string } };
     for (const memberId of recipientIds) {
       for (const socketId of this.online.get(memberId) ?? []) {
         const socket = this.liveSockets.get(socketId);
         if (!socket || !this.viewerOf(socket)) continue;
-        await socket.join(`room:${roomId}`);
-        const dto = message as { sender?: { memberId?: string } };
+        void socket.join(`room:${roomId}`);
         socket.emit('message:new', { ...message as object, mine: dto.sender?.memberId === memberId });
+        socket.emit('unread:update');
       }
     }
 
     // Persist once per recipient. Push uses the existing durable notification
     // dispatcher rather than a second, untracked fire-and-forget delivery.
-    const dto = message as { id: string; body?: string; sender?: { memberId?: string; name?: string } };
     const notifications = recipientIds.filter(id => id !== dto.sender?.memberId).map(memberId => ({
       id: randomUUID(), memberId, type: 'CHAT_MESSAGE',
       title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
@@ -444,14 +444,26 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         } });
       });
     }
-    for (const memberId of recipientIds) this.notifyMember(memberId);
+    for (const memberId of recipientIds) {
+      if (memberId === dto.sender?.memberId) continue;
+      this.notifyMember(memberId);
+      if (!this.isOnline(memberId)) {
+        void this.pushService?.sendDirectPush({ memberId }, {
+          title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
+          body: (dto.body || 'New message').slice(0, 150),
+          url: `/member/chat?roomId=${roomId}`,
+        });
+      }
+    }
     void this.pushService?.deliver();
     this.logger.log(`ChatFanOut message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
   }
 
   notifyMember(memberId: string) {
     for (const socketId of this.online.get(memberId) ?? []) {
-      this.liveSockets.get(socketId)?.emit('notification:new');
+      const sock = this.liveSockets.get(socketId);
+      sock?.emit('notification:new');
+      sock?.emit('unread:update');
     }
   }
 

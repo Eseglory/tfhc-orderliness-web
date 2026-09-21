@@ -46,6 +46,8 @@ import { LogoIcon } from '../LogoIcon';
 import { GlobalSearchModal } from './GlobalSearchModal';
 import { AdminBreadcrumb } from './AdminBreadcrumb';
 import { ThemeSwitcher } from '../ThemeSwitcher';
+import { useNotifications } from '../../lib/useNotifications';
+import { useChatUnread } from '../../lib/chat';
 
 interface NavChild {
   href: string;
@@ -175,6 +177,8 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
   const pathname = usePathname();
   const router = useRouter();
   const { user, canAny, loading } = useAuth();
+  const { unreadCount: notificationUnread } = useNotifications();
+  const chatUnread = useChatUnread();
 
   // Navigation states
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -436,6 +440,21 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
           {/* Theme Switcher Header Action */}
           <ThemeSwitcher variant="dropdown" />
 
+          {/* Notification Bell */}
+          <Link
+            href="/member/notifications"
+            className="relative p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <Bell className="w-5 h-5" />
+            {notificationUnread > 0 && (
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white font-bold text-[10px] flex items-center justify-center shadow-sm">
+                {notificationUnread > 99 ? '99+' : notificationUnread}
+              </span>
+            )}
+          </Link>
+
           {/* Admin Profile Dropdown */}
           <div className="relative" ref={profileMenuRef}>
             <button
@@ -578,9 +597,19 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                       />
                       {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
                     </div>
-                    {!sidebarCollapsed && item.badge && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        {item.badge}
+                    {!sidebarCollapsed && (item.badge || (item.key === 'chat' && chatUnread > 0)) && (
+                      <span
+                        className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md ${
+                          item.key === 'chat' && chatUnread > 0
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {item.key === 'chat' && chatUnread > 0
+                          ? chatUnread > 99
+                            ? '99+'
+                            : chatUnread
+                          : item.badge}
                       </span>
                     )}
                   </Link>

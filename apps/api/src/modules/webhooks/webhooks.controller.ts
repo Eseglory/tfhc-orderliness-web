@@ -30,7 +30,13 @@ export class WebhooksController {
     @Req() request: RawBodyRequest<Request>,
     @Body() event: WebhookEventPayload,
     @Headers('x-webhook-signature') signature?: string,
+    @Headers('x-hub-signature-256') hubSignature?: string,
   ) {
-    return this.webhooksService.handleInboundWebhook(event, signature, request.rawBody);
+    const rawSig =
+      signature ||
+      hubSignature ||
+      (request.headers['x-webhook-signature'] as string | undefined) ||
+      (request.headers['x-hub-signature-256'] as string | undefined);
+    return this.webhooksService.handleInboundWebhook(event, rawSig, request.rawBody);
   }
 }

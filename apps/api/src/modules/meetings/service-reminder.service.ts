@@ -31,7 +31,14 @@ export class ServiceReminderService {
     this.isEvaluating = true;
     try {
       const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'recurring_services_config' } });
-      if (setting && JSON.parse(setting.value).remindersEnabled === false) return { processed: 0, remindersSent: 0 };
+      if (setting) {
+        try {
+          const parsed = JSON.parse(setting.value);
+          if (parsed?.remindersEnabled === false) return { processed: 0, remindersSent: 0 };
+        } catch {
+          // If unparseable, proceed with default enabled
+        }
+      }
       const meetings = await this.prisma.meeting.findMany({ where: {
         status: { in: ['ACTIVE', 'SCHEDULED'] },
         OR: [{ serviceScheduleId: null }, { serviceSchedule: { enabled: true } }],
@@ -127,6 +134,17 @@ export class ServiceReminderService {
       if (notification) {
         result.inAppCreated++;
         this.gateway?.notifyMember(member.id);
+        if (this.pushService) {
+          try {
+            const pushRes = await this.pushService.sendDirectPush(
+              { userId: member.userId, memberId: member.id },
+              { title, body, url: path }
+            );
+            if (pushRes?.sent) result.pushSent += pushRes.sent;
+          } catch (err) {
+            this.logger.warn(`Push reminder failed for member=${member.id}`);
+          }
+        }
       }
       const email = validateEmail(member.approvedMember?.normalizedEmail || member.user?.email, { allowTestDomains: process.env.NODE_ENV !== 'production' });
       if (!email.isValid) continue;
@@ -137,10 +155,15 @@ export class ServiceReminderService {
         templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_EMAIL`, idempotencyKey: key,
         notificationId: notification?.id, provider: 'SMTP', status: 'PENDING', attemptedAt: new Date() }], skipDuplicates: true });
       if (!claim.count) continue;
-      const rendered = renderBrandedEmail({ category: 'alert', heading: title, recipientName: member.firstName,
+      const rendered = renderBrandedEmail({ category: 'reminder', heading: title, recipientName: member.firstName,
         paragraphs: [body, 'You are receiving this reminder because you indicated availability for this service.'],
-        details: [{ label: 'Service', value: meeting.title }, { label: 'Starts', value: date }, { label: 'Arrival', value: arrival }],
-        cta: { label: 'View service', url: `${appUrl}${path}`, tone: 'success' },
+        details: [
+          { label: 'Service', value: meeting.title },
+          { label: 'Starts', value: date },
+          { label: 'Arrival', value: arrival },
+          { label: 'Venue', value: meeting.locationName || 'Church Auditorium' },
+        ],
+        cta: { label: 'View Service Details', url: `${appUrl}${path}`, tone: 'primary' },
       });
       try {
         const sent = await this.mailService.sendEmail({ to: email.normalizedEmail, subject: title, text: rendered.text, html: rendered.html });
@@ -153,9 +176,9 @@ export class ServiceReminderService {
         this.logger.error(`EmailFailed delivery=${key}`);
       }
     }
-    // One durable push path prevents the old direct + scheduled duplicate.
+    // Background deliver for any batched subscriptions
     void this.pushService?.deliver();
-    this.logger.log(`ServiceReminderProcessed meeting=${meetingId} window=${window} notifications=${result.inAppCreated} emails=${result.emailSent}`);
+    this.logger.log(`ServiceReminderProcessed meeting=${meetingId} window=${window} notifications=${result.inAppCreated} emails=${result.emailSent} push=${result.pushSent}`);
     return result;
   }
 

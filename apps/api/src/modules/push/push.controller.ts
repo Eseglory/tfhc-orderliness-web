@@ -14,9 +14,11 @@ export class PushController {
   @Post('subscriptions')
   subscribe(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown, @Req() request: Request) {
     if (!user?.userId) throw new ForbiddenException('Authentication is required');
-    // Signature and expiry have already been validated by JwtAuthGuard.
     const payload = decode(request.headers.authorization?.replace(/^Bearer\s+/i, '') || '') as JwtPayload;
-    return this.push.subscribe(user.userId, body, new Date((payload?.exp || 0) * 1000));
+    const tokenExpMs = (payload?.exp || 0) * 1000;
+    const defaultExpiry = Date.now() + 30 * 86400000; // 30 days minimum
+    const expiresAt = new Date(Math.max(tokenExpMs, defaultExpiry));
+    return this.push.subscribe(user.userId, body, expiresAt);
   }
   @Post('status')
   status(@CurrentUser() user: AuthenticatedUser, @Body() body: { endpoint?: string }) {

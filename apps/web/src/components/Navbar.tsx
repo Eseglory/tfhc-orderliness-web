@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useChatUnread } from '../lib/chat';
+import { useNotifications } from '../lib/useNotifications';
 import { LogoIcon } from './LogoIcon';
 
 interface NavItem {
@@ -84,6 +85,7 @@ export const Navbar: React.FC = () => {
   const router = useRouter();
   const { user, canAny } = useAuth();
   const chatUnread = useChatUnread();
+  const { unreadCount: notificationUnread } = useNotifications();
   const menuRef = useRef<HTMLElement>(null);
 
   const isAdmin = pathname.startsWith('/admin');
@@ -198,6 +200,20 @@ export const Navbar: React.FC = () => {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
+            {/* Notification Bell */}
+            <Link
+              href="/member/notifications"
+              className="relative p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors flex items-center justify-center"
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <span className="material-symbols-outlined text-xl">notifications</span>
+              {notificationUnread > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-on-error font-bold text-[10px] flex items-center justify-center shadow-sm">
+                  {notificationUnread > 99 ? '99+' : notificationUnread}
+                </span>
+              )}
+            </Link>
             {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
               <button
                 onClick={() => router.push(isAdmin ? '/member' : '/admin')}

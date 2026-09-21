@@ -44,7 +44,13 @@ export class WebhooksService {
   }
 
   async handleGoogleCalendarWebhook(headers: Record<string, string>, body: unknown) {
-    throw new ServiceUnavailableException('Google Calendar push watches are not configured');
+    const resourceState = headers['x-goog-resource-state'] || headers['X-Goog-Resource-State'];
+    if (resourceState === 'sync') {
+      this.logger.log('Google Calendar webhook sync handshake received');
+      return { ok: true, status: 'SYNCED' };
+    }
+    this.logger.log(`Google Calendar webhook state=${resourceState}`);
+    return { ok: true, status: 'RECEIVED' };
   }
 
   async handleInboundWebhook(event: WebhookEventPayload, signature?: string, rawBody?: Buffer) {
@@ -87,6 +93,14 @@ export class WebhooksService {
     this.logger.log(`WebhookProcessed eventId=${event.eventId} duplicate=${!created}`);
     if (created) {
       this.gateway.notifyMember(member.id);
+      void this.pushService.sendDirectPush(
+        { userId: member.userId, memberId: member.id },
+        {
+          title: event.data!.title as string,
+          body: (event.data!.body as string).slice(0, 150),
+          url: '/member/notifications',
+        }
+      );
       void this.pushService.deliver();
     }
     return { received: true, event: event.event, status: created ? 'PROCESSED' : 'ALREADY_PROCESSED', duplicate: !created, timestamp: new Date().toISOString() };
