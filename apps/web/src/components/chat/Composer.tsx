@@ -4,6 +4,7 @@ import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
 import { WhatsAppEmojiPicker } from './EmojiPicker';
 import { compressImageIfNeeded } from '../../lib/image-compress';
+import { soundFx } from '../../lib/sound-fx';
 
 const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB Hard Limit
 const SAFE_RECORDING_BYTE_LIMIT = 2.85 * 1024 * 1024; // 2.85 MB Auto-stop threshold for Opus/WebM container safety
@@ -248,6 +249,23 @@ export function Composer({
     return () => document.removeEventListener('mousedown', clickOut);
   }, [showEmojis, showAttachMenu]);
 
+  // Mobile keyboard visual viewport accommodation
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const onViewportChange = () => {
+      if (document.activeElement === textareaRef.current) {
+        textareaRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    };
+    vv.addEventListener('resize', onViewportChange);
+    vv.addEventListener('scroll', onViewportChange);
+    return () => {
+      vv.removeEventListener('resize', onViewportChange);
+      vv.removeEventListener('scroll', onViewportChange);
+    };
+  }, []);
+
   const emitTyping = (typing: boolean) => {
     if (typingRef.current === typing && (!typing || Date.now() - lastTypingSent.current < 2000)) return;
     lastTypingSent.current = Date.now();
@@ -271,6 +289,9 @@ export function Composer({
       el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
     }
     if (v.trim()) {
+      if (!typingRef.current) {
+        soundFx.playTypingFeedback();
+      }
       emitTyping(true);
       if (typingTimer.current) clearTimeout(typingTimer.current);
       typingTimer.current = setTimeout(() => emitTyping(false), 2500);
@@ -287,6 +308,7 @@ export function Composer({
     try {
       // onSend resolves after durable queueing; keep the draft until that succeeds.
       await onSend(value);
+      soundFx.playMessageSend();
       if (!textareaRef.current || textareaRef.current.value.trim() === value) {
         setText('');
         if (draftKey) localStorage.removeItem(`chat_draft:${draftKey}`);

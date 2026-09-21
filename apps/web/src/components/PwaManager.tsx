@@ -2,7 +2,7 @@
 
 import { prepareDevice, clearDevice } from '../lib/pwa/device';
 import { startMetrics, recordPwaMetric } from '../lib/pwa/metrics';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clearOperations, discardFailed, flushQueue, QUEUE_EVENT, queueStatus, QueueStatus } from '../lib/pwa/queue';
@@ -14,6 +14,7 @@ const empty: QueueStatus = { pending: 0, failed: 0, syncing: false, message: '' 
 export function PwaManager() {
   const pathname = usePathname();
   const [install, setInstall] = useState<InstallPrompt | null>(null);
+  const installRef = useRef<InstallPrompt | null>(null);
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [queue, setQueue] = useState(empty);
   const [poor, setPoor] = useState(false);
@@ -23,6 +24,7 @@ export function PwaManager() {
   const [isIos, setIsIos] = useState(false);
   const [showIosModal, setShowIosModal] = useState(false);
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
+  const [dismissedInstallBanner, setDismissedInstallBanner] = useState(false);
 
   useEffect(() => {
     startMetrics();
@@ -36,6 +38,15 @@ export function PwaManager() {
       const ios = /iphone|ipad|ipod/.test(userAgent);
       setIsIos(ios);
     }
+
+    const onCustomInstallTrigger = () => {
+      if (installRef.current) {
+        void installRef.current.prompt().then(() => installRef.current?.userChoice).catch(() => undefined);
+      } else {
+        setShowIosModal(true);
+      }
+    };
+    window.addEventListener('tfhc:open-install-prompt', onCustomInstallTrigger);
 
     const connection = (navigator as Navigator & { connection?: Connection }).connection;
     const network = () => {
@@ -63,9 +74,11 @@ export function PwaManager() {
     };
     const prompt = (event: Event) => {
       event.preventDefault();
+      installRef.current = event as InstallPrompt;
       setInstall(event as InstallPrompt);
     };
     const installed = () => {
+      installRef.current = null;
       setInstall(null);
       setIsStandalone(true);
     };
@@ -146,6 +159,7 @@ export function PwaManager() {
       window.removeEventListener('focus', resume);
       document.removeEventListener('visibilitychange', resume);
       connection?.removeEventListener('change', network);
+      window.removeEventListener('tfhc:open-install-prompt', onCustomInstallTrigger);
       window.removeEventListener('beforeinstallprompt', prompt);
       window.removeEventListener('appinstalled', installed);
       navigator.serviceWorker?.removeEventListener('message', workerMessage);
@@ -161,7 +175,7 @@ export function PwaManager() {
   };
 
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname === '/verify-email';
-  if (isAuthPage || (!pathname.startsWith('/admin') && !pathname.startsWith('/member'))) {
+  if (isAuthPage) {
     return null;
   }
 
@@ -245,6 +259,69 @@ export function PwaManager() {
                   <span>Install App</span>
                 </button>
               )}
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* Floating Install Prompt Banner for Android/Desktop/iOS */}
+      {!isStandalone && !dismissedInstallBanner && (install || isIos) && (
+        <aside
+          role="region"
+          aria-label="Install TFHC-ORDERLINESS"
+          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[70] rounded-2xl bg-surface-container-high/95 dark:bg-slate-900/95 text-on-surface p-3.5 shadow-xl border border-outline-variant/30 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+            isMemberApp
+              ? 'bottom-[calc(5.2rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+              : 'bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <span className="material-symbols-outlined text-2xl">install_mobile</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <h4 className="text-xs font-extrabold text-on-surface truncate">Install TFHC-ORDERLINESS</h4>
+                <button
+                  type="button"
+                  onClick={() => setDismissedInstallBanner(true)}
+                  className="p-1 -mr-1 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                  title="Dismiss banner"
+                  aria-label="Dismiss banner"
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5">
+                {isIos ? 'Add to Home Screen for voice calls & notifications' : 'Install app for instant messaging & voice calls'}
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDismissedInstallBanner(true)}
+                  className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-highest text-on-surface text-[11px] font-semibold transition-all cursor-pointer"
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (install) {
+                      try {
+                        await install.prompt();
+                        await install.userChoice;
+                      } catch { /* dismissed */ }
+                      setInstall(null);
+                    } else if (isIos) {
+                      setShowIosModal(true);
+                    }
+                  }}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary hover:opacity-90 text-on-primary font-bold text-[11px] shadow-sm transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  <span>{isIos ? 'HOW TO INSTALL' : 'INSTALL NOW'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </aside>

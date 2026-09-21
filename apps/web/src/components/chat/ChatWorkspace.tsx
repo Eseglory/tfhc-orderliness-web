@@ -17,6 +17,7 @@ import { useUpload } from '../UploadProgress';
 import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
 import { WebRtcCallModal } from './WebRtcCallModal';
+import { soundFx } from '../../lib/sound-fx';
 
 const ROOM_ICON: Record<string, string> = {
   GENERAL: 'forum',
@@ -198,6 +199,15 @@ export function ChatWorkspace({
       }).catch(() => undefined);
     },
     onMessage: (m) => {
+      // Audio notifications for messages
+      if (!m.mine && m.sender?.memberId !== user?.memberId) {
+        if (m.roomId === activeIdRef.current) {
+          soundFx.playMessageReceive();
+        } else {
+          soundFx.playNotification();
+        }
+      }
+
       if (m.roomId === activeIdRef.current) {
         setMessages((prev) => {
           const remaining = prev.filter(x => x.id !== m.id && (!m.clientId || x.id !== m.clientId));
@@ -853,7 +863,11 @@ export function ChatWorkspace({
                   type="button"
                   onClick={() => {
                     if (!activeRoom) return;
-                    const targetMemberId = activeRoom.type === 'DIRECT' ? activeRoom.direct?.memberId : undefined;
+                    const targetMemberId =
+                      activeRoom.type === 'DIRECT'
+                        ? activeRoom.direct?.memberId ||
+                          roomMembers.find((m) => m.memberId !== user?.memberId)?.memberId
+                        : undefined;
                     window.dispatchEvent(
                       new CustomEvent('tfhc:start-call', {
                         detail: {
@@ -876,7 +890,11 @@ export function ChatWorkspace({
                   type="button"
                   onClick={() => {
                     if (!activeRoom) return;
-                    const targetMemberId = activeRoom.type === 'DIRECT' ? activeRoom.direct?.memberId : undefined;
+                    const targetMemberId =
+                      activeRoom.type === 'DIRECT'
+                        ? activeRoom.direct?.memberId ||
+                          roomMembers.find((m) => m.memberId !== user?.memberId)?.memberId
+                        : undefined;
                     window.dispatchEvent(
                       new CustomEvent('tfhc:start-call', {
                         detail: {

@@ -7,6 +7,7 @@ import { useAuth } from '../../../../lib/auth';
 import { PushSettings } from '../../../../components/PushSettings';
 import { OfflineStorage } from '../../../../components/OfflineStorage';
 import { recordPwaMetric } from '../../../../lib/pwa/metrics';
+import { soundFx, SoundSettings } from '../../../../lib/sound-fx';
 
 type PermissionStateVal = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
@@ -63,9 +64,26 @@ export default function MemberSettingsPage() {
   const [showIosInstallModal, setShowIosInstallModal] = useState(false);
   const [checkingAll, setCheckingAll] = useState(false);
 
+  // Sound & Communication Audio Preferences
+  const [soundSettings, setSoundSettings] = useState<SoundSettings>({
+    master: true,
+    messages: true,
+    notifications: true,
+    ringtone: true,
+    typing: false,
+  });
+  const [ringtonePlaying, setRingtonePlaying] = useState(false);
+
+  const handleToggleSound = (key: keyof SoundSettings) => {
+    const next = soundFx.updateSettings({ [key]: !soundSettings[key] });
+    setSoundSettings(next);
+  };
+
   // Detect platform & initial permissions
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    setSoundSettings(soundFx.getSettings());
 
     const ua = navigator.userAgent;
     let os: DeviceInfo['os'] = 'Unknown';
@@ -627,13 +645,222 @@ export default function MemberSettingsPage() {
           )}
         </section>
 
-        {/* SECTION 3: VOICE & CALLS */}
+        {/* SECTION 3: SOUND & COMMUNICATION ALERTS */}
+        <section className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600">
+                <span className="material-symbols-outlined text-2xl">volume_up</span>
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold text-[#0b1c30] dark:text-white">Sound &amp; Communication Alerts</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Custom synthesized audio alerts for calls, incoming messages, and live typing.
+                </p>
+              </div>
+            </div>
+
+            {/* Master Toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Master Sound</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={soundSettings.master}
+                onClick={() => handleToggleSound('master')}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                  soundSettings.master ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    soundSettings.master ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* 1. Message Sounds */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold text-[#0b1c30] dark:text-white">Message Send &amp; Receive</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Audio chimes when messages are sent or received in chat.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundSettings.messages}
+                  disabled={!soundSettings.master}
+                  onClick={() => handleToggleSound('messages')}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
+                    soundSettings.messages && soundSettings.master ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      soundSettings.messages && soundSettings.master ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => soundFx.playMessageSend()}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                  Test Send
+                </button>
+                <button
+                  type="button"
+                  onClick={() => soundFx.playMessageReceive()}
+                  className="flex-1 py-1.5 px-2 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                  Test Receive
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Incoming Call Ringtone */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold text-[#0b1c30] dark:text-white">Call Ringtone &amp; Ringback</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Continuous ringtone loop for incoming voice &amp; video calls.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundSettings.ringtone}
+                  disabled={!soundSettings.master}
+                  onClick={() => handleToggleSound('ringtone')}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
+                    soundSettings.ringtone && soundSettings.master ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      soundSettings.ringtone && soundSettings.master ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (ringtonePlaying) {
+                      soundFx.stopIncomingRingtone();
+                      setRingtonePlaying(false);
+                    } else {
+                      soundFx.startIncomingRingtone();
+                      setRingtonePlaying(true);
+                    }
+                  }}
+                  className={`w-full py-1.5 px-2 rounded-lg border text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center gap-1.5 ${
+                    ringtonePlaying
+                      ? 'bg-rose-500 text-white border-rose-600 animate-pulse'
+                      : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {ringtonePlaying ? 'stop' : 'ring_volume'}
+                  </span>
+                  <span>{ringtonePlaying ? 'Stop Ringtone' : 'Test Ringtone Loop'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. In-App Notification Alerts */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold text-[#0b1c30] dark:text-white">In-App Notifications</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Ping sound when alerts or announcements arrive while in the app.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundSettings.notifications}
+                  disabled={!soundSettings.master}
+                  onClick={() => handleToggleSound('notifications')}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
+                    soundSettings.notifications && soundSettings.master ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      soundSettings.notifications && soundSettings.master ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => soundFx.playNotification()}
+                  className="w-full py-1.5 px-2 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                  Test Notification Ping
+                </button>
+              </div>
+            </div>
+
+            {/* 4. Typing Feedback */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold text-[#0b1c30] dark:text-white">Typing Audio Feedback</h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Subtle micro-tone when initiating typing in conversation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={soundSettings.typing}
+                  disabled={!soundSettings.master}
+                  onClick={() => handleToggleSound('typing')}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
+                    soundSettings.typing && soundSettings.master ? 'bg-teal-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      soundSettings.typing && soundSettings.master ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => soundFx.playTypingFeedback()}
+                  className="w-full py-1.5 px-2 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[11px] font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                  Test Typing Click
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SECTION 4: CALL MEDIA DEVICES */}
         <section className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className="material-symbols-outlined text-teal-600 text-2xl">call</span>
               <div>
-                <h2 className="text-base font-extrabold text-[#0b1c30] dark:text-white">Voice &amp; Video Calls</h2>
+                <h2 className="text-base font-extrabold text-[#0b1c30] dark:text-white">Voice &amp; Video Call Devices</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Audio &amp; video device output settings for high-clarity ministry communications.
                 </p>
@@ -731,31 +958,26 @@ export default function MemberSettingsPage() {
 
             {!device.isStandalone && (
               <div>
-                {installPrompt ? (
-                  <button
-                    onClick={async () => {
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (installPrompt) {
                       try {
                         await installPrompt.prompt();
                         await installPrompt.userChoice;
                       } catch {}
                       setInstallPrompt(null);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-extrabold text-xs shadow-md shadow-red-500/20 active:scale-95 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-base">install_mobile</span>
-                    <span>Install App</span>
-                  </button>
-                ) : device.os === 'iOS' ? (
-                  <button
-                    onClick={() => setShowIosInstallModal(true)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0b1c30] hover:bg-[#162a42] text-white font-extrabold text-xs shadow-md active:scale-95 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-base">add_to_home_screen</span>
-                    <span>Install on iPhone / iPad</span>
-                  </button>
-                ) : (
-                  <span className="text-xs text-slate-500 font-semibold">Available via Browser Menu</span>
-                )}
+                    } else if (device.os === 'iOS') {
+                      setShowIosInstallModal(true);
+                    } else {
+                      window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'));
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-extrabold text-xs shadow-md shadow-red-500/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-base">install_mobile</span>
+                  <span>{device.os === 'iOS' ? 'Install on iPhone / iPad' : 'Install App'}</span>
+                </button>
               </div>
             )}
           </div>
