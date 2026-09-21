@@ -79,6 +79,12 @@ export function viewerIsDisciplinary(viewer: ChatViewer): boolean {
   ) {
     return false;
   }
+  if (viewer.isSuperAdmin === true || viewer.permissions?.includes('*')) {
+    return true;
+  }
+  if (viewer.role === 'ADMIN' || viewer.role === 'LEADER') {
+    return true;
+  }
   if (email && DISCIPLINARY_EMAILS.includes(email)) {
     return true;
   }
@@ -89,8 +95,8 @@ export function viewerIsDisciplinary(viewer: ChatViewer): boolean {
     return true;
   }
   if (
-    viewer.permissions.includes('excuses.review') ||
-    viewer.permissions.includes('flags.manage')
+    viewer.permissions?.includes('excuses.review') ||
+    viewer.permissions?.includes('flags.manage')
   ) {
     return true;
   }

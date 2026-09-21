@@ -516,6 +516,13 @@ export class ChatService implements OnApplicationBootstrap {
     await this.ensureMembership(room, viewer);
     const take = Math.min(Math.max(Number(opts.limit) || PAGE_DEFAULT, 1), PAGE_MAX);
 
+    // 1. Fetch room members ONCE for fast read/delivered receipt calculation
+    const roomMembers = await this.prisma.chatRoomMember.findMany({
+      where: { roomId, leftAt: null },
+      select: { memberId: true, lastReadAt: true, lastDeliveredAt: true },
+    });
+
+    // 2. Fetch messages from primary DB without N+1 member serialization
     const rows = await this.prisma.chatMessage.findMany({
       where: { roomId, hiddenFor: { none: { memberId: viewer.memberId } },
         ...(opts.search ? { body: { contains: opts.search.slice(0, 200), mode: 'insensitive' as const }, deletedAt: null } : {}),
@@ -525,7 +532,6 @@ export class ChatService implements OnApplicationBootstrap {
       ...(opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       include: {
         reactions: true,
-        room: { select: { members: { where: { leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } } } },
         sender: { select: senderSelect },
         replyTo: { include: { sender: { select: senderSelect } } },
       },
@@ -534,8 +540,37 @@ export class ChatService implements OnApplicationBootstrap {
     const hasMore = rows.length > take;
     const page = hasMore ? rows.slice(0, take) : rows;
 
+    // 3. Check for any pending local messages in SQLite buffer not yet in primary DB
+    if (!opts.cursor && !opts.search) {
+      const buffered = this.bufferRepo.listRecentByRoom(roomId, 10);
+      const rowIds = new Set(page.map(r => r.id));
+      for (const b of buffered) {
+        if (!rowIds.has(b.id) && b.syncStatus !== 'MIGRATED' && !b.deletedAt) {
+          page.unshift({
+            id: b.id,
+            clientOperationId: b.clientOperationId,
+            roomId: b.roomId,
+            senderMemberId: b.senderMemberId,
+            type: b.type as ChatMessageType,
+            body: b.body,
+            attachmentUrl: b.attachmentUrl,
+            attachmentMeta: b.attachmentMeta as any,
+            replyToId: b.replyToId,
+            editedAt: b.editedAt ? new Date(b.editedAt) : null,
+            deletedAt: null,
+            createdAt: new Date(b.createdAt),
+            reactions: [],
+            sender: b.senderMemberId === viewer.memberId
+              ? { id: viewer.memberId, firstName: viewer.firstName || '', lastName: viewer.lastName || '', preferredName: null, profilePhotoUrl: (viewer as any).profilePhotoUrl || null }
+              : null,
+            replyTo: null,
+          } as any);
+        }
+      }
+    }
+
     return {
-      messages: [...page].reverse().map((m) => this.toMessageDto(m, viewer)),
+      messages: [...page].reverse().map((m) => this.toMessageDto(m, viewer, roomMembers)),
       nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
       hasMore,
     };
@@ -628,7 +663,24 @@ export class ChatService implements OnApplicationBootstrap {
       ? ({ ...baseMeta, mentions: Array.from(mentionedMemberIds), isAllMentioned } as Prisma.InputJsonValue)
       : (dto.attachmentMeta && typeof dto.attachmentMeta === 'object' ? (dto.attachmentMeta as Prisma.InputJsonValue) : Prisma.DbNull);
 
-    // PostgreSQL is authoritative; never acknowledge ephemeral-only messages.
+    // 1. FAST-PATH: Write immediately to SQLite buffer (local durable storage in WAL mode)
+    try {
+      this.bufferRepo.saveMessage({
+        id: messageId,
+        clientOperationId: dto.operationId || null,
+        roomId,
+        senderMemberId: memberId,
+        type,
+        body: body || null,
+        attachmentUrl,
+        attachmentMeta: (finalAttachmentMeta as Record<string, unknown>) || null,
+        replyToId: dto.replyToId || null,
+        createdAt,
+      });
+    } catch (err: any) {
+      this.logger.warn(`ChatBufferWriteWarning: ${err.message}`);
+    }
+
     const createArgs = {
       data: {
         id: messageId,
@@ -640,89 +692,71 @@ export class ChatService implements OnApplicationBootstrap {
         attachmentUrl,
         attachmentMeta: finalAttachmentMeta,
         replyToId: dto.replyToId || null,
-      },
-      include: {
-        sender: { select: senderSelect },
-        replyTo: { include: { sender: { select: senderSelect } } },
+        createdAt: new Date(createdAt),
       },
     };
 
-    let persisted: any = null;
-    try {
-      persisted = await this.prisma.$transaction(async tx => {
-      const saved = dto.operationId
-        ? await tx.chatMessage.upsert({
-            where: { clientOperationId: dto.operationId },
-            create: createArgs.data,
-            update: {},
-            include: createArgs.include,
-          })
-        : await tx.chatMessage.create(createArgs);
-      if (saved.roomId !== roomId || saved.senderMemberId !== memberId) throw new ForbiddenException('Operation belongs to another sender');
-      const idempotencyKey = `chat:${saved.id}:notifications`;
-      const claim = await tx.communicationDelivery.createMany({ data: [{
-        idempotencyKey, channel: 'PUSH', recipient: roomId, templateKey: 'CHAT_INAPP', status: 'SENT', attemptedAt: new Date(),
-      }], skipDuplicates: true });
-      if (claim.count && recipients.length) {
-        const senderName = this.viewerName(viewer);
-        await tx.memberNotification.createMany({ data: recipients.map(recipient => {
-          const isMentioned = mentionedMemberIds.has(recipient);
-          let notifTitle = room.type === 'DIRECT' ? senderName : room.name || 'General';
-          let notifBody = (saved.body || 'New attachment').slice(0, 500);
+    // 2. ASYNC PERSISTENCE: Concurrently persist to Primary PostgreSQL and generate notifications
+    void this.persistMessageAndNotifyAsync(
+      messageId,
+      roomId,
+      memberId,
+      viewer,
+      dto,
+      createArgs,
+      recipients,
+      mentionedMemberIds,
+      isAllMentioned,
+      room,
+    );
 
-          if (isAllMentioned) {
-            notifTitle = `📢 @all in ${room.name || 'General'}`;
-            notifBody = `${senderName}: ${saved.body || 'Announcement'}`.slice(0, 500);
-          } else if (isMentioned) {
-            notifTitle = `💬 ${senderName} mentioned you in ${room.name || 'General'}`;
-            notifBody = saved.body ? saved.body.slice(0, 500) : 'Mentioned you in a message';
-          }
+    // 3. Construct instant outgoing message DTO
+    const senderDto: SenderRow = {
+      id: memberId,
+      firstName: viewer.firstName || 'Member',
+      lastName: viewer.lastName || '',
+      preferredName: null,
+      profilePhotoUrl: (viewer as any).profilePhotoUrl || null,
+    };
 
-          return {
-            memberId: recipient,
-            type: 'CHAT_MESSAGE',
-            title: notifTitle,
-            body: notifBody,
-            data: {
-              roomId,
-              messageId: saved.id,
-              url: `/member/chat?roomId=${roomId}`,
-              isMentioned,
-              isAllMentioned,
-            },
-          };
-        }) });
+    let replyToDto = null;
+    if (dto.replyToId) {
+      const parentMsg = this.bufferRepo.findById(dto.replyToId) ||
+        await this.prisma.chatMessage.findUnique({
+          where: { id: dto.replyToId },
+          include: { sender: { select: senderSelect } },
+        });
+      if (parentMsg) {
+        replyToDto = {
+          id: parentMsg.id,
+          body: parentMsg.body,
+          deletedAt: (parentMsg as any).deletedAt ? new Date((parentMsg as any).deletedAt) : null,
+          sender: (parentMsg as any).sender || null,
+        };
       }
-      return saved;
-      });
-    } catch (error: any) {
-      if (error?.code !== 'P2002' || !dto.operationId) throw error;
-      persisted = await this.prisma.chatMessage.findUnique({
-        where: { clientOperationId: dto.operationId }, include: createArgs.include,
-      });
-      if (!persisted) throw error;
-    }
-    if (persisted.roomId !== roomId || persisted.senderMemberId !== memberId) {
-      throw new ForbiddenException('Operation belongs to another sender');
-    }
-    try {
-      this.bufferRepo.saveMessage({
-        ...persisted, createdAt: persisted.createdAt.toISOString(),
-        attachmentMeta: persisted.attachmentMeta as Record<string, unknown> | null,
-      });
-      this.bufferRepo.markMigrated(persisted.id, new Date().toISOString());
-    } catch {
-      this.logger.warn('ChatCacheWriteFailed; message persisted in PostgreSQL');
     }
 
-    // 4. Update the author's read receipt
-    await this.prisma.chatRoomMember.update({
-      where: { roomId_memberId: { roomId, memberId } },
-      data: { lastReadAt: new Date(createdAt) },
-    }).catch(() => undefined);
+    const messageResult = {
+      id: messageId,
+      clientOperationId: dto.operationId || null,
+      roomId,
+      type,
+      body: body || null,
+      attachmentUrl,
+      attachmentMeta: finalAttachmentMeta,
+      replyToId: dto.replyToId || null,
+      replyTo: replyToDto,
+      editedAt: null,
+      deletedAt: null,
+      createdAt: new Date(createdAt),
+      senderMemberId: memberId,
+      sender: senderDto,
+      reactions: [],
+      room: { members: [] },
+    };
 
-    this.logger.log(`ChatStored message=${persisted.id} durationMs=${Date.now() - started}`);
-    return Object.defineProperty(this.toMessageDto(persisted, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
+    this.logger.log(`ChatStoredFast message=${messageId} durationMs=${Date.now() - started}`);
+    return Object.defineProperty(this.toMessageDto(messageResult, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
   }
 
   async forwardMessage(messageId: string, targetRoomId: string, viewer: ChatViewer, operationId: string) {
@@ -1149,6 +1183,93 @@ export class ChatService implements OnApplicationBootstrap {
     return this.prisma.chatMessage.create({ data: { roomId, type: 'SYSTEM', body } });
   }
 
+  private async persistMessageAndNotifyAsync(
+    messageId: string,
+    roomId: string,
+    memberId: string,
+    viewer: ChatViewer,
+    dto: { operationId?: string; replyToId?: string },
+    createArgs: any,
+    recipients: string[],
+    mentionedMemberIds: Set<string>,
+    isAllMentioned: boolean,
+    room: ChatRoom,
+  ) {
+    try {
+      await this.prisma.$transaction(async tx => {
+        const saved = dto.operationId
+          ? await tx.chatMessage.upsert({
+              where: { clientOperationId: dto.operationId },
+              create: createArgs.data,
+              update: {},
+            })
+          : await tx.chatMessage.create({ data: createArgs.data });
+
+        const idempotencyKey = `chat:${saved.id}:notifications`;
+        const claim = await tx.communicationDelivery.createMany({
+          data: [{
+            idempotencyKey,
+            channel: 'PUSH',
+            recipient: roomId,
+            templateKey: 'CHAT_INAPP',
+            status: 'SENT',
+            attemptedAt: new Date(),
+          }],
+          skipDuplicates: true,
+        });
+
+        if (claim.count && recipients.length) {
+          const senderName = this.viewerName(viewer);
+          await tx.memberNotification.createMany({
+            data: recipients.map(recipient => {
+              const isMentioned = mentionedMemberIds.has(recipient);
+              let notifTitle = room.type === 'DIRECT' ? senderName : room.name || 'General';
+              let notifBody = (createArgs.data.body || 'New attachment').slice(0, 500);
+
+              if (isAllMentioned) {
+                notifTitle = `📢 @all in ${room.name || 'General'}`;
+                notifBody = `${senderName}: ${createArgs.data.body || 'Announcement'}`.slice(0, 500);
+              } else if (isMentioned) {
+                notifTitle = `💬 ${senderName} mentioned you in ${room.name || 'General'}`;
+                notifBody = createArgs.data.body ? createArgs.data.body.slice(0, 500) : 'Mentioned you in a message';
+              }
+
+              return {
+                memberId: recipient,
+                type: 'CHAT_MESSAGE',
+                title: notifTitle,
+                body: notifBody,
+                data: {
+                  roomId,
+                  messageId: saved.id,
+                  url: `/member/chat?roomId=${roomId}`,
+                  isMentioned,
+                  isAllMentioned,
+                },
+              };
+            }),
+          });
+        }
+
+        // Update author's read receipt
+        await tx.chatRoomMember.updateMany({
+          where: { roomId, memberId },
+          data: { lastReadAt: new Date(createArgs.data.createdAt) },
+        }).catch(() => undefined);
+      });
+
+      this.bufferRepo.markMigrated(messageId, new Date().toISOString());
+      this.logger.log(`ChatAsyncPersisted message=${messageId} roomId=${roomId}`);
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        this.bufferRepo.markMigrated(messageId, new Date().toISOString());
+        return;
+      }
+      this.logger.warn(`ChatAsyncPersistPending message=${messageId} err=${err?.message}`);
+      this.bufferRepo.markFailed(messageId, err?.message || 'Async persistence pending');
+    }
+  }
+
   private toMessageDto(
     m: {
       id: string;
@@ -1157,27 +1278,30 @@ export class ChatService implements OnApplicationBootstrap {
       type: ChatMessageType;
       body: string | null;
       attachmentUrl: string | null;
-      attachmentMeta: Prisma.JsonValue;
+      attachmentMeta: any;
       replyToId: string | null;
-      editedAt: Date | null;
-      deletedAt: Date | null;
-      createdAt: Date;
+      editedAt: Date | string | null;
+      deletedAt: Date | string | null;
+      createdAt: Date | string;
       senderMemberId: string | null;
       reactions?: { emoji: string; memberId: string }[];
-      room?: { members: { memberId: string; lastReadAt: Date | null; lastDeliveredAt: Date | null }[] };
+      room?: { members: { memberId: string; lastReadAt: Date | string | null; lastDeliveredAt: Date | string | null }[] };
       sender?: SenderRow | null;
-      replyTo?: ({ id: string; body: string | null; deletedAt: Date | null; sender?: SenderRow | null }) | null;
+      replyTo?: ({ id: string; body: string | null; deletedAt: Date | string | null; sender?: SenderRow | null }) | null;
     },
     viewer: ChatViewer,
+    roomMembers?: { memberId: string; lastReadAt: Date | string | null; lastDeliveredAt: Date | string | null }[],
   ) {
+    const members = roomMembers || m.room?.members || [];
+    const createdTime = new Date(m.createdAt).getTime();
     return {
       id: m.id,
       clientId: m.clientOperationId || null,
       roomId: m.roomId,
       reactions: (m.reactions || []).reduce((counts, r) => ({ ...counts, [r.emoji]: (counts[r.emoji] || 0) + 1 }), {} as Record<string, number>),
       myReactions: (m.reactions || []).filter(r => r.memberId === viewer.memberId).map(r => r.emoji),
-      readBy: (m.room?.members || []).filter(r => r.memberId !== m.senderMemberId && r.lastReadAt && r.lastReadAt >= m.createdAt).length,
-      deliveredTo: (m.room?.members || []).filter(r => r.memberId !== m.senderMemberId && r.lastDeliveredAt && r.lastDeliveredAt >= m.createdAt).length,
+      readBy: members.filter(r => r.memberId !== m.senderMemberId && r.lastReadAt && new Date(r.lastReadAt).getTime() >= createdTime).length,
+      deliveredTo: members.filter(r => r.memberId !== m.senderMemberId && r.lastDeliveredAt && new Date(r.lastDeliveredAt).getTime() >= createdTime).length,
       type: m.type,
       body: m.deletedAt ? null : m.body,
       attachmentUrl: m.deletedAt ? null : m.attachmentUrl,
@@ -1191,9 +1315,9 @@ export class ChatService implements OnApplicationBootstrap {
               senderName: m.replyTo.sender ? displayName(m.replyTo.sender) : null,
             }
           : null,
-      editedAt: m.editedAt,
-      deletedAt: m.deletedAt,
-      createdAt: m.createdAt,
+      editedAt: m.editedAt ? new Date(m.editedAt) : null,
+      deletedAt: m.deletedAt ? new Date(m.deletedAt) : null,
+      createdAt: new Date(m.createdAt),
       sender: m.sender
         ? { memberId: m.sender.id, name: displayName(m.sender), photoUrl: m.sender.profilePhotoUrl }
         : null,

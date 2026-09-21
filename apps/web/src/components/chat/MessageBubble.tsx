@@ -1,7 +1,8 @@
 'use client';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Avatar } from './Avatar';
 import { ChatMessage, formatMessageTime } from '../../lib/chat';
+import { getCachedMediaUrl } from '../../lib/media-cache';
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0) return '';
@@ -74,6 +75,120 @@ function renderMessageTextWithMentions(text: string, isMine?: boolean) {
   }
 
   return parts;
+}
+
+function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [speed, setSpeed] = useState<1 | 1.5 | 2>(1);
+  const [mediaSrc, setMediaSrc] = useState(url);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getCachedMediaUrl(url).then(cached => {
+      if (alive) setMediaSrc(cached);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [url]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setPlaying(true)).catch(() => undefined);
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (!audioRef.current) return;
+    const cur = audioRef.current.currentTime;
+    const dur = audioRef.current.duration || 0;
+    setCurrentTime(cur);
+    setDuration(dur);
+    setProgress(dur > 0 ? (cur / dur) * 100 : 0);
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = Math.max(0, Math.min(pos * duration, duration));
+  };
+
+  const cycleSpeed = () => {
+    const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+    setSpeed(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  };
+
+  const formatSec = (sec: number) => {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="flex items-center gap-3 py-1 px-1 min-w-[210px] max-w-[280px]">
+      <audio
+        ref={audioRef}
+        src={mediaSrc}
+        preload="metadata"
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleTimeUpdate}
+        onEnded={() => { setPlaying(false); setProgress(0); }}
+      />
+      <button
+        type="button"
+        onClick={togglePlay}
+        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 shadow-sm ${
+          isMine
+            ? 'bg-white text-primary'
+            : 'bg-primary text-white'
+        }`}
+        aria-label={playing ? 'Pause' : 'Play voice message'}
+      >
+        <span className="material-symbols-outlined text-[24px]">
+          {playing ? 'pause' : 'play_arrow'}
+        </span>
+      </button>
+
+      <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-0">
+        <div
+          className={`h-2 rounded-full cursor-pointer overflow-hidden ${
+            isMine ? 'bg-white/30' : 'bg-surface-container-high'
+          }`}
+          onClick={handleSeek}
+        >
+          <div
+            className={`h-full rounded-full transition-all duration-75 ${
+              isMine ? 'bg-white' : 'bg-primary'
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className={`flex items-center justify-between text-[11px] font-mono ${
+          isMine ? 'text-white/80' : 'text-on-surface-variant'
+        }`}>
+          <span>{formatSec(playing ? currentTime : duration || currentTime)}</span>
+          <button
+            type="button"
+            onClick={cycleSpeed}
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold tracking-tight active:scale-90 transition-all ${
+              isMine ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface'
+            }`}
+          >
+            {speed}x
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function MessageBubble({
@@ -230,7 +345,7 @@ export function MessageBubble({
 
                 {/* WhatsApp Style Audio / Voice Note Player */}
                 {message.type === 'AUDIO' && message.attachmentUrl && (
-                  <audio controls preload="metadata" src={message.attachmentUrl} className="mb-2 max-w-full" aria-label="Voice message playback" />
+                  <VoiceNotePlayer url={message.attachmentUrl} isMine={mine} />
                 )}
 
                 {/* Document Attachment */}
@@ -278,11 +393,20 @@ export function MessageBubble({
             >
               {message.editedAt && !deleted && <span className="italic">edited</span>}
               <span>{formatMessageTime(message.createdAt)}</span>
-              {message.failed ? <button onClick={() => onRetry?.(message)} className="underline" aria-label="Retry message">Failed · Retry</button> : message.pending ? (
-                <span className="material-symbols-outlined text-[12px] opacity-75">schedule</span>
+              {message.failed ? <button onClick={() => onRetry?.(message)} className="underline text-rose-300 font-bold" aria-label="Retry message">Failed · Retry</button> : message.pending ? (
+                <span className="material-symbols-outlined text-[12px] opacity-75" title="Sending...">schedule</span>
               ) : mine ? (
                 /* WhatsApp double tick with cyan/teal read indicator */
-                <span className="material-symbols-outlined text-[15px] font-bold" title={message.readBy ? `Read by ${message.readBy}` : message.deliveredTo ? `Delivered to ${message.deliveredTo}` : 'Sent'}>
+                <span
+                  className={`material-symbols-outlined text-[15px] font-bold ${
+                    message.readBy && message.readBy > 0
+                      ? 'text-sky-300'
+                      : message.deliveredTo && message.deliveredTo > 0
+                      ? 'text-white/90'
+                      : 'text-white/70'
+                  }`}
+                  title={message.readBy ? `Read by ${message.readBy}` : message.deliveredTo ? `Delivered to ${message.deliveredTo}` : 'Sent'}
+                >
                   {message.readBy || message.deliveredTo ? 'done_all' : 'done'}
                 </span>
               ) : null}
