@@ -563,8 +563,17 @@ export function WebRtcCallModal({
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
+  useEffect(() => {
+    const handleBlocked = () => setAudioBlocked(true);
+    window.addEventListener('tfhc:ringtone-blocked', handleBlocked);
+    return () => window.removeEventListener('tfhc:ringtone-blocked', handleBlocked);
+  }, []);
+
   const unlockAudioManually = () => {
     soundFx.unlockAudioContext();
+    if (callRef.current?.isIncoming && callRef.current.status === 'ringing_incoming') {
+      soundFx.startIncomingRingtone();
+    }
     if (remoteAudioRef.current) {
       remoteAudioRef.current.play().catch(() => undefined);
     }
@@ -581,14 +590,15 @@ export function WebRtcCallModal({
   return (
     <div
       onClick={unlockAudioManually}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
+      onTouchStart={unlockAudioManually}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in cursor-pointer"
     >
       {/* Hidden audio element for voice-only remote audio output */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[380px] max-h-[85vh] overflow-y-auto"
+        onClick={unlockAudioManually}
+        className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[380px] max-h-[85vh] overflow-y-auto cursor-default"
       >
         {/* Call Header */}
         <div className="text-center space-y-1 w-full">

@@ -191,6 +191,142 @@ function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
   );
 }
 
+export interface CallMeta {
+  kind: 'CALL';
+  callType: 'VOICE' | 'VIDEO';
+  status: 'MISSED' | 'COMPLETED' | 'DECLINED';
+  duration?: number;
+  targetMemberId?: string;
+}
+
+function WhatsAppCallCard({
+  meta,
+  mine,
+  createdAt,
+  onStartCall,
+}: {
+  meta: CallMeta;
+  mine: boolean;
+  createdAt: string;
+  onStartCall?: (isVideo: boolean) => void;
+}) {
+  const isVideo = meta.callType === 'VIDEO';
+  const isMissed = meta.status === 'MISSED';
+  const isDeclined = meta.status === 'DECLINED';
+  const isCompleted = meta.status === 'COMPLETED';
+
+  const formatDuration = (sec?: number) => {
+    if (!sec || sec <= 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  let arrowIcon = 'call_made';
+  let titleText = isVideo ? 'Video call' : 'Voice call';
+  let subtitleText = '';
+  let statusBadgeClass = 'text-on-surface-variant font-medium';
+  let isRedAlert = false;
+
+  if (isMissed) {
+    if (mine) {
+      arrowIcon = 'call_made';
+      subtitleText = 'Unanswered';
+      statusBadgeClass = 'text-slate-400';
+    } else {
+      arrowIcon = 'call_missed';
+      titleText = isVideo ? 'Missed video call' : 'Missed voice call';
+      subtitleText = 'Tap to call back';
+      statusBadgeClass = 'text-rose-500 font-bold';
+      isRedAlert = true;
+    }
+  } else if (isDeclined) {
+    arrowIcon = mine ? 'call_made' : 'call_received';
+    subtitleText = 'Declined';
+    statusBadgeClass = 'text-slate-400';
+  } else if (isCompleted) {
+    arrowIcon = mine ? 'call_made' : 'call_received';
+    subtitleText = formatDuration(meta.duration);
+    statusBadgeClass = 'text-emerald-500 font-semibold';
+  }
+
+  return (
+    <div
+      className={`relative flex items-center justify-between gap-3 p-3 rounded-2xl min-w-[240px] max-w-[320px] transition-all border shadow-sm ${
+        isRedAlert
+          ? 'bg-rose-500/10 border-rose-500/30 text-on-surface dark:bg-rose-950/25'
+          : mine
+          ? 'bg-primary/10 border-primary/25 text-on-surface dark:bg-primary/15'
+          : 'bg-surface-container-high/70 border-outline-variant/30 text-on-surface'
+      }`}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Call Icon Badge */}
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-xs ${
+            isRedAlert
+              ? 'bg-rose-500/20 text-rose-500'
+              : isCompleted
+              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+              : 'bg-slate-500/20 text-slate-400'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">
+            {isRedAlert ? 'phone_missed' : isVideo ? 'videocam' : 'call'}
+          </span>
+        </div>
+
+        {/* Call details */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`material-symbols-outlined text-[15px] ${
+                isRedAlert
+                  ? 'text-rose-500'
+                  : isCompleted
+                  ? 'text-emerald-500'
+                  : 'text-slate-400'
+              }`}
+            >
+              {arrowIcon}
+            </span>
+            <p className={`text-xs truncate ${statusBadgeClass}`}>
+              {titleText}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[11px] text-on-surface-variant/80 truncate">
+              {subtitleText || (mine ? 'Outgoing' : 'Incoming')}
+            </span>
+            <span className="text-[10px] text-on-surface-variant/60 font-mono">
+              • {formatMessageTime(createdAt)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Call Back Action Button */}
+      {onStartCall && (
+        <button
+          type="button"
+          onClick={() => onStartCall(isVideo)}
+          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-95 shadow-sm cursor-pointer ${
+            isRedAlert
+              ? 'bg-rose-500 text-white hover:bg-rose-600'
+              : 'bg-emerald-500 text-white hover:bg-emerald-600'
+          }`}
+          title={`Call back (${isVideo ? 'Video' : 'Voice'})`}
+          aria-label={`Call back (${isVideo ? 'Video' : 'Voice'})`}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {isVideo ? 'videocam' : 'call'}
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function MessageBubble({
   message,
   showSender,
@@ -203,6 +339,7 @@ export function MessageBubble({
   onHide,
   onForward,
   onJumpToReply,
+  onStartCall,
 }: {
   message: ChatMessage;
   showSender: boolean;
@@ -215,6 +352,7 @@ export function MessageBubble({
   onForward?: (m: ChatMessage) => void;
   onJumpToReply?: (id: string) => void;
   onReact?: (m: ChatMessage, emoji: string) => void;
+  onStartCall?: (isVideo: boolean) => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
@@ -253,6 +391,27 @@ export function MessageBubble({
     setAudioSpeed(nextSpeed);
     if (audioRef.current) audioRef.current.playbackRate = nextSpeed;
   };
+
+  // Dedicated rendering for WhatsApp Call Logs (Missed, Completed, Declined)
+  if (message.attachmentMeta?.kind === 'CALL') {
+    return (
+      <div
+        className={`group relative flex gap-2 my-1.5 ${mine ? 'justify-end' : 'justify-start'}`}
+      >
+        {!mine && showSender && (
+          <div className="w-8 shrink-0">
+            <Avatar name={message.sender?.name ?? '?'} photoUrl={message.sender?.photoUrl} size={32} />
+          </div>
+        )}
+        <WhatsAppCallCard
+          meta={message.attachmentMeta as any}
+          mine={mine}
+          createdAt={message.createdAt}
+          onStartCall={onStartCall}
+        />
+      </div>
+    );
+  }
 
   return (
     <>

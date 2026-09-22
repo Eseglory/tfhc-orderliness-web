@@ -884,6 +884,57 @@ export class ChatService implements OnApplicationBootstrap {
     return this.toMessageDto(updated, viewer);
   }
 
+  async recordCallEvent(
+    roomId: string,
+    callerMemberId: string,
+    data: {
+      callType: 'VOICE' | 'VIDEO';
+      status: 'MISSED' | 'COMPLETED' | 'DECLINED';
+      duration?: number;
+      targetMemberId?: string;
+    },
+  ) {
+    const isVideo = data.callType === 'VIDEO';
+    let bodyText = '';
+    if (data.status === 'MISSED') {
+      bodyText = isVideo ? 'Missed video call' : 'Missed voice call';
+    } else if (data.status === 'DECLINED') {
+      bodyText = isVideo ? 'Declined video call' : 'Declined voice call';
+    } else {
+      const mins = Math.floor((data.duration || 0) / 60);
+      const secs = (data.duration || 0) % 60;
+      const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      bodyText = `${isVideo ? 'Video call' : 'Voice call'} • ${durStr}`;
+    }
+
+    const message = await this.prisma.chatMessage.create({
+      data: {
+        roomId,
+        senderMemberId: callerMemberId,
+        type: 'SYSTEM',
+        body: bodyText,
+        attachmentMeta: {
+          kind: 'CALL',
+          callType: data.callType,
+          status: data.status,
+          duration: data.duration || 0,
+          targetMemberId: data.targetMemberId,
+        },
+      },
+      include: {
+        sender: { select: senderSelect },
+        reactions: true,
+      },
+    });
+
+    const roomMembers = await this.prisma.chatRoomMember.findMany({
+      where: { roomId, leftAt: null },
+      select: { memberId: true, lastReadAt: true, lastDeliveredAt: true },
+    });
+
+    return this.toMessageDto(message, { memberId: callerMemberId } as any, roomMembers);
+  }
+
   // -------------------------------------------------------------------------
   // Read state
   // -------------------------------------------------------------------------

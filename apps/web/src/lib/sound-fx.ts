@@ -337,42 +337,164 @@ class SoundFxEngine {
     }
   }
 
+  private incomingAudioEl: HTMLAudioElement | null = null;
+  private ringtoneBlobUrl: string | null = null;
+
+  private generateRingtoneWavUrl(): string | null {
+    if (typeof window === 'undefined') return null;
+    if (this.ringtoneBlobUrl) return this.ringtoneBlobUrl;
+
+    try {
+      const sampleRate = 22050;
+      const duration = 2.4;
+      const totalSamples = Math.floor(sampleRate * duration);
+      const byteLength = totalSamples * 2;
+      const buffer = new ArrayBuffer(44 + byteLength);
+      const view = new DataView(buffer);
+
+      const writeString = (offset: number, str: string) => {
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
+      };
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + byteLength, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, byteLength, true);
+
+      // Signature polyphonic acoustic marimba chords
+      const melody: Array<[number, number, number[], number]> = [
+        [0.00, 0.35, [739.99, 1108.73], 0.36], // F#5 + C#6
+        [0.18, 0.35, [932.33, 1396.91], 0.38], // A#5 + F6
+        [0.36, 0.40, [1108.73, 1661.22], 0.42], // C#6 + G#6
+        [0.58, 0.45, [1479.98, 2217.46], 0.45], // F#6 + C#7
+        [0.82, 0.40, [1108.73, 1396.91], 0.38], // C#6 + F6
+        [1.04, 0.45, [932.33, 1108.73], 0.36],  // A#5 + C#6
+        [1.30, 0.70, [830.61, 1244.51], 0.40],  // G#5 + D#6
+      ];
+
+      let offset = 44;
+      for (let i = 0; i < totalSamples; i++) {
+        const t = i / sampleRate;
+        let sampleVal = 0;
+
+        for (const [start, len, freqs, amp] of melody) {
+          if (t >= start && t < start + len) {
+            const elapsed = t - start;
+            const attack = Math.min(1, elapsed / 0.008);
+            const decay = Math.exp(-elapsed * 6.5);
+            const envelope = attack * decay * amp;
+
+            for (const freq of freqs) {
+              sampleVal += Math.sin(2 * Math.PI * freq * elapsed) * envelope * 0.7;
+              sampleVal += Math.sin(2 * Math.PI * (freq * 2) * elapsed) * envelope * 0.3;
+            }
+          }
+        }
+
+        const clamped = Math.max(-1, Math.min(1, sampleVal));
+        view.setInt16(offset, Math.floor(clamped * 32767), true);
+        offset += 2;
+      }
+
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      this.ringtoneBlobUrl = URL.createObjectURL(blob);
+      return this.ringtoneBlobUrl;
+    } catch {
+      return null;
+    }
+  }
+
+  private getOrCreateIncomingAudio(): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.incomingAudioEl) {
+      const url = this.generateRingtoneWavUrl();
+      if (!url) return null;
+      try {
+        const audio = new Audio(url);
+        audio.loop = true;
+        audio.preload = 'auto';
+        this.incomingAudioEl = audio;
+      } catch {
+        return null;
+      }
+    }
+    return this.incomingAudioEl;
+  }
+
   /**
-   * Start Incoming Call Ringtone: Melodic marimba loop + phone vibration
+   * Start Incoming Call Ringtone: Dual pipeline (HTML5 audio loop + Web Audio oscillators + phone vibration)
    */
   public startIncomingRingtone(): void {
     if (!this.settings.master || !this.settings.ringtone) return;
     this.stopIncomingRingtone();
     this.unlockAudioContext();
 
-    const playSequence = () => {
-      // Trigger mobile phone vibration if supported
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-        try {
-          navigator.vibrate([600, 300, 600, 300, 1000]);
-        } catch {
-          // Ignore
-        }
+    // 1. Mobile phone vibration
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([600, 300, 600, 300, 1000]);
+      } catch {
+        // Ignore
       }
+    }
 
+    // 2. HTML5 Audio looping playback (native audio thread, reliable across devices)
+    const audio = this.getOrCreateIncomingAudio();
+    if (audio) {
+      audio.currentTime = 0;
+      audio.loop = true;
+      audio.volume = 1.0;
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise.catch((err) => {
+          console.warn('Incoming ringtone autoplay prevented by browser policy:', err);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('tfhc:ringtone-blocked'));
+            const oneTouchUnmute = () => {
+              audio.play().catch(() => undefined);
+              this.unlockAudioContext();
+              window.removeEventListener('pointerdown', oneTouchUnmute);
+              window.removeEventListener('touchstart', oneTouchUnmute);
+              window.removeEventListener('click', oneTouchUnmute);
+            };
+            window.addEventListener('pointerdown', oneTouchUnmute, { once: true, passive: true });
+            window.addEventListener('touchstart', oneTouchUnmute, { once: true, passive: true });
+            window.addEventListener('click', oneTouchUnmute, { once: true, passive: true });
+          }
+        });
+      }
+    }
+
+    // 3. Web Audio oscillator enhancement (adds acoustic depth when context is running)
+    const playSequence = () => {
       const ctx = this.getContext();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== 'running') return;
 
       try {
         const notes = [
-          { freq: 523.25, time: 0 },    // C5
-          { freq: 659.25, time: 0.16 }, // E5
-          { freq: 783.99, time: 0.32 }, // G5
-          { freq: 1046.5, time: 0.48 }, // C6
-          { freq: 783.99, time: 0.68 }, // G5
-          { freq: 1046.5, time: 0.84 }, // C6
-          { freq: 1318.5, time: 1.04 }, // E6
-          { freq: 1046.5, time: 1.20 }, // C6
+          { freq: 739.99, time: 0 },    // F#5
+          { freq: 932.33, time: 0.18 }, // A#5
+          { freq: 1108.73, time: 0.36 }, // C#6
+          { freq: 1479.98, time: 0.58 }, // F#6
+          { freq: 1108.73, time: 0.82 }, // C#6
+          { freq: 932.33, time: 1.04 },  // A#5
+          { freq: 830.61, time: 1.30 },  // G#5
         ];
 
         const now = ctx.currentTime;
         const mainGain = ctx.createGain();
-        mainGain.gain.setValueAtTime(0.32, now);
+        mainGain.gain.setValueAtTime(0.28, now);
         mainGain.connect(ctx.destination);
         this.ringtoneGain = mainGain;
 
@@ -383,28 +505,38 @@ class SoundFxEngine {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(freq, now + time);
 
-          noteGain.gain.setValueAtTime(0.28, now + time);
-          noteGain.gain.exponentialRampToValueAtTime(0.001, now + time + 0.24);
+          noteGain.gain.setValueAtTime(0.24, now + time);
+          noteGain.gain.exponentialRampToValueAtTime(0.001, now + time + 0.35);
 
           osc.connect(noteGain);
           noteGain.connect(mainGain);
 
           osc.start(now + time);
-          osc.stop(now + time + 0.24);
+          osc.stop(now + time + 0.35);
         });
       } catch {
         // Ignore
       }
     };
 
-    playSequence();
-    this.ringtoneInterval = setInterval(playSequence, 2200);
+    if (this.ctx && this.ctx.state === 'running') {
+      playSequence();
+      this.ringtoneInterval = setInterval(playSequence, 2400);
+    }
   }
 
   /**
    * Stop Incoming Call Ringtone and phone vibration
    */
   public stopIncomingRingtone(): void {
+    if (this.incomingAudioEl) {
+      try {
+        this.incomingAudioEl.pause();
+        this.incomingAudioEl.currentTime = 0;
+      } catch {
+        // Ignore
+      }
+    }
     if (this.ringtoneInterval) {
       clearInterval(this.ringtoneInterval);
       this.ringtoneInterval = null;

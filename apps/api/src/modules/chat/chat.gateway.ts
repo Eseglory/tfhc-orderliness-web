@@ -43,6 +43,20 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private readonly typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly socketTypingRooms = new Map<string, Set<string>>();
 
+  /** callId -> ActiveCall metadata for call history recording */
+  private readonly activeCalls = new Map<
+    string,
+    {
+      callId: string;
+      roomId: string;
+      callerMemberId: string;
+      targetMemberId?: string;
+      isVideo: boolean;
+      startTime: number;
+      connectedAt: number | null;
+    }
+  >();
+
   afterInit(server: Namespace | Server) {
     this.io = server ?? this.server;
   }
@@ -303,6 +317,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       isVideo: Boolean(data.isVideo),
     };
 
+    this.activeCalls.set(callId, {
+      callId,
+      roomId: data.roomId,
+      callerMemberId: viewer.memberId,
+      targetMemberId: data.targetMemberId,
+      isVideo: Boolean(data.isVideo),
+      startTime: Date.now(),
+      connectedAt: null,
+    });
+
     if (data.targetMemberId) {
       const isTargetOnline = this.online.has(data.targetMemberId);
       if (isTargetOnline) {
@@ -316,6 +340,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         }
         return { ok: true, callId };
       }
+
+      // If user is offline, record a missed call in the conversation timeline
+      this.activeCalls.delete(callId);
+      void this.recordAndBroadcastCall(data.roomId, viewer.memberId, {
+        callType: data.isVideo ? 'VIDEO' : 'VOICE',
+        status: 'MISSED',
+        targetMemberId: data.targetMemberId,
+      });
       return { ok: false, error: 'User is currently offline' };
     }
 
@@ -331,6 +363,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ) {
     const viewer = this.viewerOf(socket);
     if (!viewer?.memberId) return;
+
+    if (data.signal?.type === 'ready' || data.signal?.type === 'answer') {
+      const call = this.activeCalls.get(data.callId);
+      if (call && !call.connectedAt) {
+        call.connectedAt = Date.now();
+      }
+    }
 
     const signalPayload = {
       fromMemberId: viewer.memberId,
@@ -352,11 +391,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('call:reject')
-  onCallReject(
+  async onCallReject(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
   ) {
     const viewer = this.viewerOf(socket);
+    const call = this.activeCalls.get(data.callId);
+    if (call) {
+      this.activeCalls.delete(data.callId);
+      void this.recordAndBroadcastCall(call.roomId, call.callerMemberId, {
+        callType: call.isVideo ? 'VIDEO' : 'VOICE',
+        status: 'DECLINED',
+        targetMemberId: call.targetMemberId,
+      });
+    }
+
     const rejectPayload = {
       callId: data.callId,
       byMemberId: viewer?.memberId,
@@ -376,11 +425,24 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   }
 
   @SubscribeMessage('call:end')
-  onCallEnd(
+  async onCallEnd(
     @ConnectedSocket() socket: Socket,
     @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
   ) {
     const viewer = this.viewerOf(socket);
+    const call = this.activeCalls.get(data.callId);
+    if (call) {
+      this.activeCalls.delete(data.callId);
+      const duration = call.connectedAt ? Math.max(1, Math.round((Date.now() - call.connectedAt) / 1000)) : 0;
+      const status = call.connectedAt ? 'COMPLETED' : 'MISSED';
+      void this.recordAndBroadcastCall(call.roomId, call.callerMemberId, {
+        callType: call.isVideo ? 'VIDEO' : 'VOICE',
+        status,
+        duration,
+        targetMemberId: call.targetMemberId,
+      });
+    }
+
     const endPayload = {
       callId: data.callId,
       byMemberId: viewer?.memberId,
@@ -396,6 +458,24 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       }
     } else if (data.roomId) {
       socket.to(`room:${data.roomId}`).emit('call:ended', endPayload);
+    }
+  }
+
+  private async recordAndBroadcastCall(
+    roomId: string,
+    callerMemberId: string,
+    data: {
+      callType: 'VOICE' | 'VIDEO';
+      status: 'MISSED' | 'COMPLETED' | 'DECLINED';
+      duration?: number;
+      targetMemberId?: string;
+    },
+  ) {
+    try {
+      const message = await this.chat.recordCallEvent(roomId, callerMemberId, data);
+      await this.fanOut(roomId, message);
+    } catch (err) {
+      this.logger.error(`Failed to record call event for room ${roomId}: ${(err as Error).message}`);
     }
   }
 

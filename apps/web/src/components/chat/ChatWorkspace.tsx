@@ -1027,7 +1027,64 @@ export function ChatWorkspace({
                     <div key={group.day}>
                       <SystemLine text={group.day} />
                       {group.items.map((m, i) => {
-                        if (m.type === 'SYSTEM') return <SystemLine key={m.id} text={m.body ?? ''} />;
+                        const handleStartCallFromMessage = (isVideo: boolean) => {
+                          soundFx.unlockAudioContext();
+                          const isCaller = m.mine;
+                          const meta = m.attachmentMeta as { targetMemberId?: string } | null;
+                          const targetMemberId =
+                            activeRoom?.type === 'DIRECT'
+                              ? activeRoom.direct?.memberId || roomMembers.find((rm) => rm.memberId !== user?.memberId)?.memberId
+                              : isCaller
+                              ? meta?.targetMemberId
+                              : m.sender?.memberId;
+
+                          window.dispatchEvent(
+                            new CustomEvent('tfhc:start-call', {
+                              detail: {
+                                roomId: activeRoom?.id,
+                                targetMemberId,
+                                peerName: activeRoom?.name || m.sender?.name || 'Member',
+                                isVideo,
+                              },
+                            })
+                          );
+                        };
+
+                        if (m.type === 'SYSTEM') {
+                          if (m.attachmentMeta?.kind === 'CALL') {
+                            return (
+                              <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5">
+                                <MessageBubble
+                                  message={m}
+                                  showSender={false}
+                                  canModerate={canModerate}
+                                  onReply={setReplyTo}
+                                  onForward={(message) => setForwarding({ message, clientId: crypto.randomUUID() })}
+                                  onJumpToReply={(id) => {
+                                    const target = document.getElementById(`chat-message-${id}`);
+                                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    else notify('Load older messages to view the original message.', 'info');
+                                  }}
+                                  onEdit={(msg) => {
+                                    setEditing(msg);
+                                    setReplyTo(null);
+                                  }}
+                                  onDelete={handleDelete}
+                                  onRetry={() => { void drainOutbox(); }}
+                                  onReact={(message, emoji) => {
+                                    void chatApi.react(message.id, emoji, message.myReactions?.includes(emoji) || false).catch(() => notify('Reaction could not be saved.', 'error'));
+                                  }}
+                                  onHide={(message) => {
+                                    void chatApi.hide(message.id).then(() => setMessages((prev) => prev.filter((item) => item.id !== message.id))).catch(() => notify('Message could not be hidden.', 'error'));
+                                  }}
+                                  onStartCall={handleStartCallFromMessage}
+                                />
+                              </div>
+                            );
+                          }
+                          return <SystemLine key={m.id} text={m.body ?? ''} />;
+                        }
+
                         const prev = group.items[i - 1];
                         const showSender =
                           !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
@@ -1051,7 +1108,8 @@ export function ChatWorkspace({
                               onDelete={handleDelete}
                               onRetry={() => { void drainOutbox(); }}
                               onReact={(message, emoji) => { void chatApi.react(message.id, emoji, message.myReactions?.includes(emoji) || false).catch(() => notify('Reaction could not be saved.', 'error')); }}
-                              onHide={message => { void chatApi.hide(message.id).then(() => setMessages(prev => prev.filter(m => m.id !== message.id))).catch(() => notify('Message could not be hidden.', 'error')); }}
+                              onHide={message => { void chatApi.hide(message.id).then(() => setMessages(prev => prev.filter(item => item.id !== message.id))).catch(() => notify('Message could not be hidden.', 'error')); }}
+                              onStartCall={handleStartCallFromMessage}
                             />
                           </div>
                         );
