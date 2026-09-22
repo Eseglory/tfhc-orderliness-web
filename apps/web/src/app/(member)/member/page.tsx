@@ -221,6 +221,35 @@ export default function MemberDashboard() {
       <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 pt-4 pb-28 sm:pb-8 max-w-4xl mx-auto">
         <PushPromptBanner />
 
+        {notificationUnread > 0 && (
+          <Link
+            href="/member/notifications"
+            className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-red-500/10 via-orange-500/10 to-amber-500/10 border border-red-500/20 hover:border-red-500/40 transition-all shadow-xs group"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f2320c] text-white shadow-xs">
+                <span className="material-symbols-outlined text-lg animate-pulse">notifications_active</span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    You have {notificationUnread} unread notification{notificationUnread > 1 ? 's' : ''}
+                  </span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#f2320c] text-white">
+                    New
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                  Tap to view latest announcements, reminders, and updates.
+                </p>
+              </div>
+            </div>
+            <span className="material-symbols-outlined text-slate-400 group-hover:text-[#f2320c] transition-colors text-lg shrink-0">
+              chevron_right
+            </span>
+          </Link>
+        )}
+
         {/* Prominent Install App Banner for Mobile Browsers */}
         {!isStandalone && (
           <section className="relative overflow-hidden rounded-3xl border border-orange-500/30 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-red-500/10 dark:from-orange-950/40 dark:via-amber-950/30 dark:to-red-950/40 p-4 sm:p-5 shadow-sm">

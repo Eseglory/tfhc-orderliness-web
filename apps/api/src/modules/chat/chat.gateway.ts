@@ -496,11 +496,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const recipientIds = await this.chat.recipientMemberIds(room);
     const dto = message as { id: string; body?: string; sender?: { memberId?: string; name?: string } };
     for (const memberId of recipientIds) {
+      const isMine = dto.sender?.memberId === memberId;
+      const payload = { ...(message as object), mine: isMine };
+      this.io.to(`member:${memberId}`).emit('message:new', payload);
+      this.io.to(`member:${memberId}`).emit('unread:update');
+
       for (const socketId of this.online.get(memberId) ?? []) {
         const socket = this.liveSockets.get(socketId);
         if (!socket || !this.viewerOf(socket)) continue;
         void socket.join(`room:${roomId}`);
-        socket.emit('message:new', { ...message as object, mine: dto.sender?.memberId === memberId });
+        socket.emit('message:new', payload);
         socket.emit('unread:update');
       }
     }
@@ -530,19 +535,22 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     for (const memberId of recipientIds) {
       if (memberId === dto.sender?.memberId) continue;
       this.notifyMember(memberId);
-      if (!this.isOnline(memberId)) {
-        void this.pushService?.sendDirectPush({ memberId }, {
-          title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
-          body: (dto.body || 'New message').slice(0, 150),
-          url: `/member/chat?roomId=${roomId}`,
-        });
-      }
+      // Dispatch push notification to all subscribed devices for the recipient
+      void this.pushService?.sendDirectPush({ memberId }, {
+        title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
+        body: (dto.body || 'New message').slice(0, 150),
+        url: `/member/chat?roomId=${roomId}`,
+      });
     }
     void this.pushService?.deliver();
     this.logger.log(`ChatFanOut message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
   }
 
   notifyMember(memberId: string) {
+    if (this.io) {
+      this.io.to(`member:${memberId}`).emit('notification:new');
+      this.io.to(`member:${memberId}`).emit('unread:update');
+    }
     for (const socketId of this.online.get(memberId) ?? []) {
       const sock = this.liveSockets.get(socketId);
       sock?.emit('notification:new');
@@ -552,16 +560,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   async emitRoomEvent(roomId: string, event: string, payload: unknown) {
     if (!this.io) return;
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
-    if (!room) return;
-    for (const memberId of await this.chat.recipientMemberIds(room)) {
-      for (const id of this.online.get(memberId) ?? []) {
-        const socket = this.liveSockets.get(id);
-        if (!socket || !this.viewerOf(socket)) continue;
-        const message = payload as { sender?: { memberId?: string } };
-        socket.emit(event, event === 'message:update' ? { ...payload as object, mine: message.sender?.memberId === memberId } : payload);
-      }
-    }
+    // Broadcast directly to the Socket.IO room (instant in-memory delivery)
+    this.io.to(`room:${roomId}`).emit(event, payload);
   }
 
   // -------------------------------------------------------------------------

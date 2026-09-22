@@ -42,18 +42,26 @@ export class ServiceReminderService {
       const meetings = await this.prisma.meeting.findMany({ where: {
         status: { in: ['ACTIVE', 'SCHEDULED'] },
         OR: [{ serviceScheduleId: null }, { serviceSchedule: { enabled: true } }],
-        startTime: { gt: now, lte: new Date(now.getTime() + 24 * 3600000) },
+        startTime: { gt: now, lte: new Date(now.getTime() + 25 * 3600000) },
       }, orderBy: { startTime: 'asc' } });
       let remindersSent = 0;
       for (const meeting of meetings) {
         const hours = (meeting.startTime.getTime() - now.getTime()) / 3600000;
-        // Never send early. Catch up only the most recent window after downtime.
-        const window: ReminderWindow = hours > 12 ? '24h' : hours > 1 ? '12h' : '1h';
-        try {
-          const result = await this.dispatchServiceReminderWindow(meeting.id, window);
-          remindersSent += result.inAppCreated + result.emailSent;
-        } catch (error) {
-          this.logger.error(`ServiceReminderFailed meeting=${meeting.id} window=${window}`);
+        const windowsToEvaluate: ReminderWindow[] = [];
+        if (hours <= 24.5 && hours > 12.0) {
+          windowsToEvaluate.push('24h');
+        } else if (hours <= 12.0 && hours > 1.0) {
+          windowsToEvaluate.push('12h');
+        } else if (hours <= 1.0 && hours > 0.0) {
+          windowsToEvaluate.push('1h');
+        }
+        for (const window of windowsToEvaluate) {
+          try {
+            const result = await this.dispatchServiceReminderWindow(meeting.id, window);
+            remindersSent += result.inAppCreated + result.emailSent;
+          } catch (error) {
+            this.logger.error(`ServiceReminderFailed meeting=${meeting.id} window=${window}`);
+          }
         }
       }
       return { processed: meetings.length, remindersSent };
@@ -91,7 +99,7 @@ export class ServiceReminderService {
     const date = format(meeting.startTime);
     const arrival = format(meeting.expectedArrivalTime || meeting.startTime);
     const title = window === 'active' ? `Service Attendance Open: ${meeting.title}` : `Service Reminder (${window}): ${meeting.title}`;
-    const body = `${meeting.title} starts ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName}. Please prepare for your responsibilities.`;
+    const body = `${meeting.title} starts ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName || 'Main Auditorium'}. Please prepare for your responsibilities.`;
     const path = `/member/check-in?meetingId=${meeting.id}`;
     const appUrl = this.config.get<string>('APP_URL') || this.config.get<string>('APP_WEB_URL') || 'https://tfhc-orderliness-web.vercel.app';
 
@@ -101,61 +109,127 @@ export class ServiceReminderService {
       const room = await this.prisma.chatRoom.findUnique({ where: { key: 'GENERAL' } });
       if (room) {
         const idempotencyKey = `service-rem-${meeting.id}-24h-general-chat`;
-        const message = await this.prisma.$transaction(async tx => {
-          const claim = await tx.communicationDelivery.createMany({ data: [{ channel: 'PUSH', recipient: room.id,
-            templateKey: 'SERVICE_REMINDER_GENERAL_CHAT', idempotencyKey, status: 'PENDING' }], skipDuplicates: true });
-          if (!claim.count) return null;
-          const message = await tx.chatMessage.create({ data: { roomId: room.id, type: 'SYSTEM',
-            body: `${body} Everyone scheduled and available to serve should prepare ahead and be ready for assigned responsibilities.` } });
-          await tx.communicationDelivery.update({ where: { idempotencyKey }, data: { status: 'SENT', attemptedAt: new Date() } });
-          return message;
+        const existingChatDelivery = await this.prisma.communicationDelivery.findUnique({
+          where: { idempotencyKey },
         });
-        if (message) {
-          result.chatCreated++;
-          await this.gateway?.fanOut(room.id, { ...message, sender: null, mine: false }, false);
+        if (!existingChatDelivery || existingChatDelivery.status !== 'SENT') {
+          const message = await this.prisma.$transaction(async tx => {
+            const claim = await tx.communicationDelivery.upsert({
+              where: { idempotencyKey },
+              create: {
+                channel: 'PUSH',
+                recipient: room.id,
+                templateKey: 'SERVICE_REMINDER_GENERAL_CHAT',
+                idempotencyKey,
+                status: 'PENDING',
+                attemptedAt: new Date(),
+              },
+              update: { status: 'PENDING', attemptedAt: new Date() },
+            });
+            const generalChatBody = `Service reminder: Tomorrow's service (${meeting.title}) is approaching on ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName || 'Church Auditorium'}. Everyone scheduled and available to serve is encouraged to prepare ahead of time and be active and ready for assigned responsibilities.`;
+            const msg = await tx.chatMessage.create({
+              data: { roomId: room.id, type: 'SYSTEM', body: generalChatBody },
+            });
+            await tx.communicationDelivery.update({
+              where: { idempotencyKey },
+              data: { status: 'SENT', attemptedAt: new Date() },
+            });
+            return msg;
+          });
+          if (message) {
+            result.chatCreated++;
+            await this.gateway?.fanOut(room.id, { ...message, sender: null, mine: false }, false);
+          }
         }
       }
     }
     for (const member of members) {
       const prefix = window === 'active' ? `service-rem-${meeting.id}-${member.id}` : `service-rem-${meeting.id}-${window}-${member.id}`;
-      const notification = await this.prisma.$transaction(async tx => {
-        const key = `${prefix}-inapp`;
-        const claim = await tx.communicationDelivery.createMany({ data: [{ channel: 'PUSH', recipient: member.id,
-          templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_INAPP`, idempotencyKey: key, status: 'PENDING' }], skipDuplicates: true });
-        if (!claim.count) return null;
-        const item = await tx.memberNotification.create({ data: { memberId: member.id,
-          type: window === 'active' ? 'SERVICE_ATTENDANCE_REMINDER' : 'SERVICE_REMINDER', title, body,
-          data: { meetingId, window, url: path, startTime: meeting.startTime.toISOString() }, expiresAt: meeting.attendanceCloseTime } });
-        await tx.communicationDelivery.update({ where: { idempotencyKey: key }, data: {
-          notificationId: item.id, status: 'SENT', attemptedAt: new Date(),
-        } });
-        return item;
-      });
+      const inAppKey = `${prefix}-inapp`;
+      const existingInApp = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: inAppKey } });
+
+      let notification = null;
+      if (!existingInApp || existingInApp.status !== 'SENT') {
+        notification = await this.prisma.$transaction(async tx => {
+          await tx.communicationDelivery.upsert({
+            where: { idempotencyKey: inAppKey },
+            create: {
+              channel: 'PUSH',
+              recipient: member.id,
+              templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_INAPP`,
+              idempotencyKey: inAppKey,
+              status: 'PENDING',
+              attemptedAt: new Date(),
+            },
+            update: { status: 'PENDING', attemptedAt: new Date() },
+          });
+          const item = await tx.memberNotification.create({
+            data: {
+              memberId: member.id,
+              type: window === 'active' ? 'SERVICE_ATTENDANCE_REMINDER' : 'SERVICE_REMINDER',
+              title,
+              body,
+              data: { meetingId, window, url: path, startTime: meeting.startTime.toISOString() },
+              expiresAt: meeting.attendanceCloseTime,
+            },
+          });
+          await tx.communicationDelivery.update({
+            where: { idempotencyKey: inAppKey },
+            data: { notificationId: item.id, status: 'SENT', attemptedAt: new Date() },
+          });
+          return item;
+        });
+      }
+
       if (notification) {
         result.inAppCreated++;
         this.gateway?.notifyMember(member.id);
-        if (this.pushService) {
-          try {
-            const pushRes = await this.pushService.sendDirectPush(
-              { userId: member.userId, memberId: member.id },
-              { title, body, url: path }
-            );
-            if (pushRes?.sent) result.pushSent += pushRes.sent;
-          } catch (err) {
-            this.logger.warn(`Push reminder failed for member=${member.id}`);
-          }
+      }
+
+      // Dispatch push notification to member's devices
+      if (this.pushService) {
+        try {
+          const pushRes = await this.pushService.sendDirectPush(
+            { userId: member.userId, memberId: member.id },
+            { title, body, url: path }
+          );
+          if (pushRes?.sent) result.pushSent += pushRes.sent;
+        } catch (err) {
+          this.logger.warn(`Push reminder failed for member=${member.id}`);
         }
       }
+
       const email = validateEmail(member.approvedMember?.normalizedEmail || member.user?.email, { allowTestDomains: process.env.NODE_ENV !== 'production' });
       if (!email.isValid) continue;
-      const key = `${prefix}-email`;
-      // Claim BEFORE contacting SMTP. Concurrent jobs cannot send twice. An
-      // ambiguous SMTP result stays FAILED for review, never blindly resent.
-      const claim = await this.prisma.communicationDelivery.createMany({ data: [{ channel: 'EMAIL', recipient: email.normalizedEmail,
-        templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_EMAIL`, idempotencyKey: key,
-        notificationId: notification?.id, provider: 'SMTP', status: 'PENDING', attemptedAt: new Date() }], skipDuplicates: true });
-      if (!claim.count) continue;
-      const rendered = renderBrandedEmail({ category: 'reminder', heading: title, recipientName: member.firstName,
+
+      const emailKey = `${prefix}-email`;
+      const existingEmailDelivery = await this.prisma.communicationDelivery.findUnique({
+        where: { idempotencyKey: emailKey },
+      });
+      if (existingEmailDelivery?.status === 'SENT') {
+        continue;
+      }
+
+      // Reclaim / prepare delivery record
+      await this.prisma.communicationDelivery.upsert({
+        where: { idempotencyKey: emailKey },
+        create: {
+          channel: 'EMAIL',
+          recipient: email.normalizedEmail,
+          templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_EMAIL`,
+          idempotencyKey: emailKey,
+          notificationId: notification?.id,
+          provider: 'SMTP',
+          status: 'PENDING',
+          attemptedAt: new Date(),
+        },
+        update: { status: 'PENDING', attemptedAt: new Date() },
+      });
+
+      const rendered = renderBrandedEmail({
+        category: 'reminder',
+        heading: title,
+        recipientName: member.firstName,
         paragraphs: [body, 'You are receiving this reminder because you indicated availability for this service.'],
         details: [
           { label: 'Service', value: meeting.title },
@@ -166,14 +240,26 @@ export class ServiceReminderService {
         cta: { label: 'View Service Details', url: `${appUrl}${path}`, tone: 'primary' },
       });
       try {
-        const sent = await this.mailService.sendEmail({ to: email.normalizedEmail, subject: title, text: rendered.text, html: rendered.html });
-        await this.prisma.communicationDelivery.update({ where: { idempotencyKey: key }, data: { status: 'SENT', providerRef: sent.messageId } });
+        const sent = await this.mailService.sendEmail({
+          to: email.normalizedEmail,
+          subject: title,
+          text: rendered.text,
+          html: rendered.html,
+        });
+        await this.prisma.communicationDelivery.update({
+          where: { idempotencyKey: emailKey },
+          data: { status: 'SENT', providerRef: sent.messageId },
+        });
         result.emailSent++;
-      } catch {
-        await this.prisma.communicationDelivery.update({ where: { idempotencyKey: key }, data: {
-          status: 'FAILED', failureReason: 'SMTP delivery failed; reconcile provider acceptance before retrying.',
-        } });
-        this.logger.error(`EmailFailed delivery=${key}`);
+      } catch (err: any) {
+        await this.prisma.communicationDelivery.update({
+          where: { idempotencyKey: emailKey },
+          data: {
+            status: 'FAILED',
+            failureReason: `SMTP delivery error: ${(err as Error).message}`,
+          },
+        });
+        this.logger.error(`EmailFailed delivery=${emailKey}: ${(err as Error).message}`);
       }
     }
     // Background deliver for any batched subscriptions

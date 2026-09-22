@@ -3,6 +3,17 @@
 import React, { useEffect, useState } from 'react';
 import { fetchApi } from '../lib/api';
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export function PushPromptBanner() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -11,6 +22,30 @@ export function PushPromptBanner() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('PushManager' in window) || !('serviceWorker' in navigator) || !('Notification' in window)) return;
+
+    if (Notification.permission === 'granted') {
+      // Auto-verify and sync push subscription with backend
+      fetchApi<{ enabled: boolean; publicKey: string | null }>('/push/config')
+        .then(async (cfg) => {
+          if (!cfg?.enabled || !cfg.publicKey) return;
+          const reg = (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register('/sw.js'));
+          await navigator.serviceWorker.ready;
+          let sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            const bytes = urlBase64ToUint8Array(cfg.publicKey);
+            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+          }
+          if (sub) {
+            await fetchApi('/push/subscriptions', {
+              method: 'POST',
+              body: JSON.stringify(sub.toJSON()),
+            });
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
     if (Notification.permission !== 'default') return;
     if (sessionStorage.getItem('dismissed_push_banner') === 'true') return;
 
@@ -38,9 +73,7 @@ export function PushPromptBanner() {
         (await navigator.serviceWorker.getRegistration()) ||
         (await navigator.serviceWorker.register('/sw.js'));
       await navigator.serviceWorker.ready;
-      const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), (char) =>
-        char.charCodeAt(0)
-      );
+      const bytes = urlBase64ToUint8Array(key);
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: bytes,

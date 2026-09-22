@@ -36,7 +36,18 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'X-Requested-With',
+      'x-webhook-signature',
+      'x-hub-signature-256',
+      'x-goog-resource-state',
+      'x-goog-channel-id',
+      'X-Goog-Resource-State',
+      'X-Goog-Channel-ID',
+    ],
   });
 
   app.useGlobalPipes(

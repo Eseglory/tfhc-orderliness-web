@@ -2,6 +2,17 @@
 import { useEffect, useState } from 'react';
 import { fetchApi } from '../lib/api';
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export function PushSettings() {
   const [supported, setSupported] = useState(false);
   const [enabled, setEnabled] = useState(false);
@@ -64,7 +75,7 @@ export function PushSettings() {
         setMessage('Device notifications turned off.');
       } else {
         if (!key) throw new Error('Device notifications are not configured yet.');
-        const bytes = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0));
+        const bytes = urlBase64ToUint8Array(key);
         const existingKey = subscription?.options.applicationServerKey;
         if (subscription && existingKey &&
             (existingKey.byteLength !== bytes.length || new Uint8Array(existingKey).some((value, index) => value !== bytes[index]))) {

@@ -270,6 +270,9 @@ export function ChatWorkspace({
         }, 4000);
       }
     },
+    onUnread: () => {
+      void loadRooms();
+    },
   });
 
   // Deep-link open once rooms are available.

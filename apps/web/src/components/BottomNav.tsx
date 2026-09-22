@@ -4,10 +4,12 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useChatUnread } from '../lib/chat';
+import { useNotifications } from '../lib/useNotifications';
 
 export const BottomNav: React.FC = () => {
   const pathname = usePathname();
   const unread = useChatUnread();
+  const { unreadCount: notificationUnread } = useNotifications();
 
   // The member bottom nav belongs only to the member portal.
   if (!pathname.startsWith('/member')) {
@@ -26,14 +28,19 @@ export const BottomNav: React.FC = () => {
         {/* 1. Home */}
         <Link
           href="/member"
-          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all duration-200 active:scale-90 ${
+          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all duration-200 active:scale-90 relative ${
             isHome ? 'text-[#f2320c] font-bold' : 'text-slate-500 hover:text-[#f2320c] dark:text-slate-400 dark:hover:text-slate-200'
           }`}
         >
-          <div className={`flex items-center justify-center w-10 h-7 rounded-full transition-colors ${
+          <div className={`flex items-center justify-center w-10 h-7 rounded-full transition-colors relative ${
             isHome ? 'bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400' : ''
           }`}>
             <span className="material-symbols-outlined text-[22px]" data-icon="home">home</span>
+            {notificationUnread > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-[#f2320c] px-1 text-[9px] font-bold leading-4 text-white flex items-center justify-center shadow-xs">
+                {notificationUnread > 99 ? '99+' : notificationUnread}
+              </span>
+            )}
           </div>
           <span className="text-[10px] font-semibold tracking-tight leading-none">Home</span>
         </Link>

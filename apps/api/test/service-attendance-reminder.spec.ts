@@ -253,6 +253,16 @@ describe('Active Service Reminder for Available Members Suite', () => {
       }
       return { count };
     };
+    mockPrisma.communicationDelivery.upsert = async ({ where, create, update }: any) => {
+      let row = deliveries.find(d => d.idempotencyKey === where.idempotencyKey);
+      if (row) {
+        Object.assign(row, update);
+      } else {
+        row = { id: `del-${deliveries.length + 1}`, ...create, createdAt: new Date() };
+        deliveries.push(row);
+      }
+      return row;
+    };
     mockPrisma.communicationDelivery.update = async ({ where, data }: any) => {
       const row = deliveries.find(d => d.idempotencyKey === where.idempotencyKey);
       Object.assign(row, data); return row;

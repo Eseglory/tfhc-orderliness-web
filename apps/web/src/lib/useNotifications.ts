@@ -29,8 +29,16 @@ export function useNotifications() {
     try {
       const data = await fetchApi<MemberNotification[]>('/members/me/notifications');
       if (isMounted.current && Array.isArray(data)) {
+        const unread = data.filter((n) => n.status === 'UNREAD').length;
         setNotifications(data);
-        setUnreadCount(data.filter((n) => n.status === 'UNREAD').length);
+        setUnreadCount(unread);
+        if (typeof navigator !== 'undefined' && 'setAppBadge' in navigator) {
+          if (unread > 0) {
+            (navigator as any).setAppBadge(unread).catch(() => {});
+          } else if ('clearAppBadge' in navigator) {
+            (navigator as any).clearAppBadge().catch(() => {});
+          }
+        }
       }
     } catch {
       // Quiet fallback
@@ -66,6 +74,9 @@ export function useNotifications() {
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, status: 'READ' })));
       setUnreadCount(0);
+      if (typeof navigator !== 'undefined' && 'clearAppBadge' in navigator) {
+        (navigator as any).clearAppBadge().catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to mark notifications read:', err);
     }
