@@ -219,7 +219,21 @@ export default function LoginPage() {
         </p>
       </main>
 
-      <footer className="mt-stack-lg text-center">
+      <footer className="mt-stack-lg text-center space-y-2">
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'));
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-500/10 hover:bg-orange-500/15 text-orange-600 dark:text-orange-400 font-bold text-xs border border-orange-500/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">install_mobile</span>
+            <span>Install App on this phone</span>
+          </button>
+        </div>
         <span className="font-body-md text-body-md text-on-surface-variant flex items-center justify-center gap-2">
           <HelpCircle size={18} aria-hidden="true" />
           Registration is open to approved members only

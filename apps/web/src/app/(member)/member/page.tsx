@@ -52,6 +52,14 @@ export default function MemberDashboard() {
   } | null>(null);
 
   const [hasClockedIn, setHasClockedIn] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      setIsStandalone(standalone);
+    }
+  }, []);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -175,6 +183,19 @@ export default function MemberDashboard() {
         </div>
 
         <div className="flex items-center gap-2">
+          {!isStandalone && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-extrabold text-xs shadow-md shadow-orange-500/25 active:scale-95 transition-all cursor-pointer shrink-0"
+              title="Install App"
+              aria-label="Install App"
+            >
+              <span className="material-symbols-outlined text-[17px]">install_mobile</span>
+              <span className="hidden xs:inline">Install App</span>
+              <span className="xs:hidden">Install</span>
+            </button>
+          )}
           {user && (user.role !== 'MEMBER' || user.isSuperAdmin) && (
             <button
               onClick={() => router.push('/admin')}
@@ -199,6 +220,34 @@ export default function MemberDashboard() {
 
       <main className="flex w-full flex-1 flex-col gap-5 px-4 sm:px-6 pt-4 pb-28 sm:pb-8 max-w-4xl mx-auto">
         <PushPromptBanner />
+
+        {/* Prominent Install App Banner for Mobile Browsers */}
+        {!isStandalone && (
+          <section className="relative overflow-hidden rounded-3xl border border-orange-500/30 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-red-500/10 dark:from-orange-950/40 dark:via-amber-950/30 dark:to-red-950/40 p-4 sm:p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-orange-600 to-red-600 text-white shadow-md shadow-orange-500/30">
+                  <span className="material-symbols-outlined text-2xl">install_mobile</span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+                    Install TFHC-ORDERLINESS
+                  </h3>
+                  <p className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 mt-0.5 font-medium line-clamp-1">
+                    Install on your phone for instant messaging, voice calls, and offline access.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'))}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 hover:opacity-95 active:scale-95 text-white font-black text-xs shadow-md shadow-orange-500/25 transition-all shrink-0 uppercase tracking-wider cursor-pointer"
+              >
+                Install
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">

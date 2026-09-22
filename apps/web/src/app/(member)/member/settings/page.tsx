@@ -967,8 +967,6 @@ export default function MemberSettingsPage() {
                         await installPrompt.userChoice;
                       } catch {}
                       setInstallPrompt(null);
-                    } else if (device.os === 'iOS') {
-                      setShowIosInstallModal(true);
                     } else {
                       window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'));
                     }

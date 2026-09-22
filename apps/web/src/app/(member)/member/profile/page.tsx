@@ -302,6 +302,22 @@ export default function MemberProfilePage() {
                 </div>
                 <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
               </Link>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('tfhc:open-install-prompt'))}
+                className="w-full flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors border-b border-outline-variant/20 text-left cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                    <span className="material-symbols-outlined text-[18px]">install_mobile</span>
+                  </div>
+                  <div>
+                    <span className="font-body-md text-body-md text-primary font-bold">Install TFHC App</span>
+                    <span className="block text-[11px] text-on-surface-variant">Add to home screen for voice calls and offline access</span>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+              </button>
               <Link href="/member/offline" className="flex items-center justify-between p-4 hover:bg-surface-container-low transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">

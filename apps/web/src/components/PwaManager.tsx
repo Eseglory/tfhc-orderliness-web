@@ -22,7 +22,10 @@ export function PwaManager() {
   const [online, setOnline] = useState(true);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIos, setIsIos] = useState(false);
-  const [showIosModal, setShowIosModal] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [installModalTab, setInstallModalTab] = useState<'android' | 'ios' | 'desktop'>('android');
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
   const [dismissedInstallBanner, setDismissedInstallBanner] = useState(false);
 
@@ -35,15 +38,20 @@ export function PwaManager() {
       const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
       setIsStandalone(standalone);
       const userAgent = window.navigator.userAgent.toLowerCase();
-      const ios = /iphone|ipad|ipod/.test(userAgent);
+      const ios = /iphone|ipad|ipod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const android = /android/.test(userAgent);
+      const mobile = ios || android || /mobile|touch/i.test(userAgent);
       setIsIos(ios);
+      setIsAndroid(android);
+      setIsMobile(mobile);
+      setInstallModalTab(ios ? 'ios' : android ? 'android' : 'desktop');
     }
 
     const onCustomInstallTrigger = () => {
       if (installRef.current) {
         void installRef.current.prompt().then(() => installRef.current?.userChoice).catch(() => undefined);
       } else {
-        setShowIosModal(true);
+        setShowInstallModal(true);
       }
     };
     window.addEventListener('tfhc:open-install-prompt', onCustomInstallTrigger);
@@ -175,11 +183,7 @@ export function PwaManager() {
   };
 
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password' || pathname === '/verify-email';
-  if (isAuthPage) {
-    return null;
-  }
-
-  const hasNotice = Boolean(queue.syncing || queue.pending > 0 || queue.failed > 0 || issue || poor);
+  const hasNotice = !isAuthPage && Boolean(queue.syncing || queue.pending > 0 || queue.failed > 0 || issue || poor);
   const isMemberApp = pathname.startsWith('/member');
 
   return (
@@ -247,13 +251,17 @@ export function PwaManager() {
                 </div>
               )}
 
-              {!isStandalone && install && (
+              {!isStandalone && (
                 <button
                   onClick={async () => {
-                    try { await install.prompt(); await install.userChoice; } catch { /* Dismissal is harmless. */ }
-                    setInstall(null);
+                    if (installRef.current) {
+                      try { await installRef.current.prompt(); await installRef.current.userChoice; } catch { /* dismissed */ }
+                      setInstall(null);
+                    } else {
+                      setShowInstallModal(true);
+                    }
                   }}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-primary text-on-primary text-[11px] sm:text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-primary text-on-primary text-[11px] sm:text-xs font-extrabold shadow-sm hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[15px]">install_mobile</span>
                   <span>Install App</span>
@@ -265,23 +273,23 @@ export function PwaManager() {
       )}
 
       {/* Floating Install Prompt Banner for Android/Desktop/iOS */}
-      {!isStandalone && !dismissedInstallBanner && (install || isIos) && (
+      {!isStandalone && !dismissedInstallBanner && (
         <aside
           role="region"
           aria-label="Install TFHC-ORDERLINESS"
-          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[70] rounded-2xl bg-surface-container-high/95 dark:bg-slate-900/95 text-on-surface p-3.5 shadow-xl border border-outline-variant/30 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+          className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[70] rounded-2xl bg-surface-container-high/95 dark:bg-slate-900/95 text-on-surface p-3.5 shadow-2xl border border-outline-variant/40 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-300 ${
             isMemberApp
               ? 'bottom-[calc(5.2rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
               : 'bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-orange-600 to-red-600 text-white shadow-md shadow-orange-500/25">
               <span className="material-symbols-outlined text-2xl">install_mobile</span>
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1">
-                <h4 className="text-xs font-extrabold text-on-surface truncate">Install TFHC-ORDERLINESS</h4>
+                <h4 className="text-xs font-black text-on-surface tracking-tight">Install TFHC-ORDERLINESS</h4>
                 <button
                   type="button"
                   onClick={() => setDismissedInstallBanner(true)}
@@ -292,8 +300,12 @@ export function PwaManager() {
                   <span className="material-symbols-outlined text-base">close</span>
                 </button>
               </div>
-              <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5">
-                {isIos ? 'Add to Home Screen for voice calls & notifications' : 'Install app for instant messaging & voice calls'}
+              <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5 font-medium">
+                {isIos
+                  ? 'Add to Home Screen for voice calls & notifications'
+                  : isAndroid
+                  ? 'Install on your phone for instant calls & alerts'
+                  : 'Install app for instant messaging & voice calls'}
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <button
@@ -306,20 +318,20 @@ export function PwaManager() {
                 <button
                   type="button"
                   onClick={async () => {
-                    if (install) {
+                    if (installRef.current) {
                       try {
-                        await install.prompt();
-                        await install.userChoice;
+                        await installRef.current.prompt();
+                        await installRef.current.userChoice;
                       } catch { /* dismissed */ }
                       setInstall(null);
-                    } else if (isIos) {
-                      setShowIosModal(true);
+                    } else {
+                      setShowInstallModal(true);
                     }
                   }}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary hover:opacity-90 text-on-primary font-bold text-[11px] shadow-sm transition-all cursor-pointer"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 hover:opacity-95 active:scale-95 text-white font-extrabold text-[11px] shadow-sm shadow-orange-500/30 transition-all cursor-pointer uppercase tracking-wider"
                 >
                   <span className="material-symbols-outlined text-sm">download</span>
-                  <span>{isIos ? 'HOW TO INSTALL' : 'INSTALL NOW'}</span>
+                  <span>{install ? 'INSTALL NOW' : isIos ? 'HOW TO INSTALL' : 'INSTALL APP'}</span>
                 </button>
               </div>
             </div>
@@ -381,28 +393,32 @@ export function PwaManager() {
         </div>
       )}
 
-      {/* iOS Installation Instruction Modal */}
-      {showIosModal && (
+      {/* Universal Installation Instruction Modal (Android, iOS, Desktop) */}
+      {showInstallModal && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-labelledby="ios-install-title"
+          aria-labelledby="install-modal-title"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in"
-          onClick={() => setShowIosModal(false)}
+          onClick={() => setShowInstallModal(false)}
         >
           <div
-            className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 p-6 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200 flex flex-col"
+            className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-slate-900 p-5 sm:p-6 text-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-[#f2320c] dark:bg-red-950/50">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-orange-500 to-red-600 text-white shadow-xs">
                   <span className="material-symbols-outlined text-xl">install_mobile</span>
                 </div>
-                <h3 id="ios-install-title" className="text-base font-extrabold">Install on iPhone / iPad</h3>
+                <div>
+                  <h3 id="install-modal-title" className="text-base font-black tracking-tight leading-tight">Install TFHC App</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Quick setup on your device</p>
+                </div>
               </div>
               <button
-                onClick={() => setShowIosModal(false)}
+                onClick={() => setShowInstallModal(false)}
                 className="rounded-full p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                 aria-label="Close"
               >
@@ -410,32 +426,153 @@ export function PwaManager() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-3.5 text-xs text-slate-600 dark:text-slate-300">
-              <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-900 dark:text-white">1</span>
-                <p className="pt-0.5">
-                  Tap the <strong className="text-slate-900 dark:text-white">Share</strong> icon <span className="material-symbols-outlined align-middle text-sm text-blue-500">ios_share</span> in your Safari or Chrome navigation bar.
-                </p>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-900 dark:text-white">2</span>
-                <p className="pt-0.5">
-                  Scroll down the share sheet and select <strong className="text-slate-900 dark:text-white">&ldquo;Add to Home Screen&rdquo;</strong> <span className="material-symbols-outlined align-middle text-sm">add_box</span>.
-                </p>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-900 dark:text-white">3</span>
-                <p className="pt-0.5">
-                  Tap <strong className="text-slate-900 dark:text-white">&ldquo;Add&rdquo;</strong> in the top right corner to install TFHC-ORDERLINESS on your home screen.
-                </p>
-              </div>
+            {/* Platform Selection Tabs */}
+            <div className="mt-3 flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 shrink-0 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setInstallModalTab('android')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  installModalTab === 'android'
+                    ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">android</span>
+                <span>Android</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInstallModalTab('ios')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  installModalTab === 'ios'
+                    ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">phone_iphone</span>
+                <span>iPhone/iPad</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInstallModalTab('desktop')}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  installModalTab === 'desktop'
+                    ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">laptop</span>
+                <span>Desktop</span>
+              </button>
             </div>
+
+            {/* Tab 1: Android Instructions */}
+            {installModalTab === 'android' && (
+              <div className="mt-4 space-y-3.5 text-xs text-slate-600 dark:text-slate-300">
+                <div className="p-3 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200/50 dark:border-orange-900/40 text-[11px] text-orange-900 dark:text-orange-300 font-medium">
+                  {installRef.current ? (
+                    <div className="flex flex-col gap-2">
+                      <span>Chrome is ready to install the app directly:</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (installRef.current) {
+                            try {
+                              await installRef.current.prompt();
+                              await installRef.current.userChoice;
+                            } catch {}
+                            setInstall(null);
+                            setShowInstallModal(false);
+                          }
+                        }}
+                        className="py-2 px-3 rounded-xl bg-orange-600 text-white font-extrabold text-xs shadow-xs text-center active:scale-95 transition-all"
+                      >
+                        Tap to Install Immediately
+                      </button>
+                    </div>
+                  ) : (
+                    <span>If the automatic prompt hasn&apos;t appeared yet, install manually in 3 seconds:</span>
+                  )}
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400 font-extrabold">1</span>
+                  <p className="pt-0.5">
+                    Tap the <strong className="text-slate-900 dark:text-white">three dots menu (⋮)</strong> in the top right corner of Chrome or your browser.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400 font-extrabold">2</span>
+                  <p className="pt-0.5">
+                    Select <strong className="text-slate-900 dark:text-white">&ldquo;Install app&rdquo;</strong> (or <strong className="text-slate-900 dark:text-white">&ldquo;Add to Home screen&rdquo;</strong>) <span className="material-symbols-outlined align-middle text-sm text-orange-500">add_to_home_screen</span>.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-950/60 dark:text-orange-400 font-extrabold">3</span>
+                  <p className="pt-0.5">
+                    Tap <strong className="text-slate-900 dark:text-white">&ldquo;Install&rdquo;</strong> in the confirmation dialog. The app will be added to your home screen and app launcher.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 2: iPhone / iPad Instructions */}
+            {installModalTab === 'ios' && (
+              <div className="mt-4 space-y-3.5 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 font-extrabold">1</span>
+                  <p className="pt-0.5">
+                    In Safari or Chrome, tap the <strong className="text-slate-900 dark:text-white">Share</strong> icon <span className="material-symbols-outlined align-middle text-sm text-blue-500">ios_share</span> in the bottom toolbar.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 font-extrabold">2</span>
+                  <p className="pt-0.5">
+                    Scroll down the share sheet and select <strong className="text-slate-900 dark:text-white">&ldquo;Add to Home Screen&rdquo;</strong> <span className="material-symbols-outlined align-middle text-sm text-blue-500">add_box</span>.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 font-extrabold">3</span>
+                  <p className="pt-0.5">
+                    Tap <strong className="text-slate-900 dark:text-white">&ldquo;Add&rdquo;</strong> in the top right corner. TFHC-ORDERLINESS will appear as a standalone app on your home screen.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Desktop Instructions */}
+            {installModalTab === 'desktop' && (
+              <div className="mt-4 space-y-3.5 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 font-extrabold">1</span>
+                  <p className="pt-0.5">
+                    Look for the <strong className="text-slate-900 dark:text-white">Install icon (⊕)</strong> on the right side of the browser address bar.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 font-extrabold">2</span>
+                  <p className="pt-0.5">
+                    Or click the browser menu (<strong className="text-slate-900 dark:text-white">⋮</strong>) &rarr; <strong className="text-slate-900 dark:text-white">&ldquo;Save and share&rdquo;</strong> &rarr; <strong className="text-slate-900 dark:text-white">&ldquo;Install TFHC Orderliness&rdquo;</strong>.
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 font-extrabold">3</span>
+                  <p className="pt-0.5">
+                    Click <strong className="text-slate-900 dark:text-white">&ldquo;Install&rdquo;</strong> to launch as a native desktop window.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
-              onClick={() => setShowIosModal(false)}
+              onClick={() => setShowInstallModal(false)}
               className="mt-6 w-full rounded-2xl bg-[#0b1c30] hover:bg-[#162a42] dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 py-3 text-center text-xs font-extrabold text-white transition-all active:scale-95 shadow-md shrink-0 cursor-pointer"
             >
               Got it
