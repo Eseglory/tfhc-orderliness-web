@@ -49,4 +49,11 @@ export class AvailabilityController {
   openWeek() {
     return this.availability.openCurrentWeek();
   }
+
+  @Post('admin/reopen-recovery')
+  @RequirePermissions('events.create')
+  reopenRecovery(@Body() body?: { cycleId?: string; closeUntilDate?: string }) {
+    const until = body?.closeUntilDate ? new Date(body.closeUntilDate) : undefined;
+    return this.availability.reopenRecoveryWindow(body?.cycleId, until);
+  }
 }

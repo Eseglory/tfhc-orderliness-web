@@ -20,6 +20,7 @@ type AvailabilityResponse = {
     opensAt: string;
     closesAt: string;
     isOpen?: boolean;
+    isRecovery?: boolean;
     nextOpensAt?: string;
   };
   meetings: AvailabilityMeeting[];
@@ -83,6 +84,7 @@ export default function MemberAvailabilityPage() {
       )
     : false;
 
+  const isRecovery = Boolean(data?.cycle?.isRecovery);
   const isSubmitted = Boolean(data?.submitted);
 
   return (
@@ -98,7 +100,9 @@ export default function MemberAvailabilityPage() {
           </button>
           <div>
             <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
-            <p className="text-[11px] font-semibold text-on-surface-variant">Open: Monday 12:00 AM – 12:00 PM WAT</p>
+            <p className="text-[11px] font-semibold text-on-surface-variant">
+              {isRecovery ? 'Tuesday Recovery Window (Closes 11:59 PM WAT)' : 'Open: Monday 12:00 AM – 12:00 PM WAT'}
+            </p>
           </div>
         </div>
       </header>
@@ -138,7 +142,9 @@ export default function MemberAvailabilityPage() {
                     </p>
                     {isOpen ? (
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1 font-semibold">
-                        Window remains open until Monday at 12:00 PM WAT. You may update your service selection below.
+                        {isRecovery
+                          ? 'Tuesday recovery window remains open until 11:59 PM WAT. You may update your service selection below.'
+                          : 'Window remains open until Monday at 12:00 PM WAT. You may update your service selection below.'}
                       </p>
                     ) : (
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1">
@@ -159,10 +165,37 @@ export default function MemberAvailabilityPage() {
                       Availability Closed
                     </h2>
                     <p className="text-xs sm:text-sm text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
-                      The weekly availability window closed Monday at 12:00 PM WAT.
+                      The weekly availability window closed.
                     </p>
                     <p className="text-xs text-amber-900 dark:text-amber-200 font-bold pt-1">
-                      Next window: Monday at 12:00 AM WAT.
+                      Next regular window: Monday at 12:00 AM WAT.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : isRecovery ? (
+              <div className="rounded-2xl p-5 mb-stack-md border border-amber-300 dark:border-amber-700 bg-amber-50/90 dark:bg-amber-950/40 text-slate-900 dark:text-white shadow-xs">
+                <div className="flex items-start gap-3">
+                  <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-2xl shrink-0 mt-0.5">
+                    published_with_changes
+                  </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase">
+                        Tuesday Recovery Window
+                      </span>
+                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-bold">
+                        Closes Tonight at 11:59 PM WAT
+                      </span>
+                    </div>
+                    <h2 className="font-headline-sm text-base font-extrabold text-amber-950 dark:text-amber-100 mt-1">
+                      Submit This Week&apos;s Availability
+                    </h2>
+                    <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-200 font-medium leading-relaxed">
+                      Following Monday&apos;s missed window, availability has been reopened today for this week only. Please select the services you expect to attend below.
+                    </p>
+                    <p className="text-[11px] text-on-surface-variant font-medium pt-1">
+                      Standard schedule remains every Monday 12:00 AM – 12:00 PM WAT.
                     </p>
                   </div>
                 </div>

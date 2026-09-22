@@ -100,6 +100,12 @@ describe('Weekly Availability Poll & Attendance Reconciliation Engine Suite', ()
       }),
     },
     weeklyAvailabilityResponse: {
+      findMany: jest.fn(async ({ where }) => {
+        let list = [...inMemoryResponses];
+        if (where?.cycleId) list = list.filter((r) => r.cycleId === where.cycleId);
+        if (where?.memberId) list = list.filter((r) => r.memberId === where.memberId);
+        return list;
+      }),
       upsert: jest.fn(async ({ where, create }) => {
         const existingIdx = inMemoryResponses.findIndex(
           (r) => r.cycleId === where.cycleId_memberId.cycleId && r.memberId === where.cycleId_memberId.memberId
@@ -237,6 +243,19 @@ describe('Weekly Availability Poll & Attendance Reconciliation Engine Suite', ()
       // Category 4: Uncommitted + Absent (Diana)
       expect(tuesdayReport?.categories.uncommittedAndAbsent.length).toBe(1);
       expect(tuesdayReport?.categories.uncommittedAndAbsent[0].memberId).toBe('mem-4');
+
+      // Distinct No Response: Charlie (walk-in) + Diana (absent) both never responded to weekly poll
+      expect(tuesdayReport?.categories.noResponse.length).toBe(2);
+      expect(tuesdayReport?.totalNoResponse).toBe(2);
+
+      // Distinct Not Available: members who responded to poll but excluded this service
+      expect(tuesdayReport?.totalNotAvailable).toBe(0); // Alice & Bob both committed to Tuesday
+
+      // Sunday Report: Bob responded to poll but did not commit to Sunday -> Not Available!
+      const sundayReport = reconciliation.services.find((s) => s.meetingId === 'mtg-sun');
+      expect(sundayReport).toBeDefined();
+      expect(sundayReport?.categories.notAvailable.some((m) => m.memberId === 'mem-2')).toBe(true);
+      expect(sundayReport?.categories.noResponse.map((m) => m.memberId).sort()).toEqual(['mem-3', 'mem-4']);
 
       // Overview Metrics: Total Expected = 2 (Alice + Bob), Total Attended = 2 (Alice + Charlie)
       expect(tuesdayReport?.totalExpectedAvailable).toBe(2);

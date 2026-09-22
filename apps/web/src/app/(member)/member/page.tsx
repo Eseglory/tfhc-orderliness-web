@@ -48,7 +48,7 @@ export default function MemberDashboard() {
   const [availabilityData, setAvailabilityData] = useState<{
     submitted?: boolean;
     selectedMeetingIds?: string[];
-    cycle?: { state?: string; closesAt?: string; isOpen?: boolean };
+    cycle?: { state?: string; closesAt?: string; isOpen?: boolean; isRecovery?: boolean };
   } | null>(null);
 
   const [hasClockedIn, setHasClockedIn] = useState(false);
@@ -278,6 +278,68 @@ export default function MemberDashboard() {
           </section>
         )}
 
+        {/* Prominent Weekly Availability Section (Top of Dashboard) */}
+        {availabilityOpen ? (
+          <section className="relative overflow-hidden rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-primary/10 via-surface-container-low to-primary/5 p-5 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
+                  <span className="material-symbols-outlined text-2xl">event_available</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                      availabilityData?.cycle?.isRecovery
+                        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                    }`}>
+                      {availabilityData?.cycle?.isRecovery ? 'Tuesday Recovery Open' : 'Weekly Availability Open'}
+                    </span>
+                    <span className="text-[11px] text-on-surface-variant font-medium">
+                      {availabilityData?.cycle?.isRecovery ? 'Closes Tonight 11:59 PM WAT' : 'Closes Monday 12:00 PM WAT'}
+                    </span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-on-surface mt-1">
+                    {availabilityData?.cycle?.isRecovery
+                      ? 'Submit Your Weekly Availability (Recovery Window)'
+                      : 'Indicate Your Service Availability For This Week'}
+                  </h2>
+                  <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed max-w-xl">
+                    {availabilityData?.cycle?.isRecovery
+                      ? 'The weekly poll was reopened for this week. Please choose the services you expect to attend or serve in.'
+                      : 'Help your leadership plan effectively by selecting which services you will attend.'}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/member/availability"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-on-primary font-black text-xs hover:opacity-90 active:scale-95 transition-all shadow-lg shrink-0"
+              >
+                <span>Select Services</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </Link>
+            </div>
+          </section>
+        ) : availabilityData?.submitted ? (
+          <section className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/90 dark:bg-emerald-950/50 px-4 py-3 text-emerald-950 dark:text-emerald-200 shadow-xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
+              <div className="min-w-0">
+                <p className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100">Weekly Availability Submitted</p>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">
+                  You have confirmed your availability for this week&apos;s service.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/member/availability"
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 active:scale-95 transition-all shrink-0"
+            >
+              View / Update
+            </Link>
+          </section>
+        ) : null}
+
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex flex-col gap-3.5">
@@ -457,25 +519,6 @@ export default function MemberDashboard() {
         <EngagementNudge />
         <ProfileCompletionReminder />
 
-        {availabilityData?.submitted ? (
-          <Link href="/member/availability" className="flex items-center gap-3 rounded-2xl border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/80 dark:bg-emerald-950/40 px-4 py-3 text-slate-900 dark:text-white hover:bg-emerald-100/80 transition-colors shadow-xs">
-            <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-extrabold text-emerald-950 dark:text-emerald-200">Availability Submitted</p>
-              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">You have submitted your availability for this week&apos;s service. Remember to check in when service starts.</p>
-            </div>
-            <span className="material-symbols-outlined text-emerald-400 text-base">chevron_right</span>
-          </Link>
-        ) : availabilityOpen ? (
-          <Link href="/member/availability" className="flex items-center gap-3 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/80 dark:bg-blue-950/40 px-4 py-3 text-slate-900 dark:text-white hover:bg-blue-100/80 transition-colors shadow-xs">
-            <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">event_available</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-extrabold text-blue-950 dark:text-blue-200">Weekly Availability Open (Monday 12:00 AM – 12:00 PM WAT)</p>
-              <p className="text-[11px] text-blue-700 dark:text-blue-300 truncate">Let your team know when you can serve this week before Monday 12:00 PM WAT.</p>
-            </div>
-            <span className="material-symbols-outlined text-blue-400 text-base">chevron_right</span>
-          </Link>
-        ) : null}
 
         {/* Top KPI Metrics Bar */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

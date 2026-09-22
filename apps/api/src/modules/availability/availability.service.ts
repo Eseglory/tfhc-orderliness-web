@@ -12,6 +12,7 @@ export interface ReconciliationCategoryMember {
   subTeamName: string;
   actualStatus?: string;
   arrivalTime?: Date | null;
+  availabilityStatus?: 'AVAILABLE' | 'NOT_AVAILABLE' | 'NO_RESPONSE';
 }
 
 export interface ServiceReconciliationReport {
@@ -21,11 +22,15 @@ export interface ServiceReconciliationReport {
   endTime: Date | null;
   locationName: string | null;
   totalExpectedAvailable: number;
+  totalNotAvailable: number;
+  totalNoResponse: number;
   totalActualAttended: number;
   conversionRate: number; // percentage of (availableAndAttended / totalExpectedAvailable)
   categories: {
     availableAndAttended: ReconciliationCategoryMember[];
     availableAndAbsent: ReconciliationCategoryMember[];
+    notAvailable: ReconciliationCategoryMember[];
+    noResponse: ReconciliationCategoryMember[];
     uncommittedAndAttended: ReconciliationCategoryMember[];
     uncommittedAndAbsent: ReconciliationCategoryMember[];
   };
@@ -102,9 +107,19 @@ export class AvailabilityService {
 
   async openCurrentWeek(now = new Date()) {
     const { weekStart, opensAt, closesAt } = this.getWatCycleWindows(now);
+    const existing = await this.prisma.weeklyAvailabilityCycle.findUnique({
+      where: { weekStart },
+    });
+
+    // If an existing cycle has been extended for recovery and is still active, don't overwrite its closesAt!
+    const effectiveClosesAt =
+      existing && existing.closesAt.getTime() > closesAt.getTime() && existing.state === WeeklyAvailabilityState.OPEN
+        ? existing.closesAt
+        : closesAt;
+
     const cycle = await this.prisma.weeklyAvailabilityCycle.upsert({
       where: { weekStart },
-      update: { opensAt, closesAt },
+      update: { opensAt, closesAt: effectiveClosesAt },
       create: {
         weekStart,
         opensAt,
@@ -116,9 +131,39 @@ export class AvailabilityService {
     return cycle;
   }
 
+  async reopenRecoveryWindow(cycleId?: string, closeUntilDate?: Date) {
+    const cycle = cycleId
+      ? await this.prisma.weeklyAvailabilityCycle.findUnique({ where: { id: cycleId } })
+      : await this.prisma.weeklyAvailabilityCycle.findFirst({ orderBy: { weekStart: 'desc' } });
+
+    if (!cycle) throw new NotFoundException('Weekly availability cycle not found');
+
+    let closesAt = closeUntilDate;
+    if (!closesAt) {
+      // Default to Tuesday 23:59:59.999 WAT (Tuesday 22:59:59.999 UTC)
+      const ws = cycle.weekStart;
+      const mYear = ws.getUTCFullYear();
+      const mMonth = ws.getUTCMonth();
+      const mDay = ws.getUTCDate();
+      closesAt = new Date(Date.UTC(mYear, mMonth, mDay + 1, 23 - 1, 59, 59, 999));
+    }
+
+    const updated = await this.prisma.weeklyAvailabilityCycle.update({
+      where: { id: cycle.id },
+      data: {
+        state: WeeklyAvailabilityState.OPEN,
+        closesAt,
+        finalizedAt: null,
+      },
+    });
+
+    this.cache.invalidateTag('availability');
+    return updated;
+  }
+
   async currentForMember(memberId: string) {
     const now = new Date();
-    const { weekStart, isOpen: windowIsOpen, nextOpensAt } = this.getWatCycleWindows(now);
+    const { weekStart, opensAt, closesAt: standardClosesAt, isOpen: standardWindowIsOpen, nextOpensAt } = this.getWatCycleWindows(now);
     let cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({
       where: { weekStart },
       include: {
@@ -140,7 +185,15 @@ export class AvailabilityService {
 
     if (!cycle) throw new NotFoundException('Weekly availability has not opened');
 
-    const isOpen = cycle.state === WeeklyAvailabilityState.OPEN && windowIsOpen && now.getTime() < cycle.closesAt.getTime();
+    const isOpen =
+      cycle.state === WeeklyAvailabilityState.OPEN &&
+      now.getTime() >= cycle.opensAt.getTime() &&
+      now.getTime() < cycle.closesAt.getTime();
+
+    const isRecovery =
+      isOpen &&
+      (cycle.closesAt.getTime() > standardClosesAt.getTime() ||
+        (!standardWindowIsOpen && now.getTime() < cycle.closesAt.getTime()));
 
     const meetings = await this.weekMeetings(cycle.weekStart);
     return {
@@ -151,6 +204,7 @@ export class AvailabilityService {
         opensAt: cycle.opensAt,
         closesAt: cycle.closesAt,
         isOpen,
+        isRecovery,
         nextOpensAt,
       },
       meetings,
@@ -170,20 +224,20 @@ export class AvailabilityService {
     }
 
     const now = new Date();
-    const { weekStart, isOpen: windowIsOpen } = this.getWatCycleWindows(now);
+    const { weekStart } = this.getWatCycleWindows(now);
     let cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({ where: { weekStart } });
     if (!cycle) {
       cycle = await this.openCurrentWeek(now);
     }
     if (!cycle) throw new NotFoundException('Weekly availability has not opened');
 
-    if (
-      cycle.state !== WeeklyAvailabilityState.OPEN ||
-      !windowIsOpen ||
-      now.getTime() >= cycle.closesAt.getTime() ||
-      now.getTime() < cycle.opensAt.getTime()
-    ) {
-      throw new ForbiddenException('The weekly availability window closed Monday at 12:00 PM WAT.');
+    const isCycleOpen =
+      cycle.state === WeeklyAvailabilityState.OPEN &&
+      now.getTime() >= cycle.opensAt.getTime() &&
+      now.getTime() < cycle.closesAt.getTime();
+
+    if (!isCycleOpen) {
+      throw new ForbiddenException('The weekly availability window is currently closed.');
     }
 
     const meetings = await this.weekMeetings(cycle.weekStart);
@@ -276,6 +330,12 @@ export class AvailabilityService {
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
 
+    const responses = await this.prisma.weeklyAvailabilityResponse.findMany({
+      where: { cycleId: cycle.id },
+      select: { memberId: true, submittedAt: true },
+    });
+    const respondedMemberIds = new Set(responses.map((r) => r.memberId));
+
     const commitments = await this.prisma.memberServiceCommitment.findMany({
       where: { cycleId: cycle.id, status: 'COMMITTED' },
     });
@@ -303,11 +363,14 @@ export class AvailabilityService {
 
       const availableAndAttended: ReconciliationCategoryMember[] = [];
       const availableAndAbsent: ReconciliationCategoryMember[] = [];
+      const notAvailable: ReconciliationCategoryMember[] = [];
+      const noResponse: ReconciliationCategoryMember[] = [];
       const uncommittedAndAttended: ReconciliationCategoryMember[] = [];
       const uncommittedAndAbsent: ReconciliationCategoryMember[] = [];
 
       for (const m of activeMembers) {
         const isCommitted = committedMembers.has(m.id);
+        const hasResponded = respondedMemberIds.has(m.id);
         const att = meetingAttendance.get(m.id);
         const isAttended = att && ['EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(att.status);
 
@@ -319,6 +382,7 @@ export class AvailabilityService {
           subTeamName: m.subTeam?.name || 'Unassigned',
           actualStatus: att?.status,
           arrivalTime: att?.actualArrivalTime,
+          availabilityStatus: isCommitted ? 'AVAILABLE' : hasResponded ? 'NOT_AVAILABLE' : 'NO_RESPONSE',
         };
 
         if (isCommitted && isAttended) {
@@ -327,8 +391,18 @@ export class AvailabilityService {
           availableAndAbsent.push(memberObj);
         } else if (!isCommitted && isAttended) {
           uncommittedAndAttended.push(memberObj);
+          if (hasResponded) {
+            notAvailable.push(memberObj);
+          } else {
+            noResponse.push(memberObj);
+          }
         } else {
           uncommittedAndAbsent.push(memberObj);
+          if (hasResponded) {
+            notAvailable.push(memberObj);
+          } else {
+            noResponse.push(memberObj);
+          }
         }
       }
 
@@ -343,16 +417,24 @@ export class AvailabilityService {
         endTime: meeting.endTime,
         locationName: meeting.locationName,
         totalExpectedAvailable: totalExpected,
+        totalNotAvailable: notAvailable.length,
+        totalNoResponse: noResponse.length,
         totalActualAttended: totalAttended,
         conversionRate,
         categories: {
           availableAndAttended,
           availableAndAbsent,
+          notAvailable,
+          noResponse,
           uncommittedAndAttended,
           uncommittedAndAbsent,
         },
       };
     });
+
+    const isRecovery =
+      cycle.state === WeeklyAvailabilityState.OPEN &&
+      cycle.closesAt.getTime() > cycle.opensAt.getTime() + 12 * 3600000;
 
     return {
       cycle: {
@@ -361,6 +443,7 @@ export class AvailabilityService {
         state: cycle.state,
         opensAt: cycle.opensAt,
         closesAt: cycle.closesAt,
+        isRecovery,
       },
       services: reports,
     };

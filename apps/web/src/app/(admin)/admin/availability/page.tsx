@@ -21,11 +21,15 @@ type ServiceReconciliation = {
   endTime: string | null;
   locationName: string | null;
   totalExpectedAvailable: number;
+  totalNotAvailable?: number;
+  totalNoResponse?: number;
   totalActualAttended: number;
   conversionRate: number;
   categories: {
     availableAndAttended: ReconciliationMember[];
     availableAndAbsent: ReconciliationMember[];
+    notAvailable?: ReconciliationMember[];
+    noResponse?: ReconciliationMember[];
     uncommittedAndAttended: ReconciliationMember[];
     uncommittedAndAbsent: ReconciliationMember[];
   };
@@ -38,6 +42,7 @@ type ReconciliationReport = {
     state: string;
     opensAt: string;
     closesAt: string;
+    isRecovery?: boolean;
   };
   services: ServiceReconciliation[];
 };
@@ -47,7 +52,9 @@ export default function AdminAvailabilityPlanningPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedMeetingId, setSelectedMeetingId] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'availableAndAttended' | 'availableAndAbsent' | 'uncommittedAndAttended' | 'uncommittedAndAbsent'>('availableAndAttended');
+  const [activeTab, setActiveTab] = useState<
+    'availableAndAttended' | 'availableAndAbsent' | 'notAvailable' | 'noResponse' | 'uncommittedAndAttended' | 'uncommittedAndAbsent'
+  >('availableAndAttended');
   const [search, setSearch] = useState('');
 
   const loadData = async () => {
@@ -164,26 +171,31 @@ export default function AdminAvailabilityPlanningPage() {
           {activeService && (
             <div className="space-y-6">
               {/* Headline Metrics for the Service */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-2xl shadow-sm">
-                  <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Expected Available (Poll)</p>
+                  <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Expected Available</p>
                   <p className="text-3xl font-extrabold text-primary mt-1">{activeService.totalExpectedAvailable}</p>
-                  <p className="text-xs text-on-surface-variant mt-1">Members who marked AVAILABLE</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Marked AVAILABLE in poll</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-2xl shadow-sm">
+                  <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Not Available</p>
+                  <p className="text-3xl font-extrabold text-amber-600 mt-1">{activeService.totalNotAvailable ?? (activeService.categories.notAvailable?.length || 0)}</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Responded, excluded service</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-2xl shadow-sm">
+                  <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">No Response</p>
+                  <p className="text-3xl font-extrabold text-slate-500 mt-1">{activeService.totalNoResponse ?? (activeService.categories.noResponse?.length || 0)}</p>
+                  <p className="text-xs text-on-surface-variant mt-1">Never filled poll</p>
                 </div>
                 <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-2xl shadow-sm">
                   <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Actual Attended</p>
                   <p className="text-3xl font-extrabold text-emerald-600 mt-1">{activeService.totalActualAttended}</p>
-                  <p className="text-xs text-on-surface-variant mt-1">Authoritative attendance records</p>
-                </div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 p-5 rounded-2xl shadow-sm">
-                  <p className="text-xs uppercase tracking-wider font-semibold text-on-surface-variant">Poll Conversion Rate</p>
-                  <p className="text-3xl font-extrabold text-primary mt-1">{activeService.conversionRate}%</p>
-                  <p className="text-xs text-on-surface-variant mt-1">Committed who showed up</p>
+                  <p className="text-xs text-on-surface-variant mt-1">{activeService.conversionRate}% conversion rate</p>
                 </div>
               </div>
 
-              {/* 4 Reconciliation Categories Filter Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* 5 Reconciliation Categories Filter Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                 <button
                   onClick={() => setActiveTab('availableAndAttended')}
                   className={`p-4 rounded-xl border text-left transition-all ${
@@ -212,8 +224,40 @@ export default function AdminAvailabilityPlanningPage() {
                     <span className="text-xs font-bold uppercase text-amber-700">Category 2</span>
                     <span className="text-lg font-bold text-amber-700">{activeService.categories.availableAndAbsent.length}</span>
                   </div>
-                  <p className="font-semibold text-sm mt-1">Said Available + Did NOT Attend</p>
+                  <p className="font-semibold text-sm mt-1">Said Available + Absent</p>
                   <p className="text-xs text-on-surface-variant mt-0.5">Planned but absent</p>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('notAvailable')}
+                  className={`p-4 rounded-xl border text-left transition-all ${
+                    activeTab === 'notAvailable'
+                      ? 'bg-orange-500/10 border-orange-500 text-orange-950 ring-2 ring-orange-500/20'
+                      : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container-low text-on-surface'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase text-orange-700">Category 3</span>
+                    <span className="text-lg font-bold text-orange-700">{activeService.categories.notAvailable?.length || 0}</span>
+                  </div>
+                  <p className="font-semibold text-sm mt-1">Not Available</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Explicitly excused/excluded</p>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('noResponse')}
+                  className={`p-4 rounded-xl border text-left transition-all ${
+                    activeTab === 'noResponse'
+                      ? 'bg-slate-500/10 border-slate-500 text-slate-950 ring-2 ring-slate-500/20'
+                      : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container-low text-on-surface'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase text-slate-600">Category 4</span>
+                    <span className="text-lg font-bold text-slate-700">{activeService.categories.noResponse?.length || 0}</span>
+                  </div>
+                  <p className="font-semibold text-sm mt-1">No Response</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Unresponsive to poll</p>
                 </button>
 
                 <button
@@ -225,27 +269,11 @@ export default function AdminAvailabilityPlanningPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase text-blue-700">Category 3</span>
+                    <span className="text-xs font-bold uppercase text-blue-700">Category 5</span>
                     <span className="text-lg font-bold text-blue-700">{activeService.categories.uncommittedAndAttended.length}</span>
                   </div>
-                  <p className="font-semibold text-sm mt-1">No Response + Attended</p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Walk-in attendance</p>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('uncommittedAndAbsent')}
-                  className={`p-4 rounded-xl border text-left transition-all ${
-                    activeTab === 'uncommittedAndAbsent'
-                      ? 'bg-slate-500/10 border-slate-500 text-slate-950 ring-2 ring-slate-500/20'
-                      : 'bg-surface-container-lowest border-outline-variant/20 hover:bg-surface-container-low text-on-surface'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase text-slate-600">Category 4</span>
-                    <span className="text-lg font-bold text-slate-700">{activeService.categories.uncommittedAndAbsent.length}</span>
-                  </div>
-                  <p className="font-semibold text-sm mt-1">No Response + Absent</p>
-                  <p className="text-xs text-on-surface-variant mt-0.5">Inactive / not present</p>
+                  <p className="font-semibold text-sm mt-1">Walk-In / Attended</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">Attended without commit</p>
                 </button>
               </div>
 
@@ -256,8 +284,10 @@ export default function AdminAvailabilityPlanningPage() {
                     <h2 className="font-bold text-lg text-primary">
                       {activeTab === 'availableAndAttended' && 'Category 1: Said Available & Actually Attended'}
                       {activeTab === 'availableAndAbsent' && 'Category 2: Said Available & Did NOT Attend'}
-                      {activeTab === 'uncommittedAndAttended' && 'Category 3: Did Not Indicate & Actually Attended'}
-                      {activeTab === 'uncommittedAndAbsent' && 'Category 4: Did Not Indicate & Did Not Attend'}
+                      {activeTab === 'notAvailable' && 'Category 3: Explicitly Marked Not Available for This Service'}
+                      {activeTab === 'noResponse' && 'Category 4: No Response to Weekly Poll'}
+                      {activeTab === 'uncommittedAndAttended' && 'Category 5: Walk-In (Attended Without Prior Commitment)'}
+                      {activeTab === 'uncommittedAndAbsent' && 'All Uncommitted & Absent'}
                     </h2>
                     <p className="text-xs text-on-surface-variant mt-0.5">
                       Showing {filteredMembers.length} member{filteredMembers.length === 1 ? '' : 's'}
