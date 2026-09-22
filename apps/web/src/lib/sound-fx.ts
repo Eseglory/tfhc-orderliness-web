@@ -70,17 +70,17 @@ class SoundFxEngine {
   private setupUnlockListeners(): void {
     const unlock = () => {
       this.unlockAudioContext();
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('touchstart', unlock);
-      window.removeEventListener('keydown', unlock);
     };
-    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-    window.addEventListener('touchstart', unlock, { once: true, passive: true });
-    window.addEventListener('keydown', unlock, { once: true, passive: true });
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('touchend', unlock, { passive: true });
+    window.addEventListener('click', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
   }
 
   public unlockAudioContext(): void {
     try {
+      if (typeof window === 'undefined') return;
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) return;
       if (!this.ctx) {
@@ -89,6 +89,12 @@ class SoundFxEngine {
       if (this.ctx.state === 'suspended') {
         void this.ctx.resume().catch(() => undefined);
       }
+      // Play 1-sample silent buffer to unlock iOS Safari Web Audio policy
+      const buf = this.ctx.createBuffer(1, 1, 22050);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.ctx.destination);
+      src.start(0);
       this.unlocked = true;
     } catch {
       // AudioContext unavailable
@@ -112,10 +118,11 @@ class SoundFxEngine {
   }
 
   /**
-   * Message Send Sound: Crisp ascending chime (800Hz -> 1350Hz)
+   * Message Send Sound: Iconic crisp WhatsApp-like ascending pop (950Hz -> 1750Hz)
    */
   public playMessageSend(): void {
     if (!this.settings.master || !this.settings.messages) return;
+    this.unlockAudioContext();
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -125,63 +132,77 @@ class SoundFxEngine {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(1350, now + 0.08);
+      osc.frequency.setValueAtTime(950, now);
+      osc.frequency.exponentialRampToValueAtTime(1750, now + 0.045);
 
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.12);
+      osc.stop(now + 0.085);
     } catch {
       // Ignore audio synthesis errors
     }
   }
 
   /**
-   * Message Receive Sound: Warm marimba chord (E5 659Hz + B5 987Hz)
+   * Message Receive Sound: WhatsApp-style bright melodic chime (G5 784Hz -> C6 1046Hz + E6 1318Hz)
    */
   public playMessageReceive(): void {
     if (!this.settings.master || !this.settings.messages) return;
+    this.unlockAudioContext();
     const ctx = this.getContext();
     if (!ctx) return;
 
     try {
       const now = ctx.currentTime;
+      // Tone 1: Intro warm bell
       const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-
+      const gain1 = ctx.createGain();
       osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(659.25, now); // E5
+      osc1.frequency.setValueAtTime(783.99, now); // G5
+      gain1.gain.setValueAtTime(0.22, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.14);
+
+      // Tone 2: Harmonic sweet double bell
+      const osc2 = ctx.createOscillator();
+      const osc3 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
 
       osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(987.77, now + 0.05); // B5
+      osc2.frequency.setValueAtTime(1046.5, now + 0.07); // C6
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(1318.5, now + 0.07); // E6
 
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      gain2.gain.setValueAtTime(0.26, now + 0.07);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
 
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
+      osc2.connect(gain2);
+      osc3.connect(gain2);
+      gain2.connect(ctx.destination);
 
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-      osc2.start(now + 0.05);
-      osc2.stop(now + 0.35);
+      osc2.start(now + 0.07);
+      osc2.stop(now + 0.32);
+      osc3.start(now + 0.07);
+      osc3.stop(now + 0.32);
     } catch {
       // Ignore
     }
   }
 
   /**
-   * Notification Pop: Clean modern alert ping (G5 784Hz -> C6 1046Hz)
+   * Notification Pop: Clean modern alert ping
    */
   public playNotification(): void {
     if (!this.settings.master || !this.settings.notifications) return;
+    this.unlockAudioContext();
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -191,24 +212,24 @@ class SoundFxEngine {
       const gain = ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(783.99, now); // G5
-      osc.frequency.setValueAtTime(1046.5, now + 0.1); // C6
+      osc.frequency.setValueAtTime(880, now); // A5
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08); // E6
 
       gain.gain.setValueAtTime(0.22, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.4);
+      osc.stop(now + 0.28);
     } catch {
       // Ignore
     }
   }
 
   /**
-   * Typing Feedback: Subtle, soft 15ms click
+   * Typing Feedback: Subtle soft click
    */
   public playTypingFeedback(): void {
     if (!this.settings.master || !this.settings.typing) return;
@@ -237,13 +258,103 @@ class SoundFxEngine {
   }
 
   /**
-   * Start Incoming Call Ringtone: Rhythmic, harmonic marimba loop (repeats every 2 seconds)
+   * Call Connected Chime: Ascending two-chord confirmation
+   */
+  public playCallConnected(): void {
+    if (!this.settings.master) return;
+    this.unlockAudioContext();
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now); // C5
+      osc1.frequency.setValueAtTime(659.25, now + 0.1); // E5
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(783.99, now + 0.1); // G5
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+      osc2.start(now + 0.1);
+      osc2.stop(now + 0.35);
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Busy / Call Declined Tone: 3 rapid telephone busy beeps (480Hz + 620Hz)
+   */
+  public playBusyTone(): void {
+    if (!this.settings.master) return;
+    this.unlockAudioContext();
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const pulses = [0, 0.22, 0.44];
+
+      pulses.forEach((offset) => {
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(480, now + offset);
+
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(620, now + offset);
+
+        gain.gain.setValueAtTime(0.18, now + offset);
+        gain.gain.setValueAtTime(0.18, now + offset + 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.16);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(now + offset);
+        osc1.stop(now + offset + 0.16);
+        osc2.start(now + offset);
+        osc2.stop(now + offset + 0.16);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Start Incoming Call Ringtone: Melodic marimba loop + phone vibration
    */
   public startIncomingRingtone(): void {
     if (!this.settings.master || !this.settings.ringtone) return;
     this.stopIncomingRingtone();
+    this.unlockAudioContext();
 
     const playSequence = () => {
+      // Trigger mobile phone vibration if supported
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate([600, 300, 600, 300, 1000]);
+        } catch {
+          // Ignore
+        }
+      }
+
       const ctx = this.getContext();
       if (!ctx) return;
 
@@ -255,11 +366,13 @@ class SoundFxEngine {
           { freq: 1046.5, time: 0.48 }, // C6
           { freq: 783.99, time: 0.68 }, // G5
           { freq: 1046.5, time: 0.84 }, // C6
+          { freq: 1318.5, time: 1.04 }, // E6
+          { freq: 1046.5, time: 1.20 }, // C6
         ];
 
         const now = ctx.currentTime;
         const mainGain = ctx.createGain();
-        mainGain.gain.setValueAtTime(0.28, now);
+        mainGain.gain.setValueAtTime(0.32, now);
         mainGain.connect(ctx.destination);
         this.ringtoneGain = mainGain;
 
@@ -270,14 +383,14 @@ class SoundFxEngine {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(freq, now + time);
 
-          noteGain.gain.setValueAtTime(0.25, now + time);
-          noteGain.gain.exponentialRampToValueAtTime(0.001, now + time + 0.22);
+          noteGain.gain.setValueAtTime(0.28, now + time);
+          noteGain.gain.exponentialRampToValueAtTime(0.001, now + time + 0.24);
 
           osc.connect(noteGain);
           noteGain.connect(mainGain);
 
           osc.start(now + time);
-          osc.stop(now + time + 0.22);
+          osc.stop(now + time + 0.24);
         });
       } catch {
         // Ignore
@@ -285,16 +398,23 @@ class SoundFxEngine {
     };
 
     playSequence();
-    this.ringtoneInterval = setInterval(playSequence, 2000);
+    this.ringtoneInterval = setInterval(playSequence, 2200);
   }
 
   /**
-   * Stop Incoming Call Ringtone
+   * Stop Incoming Call Ringtone and phone vibration
    */
   public stopIncomingRingtone(): void {
     if (this.ringtoneInterval) {
       clearInterval(this.ringtoneInterval);
       this.ringtoneInterval = null;
+    }
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(0);
+      } catch {
+        // Ignore
+      }
     }
     if (this.ringtoneGain) {
       try {
@@ -313,6 +433,7 @@ class SoundFxEngine {
   public startOutgoingRingback(): void {
     if (!this.settings.master || !this.settings.ringtone) return;
     this.stopOutgoingRingback();
+    this.unlockAudioContext();
 
     const playPulse = () => {
       const ctx = this.getContext();
@@ -326,12 +447,11 @@ class SoundFxEngine {
 
         osc1.type = 'sine';
         osc1.frequency.setValueAtTime(440, now); // 440Hz
-
         osc2.type = 'sine';
         osc2.frequency.setValueAtTime(480, now); // 480Hz
 
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.setValueAtTime(0.12, now + 1.4);
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.setValueAtTime(0.16, now + 1.4);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
 
         osc1.connect(gain);

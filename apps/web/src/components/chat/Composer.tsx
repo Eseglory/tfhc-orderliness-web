@@ -305,10 +305,14 @@ export function Composer({
     if (!value || submitting.current) return;
     submitting.current = true;
     emitTyping(false);
+
+    // Play WhatsApp message send sound immediately in the synchronous user gesture
+    soundFx.unlockAudioContext();
+    soundFx.playMessageSend();
+
     try {
       // onSend resolves after durable queueing; keep the draft until that succeeds.
       await onSend(value);
-      soundFx.playMessageSend();
       if (!textareaRef.current || textareaRef.current.value.trim() === value) {
         setText('');
         if (draftKey) localStorage.removeItem(`chat_draft:${draftKey}`);

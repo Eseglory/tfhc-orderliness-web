@@ -78,6 +78,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       socket.data.viewer = viewer;
 
       socket.join(`user:${viewer.userId}`);
+      socket.join(`member:${viewer.memberId}`);
       const roomIds = await this.chat.roomIdsForViewer(viewer);
       roomIds.forEach((id) => socket.join(`room:${id}`));
 
@@ -295,28 +296,31 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       name: `${viewer.firstName ?? ''} ${viewer.lastName ?? ''}`.trim() || 'Member',
     };
 
+    const callPayload = {
+      callId,
+      roomId: data.roomId,
+      caller,
+      isVideo: Boolean(data.isVideo),
+    };
+
     if (data.targetMemberId) {
-      const targetSockets = this.online.get(data.targetMemberId);
-      if (targetSockets && targetSockets.size > 0) {
-        for (const sid of targetSockets) {
-          this.liveSockets.get(sid)?.emit('call:incoming', {
-            callId,
-            roomId: data.roomId,
-            caller,
-            isVideo: Boolean(data.isVideo),
-          });
+      const isTargetOnline = this.online.has(data.targetMemberId);
+      if (isTargetOnline) {
+        // Emit to member room as well as any tracked socket IDs
+        this.io.to(`member:${data.targetMemberId}`).emit('call:incoming', callPayload);
+        const targetSockets = this.online.get(data.targetMemberId);
+        if (targetSockets) {
+          for (const sid of targetSockets) {
+            this.liveSockets.get(sid)?.emit('call:incoming', callPayload);
+          }
         }
         return { ok: true, callId };
       }
       return { ok: false, error: 'User is currently offline' };
     }
 
-    socket.to(`room:${data.roomId}`).emit('call:incoming', {
-      callId,
-      roomId: data.roomId,
-      caller,
-      isVideo: Boolean(data.isVideo),
-    });
+    // Room-wide call broadcast
+    socket.to(`room:${data.roomId}`).emit('call:incoming', callPayload);
     return { ok: true, callId };
   }
 
@@ -328,23 +332,22 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const viewer = this.viewerOf(socket);
     if (!viewer?.memberId) return;
 
+    const signalPayload = {
+      fromMemberId: viewer.memberId,
+      signal: data.signal,
+      callId: data.callId,
+    };
+
     if (data.targetMemberId) {
+      this.io.to(`member:${data.targetMemberId}`).emit('call:signal', signalPayload);
       const targetSockets = this.online.get(data.targetMemberId);
       if (targetSockets) {
         for (const sid of targetSockets) {
-          this.liveSockets.get(sid)?.emit('call:signal', {
-            fromMemberId: viewer.memberId,
-            signal: data.signal,
-            callId: data.callId,
-          });
+          this.liveSockets.get(sid)?.emit('call:signal', signalPayload);
         }
       }
     } else if (data.roomId) {
-      socket.to(`room:${data.roomId}`).emit('call:signal', {
-        fromMemberId: viewer.memberId,
-        signal: data.signal,
-        callId: data.callId,
-      });
+      socket.to(`room:${data.roomId}`).emit('call:signal', signalPayload);
     }
   }
 
@@ -354,21 +357,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
   ) {
     const viewer = this.viewerOf(socket);
+    const rejectPayload = {
+      callId: data.callId,
+      byMemberId: viewer?.memberId,
+    };
+
     if (data.targetMemberId) {
+      this.io.to(`member:${data.targetMemberId}`).emit('call:rejected', rejectPayload);
       const targetSockets = this.online.get(data.targetMemberId);
       if (targetSockets) {
         for (const sid of targetSockets) {
-          this.liveSockets.get(sid)?.emit('call:rejected', {
-            callId: data.callId,
-            byMemberId: viewer?.memberId,
-          });
+          this.liveSockets.get(sid)?.emit('call:rejected', rejectPayload);
         }
       }
     } else if (data.roomId) {
-      socket.to(`room:${data.roomId}`).emit('call:rejected', {
-        callId: data.callId,
-        byMemberId: viewer?.memberId,
-      });
+      socket.to(`room:${data.roomId}`).emit('call:rejected', rejectPayload);
     }
   }
 
@@ -378,21 +381,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() data: { callId: string; targetMemberId?: string; roomId?: string },
   ) {
     const viewer = this.viewerOf(socket);
+    const endPayload = {
+      callId: data.callId,
+      byMemberId: viewer?.memberId,
+    };
+
     if (data.targetMemberId) {
+      this.io.to(`member:${data.targetMemberId}`).emit('call:ended', endPayload);
       const targetSockets = this.online.get(data.targetMemberId);
       if (targetSockets) {
         for (const sid of targetSockets) {
-          this.liveSockets.get(sid)?.emit('call:ended', {
-            callId: data.callId,
-            byMemberId: viewer?.memberId,
-          });
+          this.liveSockets.get(sid)?.emit('call:ended', endPayload);
         }
       }
     } else if (data.roomId) {
-      socket.to(`room:${data.roomId}`).emit('call:ended', {
-        callId: data.callId,
-        byMemberId: viewer?.memberId,
-      });
+      socket.to(`room:${data.roomId}`).emit('call:ended', endPayload);
     }
   }
 

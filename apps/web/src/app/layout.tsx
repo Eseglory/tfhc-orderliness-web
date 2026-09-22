@@ -9,6 +9,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { ThemeProvider } from '../lib/theme';
 import { ToastProvider } from '../components/ui';
 import { AuthProvider } from '../lib/auth';
+import { GlobalCallManager } from '../components/chat/GlobalCallManager';
 
 const inter = localFont({
   src: '../../public/fonts/inter-latin.woff2',
@@ -91,6 +92,7 @@ export default function RootLayout({
               <OfflineBanner />
               <PwaManager />
               <VenueSessionGuard />
+              <GlobalCallManager />
               <AuthGate>{children}</AuthGate>
               <BottomNav />
             </ToastProvider>

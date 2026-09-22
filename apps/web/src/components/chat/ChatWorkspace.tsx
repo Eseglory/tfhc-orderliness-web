@@ -16,7 +16,6 @@ import { MessageBubble, SystemLine } from './MessageBubble';
 import { useUpload } from '../UploadProgress';
 import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
-import { WebRtcCallModal } from './WebRtcCallModal';
 import { soundFx } from '../../lib/sound-fx';
 
 const ROOM_ICON: Record<string, string> = {
@@ -201,6 +200,7 @@ export function ChatWorkspace({
     onMessage: (m) => {
       // Audio notifications for messages
       if (!m.mine && m.sender?.memberId !== user?.memberId) {
+        soundFx.unlockAudioContext();
         if (m.roomId === activeIdRef.current) {
           soundFx.playMessageReceive();
         } else {
@@ -863,6 +863,7 @@ export function ChatWorkspace({
                   type="button"
                   onClick={() => {
                     if (!activeRoom) return;
+                    soundFx.unlockAudioContext();
                     const targetMemberId =
                       activeRoom.type === 'DIRECT'
                         ? activeRoom.direct?.memberId ||
@@ -879,7 +880,7 @@ export function ChatWorkspace({
                       })
                     );
                   }}
-                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
+                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer"
                   title="Voice Call"
                   aria-label="Voice Call"
                 >
@@ -890,6 +891,7 @@ export function ChatWorkspace({
                   type="button"
                   onClick={() => {
                     if (!activeRoom) return;
+                    soundFx.unlockAudioContext();
                     const targetMemberId =
                       activeRoom.type === 'DIRECT'
                         ? activeRoom.direct?.memberId ||
@@ -906,7 +908,7 @@ export function ChatWorkspace({
                       })
                     );
                   }}
-                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
+                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer"
                   title="Video Call"
                   aria-label="Video Call"
                 >
@@ -1291,7 +1293,6 @@ export function ChatWorkspace({
           onChanged={loadRooms}
         />
       )}
-      <WebRtcCallModal socket={socket.socket} currentMemberId={user?.memberId} />
     </div>
   );
 }

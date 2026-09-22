@@ -34,6 +34,7 @@ interface CallState {
   targetMemberId?: string;
   isVideo: boolean;
   status: CallStatus;
+  errorMessage?: string;
 }
 
 const CALL_TIMEOUT_SECONDS = 35;
@@ -62,6 +63,7 @@ export function WebRtcCallModal({
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const iceCandidatesQueueRef = useRef<RTCIceCandidateInit[]>([]);
 
   // Duration timer for connected calls
@@ -74,10 +76,40 @@ export function WebRtcCallModal({
     return () => clearInterval(t);
   }, [call?.status]);
 
+  // Synchronize local & remote video/audio elements whenever call status or video mode changes
+  useEffect(() => {
+    if (!call) return;
+
+    if (localVideoRef.current && localStreamRef.current && call.isVideo) {
+      if (localVideoRef.current.srcObject !== localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.play().catch(() => undefined);
+      }
+    }
+
+    if (remoteStreamRef.current) {
+      if (call.isVideo && remoteVideoRef.current) {
+        if (remoteVideoRef.current.srcObject !== remoteStreamRef.current) {
+          remoteVideoRef.current.srcObject = remoteStreamRef.current;
+          remoteVideoRef.current.play().catch(() => setAudioBlocked(true));
+        }
+      } else if (!call.isVideo && remoteAudioRef.current) {
+        if (remoteAudioRef.current.srcObject !== remoteStreamRef.current) {
+          remoteAudioRef.current.srcObject = remoteStreamRef.current;
+          remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
+        }
+      }
+    }
+  }, [call]);
+
   const cleanUpCall = useCallback(() => {
     if (ringTimeoutRef.current) {
       clearTimeout(ringTimeoutRef.current);
       ringTimeoutRef.current = null;
+    }
+    if (cleanupTimeoutRef.current) {
+      clearTimeout(cleanupTimeoutRef.current);
+      cleanupTimeoutRef.current = null;
     }
 
     soundFx.stopIncomingRingtone();
@@ -178,18 +210,13 @@ export function WebRtcCallModal({
         remoteStreamRef.current = stream;
       }
 
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.play().catch(() => {
-          setAudioBlocked(true);
-        });
-      }
-
-      if (remoteVideoRef.current && callRef.current?.isVideo) {
+      const activeCall = callRef.current;
+      if (activeCall?.isVideo && remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
-        remoteVideoRef.current.play().catch(() => {
-          setAudioBlocked(true);
-        });
+        remoteVideoRef.current.play().catch(() => setAudioBlocked(true));
+      } else if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current.play().catch(() => setAudioBlocked(true));
       }
     };
 
@@ -197,6 +224,7 @@ export function WebRtcCallModal({
       if (pc.connectionState === 'connected') {
         soundFx.stopIncomingRingtone();
         soundFx.stopOutgoingRingback();
+        soundFx.playCallConnected();
         if (ringTimeoutRef.current) {
           clearTimeout(ringTimeoutRef.current);
           ringTimeoutRef.current = null;
@@ -250,6 +278,7 @@ export function WebRtcCallModal({
       localStreamRef.current = stream;
       if (localVideoRef.current && current.isVideo) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(() => undefined);
       }
 
       const pc = setupPeerConnection();
@@ -291,7 +320,7 @@ export function WebRtcCallModal({
         return;
       }
 
-      // Start ringing sound
+      // Start ringing sound & vibration
       soundFx.startIncomingRingtone();
 
       setCall({
@@ -325,7 +354,11 @@ export function WebRtcCallModal({
 
       try {
         if (sig.type === 'ready') {
-          // Caller sends SDP offer
+          // Recipient answered! Stop outgoing ringback tone immediately
+          soundFx.stopOutgoingRingback();
+          setCall((prev) => (prev ? { ...prev, status: 'connecting' } : null));
+
+          // Caller creates and sends SDP offer
           if (pc) {
             const offer = await pc.createOffer({
               offerToReceiveAudio: true,
@@ -333,7 +366,8 @@ export function WebRtcCallModal({
             });
             await pc.setLocalDescription(offer);
             socket.emit('call:signal', {
-              targetMemberId: data.fromMemberId,
+              targetMemberId: data.fromMemberId || activeCall.targetMemberId,
+              roomId: activeCall.roomId,
               callId: data.callId,
               signal: offer,
             });
@@ -347,7 +381,8 @@ export function WebRtcCallModal({
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             socket.emit('call:signal', {
-              targetMemberId: data.fromMemberId,
+              targetMemberId: data.fromMemberId || activeCall.targetMemberId,
+              roomId: activeCall.roomId,
               callId: data.callId,
               signal: answer,
             });
@@ -372,11 +407,18 @@ export function WebRtcCallModal({
     };
 
     const onEnded = () => {
-      cleanUpCall();
+      soundFx.stopIncomingRingtone();
+      soundFx.stopOutgoingRingback();
+      setCall((prev) => (prev ? { ...prev, status: 'ended', errorMessage: 'Call ended' } : null));
+      cleanupTimeoutRef.current = setTimeout(() => cleanUpCall(), 1500);
     };
 
     const onRejected = () => {
-      cleanUpCall();
+      soundFx.stopIncomingRingtone();
+      soundFx.stopOutgoingRingback();
+      soundFx.playBusyTone();
+      setCall((prev) => (prev ? { ...prev, status: 'rejected', errorMessage: 'Call declined' } : null));
+      cleanupTimeoutRef.current = setTimeout(() => cleanUpCall(), 2000);
     };
 
     socket.on('call:incoming', onIncoming);
@@ -392,7 +434,7 @@ export function WebRtcCallModal({
     };
   }, [socket, currentMemberId, cleanUpCall, rejectCall, flushQueuedIceCandidates]);
 
-  // Expose global initiate call trigger
+  // Global initiate call trigger
   useEffect(() => {
     const handleInitiate = async (e: Event) => {
       const detail = (e as CustomEvent).detail as {
@@ -403,8 +445,19 @@ export function WebRtcCallModal({
       };
       if (!socket) return;
 
+      // Start ringing audio and UI immediately
       soundFx.unlockAudioContext();
       soundFx.startOutgoingRingback();
+
+      setCall({
+        callId: 'pending',
+        roomId: detail.roomId,
+        isIncoming: false,
+        peerName: detail.peerName,
+        targetMemberId: detail.targetMemberId,
+        isVideo: detail.isVideo,
+        status: 'ringing_outgoing',
+      });
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -425,6 +478,7 @@ export function WebRtcCallModal({
         localStreamRef.current = stream;
         if (localVideoRef.current && detail.isVideo) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => undefined);
         }
 
         socket.emit(
@@ -436,15 +490,7 @@ export function WebRtcCallModal({
           },
           (res: { ok: boolean; callId?: string; error?: string }) => {
             if (res.ok && res.callId) {
-              setCall({
-                callId: res.callId,
-                roomId: detail.roomId,
-                isIncoming: false,
-                peerName: detail.peerName,
-                targetMemberId: detail.targetMemberId,
-                isVideo: detail.isVideo,
-                status: 'ringing_outgoing',
-              });
+              setCall((prev) => (prev ? { ...prev, callId: res.callId! } : null));
 
               const pc = setupPeerConnection();
               stream.getTracks().forEach((t) => pc.addTrack(t, stream));
@@ -455,14 +501,35 @@ export function WebRtcCallModal({
                 endCall();
               }, CALL_TIMEOUT_SECONDS * 1000);
             } else {
-              console.warn('Call initiate failed:', res.error);
-              cleanUpCall();
+              soundFx.stopOutgoingRingback();
+              soundFx.playBusyTone();
+              setCall((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      status: 'failed',
+                      errorMessage: res.error || 'User is currently offline',
+                    }
+                  : null
+              );
+              cleanupTimeoutRef.current = setTimeout(() => cleanUpCall(), 2500);
             }
           }
         );
       } catch (err) {
         console.error('Call media error:', err);
-        cleanUpCall();
+        soundFx.stopOutgoingRingback();
+        soundFx.playBusyTone();
+        setCall((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'failed',
+                errorMessage: 'Camera / Microphone permission denied',
+              }
+            : null
+        );
+        cleanupTimeoutRef.current = setTimeout(() => cleanUpCall(), 2500);
       }
     };
 
@@ -512,34 +579,44 @@ export function WebRtcCallModal({
   const isConnected = call.status === 'connected';
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
-      {/* Hidden audio element for remote audio output */}
+    <div
+      onClick={unlockAudioManually}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in"
+    >
+      {/* Hidden audio element for voice-only remote audio output */}
       <audio ref={remoteAudioRef} autoPlay playsInline />
 
-      <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[380px] max-h-[85vh] overflow-y-auto">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-800 p-6 text-white shadow-2xl flex flex-col items-center justify-between min-h-[380px] max-h-[85vh] overflow-y-auto"
+      >
         {/* Call Header */}
-        <div className="text-center space-y-1">
+        <div className="text-center space-y-1 w-full">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 text-[11px] font-bold text-slate-300">
             <span className="material-symbols-outlined text-sm text-[#f2320c]">
               {call.isVideo ? 'videocam' : 'call'}
             </span>
             <span>{call.isVideo ? 'Video Call' : 'Voice Call'}</span>
           </div>
-          <h2 className="text-xl font-extrabold text-white mt-1">{call.peerName}</h2>
-          <p className="text-xs text-slate-400 font-mono">
-            {isConnected
-              ? formatTimer(elapsed)
-              : call.status === 'connecting'
-              ? 'Connecting stream…'
-              : call.isIncoming
-              ? 'Incoming call…'
-              : 'Ringing…'}
+          <h2 className="text-xl font-extrabold text-white mt-1 truncate px-4">{call.peerName}</h2>
+          <p className="text-xs font-mono">
+            {call.errorMessage ? (
+              <span className="text-rose-400 font-bold">{call.errorMessage}</span>
+            ) : isConnected ? (
+              <span className="text-emerald-400 font-bold">{formatTimer(elapsed)}</span>
+            ) : call.status === 'connecting' ? (
+              <span className="text-amber-400 font-medium">Connecting stream…</span>
+            ) : call.isIncoming ? (
+              <span className="text-emerald-400 font-bold animate-pulse">Incoming call…</span>
+            ) : (
+              <span className="text-slate-400">Ringing…</span>
+            )}
           </p>
 
           {audioBlocked && (
             <button
               onClick={unlockAudioManually}
-              className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold animate-pulse active:scale-95"
+              className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold animate-pulse active:scale-95 cursor-pointer"
             >
               <span className="material-symbols-outlined text-xs">volume_up</span>
               <span>Tap to enable audio</span>
@@ -582,7 +659,11 @@ export function WebRtcCallModal({
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                {isConnected ? 'Call in progress' : 'Waiting for connection…'}
+                {call.errorMessage
+                  ? call.errorMessage
+                  : isConnected
+                  ? 'Call in progress'
+                  : 'Waiting for connection…'}
               </p>
             </div>
           )}
@@ -590,13 +671,13 @@ export function WebRtcCallModal({
 
         {/* Action Controls */}
         {call.isIncoming && !isConnected && call.status === 'ringing_incoming' ? (
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-8 py-2">
             <button
               onClick={rejectCall}
               className="flex flex-col items-center gap-1 text-xs font-bold text-rose-400 active:scale-95 transition-all"
             >
-              <div className="w-14 h-14 rounded-full bg-rose-600 hover:bg-rose-700 flex items-center justify-center text-white shadow-lg shadow-rose-600/30 cursor-pointer">
-                <span className="material-symbols-outlined text-2xl">call_end</span>
+              <div className="w-16 h-16 rounded-full bg-rose-600 hover:bg-rose-700 flex items-center justify-center text-white shadow-lg shadow-rose-600/30 cursor-pointer">
+                <span className="material-symbols-outlined text-3xl">call_end</span>
               </div>
               <span>Decline</span>
             </button>
@@ -604,21 +685,22 @@ export function WebRtcCallModal({
               onClick={acceptCall}
               className="flex flex-col items-center gap-1 text-xs font-bold text-emerald-400 active:scale-95 transition-all"
             >
-              <div className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30 animate-bounce cursor-pointer">
-                <span className="material-symbols-outlined text-2xl">call</span>
+              <div className="w-16 h-16 rounded-full bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30 animate-bounce cursor-pointer">
+                <span className="material-symbols-outlined text-3xl">call</span>
               </div>
               <span>Accept</span>
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 py-2">
             <button
               onClick={toggleMic}
+              disabled={!isConnected}
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
                 micMuted
                   ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                   : 'bg-slate-800 text-white hover:bg-slate-700'
-              }`}
+              } disabled:opacity-40`}
               title={micMuted ? 'Unmute microphone' : 'Mute microphone'}
             >
               <span className="material-symbols-outlined text-xl">
@@ -629,11 +711,12 @@ export function WebRtcCallModal({
             {call.isVideo && (
               <button
                 onClick={toggleCam}
+                disabled={!isConnected}
                 className={`w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
                   camOff
                     ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                     : 'bg-slate-800 text-white hover:bg-slate-700'
-                }`}
+                } disabled:opacity-40`}
                 title={camOff ? 'Turn camera on' : 'Turn camera off'}
               >
                 <span className="material-symbols-outlined text-xl">
