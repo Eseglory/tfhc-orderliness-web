@@ -1,55 +1,36 @@
-const https = require('node:https');
 require('dotenv').config();
+const https = require('https');
 
-const renderApiKey = process.env.RENDER_API_KEY;
-const vercelToken = process.env.VERCEL_TOKEN;
-
-function httpsGet(urlStr, headers) {
+function get(url, headers) {
   return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
-    const req = https.request(
-      url,
-      { method: 'GET', headers },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            resolve({ status: res.statusCode, body: JSON.parse(data) });
-          } catch (e) {
-            resolve({ status: res.statusCode, body: data });
-          }
-        });
-      }
-    );
+    const req = https.request(url, { headers }, (res) => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { resolve(data); }
+      });
+    });
     req.on('error', reject);
     req.end();
   });
 }
 
-async function checkRenderDeploy(serviceId, deployId) {
-  const res = await httpsGet(`https://api.render.com/v1/services/${serviceId}/deploys/${deployId}`, {
-    Authorization: `Bearer ${renderApiKey}`,
-    Accept: 'application/json',
-  });
-  if (res.status >= 200 && res.status < 300) {
-    return res.body;
-  }
-  throw new Error(`Render API status ${res.status}: ${JSON.stringify(res.body)}`);
+async function check() {
+  // 1. Render API deploy status
+  const renderApiKey = process.env.RENDER_API_KEY;
+  const renderDeploy = await get(
+    'https://api.render.com/v1/services/srv-dahhbh61egvs7380hp7g/deploys/dep-dap80c60tbcc738nn1bg',
+    { Authorization: `Bearer ${renderApiKey}`, Accept: 'application/json' }
+  );
+  console.log(`Render API Status: ${renderDeploy.status || 'unknown'}`);
+
+  // 2. Vercel Web deploy status
+  const vercelToken = process.env.VERCEL_TOKEN;
+  const vercelDeploy = await get(
+    'https://api.vercel.com/v13/deployments/dpl_8GGJpSzQyUEcKwyZNN48CciSnvtw?teamId=team_Mf5t14RhxNCW6ED6ryqGTMUY',
+    { Authorization: `Bearer ${vercelToken}` }
+  );
+  console.log(`Vercel Web Status: ${vercelDeploy.readyState || vercelDeploy.status || 'unknown'}`);
 }
 
-async function checkVercelDeployments() {
-  const res = await httpsGet(`https://api.vercel.com/v6/deployments?projectId=prj_yGW2PUncuQt06IAKNlbqROpUyzBv&limit=3`, {
-    Authorization: `Bearer ${vercelToken}`,
-    Accept: 'application/json',
-  });
-  if (res.status >= 200 && res.status < 300) {
-    return res.body.deployments || [];
-  }
-  throw new Error(`Vercel API status ${res.status}: ${JSON.stringify(res.body)}`);
-}
-
-module.exports = {
-  checkRenderDeploy,
-  checkVercelDeployments,
-};
+check().catch(console.error);
