@@ -217,7 +217,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       const template = SERVICE_SCHEDULES.find((s) => s.id === schedule.id);
       const isOnline = template?.isOnline ?? false;
       const locationName = template?.locationName ?? config.venue.name;
-      const address = template?.meetingUrl ?? (isOnline ? 'https://meet.google.com/ord-tfhc-wed' : null);
+      const address = template?.meetingUrl ?? (isOnline ? 'https://meet.google.com/wkx-kgew-iqe' : null);
       const notes = template?.notes ?? null;
       const description = template?.description ?? null;
       const geofenceRadiusMeters = isOnline ? 100000 : config.venue.radiusMeters;
