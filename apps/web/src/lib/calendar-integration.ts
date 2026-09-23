@@ -19,6 +19,13 @@ export interface CalendarEventOptions {
   organizerName?: string | null;
   recurrenceRule?: string | null;
   timezone?: string | null;
+  agendaItems?: Array<{
+    order: number;
+    title: string;
+    description?: string | null;
+    durationMinutes?: number | null;
+    assignedMember?: { firstName?: string; lastName?: string; preferredName?: string | null } | null;
+  }>;
 }
 
 /**
@@ -74,6 +81,17 @@ export function buildAdvancedGoogleCalendarUrl(opts: CalendarEventOptions): stri
   let detailsText = opts.description ? `${opts.description.trim()}\n\n` : '';
   if (virtualUrl) {
     detailsText += `📹 Google Meet / Video Call: ${virtualUrl}\n\n`;
+  }
+  if (opts.agendaItems && opts.agendaItems.length > 0) {
+    detailsText += `📋 Order of Service / Agenda:\n`;
+    opts.agendaItems.forEach((item) => {
+      const assigned = item.assignedMember
+        ? ` (${item.assignedMember.preferredName || `${item.assignedMember.firstName || ''} ${item.assignedMember.lastName || ''}`.trim()})`
+        : '';
+      const dur = item.durationMinutes ? ` [${item.durationMinutes}m]` : '';
+      detailsText += `${item.order}. ${item.title}${dur}${assigned}\n`;
+    });
+    detailsText += `\n`;
   }
   if (opts.notes) {
     detailsText += `📌 Notes & Guidelines: ${opts.notes.trim()}\n\n`;
@@ -160,7 +178,21 @@ export function generateIcsFileContent(opts: CalendarEventOptions): string {
     `DTEND:${formatIso(end)}`,
     rruleIcs,
     `SUMMARY:${escapeIcs(opts.title)}`,
-    `DESCRIPTION:${escapeIcs([opts.description, virtualUrl ? `Join Google Meet: ${virtualUrl}` : null, opts.notes].filter(Boolean).join('\n\n'))}`,
+    `DESCRIPTION:${escapeIcs(
+      [
+        opts.description,
+        virtualUrl ? `Join Google Meet: ${virtualUrl}` : null,
+        opts.agendaItems && opts.agendaItems.length > 0
+          ? `Agenda:\n` +
+            opts.agendaItems
+              .map((it) => `${it.order}. ${it.title}${it.durationMinutes ? ` [${it.durationMinutes}m]` : ''}${it.assignedMember ? ` (${it.assignedMember.firstName || ''} ${it.assignedMember.lastName || ''})` : ''}`)
+              .join('\n')
+          : null,
+        opts.notes,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    )}`,
     `LOCATION:${escapeIcs(locationText)}`,
     virtualUrl ? `URL:${virtualUrl}` : '',
     attendeesIcs ? attendeesIcs : '',
@@ -197,7 +229,17 @@ export function formatMeetingInviteMessage(opts: CalendarEventOptions): string {
     msg += `📍 *Venue:* ${opts.locationName}${opts.address ? `, ${opts.address}` : ''}\n`;
   }
   if (opts.description) {
-    msg += `\n📝 *Agenda / Overview:*\n${opts.description}\n`;
+    msg += `\n📝 *Overview:*\n${opts.description}\n`;
+  }
+  if (opts.agendaItems && opts.agendaItems.length > 0) {
+    msg += `\n📋 *Order of Service / Agenda:*\n`;
+    opts.agendaItems.forEach((it) => {
+      const assigned = it.assignedMember
+        ? ` (${it.assignedMember.preferredName || `${it.assignedMember.firstName || ''} ${it.assignedMember.lastName || ''}`.trim()})`
+        : '';
+      const dur = it.durationMinutes ? ` [${it.durationMinutes}m]` : '';
+      msg += `• *${it.order}. ${it.title}*${dur}${assigned}\n`;
+    });
   }
 
   msg += `\n🔗 *Add to Google Calendar:*\n${buildAdvancedGoogleCalendarUrl(opts)}\n\n_The Father's House Church_`;

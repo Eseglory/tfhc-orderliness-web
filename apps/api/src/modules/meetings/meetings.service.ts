@@ -38,6 +38,8 @@ interface CreateMeetingDto {
   organizerName?: string;
   coverImageUrl?: string;
   notes?: string;
+  isOnline?: boolean;
+  meetingUrl?: string | null;
   supervisingMinisterId?: string | null;
   autoAssignSupervisingMinister?: boolean;
   audiences?: AudienceInput[];
@@ -476,6 +478,23 @@ export class MeetingsService {
             }
           : false,
         attendanceRecords: includeAttendance ? { include: { member: true }, orderBy: { actualArrivalTime: 'asc' } } : false,
+        agendaItems: {
+          orderBy: { order: 'asc' },
+          include: {
+            assignedMember: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredName: true,
+                memberCode: true,
+                profilePhotoUrl: true,
+                roleInUnit: true,
+                subTeam: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -743,6 +762,8 @@ export class MeetingsService {
         organizerName: dto.organizerName || null,
         coverImageUrl: dto.coverImageUrl || null,
         notes: dto.notes || null,
+        isOnline: Boolean(dto.isOnline),
+        meetingUrl: dto.meetingUrl || null,
         status: MeetingStatus.SCHEDULED,
         qrSecret: null,
         createdById: actorUserId ?? null,
@@ -862,6 +883,8 @@ export class MeetingsService {
       ...(dto.organizerName !== undefined ? { organizerName: dto.organizerName || null } : {}),
       ...(dto.coverImageUrl !== undefined ? { coverImageUrl: dto.coverImageUrl || null } : {}),
       ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),
+      ...(dto.isOnline !== undefined ? { isOnline: Boolean(dto.isOnline) } : {}),
+      ...(dto.meetingUrl !== undefined ? { meetingUrl: dto.meetingUrl || null } : {}),
     };
 
     // Editing one occurrence of a recurring series turns it into an exception so
@@ -1192,5 +1215,173 @@ export class MeetingsService {
     }
     this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return createdMeetings;
+  }
+
+  async getAgenda(meetingId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    return this.prisma.meetingAgendaItem.findMany({
+      where: { meetingId },
+      orderBy: { order: 'asc' },
+      include: {
+        assignedMember: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            memberCode: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+  }
+
+  async createAgendaItem(
+    meetingId: string,
+    dto: {
+      title: string;
+      description?: string;
+      durationMinutes?: number;
+      assignedMemberId?: string;
+      order?: number;
+    },
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    let order = dto.order;
+    if (order === undefined || order === null) {
+      const highest = await this.prisma.meetingAgendaItem.findFirst({
+        where: { meetingId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      order = (highest?.order ?? 0) + 1;
+    }
+
+    const item = await this.prisma.meetingAgendaItem.create({
+      data: {
+        meetingId,
+        order,
+        title: dto.title,
+        description: dto.description || null,
+        durationMinutes: dto.durationMinutes ? Number(dto.durationMinutes) : null,
+        assignedMemberId: dto.assignedMemberId || null,
+      },
+      include: {
+        assignedMember: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            memberCode: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    this.cache.invalidateTags(['calendar', 'meetings']);
+    return item;
+  }
+
+  async updateAgendaItem(
+    meetingId: string,
+    itemId: string,
+    dto: {
+      title?: string;
+      description?: string;
+      durationMinutes?: number;
+      assignedMemberId?: string | null;
+      order?: number;
+    },
+  ) {
+    const existing = await this.prisma.meetingAgendaItem.findFirst({
+      where: { id: itemId, meetingId },
+    });
+    if (!existing) throw new NotFoundException('Agenda item not found for this meeting');
+
+    const updated = await this.prisma.meetingAgendaItem.update({
+      where: { id: itemId },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.description !== undefined ? { description: dto.description || null } : {}),
+        ...(dto.durationMinutes !== undefined ? { durationMinutes: dto.durationMinutes ? Number(dto.durationMinutes) : null } : {}),
+        ...(dto.assignedMemberId !== undefined ? { assignedMemberId: dto.assignedMemberId || null } : {}),
+        ...(dto.order !== undefined ? { order: Number(dto.order) } : {}),
+      },
+      include: {
+        assignedMember: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            memberCode: true,
+            profilePhotoUrl: true,
+            roleInUnit: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    this.cache.invalidateTags(['calendar', 'meetings']);
+    return updated;
+  }
+
+  async deleteAgendaItem(meetingId: string, itemId: string) {
+    const existing = await this.prisma.meetingAgendaItem.findFirst({
+      where: { id: itemId, meetingId },
+    });
+    if (!existing) throw new NotFoundException('Agenda item not found for this meeting');
+
+    await this.prisma.meetingAgendaItem.delete({
+      where: { id: itemId },
+    });
+
+    this.cache.invalidateTags(['calendar', 'meetings']);
+    return { success: true, deletedId: itemId };
+  }
+
+  async reorderAgendaItems(meetingId: string, items: { id: string; order: number }[]) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.meetingAgendaItem.updateMany({
+          where: { id: item.id, meetingId },
+          data: { order: item.order },
+        }),
+      ),
+    );
+
+    this.cache.invalidateTags(['calendar', 'meetings']);
+    return this.getAgenda(meetingId);
+  }
+
+  async updateMeetingUrl(meetingId: string, meetingUrl: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        meetingUrl,
+        isOnline: true,
+      },
+    });
+
+    this.cache.invalidateTags(['calendar', 'meetings']);
+    return { success: true, meetingId, meetingUrl: updated.meetingUrl, isOnline: updated.isOnline };
   }
 }

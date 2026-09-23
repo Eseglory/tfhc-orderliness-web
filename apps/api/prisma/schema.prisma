@@ -269,6 +269,7 @@ model Member {
   chatReactions      ChatMessageReaction[]
   hiddenChatMessages ChatMessageHidden[]
   supervisedMeetings Meeting[]           @relation("MeetingSupervisingMinister")
+  assignedAgendaItems MeetingAgendaItem[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -451,6 +452,8 @@ model Meeting {
   attendanceCodeExpiresAt DateTime?
   archivedAt           DateTime?
   createdById          String?
+  meetingUrl           String?
+  agendaItems          MeetingAgendaItem[]
   attendanceRecords    AttendanceRecord[]
   excuseRequests       AbsenceExcuse[]
   correctionRequests   CorrectionRequest[]
@@ -477,6 +480,25 @@ model Meeting {
   @@index([visibility, startTime])
   @@unique([serviceScheduleId, startTime])
   @@map("meetings")
+}
+
+model MeetingAgendaItem {
+  id               String   @id @default(uuid())
+  meetingId        String
+  meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  order            Int      @default(0)
+  title            String
+  description      String?
+  durationMinutes  Int?
+  assignedMemberId String?
+  assignedMember   Member?  @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([meetingId])
+  @@index([assignedMemberId])
+  @@index([meetingId, order])
+  @@map("meeting_agenda_items")
 }
 
 model WeeklyAvailabilityCycle {

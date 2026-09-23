@@ -203,4 +203,56 @@ export class MeetingsController {
   updateStatus(@Param('id') id: string, @Body() body: { status: MeetingStatus }, @CurrentUser('userId') userId: string) {
     return this.meetingsService.updateStatus(id, body.status, userId);
   }
+
+  @Get(':id/agenda')
+  getAgenda(@Param('id') id: string) {
+    return this.meetingsService.getAgenda(id);
+  }
+
+  @RequirePermissions('events.update')
+  @Post(':id/agenda')
+  createAgendaItem(
+    @Param('id') id: string,
+    @Body() body: { title: string; description?: string; durationMinutes?: number; assignedMemberId?: string; order?: number },
+  ) {
+    return this.meetingsService.createAgendaItem(id, body);
+  }
+
+  @RequirePermissions('events.update')
+  @Patch(':id/agenda/:itemId')
+  updateAgendaItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() body: { title?: string; description?: string; durationMinutes?: number; assignedMemberId?: string | null; order?: number },
+  ) {
+    return this.meetingsService.updateAgendaItem(id, itemId, body);
+  }
+
+  @RequirePermissions('events.update')
+  @Delete(':id/agenda/:itemId')
+  deleteAgendaItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+  ) {
+    return this.meetingsService.deleteAgendaItem(id, itemId);
+  }
+
+  @RequirePermissions('events.update')
+  @Put(':id/agenda/reorder')
+  reorderAgenda(
+    @Param('id') id: string,
+    @Body() body: { items: { id: string; order: number }[] },
+  ) {
+    return this.meetingsService.reorderAgendaItems(id, body?.items || []);
+  }
+
+  @RequirePermissions('events.update')
+  @Patch(':id/meeting-url')
+  updateMeetingUrl(
+    @Param('id') id: string,
+    @Body() body: { meetingUrl: string },
+  ) {
+    return this.meetingsService.updateMeetingUrl(id, body.meetingUrl);
+  }
 }
+

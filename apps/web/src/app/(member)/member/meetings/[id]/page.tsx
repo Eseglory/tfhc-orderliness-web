@@ -263,7 +263,7 @@ export default function MeetingDetailPage() {
     year: 'numeric',
   });
 
-  const virtualMeetingUrl = extractVirtualUrl(meeting) || (meeting.address?.startsWith('http') ? meeting.address : null);
+  const virtualMeetingUrl = meeting.meetingUrl || extractVirtualUrl(meeting) || (meeting.address?.startsWith('http') ? meeting.address : null);
   const isVirtual = Boolean(virtualMeetingUrl) || Boolean(meeting.isOnline) || meeting.locationName?.toLowerCase().includes('online') || meeting.locationName?.toLowerCase().includes('google meet') || meeting.locationName?.toLowerCase().includes('virtual');
   const isWedMeeting = title.toLowerCase().includes('wednesday') && (Boolean(meeting.serviceScheduleId) || title.toLowerCase().includes('weekly'));
   const recurrenceRuleStr = isWedMeeting ? 'FREQ=WEEKLY;BYDAY=WE' : null;
@@ -280,6 +280,7 @@ export default function MeetingDetailPage() {
     mode: isVirtual ? 'VIRTUAL' : 'IN_PERSON',
     recurrenceRule: recurrenceRuleStr,
     timezone: 'Africa/Lagos',
+    agendaItems: meeting.agendaItems || [],
   });
 
   return (
@@ -765,6 +766,60 @@ export default function MeetingDetailPage() {
             </div>
           </div>
         </section>
+
+        {/* Order of Service & Meeting Agenda */}
+        {meeting?.agendaItems && meeting.agendaItems.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-lg">format_list_numbered</span>
+                <span>Order of Service &amp; Agenda</span>
+              </h3>
+              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/40">
+                {meeting.agendaItems.length} items
+              </span>
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/20 overflow-hidden divide-y divide-outline-variant/10 shadow-2xs">
+              {meeting.agendaItems.map((item: any) => {
+                const assigned = item.assignedMember;
+                const assignedName = assigned
+                  ? (assigned.preferredName || `${assigned.firstName || ''} ${assigned.lastName || ''}`.trim())
+                  : null;
+
+                return (
+                  <div key={item.id} className="p-4 flex items-start gap-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black text-xs shrink-0 border border-indigo-200/50 dark:border-indigo-800/40 mt-0.5">
+                      #{item.order}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-[#0b1c30] dark:text-white">{item.title}</span>
+                        {item.durationMinutes && (
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                            {item.durationMinutes} mins
+                          </span>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{item.description}</p>
+                      )}
+                      {assignedName && (
+                        <div className="flex items-center gap-1.5 pt-1 text-xs text-slate-700 dark:text-slate-300 font-medium">
+                          <span className="text-slate-400 text-[11px]">Led by:</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{assignedName}</span>
+                          {assigned.roleInUnit && (
+                            <span className="text-[10px] text-slate-400">({assigned.roleInUnit})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Option C: Meeting Attendance Code Modal */}
         {showCodeModal && (
