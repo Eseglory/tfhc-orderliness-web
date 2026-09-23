@@ -2,7 +2,8 @@ import { canViewEvent } from '../common/event-visibility';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { MeetingStatus, MemberStatus, AttendanceStatus } from '@tfhc/shared';
+import { MeetingStatus, MemberStatus, AttendanceStatus, AttendanceMethod } from '@tfhc/shared';
+import { AttendanceType } from '@prisma/client';
 import { ServiceReminderService } from '../modules/meetings/service-reminder.service';
 
 @Injectable()
@@ -103,6 +104,16 @@ export class AbsenceProcessingJob {
       const absentMembers = activeMembers.filter((m) => !checkedInMemberIds.has(m.id));
 
       if (absentMembers.length > 0) {
+        const isOnline = Boolean(
+          (meeting as any).isOnline ||
+          meeting.geofenceRadiusMeters >= 50000 ||
+          meeting.locationName?.toLowerCase().includes('virtual') ||
+          meeting.locationName?.toLowerCase().includes('online') ||
+          meeting.address?.startsWith('http') ||
+          meeting.serviceScheduleId === 'wednesday-unit-meeting' ||
+          meeting.title?.toLowerCase().includes('wednesday')
+        );
+
         await tx.attendanceRecord.createMany({
           data: absentMembers.map((m) => ({
             memberId: m.id,
@@ -110,6 +121,9 @@ export class AbsenceProcessingJob {
             expectedArrivalTime: meeting.expectedArrivalTime,
             status: AttendanceStatus.ABSENT,
             pointsEarned: 0,
+            attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+            method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO_QR,
+            distanceFromVenue: null,
           })),
         });
       }

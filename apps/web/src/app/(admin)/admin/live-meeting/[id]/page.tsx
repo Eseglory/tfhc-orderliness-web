@@ -459,7 +459,9 @@ export default function AdminLiveMeetingPage() {
   const isOnlineMeeting = Boolean(meeting?.isOnline) ||
     meeting?.locationName?.toLowerCase().includes('online') ||
     meeting?.locationName?.toLowerCase().includes('virtual') ||
-    meeting?.locationName?.toLowerCase().includes('google meet');
+    meeting?.locationName?.toLowerCase().includes('google meet') ||
+    meeting?.serviceScheduleId === 'wednesday-unit-meeting' ||
+    meeting?.title?.toLowerCase().includes('wednesday');
   const onlineSessionCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_SESSION').length;
   const onlineCodeCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_CODE').length;
   const totalOnlineCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE').length;
@@ -1393,15 +1395,16 @@ export default function AdminLiveMeetingPage() {
                   <tr>
                     <th className="px-4 py-3">Member</th>
                     <th className="px-4 py-3">Sub-Team</th>
-                    <th className="px-4 py-3">Arrival &amp; Duration</th>
-                    <th className="px-4 py-3">Method &amp; Type</th>
+                    <th className="px-4 py-3">Arrival Time</th>
+                    <th className="px-4 py-3">{isOnlineMeeting ? 'Gathering Mode' : 'Check-in Method'}</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
                   {attendanceRecords.length > 0 ? (
                     attendanceRecords.map((r) => {
-                      const isActiveOnline = r.attendanceType === 'ONLINE' && r.lastSeenAt && !r.leftAt && (nowMs - new Date(r.lastSeenAt).getTime() < 180000);
+                      const isOnlineRecord = isOnlineMeeting || r.attendanceType === 'ONLINE';
+                      const isActiveOnline = isOnlineRecord && r.lastSeenAt && !r.leftAt && (nowMs - new Date(r.lastSeenAt).getTime() < 180000);
                       return (
                         <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                           <td className="px-4 py-3">
@@ -1423,7 +1426,7 @@ export default function AdminLiveMeetingPage() {
                           <td className="px-4 py-3 text-slate-500 font-medium">{r.member?.subTeam?.name || 'General'}</td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                             <span className="font-mono text-[11px] block">
-                              {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                              {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'}
                             </span>
                             {r.durationMinutes !== null && r.durationMinutes !== undefined && (
                               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">
@@ -1432,7 +1435,7 @@ export default function AdminLiveMeetingPage() {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            {r.attendanceType === 'ONLINE' ? (
+                            {isOnlineRecord ? (
                               <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                                 r.method === 'ONLINE_CODE'
                                   ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20'
@@ -1441,7 +1444,7 @@ export default function AdminLiveMeetingPage() {
                                 <span className="material-symbols-outlined text-xs">
                                   {r.method === 'ONLINE_CODE' ? 'pin' : 'videocam'}
                                 </span>
-                                <span>{r.method === 'ONLINE_CODE' ? 'Online (Code)' : 'Online (Session)'}</span>
+                                <span>{r.method === 'ONLINE_CODE' ? 'Online (Code)' : 'Online (Google Meet)'}</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">

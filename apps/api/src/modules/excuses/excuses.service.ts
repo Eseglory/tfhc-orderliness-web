@@ -2,6 +2,7 @@ import { canViewEvent } from '../../common/event-visibility';
 import { unitPolicy } from '../../common/unit-policy';
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AttendanceType } from '@prisma/client';
 import { CacheService } from '../../common/cache/cache.service';
 import { ExcuseStatus, AttendanceStatus, AttendanceMethod, calculateAttendancePoints } from '@tfhc/shared';
 import { isJacob, isDaniel } from '../../common/rbac/authorization-rules';
@@ -163,6 +164,12 @@ export class ExcusesService implements OnModuleInit {
           const existingRecord = await tx.attendanceRecord.findUnique({
             where: { memberId_meetingId: { memberId: excuse.memberId, meetingId: excuse.meetingId } },
           });
+          const isExcuseMeetingOnline = Boolean(
+            (excuse.meeting as any)?.isOnline ||
+            excuse.meeting?.locationName?.toLowerCase().includes('online') ||
+            excuse.meeting?.serviceScheduleId === 'wednesday-unit-meeting' ||
+            excuse.meeting?.title?.toLowerCase().includes('wednesday')
+          );
           const record = existingRecord
             ? await tx.attendanceRecord.update({
                 where: { id: existingRecord.id },
@@ -174,6 +181,8 @@ export class ExcusesService implements OnModuleInit {
                   meetingId: excuse.meetingId,
                   expectedArrivalTime: excuse.meeting.expectedArrivalTime,
                   status: AttendanceStatus.EXCUSED,
+                  attendanceType: isExcuseMeetingOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+                  method: isExcuseMeetingOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO_QR,
                   isModified: true,
                   pointsEarned: 0,
                 },
@@ -208,6 +217,12 @@ export class ExcusesService implements OnModuleInit {
             const existingRecord = await tx.attendanceRecord.findUnique({
               where: { memberId_meetingId: { memberId: excuse.memberId, meetingId: m.id } },
             });
+            const isMOnline = Boolean(
+              (m as any)?.isOnline ||
+              m?.locationName?.toLowerCase().includes('online') ||
+              m?.serviceScheduleId === 'wednesday-unit-meeting' ||
+              m?.title?.toLowerCase().includes('wednesday')
+            );
             const rec = existingRecord
               ? await tx.attendanceRecord.update({
                   where: { id: existingRecord.id },
@@ -219,6 +234,8 @@ export class ExcusesService implements OnModuleInit {
                     meetingId: m.id,
                     expectedArrivalTime: m.expectedArrivalTime,
                     status: AttendanceStatus.EXCUSED,
+                    attendanceType: isMOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+                    method: isMOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO_QR,
                     isModified: true,
                     pointsEarned: 0,
                   },

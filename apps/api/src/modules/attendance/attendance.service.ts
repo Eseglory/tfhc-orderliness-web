@@ -182,7 +182,9 @@ export class AttendanceService {
         meeting.geofenceRadiusMeters >= 50000 ||
         meeting.locationName?.toLowerCase().includes('virtual') ||
         meeting.locationName?.toLowerCase().includes('online') ||
-        meeting.address?.startsWith('http')
+        meeting.address?.startsWith('http') ||
+        meeting.serviceScheduleId === 'wednesday-unit-meeting' ||
+        meeting.title?.toLowerCase().includes('wednesday')
       );
 
       return tx.attendanceRecord.create({
@@ -195,11 +197,11 @@ export class AttendanceService {
         lastSeenAt: serverTimestamp,
         status,
         attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
-        gpsLat: dto.latitude,
-        gpsLong: dto.longitude,
-        gpsAccuracy: dto.gpsAccuracy,
-        distanceFromVenue,
-        method: isOnline ? AttendanceMethod.ONLINE_SESSION : AttendanceMethod.SYSTEM_GEO,
+        gpsLat: isOnline ? null : dto.latitude,
+        gpsLong: isOnline ? null : dto.longitude,
+        gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
+        distanceFromVenue: isOnline ? null : distanceFromVenue,
+        method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
         pointsEarned,
         deviceInfo: dto.deviceInfo,
       },
@@ -900,6 +902,16 @@ export class AttendanceService {
       meeting.pointWeight * meeting.category.pointWeight, await unitPolicy(this.prisma)
     );
 
+    const isOnline = Boolean(
+      (meeting as any).isOnline ||
+      meeting.geofenceRadiusMeters >= 50000 ||
+      meeting.locationName?.toLowerCase().includes('virtual') ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.address?.startsWith('http') ||
+      meeting.serviceScheduleId === 'wednesday-unit-meeting' ||
+      meeting.title?.toLowerCase().includes('wednesday')
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.attendanceRecord.findUnique({
         where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
@@ -913,6 +925,8 @@ export class AttendanceService {
             status: dto.status,
             ...(arrival ? {actualArrivalTime:arrival} : {}),
             method: AttendanceMethod.MANUAL,
+            attendanceType: isOnline ? AttendanceType.ONLINE : (existing.attendanceType || AttendanceType.PHYSICAL),
+            distanceFromVenue: isOnline ? null : existing.distanceFromVenue,
             pointsEarned,
             isModified: true,
           },
@@ -926,6 +940,8 @@ export class AttendanceService {
             actualArrivalTime: arrival ?? new Date(),
             status: dto.status,
             method: AttendanceMethod.MANUAL,
+            attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+            distanceFromVenue: isOnline ? null : undefined,
             pointsEarned,
             isModified: true,
           },

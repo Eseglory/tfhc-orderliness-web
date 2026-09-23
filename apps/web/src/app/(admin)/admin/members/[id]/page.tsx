@@ -586,7 +586,9 @@ export default function MemberCRMProfilePage() {
                               {rec.meeting?.title || 'Worship Service'}
                             </td>
                             <td className="py-2.5 px-4 text-slate-500 dark:text-slate-400">
-                              {rec.method || 'GPS Check-in'}
+                              {rec.attendanceType === 'ONLINE' || rec.meeting?.isOnline || rec.meeting?.serviceScheduleId === 'wednesday-unit-meeting' || rec.meeting?.title?.toLowerCase().includes('wednesday')
+                                ? (rec.method === 'ONLINE_CODE' ? 'Online (Code)' : 'Online (Google Meet)')
+                                : (rec.method || 'GPS Check-in')}
                             </td>
                             <td className="py-2.5 pl-4 text-right">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
