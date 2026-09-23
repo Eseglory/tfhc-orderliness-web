@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
+import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 
 type ReconciliationMember = {
   memberId: string;
@@ -91,7 +92,8 @@ export default function AdminAvailabilityPlanningPage() {
   });
 
   return (
-    <div className="bg-background text-on-background min-h-screen p-6 max-w-7xl mx-auto pb-24 font-body-md">
+    <AdminLayoutShell>
+      <div className="text-on-background p-4 sm:p-6 max-w-7xl mx-auto pb-24 font-body-md">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant/10 pb-6 mb-8">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container flex-shrink-0 p-1">
@@ -353,6 +355,7 @@ export default function AdminAvailabilityPlanningPage() {
           )}
         </div>
       )}
-    </div>
+      </div>
+    </AdminLayoutShell>
   );
 }

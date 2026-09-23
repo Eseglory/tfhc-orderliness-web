@@ -25,6 +25,7 @@ const ROUTE_MAP: Record<string, RouteHierarchy> = {
   '/admin/services': { path: '/admin/events', label: 'Recurring Series', parent: { label: 'Events & Gatherings', href: '/admin/events' } },
   '/admin/meetings/dashboard': { path: '/admin/meetings/dashboard', label: 'Operations Board', parent: { label: 'Events & Gatherings', href: '/admin/events' } },
   '/admin/live-meeting': { path: '/admin/live-meeting', label: 'Live Roster Session', parent: { label: 'Events & Gatherings', href: '/admin/events' } },
+  '/admin/availability': { path: '/admin/availability', label: 'Weekly Availability Reconciliation', parent: { label: 'Attendance', href: '/admin/reports' } },
   '/admin/reports': { path: '/admin/reports', label: 'Attendance Analytics & Trends', parent: { label: 'Attendance' } },
   '/admin/tracker': { path: '/admin/tracker', label: 'Attendance & Goal Tracker', parent: { label: 'Tracking & Approvals' } },
   '/admin/approvals': { path: '/admin/approvals', label: 'Approvals Center', parent: { label: 'Tracking & Approvals' } },
