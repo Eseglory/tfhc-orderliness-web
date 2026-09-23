@@ -12,17 +12,43 @@
  */
 
 // Default Hosted Image URLs for production email delivery (Gmail/Outlook HTTPS requirements)
-export const DEFAULT_CHURCH_LOGO_URL =
-  process.env.CHURCH_LOGO_URL || 'https://eglobalicthub.com/assets/tfhc/logo.png';
-export const DEFAULT_ESE_GLORY_AVATAR =
-  process.env.ADMIN_PHOTO_URL || 'https://eglobalicthub.com/assets/tfhc/ese-glory.jpg';
+export function getChurchLogoUrl(): string {
+  if (process.env.CHURCH_LOGO_URL && process.env.CHURCH_LOGO_URL.trim()) {
+    return process.env.CHURCH_LOGO_URL.trim();
+  }
+  const baseUrl = (
+    process.env.APP_WEB_URL ||
+    process.env.APP_URL ||
+    process.env.FRONTEND_URL ||
+    'https://tfhc-orderliness-web.vercel.app'
+  ).replace(/\/+$/, '');
+  return `${baseUrl}/logo-email.png`;
+}
+
+export function getAdminAvatarUrl(): string {
+  if (process.env.ADMIN_PHOTO_URL && process.env.ADMIN_PHOTO_URL.trim()) {
+    return process.env.ADMIN_PHOTO_URL.trim();
+  }
+  const baseUrl = (
+    process.env.APP_WEB_URL ||
+    process.env.APP_URL ||
+    process.env.FRONTEND_URL ||
+    'https://tfhc-orderliness-web.vercel.app'
+  ).replace(/\/+$/, '');
+  return `${baseUrl}/ese-glory.jpg`;
+}
+
+export const DEFAULT_CHURCH_LOGO_URL = getChurchLogoUrl();
+export const DEFAULT_ESE_GLORY_AVATAR = getAdminAvatarUrl();
 
 export const BRAND = {
   name: 'TFHC Orderliness',
   churchName: "The Father's House Church",
   churchAddress: '90, Ojodu Akute Road, Ajayi Farms Bus-Stop.',
   churchMapsUrl: 'https://www.google.com/maps/place/402+Park+Ave+S,+New+York,+NY+10016,+USA/@40.7431645,-73.985576,18z/data=!3m1!4b1!4m12!1m6!3m5!1s0x89c259ab1e7d7bb3:0x73d3e76f445d8343!2sBig+Blue+Travel!8m2!3d40.7542139!4d-73.9860662!3m4!1s0x89c259a79f63f8eb:0x376f7da45d944208!8m2!3d40.7431624!4d-73.9844496',
-  churchLogoUrl: DEFAULT_CHURCH_LOGO_URL,
+  get churchLogoUrl(): string {
+    return getChurchLogoUrl();
+  },
   poweredByName: 'Eglobal ICT-Hub',
   poweredByUrl: 'https://eglobalicthub.com',
   navy: '#1E1B4B',
@@ -274,7 +300,7 @@ export function renderBrandedEmail(input: BrandedEmailOptions): { subject: strin
                     <table role="presentation" cellspacing="0" cellpadding="0">
                       <tr>
                         <td valign="middle" style="padding-right:12px;">
-                          <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="34" style="display:block;height:34px;border:0;outline:none;" />
+                          <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="114" height="34" style="display:block;width:114px;height:34px;max-width:114px;border:0;outline:none;" />
                         </td>
                         <td valign="middle" style="border-left:1px solid #E2E8F0;padding-left:12px;">
                           <div style="font-size:16px;font-weight:900;letter-spacing:-0.02em;color:${BRAND.navy};">
@@ -457,7 +483,7 @@ export function renderInvitationEmail(options: InvitationEmailOptions): { subjec
 
               <!-- Church Logo -->
               <div style="margin-bottom:16px;">
-                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="38" style="display:inline-block;height:38px;border:0;outline:none;" />
+                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="127" height="38" style="display:inline-block;width:127px;height:38px;max-width:127px;border:0;outline:none;" />
               </div>
 
               <!-- Badge Pill -->
@@ -748,7 +774,7 @@ export function renderRosterReminderEmail(options: RosterReminderEmailOptions): 
           <tr>
             <td style="background-color:#1E1B4B;background-image:linear-gradient(180deg, #1E1B4B 0%, #25225E 100%);padding:32px 32px 28px;text-align:center;">
               <div style="margin-bottom:16px;">
-                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="36" style="display:inline-block;height:36px;border:0;outline:none;" />
+                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="120" height="36" style="display:inline-block;width:120px;height:36px;max-width:120px;border:0;outline:none;" />
               </div>
               <div style="display:inline-block;padding:5px 14px;background-color:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:9999px;margin-bottom:14px;">
                 <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:#E0E7FF;text-transform:uppercase;">
@@ -1012,7 +1038,7 @@ export function renderMemberQueryAvailabilityEmail(options: MemberQueryAvailabil
           <tr>
             <td style="background-color:#1E1B4B;background-image:linear-gradient(180deg, #1E1B4B 0%, #25225E 100%);padding:32px 32px 28px;text-align:center;">
               <div style="margin-bottom:16px;">
-                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="36" style="display:inline-block;height:36px;border:0;outline:none;" />
+                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="120" height="36" style="display:inline-block;width:120px;height:36px;max-width:120px;border:0;outline:none;" />
               </div>
               <div style="display:inline-block;padding:5px 14px;background-color:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:9999px;margin-bottom:14px;">
                 <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:#E0E7FF;text-transform:uppercase;">
@@ -1251,7 +1277,7 @@ export function renderApprovalNotificationEmail(options: ApprovalNotificationEma
           <tr>
             <td style="background-color:#1E1B4B;background-image:linear-gradient(180deg, #1E1B4B 0%, #25225E 100%);padding:32px 32px 28px;text-align:center;">
               <div style="margin-bottom:16px;">
-                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="36" style="display:inline-block;height:36px;border:0;outline:none;" />
+                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="120" height="36" style="display:inline-block;width:120px;height:36px;max-width:120px;border:0;outline:none;" />
               </div>
               <div style="display:inline-block;padding:5px 14px;background-color:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:9999px;margin-bottom:14px;">
                 <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:#E0E7FF;text-transform:uppercase;">
@@ -1539,7 +1565,7 @@ export function renderBulletinDispatchEmail(options: BulletinDispatchEmailOption
           <tr>
             <td style="background-color:#1E1B4B;background-image:linear-gradient(180deg, #1E1B4B 0%, #25225E 100%);padding:32px 32px 28px;text-align:center;">
               <div style="margin-bottom:16px;">
-                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" height="36" style="display:inline-block;height:36px;border:0;outline:none;" />
+                <img src="${BRAND.churchLogoUrl}" alt="${BRAND.churchName}" width="120" height="36" style="display:inline-block;width:120px;height:36px;max-width:120px;border:0;outline:none;" />
               </div>
               <div style="display:inline-block;padding:5px 14px;background-color:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:9999px;margin-bottom:14px;">
                 <span style="font-size:11px;font-weight:800;letter-spacing:0.06em;color:#E0E7FF;text-transform:uppercase;">

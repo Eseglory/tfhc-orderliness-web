@@ -41,10 +41,16 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:tfhc-orderliness@eglobalicthub.com
+      - key: APP_WEB_URL
+        value: https://tfhc-orderliness-web.vercel.app
+      - key: CHURCH_LOGO_URL
+        value: https://tfhc-orderliness-web.vercel.app/logo-email.png
+      - key: ADMIN_PHOTO_URL
+        value: https://tfhc-orderliness-web.vercel.app/ese-glory.jpg
       # Update after first deploy if Render assigns a different subdomain
       # than the `name:` above (e.g. on a name collision).
       - key: CORS_ORIGIN
-        value: https://tfhc-orderliness-web.onrender.com
+        value: https://tfhc-orderliness-web.onrender.com,https://tfhc-orderliness-web.vercel.app
 
   # Next.js mobile-first PWA — installable frontend for members and admins.
   - type: web
