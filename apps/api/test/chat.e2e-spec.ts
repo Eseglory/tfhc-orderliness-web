@@ -9,6 +9,8 @@ import { AddressInfo } from 'net';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { ChatService } from '../src/modules/chat/chat.service';
+import { ChatBufferRepository } from '../src/modules/chat/chat-buffer.repository';
 import { ChatMigrationJob } from '../src/modules/chat/chat-migration.job';
 import { RbacService } from '../src/common/rbac/rbac.service';
 
@@ -179,6 +181,24 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     const replay = (await http().post(`/chat/rooms/${generalId}/messages`).set(auth(aliceToken)).send({ body: 'Durability failure recovery', clientId: operationId }).expect(201)).body;
     expect(replay.id).toBe(saved.id);
     expect(await db.chatMessage.count({ where: { clientOperationId: operationId } })).toBe(1);
+  });
+
+  test('recovers notification work when its SQLite queue has been lost', async () => {
+    const generalId = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL').id;
+    const message = await db.chatMessage.create({ data: { roomId: generalId, senderMemberId: aliceId, type: 'TEXT', body: 'Restart notification recovery' } });
+    await db.communicationDelivery.create({ data: { idempotencyKey: `chat:${message.id}:notification-work`, channel: 'PUSH', recipient: message.id, providerRef: message.id, templateKey: 'CHAT_NOTIFICATION_WORK', status: 'PENDING' } });
+    const queue = jest.spyOn(app.get(ChatBufferRepository), 'pendingNotifications').mockReturnValue([]);
+    const previous = process.env.DISABLE_SCHEDULED_JOBS;
+    try {
+      process.env.DISABLE_SCHEDULED_JOBS = 'false';
+      await app.get(ChatService).retryPendingNotifications();
+      const work = await db.communicationDelivery.findUniqueOrThrow({ where: { idempotencyKey: `chat:${message.id}:notification-work` } });
+      expect(work.status).toBe('SENT');
+      const where = { memberId: bobId, type: 'CHAT_MESSAGE', data: { path: ['messageId'], equals: message.id } };
+      expect(await db.memberNotification.count({ where })).toBe(1);
+      await app.get(ChatService).retryPendingNotifications();
+      expect(await db.memberNotification.count({ where })).toBe(1);
+    } finally { process.env.DISABLE_SCHEDULED_JOBS = previous; queue.mockRestore(); }
   });
 
   test('direct messages: a 1:1 room is created once and both sides converge on it', async () => {
