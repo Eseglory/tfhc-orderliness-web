@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   OnApplicationBootstrap,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ChatMessageType, ChatRoom, ChatRoomType, MemberStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -845,6 +846,7 @@ export class ChatService implements OnApplicationBootstrap {
         if (buffered.roomId !== roomId || buffered.senderMemberId !== memberId) {
           throw new ForbiddenException('Operation belongs to another sender');
         }
+        await this.requirePrimaryPersistence(buffered.id);
         const sender = buffered.senderMemberId ? this.bufferRepo.getMemberProfile(buffered.senderMemberId) : null;
         return this.toMessageDto(
           {
@@ -877,6 +879,7 @@ export class ChatService implements OnApplicationBootstrap {
         if (existing.roomId !== roomId || existing.senderMemberId !== memberId) {
           throw new ForbiddenException('Operation belongs to another sender');
         }
+        await this.ensureNotificationWork(existing.id);
         return this.toMessageDto(existing, viewer);
       }
     }
@@ -973,7 +976,11 @@ export class ChatService implements OnApplicationBootstrap {
       },
     };
 
-    // 2. ASYNC PERSISTENCE: Concurrently persist to Primary PostgreSQL and generate notifications
+    // Render's free filesystem is ephemeral. Never let the device discard its
+    // durable outbox until PostgreSQL confirms the message, including retries.
+    await this.requirePrimaryPersistence(messageId);
+
+    // Notifications remain outside the acknowledgement's critical path.
     void this.persistMessageAndNotifyAsync(
       messageId,
       roomId,
@@ -1035,6 +1042,22 @@ export class ChatService implements OnApplicationBootstrap {
     this.invalidateRoomCaches(roomId);
     this.logger.debug(`ChatStoredFast message=${messageId} durationMs=${Date.now() - started}`);
     return Object.defineProperty(this.toMessageDto(messageResult, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
+  }
+
+  private async requirePrimaryPersistence(messageId: string): Promise<void> {
+    if (!await this.migrationJob.persistMessageAsync(messageId, true)) {
+      throw new ServiceUnavailableException('Message is still queued. Durable storage is temporarily unavailable; retry with the same client message ID.');
+    }
+    await this.ensureNotificationWork(messageId);
+  }
+
+  private async ensureNotificationWork(messageId: string): Promise<void> {
+    // This durable work marker survives loss of Render's local notification queue.
+    // If either write fails the client retains its original operation for retry.
+    await this.prisma.communicationDelivery.createMany({ data: [{
+      idempotencyKey: `chat:${messageId}:notification-work`, channel: 'PUSH',
+      recipient: messageId, providerRef: messageId, templateKey: 'CHAT_NOTIFICATION_WORK', status: 'PENDING',
+    }], skipDuplicates: true });
   }
 
   async forwardMessage(messageId: string, targetRoomId: string, viewer: ChatViewer, operationId: string) {
@@ -1514,6 +1537,7 @@ export class ChatService implements OnApplicationBootstrap {
       schedule: '00:00 and 12:00',
       timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
       authority: 'PostgreSQL',
+      acknowledgement: 'PostgreSQL commit and durable notification work before success',
     };
   }
 
@@ -1560,6 +1584,30 @@ export class ChatService implements OnApplicationBootstrap {
           await this.persistMessageAndNotifyAsync(messageId, p.roomId, p.memberId, p.viewer, {},
             { data: { body: message.body, createdAt: message.createdAt } }, p.recipients,
             new Set(p.mentionedMemberIds), p.isAllMentioned, p.room);
+        }
+      }
+      // Recover even when a restart replaced SQLite with an empty filesystem.
+      let afterId: string | undefined;
+      while (true) {
+        const batch = await this.prisma.communicationDelivery.findMany({ where: {
+          templateKey: 'CHAT_NOTIFICATION_WORK', status: 'PENDING', ...(afterId ? { id: { gt: afterId } } : {}),
+        }, orderBy: { id: 'asc' }, take: 50 });
+        if (!batch.length) break;
+        for (const work of batch) {
+          afterId = work.id;
+          const message = await this.prisma.chatMessage.findUnique({ where: { id: work.recipient }, include: { room: true, sender: { select: senderSelect } } });
+          if (!message || message.deletedAt || !message.senderMemberId) {
+            await this.prisma.communicationDelivery.update({ where: { id: work.id }, data: { status: 'SENT' } });
+            continue;
+          }
+          this.bufferRepo.seedLegacyMessages([{ ...message, attachmentMeta: message.attachmentMeta as Record<string, unknown> | null,
+            createdAt: message.createdAt.toISOString(), editedAt: message.editedAt?.toISOString() || null, deletedAt: null }]);
+          const recipients = (await this.recipientMemberIds(message.room)).filter(id => id !== message.senderMemberId);
+          const metadata = message.attachmentMeta as { mentions?: string[]; isAllMentioned?: boolean } | null;
+          await this.persistMessageAndNotifyAsync(message.id, message.roomId, message.senderMemberId,
+            { userId: '', memberId: message.senderMemberId, role: 'MEMBER', permissions: [], firstName: message.sender?.firstName, lastName: message.sender?.lastName }, {},
+            { data: { body: message.body, createdAt: message.createdAt } }, recipients,
+            new Set(metadata?.mentions || []), !!metadata?.isAllMentioned, message.room);
         }
       }
     } finally { this.notificationsDraining = false; }
@@ -1637,6 +1685,10 @@ export class ChatService implements OnApplicationBootstrap {
         await tx.chatRoomMember.updateMany({
           where: { roomId, memberId, OR: [{ lastReadAt: null }, { lastReadAt: { lt: new Date(createArgs.data.createdAt) } }] },
           data: { lastReadAt: new Date(createArgs.data.createdAt) },
+        });
+        await tx.communicationDelivery.updateMany({
+          where: { idempotencyKey: `chat:${messageId}:notification-work` },
+          data: { status: 'SENT', attemptedAt: new Date() },
         });
         return claim.count > 0;
       });

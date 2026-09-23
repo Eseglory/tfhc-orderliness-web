@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { ChatBufferRepository } from '../src/modules/chat/chat-buffer.repository';
+import { ChatBufferRepository, defaultChatDatabasePath } from '../src/modules/chat/chat-buffer.repository';
 
 describe('ChatBufferRepository (SQLite Realtime Buffer with WAL Mode)', () => {
   let repo: ChatBufferRepository;
@@ -34,6 +34,16 @@ describe('ChatBufferRepository (SQLite Realtime Buffer with WAL Mode)', () => {
     } catch {
       // ignore
     }
+  });
+
+  test('uses the same default database regardless of launch directory', () => {
+    const original = process.cwd();
+    const before = defaultChatDatabasePath();
+    try {
+      process.chdir(path.dirname(original));
+      expect(defaultChatDatabasePath()).toBe(before);
+      expect(before).toMatch(/[/\\]data[/\\]chat_shared\.db$/);
+    } finally { process.chdir(original); }
   });
 
   test('saves and retrieves messages from SQLite realtime buffer', () => {

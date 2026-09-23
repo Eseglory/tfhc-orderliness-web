@@ -17,6 +17,12 @@ import {
   Shield,
   Sparkles,
   UserCheck,
+  X,
+  XCircle,
+  Search,
+  Phone,
+  ExternalLink,
+  ChevronRight,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../../components/admin/AdminLayoutShell';
 import { StatusBadge } from '../../../../../components/StatusBadge';
@@ -66,6 +72,213 @@ export default function AdminLiveMeetingPage() {
   const [manualStatus, setManualStatus] = useState('ON_TIME');
   const [manualReason, setManualReason] = useState('Dead phone battery / No smartphone');
   const [submittingManual, setSubmittingManual] = useState(false);
+
+  // RSVP & Weekly Availability Details Modal
+  const [showRsvpModal, setShowRsvpModal] = useState(false);
+  const [rsvpFilter, setRsvpFilter] = useState<'ALL' | 'ATTENDING' | 'DECLINED' | 'CHECKED_IN' | 'PENDING'>('ALL');
+  const [rsvpSearch, setRsvpSearch] = useState('');
+
+  // Memoized Unified RSVP & Weekly Availability Roster
+  const unifiedRsvpData = useMemo(() => {
+    if (!meeting) return { list: [], totalAttending: 0, totalDeclined: 0, totalCheckedIn: 0 };
+
+    const memberMap = new Map<string, {
+      memberId: string;
+      firstName: string;
+      lastName: string;
+      memberCode: string;
+      phoneNumber: string | null;
+      roleInUnit: string | null;
+      profilePhotoUrl: string | null;
+      subTeamName: string;
+      status: 'ATTENDING' | 'DECLINED';
+      sources: string[];
+      submittedAt: string | null;
+      hasAttended: boolean;
+      actualArrivalTime: string | null;
+      attendanceStatus: string | null;
+      attendanceType: string | null;
+      attendanceMethod: string | null;
+    }>();
+
+    // 1. Process Event Responses (RSVP)
+    (meeting.eventResponses || []).forEach((resp: any) => {
+      const m = resp.member;
+      if (!m) return;
+      const existing = memberMap.get(m.id);
+      const isAttending = Boolean(resp.attending);
+      if (existing) {
+        if (!existing.sources.includes('Direct Event RSVP')) {
+          existing.sources.push('Direct Event RSVP');
+        }
+        existing.status = isAttending ? 'ATTENDING' : 'DECLINED';
+        if (resp.updatedAt) existing.submittedAt = resp.updatedAt;
+      } else {
+        memberMap.set(m.id, {
+          memberId: m.id,
+          firstName: m.firstName || '',
+          lastName: m.lastName || '',
+          memberCode: m.memberCode || '—',
+          phoneNumber: m.phoneNumber || null,
+          roleInUnit: m.roleInUnit || null,
+          profilePhotoUrl: m.profilePhotoUrl || null,
+          subTeamName: m.subTeam?.name || 'General',
+          status: isAttending ? 'ATTENDING' : 'DECLINED',
+          sources: ['Direct Event RSVP'],
+          submittedAt: resp.updatedAt || null,
+          hasAttended: false,
+          actualArrivalTime: null,
+          attendanceStatus: null,
+          attendanceType: null,
+          attendanceMethod: null,
+        });
+      }
+    });
+
+    // 2. Process Service Commitments (Direct weekly commitments attached to meeting)
+    (meeting.serviceCommitments || []).forEach((comm: any) => {
+      const m = comm.member;
+      if (!m) return;
+      const isCommitted = comm.status === 'COMMITTED';
+      const existing = memberMap.get(m.id);
+      if (existing) {
+        if (!existing.sources.includes('Weekly Availability Poll')) {
+          existing.sources.push('Weekly Availability Poll');
+        }
+      } else {
+        memberMap.set(m.id, {
+          memberId: m.id,
+          firstName: m.firstName || '',
+          lastName: m.lastName || '',
+          memberCode: m.memberCode || '—',
+          phoneNumber: m.phoneNumber || null,
+          roleInUnit: m.roleInUnit || null,
+          profilePhotoUrl: m.profilePhotoUrl || null,
+          subTeamName: m.subTeam?.name || 'General',
+          status: isCommitted ? 'ATTENDING' : 'DECLINED',
+          sources: ['Weekly Availability Poll'],
+          submittedAt: comm.createdAt || null,
+          hasAttended: false,
+          actualArrivalTime: null,
+          attendanceStatus: null,
+          attendanceType: null,
+          attendanceMethod: null,
+        });
+      }
+    });
+
+    // 3. Process Weekly Availability cycle members (available & unavailable from weekly poll)
+    if (meeting.weeklyAvailability) {
+      (meeting.weeklyAvailability.availableMembers || []).forEach((m: any) => {
+        const existing = memberMap.get(m.id);
+        if (existing) {
+          if (!existing.sources.includes('Weekly Availability Poll')) {
+            existing.sources.push('Weekly Availability Poll');
+          }
+        } else {
+          memberMap.set(m.id, {
+            memberId: m.id,
+            firstName: m.firstName || '',
+            lastName: m.lastName || '',
+            memberCode: m.memberCode || '—',
+            phoneNumber: m.phoneNumber || null,
+            roleInUnit: m.roleInUnit || null,
+            profilePhotoUrl: m.profilePhotoUrl || null,
+            subTeamName: m.subTeam?.name || 'General',
+            status: 'ATTENDING',
+            sources: ['Weekly Availability Poll'],
+            submittedAt: m.submittedAt || null,
+            hasAttended: false,
+            actualArrivalTime: null,
+            attendanceStatus: null,
+            attendanceType: null,
+            attendanceMethod: null,
+          });
+        }
+      });
+
+      (meeting.weeklyAvailability.unavailableMembers || []).forEach((m: any) => {
+        const existing = memberMap.get(m.id);
+        if (!existing) {
+          memberMap.set(m.id, {
+            memberId: m.id,
+            firstName: m.firstName || '',
+            lastName: m.lastName || '',
+            memberCode: m.memberCode || '—',
+            phoneNumber: m.phoneNumber || null,
+            roleInUnit: m.roleInUnit || null,
+            profilePhotoUrl: m.profilePhotoUrl || null,
+            subTeamName: m.subTeam?.name || 'General',
+            status: 'DECLINED',
+            sources: ['Weekly Availability Poll'],
+            submittedAt: m.submittedAt || null,
+            hasAttended: false,
+            actualArrivalTime: null,
+            attendanceStatus: null,
+            attendanceType: null,
+            attendanceMethod: null,
+          });
+        }
+      });
+    }
+
+    // 4. Cross-reference with Attendance Records (has member checked in?)
+    const attendanceMap = new Map<string, any>();
+    (attendanceRecords || []).forEach((rec: any) => {
+      if (rec.memberId) {
+        attendanceMap.set(rec.memberId, rec);
+      }
+    });
+
+    const fullList = Array.from(memberMap.values()).map((item) => {
+      const att = attendanceMap.get(item.memberId);
+      if (att) {
+        return {
+          ...item,
+          hasAttended: true,
+          actualArrivalTime: att.actualArrivalTime || null,
+          attendanceStatus: att.status || null,
+          attendanceType: att.attendanceType || null,
+          attendanceMethod: att.attendanceMethod || null,
+        };
+      }
+      return item;
+    });
+
+    const totalAttending = fullList.filter((x) => x.status === 'ATTENDING').length;
+    const totalDeclined = fullList.filter((x) => x.status === 'DECLINED').length;
+    const totalCheckedIn = fullList.filter((x) => x.status === 'ATTENDING' && x.hasAttended).length;
+
+    return {
+      list: fullList,
+      totalAttending,
+      totalDeclined,
+      totalCheckedIn,
+    };
+  }, [meeting, attendanceRecords]);
+
+  // Filtered List based on Search & Active Tab
+  const filteredRsvpList = useMemo(() => {
+    return unifiedRsvpData.list.filter((m) => {
+      // 1. Status Filter
+      if (rsvpFilter === 'ATTENDING' && m.status !== 'ATTENDING') return false;
+      if (rsvpFilter === 'DECLINED' && m.status !== 'DECLINED') return false;
+      if (rsvpFilter === 'CHECKED_IN' && !m.hasAttended) return false;
+      if (rsvpFilter === 'PENDING' && (m.status !== 'ATTENDING' || m.hasAttended)) return false;
+
+      // 2. Search
+      if (rsvpSearch.trim()) {
+        const q = rsvpSearch.toLowerCase();
+        const matchesName = `${m.firstName} ${m.lastName}`.toLowerCase().includes(q);
+        const matchesCode = m.memberCode.toLowerCase().includes(q);
+        const matchesPhone = (m.phoneNumber || '').toLowerCase().includes(q);
+        const matchesTeam = m.subTeamName.toLowerCase().includes(q);
+        if (!matchesName && !matchesCode && !matchesPhone && !matchesTeam) return false;
+      }
+
+      return true;
+    });
+  }, [unifiedRsvpData.list, rsvpFilter, rsvpSearch]);
 
   const loadData = useCallback(async () => {
     if (!meetingId) return;
@@ -639,24 +852,60 @@ export default function AdminLiveMeetingPage() {
               </div>
             </section>
 
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white">RSVP Responses</h2>
+            <section
+              onClick={() => {
+                setRsvpFilter('ALL');
+                setRsvpSearch('');
+                setShowRsvpModal(true);
+              }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-500/60 p-5 rounded-2xl shadow-sm space-y-3 cursor-pointer transition-all hover:shadow-md group relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-1.5">
+                      <span>RSVP &amp; Availability</span>
+                    </h2>
+                    <p className="text-[10px] text-slate-400 font-medium">Weekly poll &amp; direct RSVPs</p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/50 dark:border-indigo-800/50 px-2.5 py-1 rounded-full flex items-center gap-1 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-2xs">
+                  <span>View Details</span>
+                  <ExternalLink className="w-3 h-3" />
+                </span>
               </div>
+
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center group-hover:bg-emerald-500/5 transition-colors">
                   <span className="text-xl font-black text-emerald-600">
-                    {meeting?.eventResponses?.filter((r: any) => r.attending).length ?? 0}
+                    {unifiedRsvpData.totalAttending}
                   </span>
-                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Attending</span>
+                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">
+                    Attending / Available
+                  </span>
                 </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-100 dark:border-slate-800 text-center group-hover:bg-rose-500/5 transition-colors">
                   <span className="text-xl font-black text-rose-600">
-                    {meeting?.eventResponses?.filter((r: any) => !r.attending).length ?? 0}
+                    {unifiedRsvpData.totalDeclined}
                   </span>
-                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">Declined</span>
+                  <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mt-0.5">
+                    Declined / Unavailable
+                  </span>
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] pt-1 text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/60">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>{unifiedRsvpData.totalCheckedIn} checked in</span>
+                </span>
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-0.5">
+                  <span>Click to view roster</span>
+                  <ChevronRight className="w-3 h-3" />
+                </span>
               </div>
             </section>
           </div>
@@ -1024,6 +1273,230 @@ export default function AdminLiveMeetingPage() {
                   className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow-md shadow-blue-600/30 transition disabled:opacity-50"
                 >
                   {generatingCode ? 'Generating Code…' : 'Generate & Activate Code'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RSVP & Weekly Availability Details Modal */}
+        {showRsvpModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-3 sm:p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800/80 flex items-start justify-between bg-slate-50/50 dark:bg-slate-950/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>RSVP &amp; Weekly Availability Responses</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {meeting?.title} • {new Date(meeting?.startTime).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRsvpModal(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Summary KPIs Ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 sm:p-6 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800">
+                <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Responses</span>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{unifiedRsvpData.list.length}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Poll + direct RSVPs</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider">Attending / Available</span>
+                  <p className="text-2xl font-black text-emerald-600 mt-0.5">{unifiedRsvpData.totalAttending}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Expected to attend</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] uppercase font-bold text-rose-600 tracking-wider">Declined / Unavailable</span>
+                  <p className="text-2xl font-black text-rose-600 mt-0.5">{unifiedRsvpData.totalDeclined}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Stated cannot attend</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+                  <span className="text-[10px] uppercase font-bold text-indigo-600 tracking-wider">Present &amp; Checked In</span>
+                  <p className="text-2xl font-black text-indigo-600 mt-0.5">
+                    {unifiedRsvpData.totalCheckedIn}
+                    <span className="text-xs text-slate-400 font-semibold ml-1.5">
+                      ({unifiedRsvpData.totalAttending > 0 ? Math.round((unifiedRsvpData.totalCheckedIn / unifiedRsvpData.totalAttending) * 100) : 0}%)
+                    </span>
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Arrived so far</p>
+                </div>
+              </div>
+
+              {/* Filters & Search Bar */}
+              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900">
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                  {[
+                    { id: 'ALL', label: 'All', count: unifiedRsvpData.list.length },
+                    { id: 'ATTENDING', label: 'Attending / Available', count: unifiedRsvpData.totalAttending },
+                    { id: 'DECLINED', label: 'Declined', count: unifiedRsvpData.totalDeclined },
+                    { id: 'CHECKED_IN', label: 'Present', count: unifiedRsvpData.totalCheckedIn },
+                    { id: 'PENDING', label: 'Not Yet Arrived', count: Math.max(0, unifiedRsvpData.totalAttending - unifiedRsvpData.totalCheckedIn) },
+                  ].map((tab) => {
+                    const isActive = rsvpFilter === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setRsvpFilter(tab.id as any)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                          isActive
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Search */}
+                <div className="relative min-w-[220px]">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    value={rsvpSearch}
+                    onChange={(e) => setRsvpSearch(e.target.value)}
+                    placeholder="Search name, code, phone…"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                  />
+                  {rsvpSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setRsvpSearch('')}
+                      className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Member Roster List */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[480px]">
+                {filteredRsvpList.length === 0 ? (
+                  <div className="text-center py-16 text-slate-400 space-y-2">
+                    <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
+                    <p className="font-semibold text-sm text-slate-700 dark:text-slate-300">No members match this filter</p>
+                    <p className="text-xs text-slate-400">Try selecting another filter or clearing your search query.</p>
+                  </div>
+                ) : (
+                  filteredRsvpList.map((m) => {
+                    const initials = `${(m.firstName || '').charAt(0)}${(m.lastName || '').charAt(0)}`.toUpperCase() || 'M';
+                    return (
+                      <div key={m.memberId} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/30 px-3 rounded-2xl transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-700 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                            {initials}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-sm text-slate-900 dark:text-white">
+                                {m.firstName} {m.lastName}
+                              </span>
+                              <span className="font-mono text-[11px] text-slate-400 font-semibold">
+                                {m.memberCode}
+                              </span>
+                              {m.roleInUnit && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                  {m.roleInUnit}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 mt-1 flex-wrap">
+                              <span className="font-medium text-slate-600 dark:text-slate-300">
+                                Team: {m.subTeamName}
+                              </span>
+                              {m.phoneNumber && (
+                                <a
+                                  href={`tel:${m.phoneNumber}`}
+                                  className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  <span>{m.phoneNumber}</span>
+                                </a>
+                              )}
+                              <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md font-medium">
+                                Source: {m.sources.join(' & ')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          {/* RSVP/Availability Decision Badge */}
+                          {m.status === 'ATTENDING' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Attending / Available</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Declined / Unavailable</span>
+                            </span>
+                          )}
+
+                          {/* Attendance Check-in State */}
+                          {m.hasAttended ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span>Present</span>
+                              {m.actualArrivalTime && (
+                                <span className="font-normal text-[11px] opacity-80">
+                                  ({new Date(m.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>Not Checked In</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50">
+                <Link
+                  href="/admin/availability"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Open Weekly Availability Reconciliation &rarr;</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowRsvpModal(false)}
+                  className="px-5 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Close
                 </button>
               </div>
             </div>

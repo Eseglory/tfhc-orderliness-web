@@ -5,6 +5,7 @@ dist
 .next
 **/.next
 .git
+data/storage-backups
 .validation
 apps/api/data
 apps/api/test-data

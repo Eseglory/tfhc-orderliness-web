@@ -46,3 +46,4 @@ apps/api/test-data/
 *.db
 *.db-wal
 *.db-shm
+data/storage-backups/

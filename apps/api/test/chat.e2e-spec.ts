@@ -9,6 +9,7 @@ import { AddressInfo } from 'net';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthService } from '../src/modules/auth/auth.service';
+import { ChatMigrationJob } from '../src/modules/chat/chat-migration.job';
 import { RbacService } from '../src/common/rbac/rbac.service';
 
 const database = process.env.TEST_DATABASE_URL;
@@ -162,6 +163,22 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     await http().post(`/chat/rooms/${generalId}/read`).set(auth(bobToken)).send({ messageId: msg.id }).expect(201);
     const bobRooms2 = (await http().get('/chat/rooms').set(auth(bobToken)).expect(200)).body;
     expect(bobRooms2.find((r: any) => r.id === generalId).unreadCount).toBe(0);
+  });
+
+  test('withholds success on primary failure and retries the same operation without duplicates', async () => {
+    const generalId = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL').id;
+    const operationId = `durability-${run}`;
+    const migration = app.get(ChatMigrationJob);
+    const failure = jest.spyOn(migration, 'persistMessageAsync').mockResolvedValueOnce(false);
+    try {
+      await http().post(`/chat/rooms/${generalId}/messages`).set(auth(aliceToken)).send({ body: 'Durability failure recovery', clientId: operationId }).expect(503);
+      expect(await db.chatMessage.count({ where: { clientOperationId: operationId } })).toBe(0);
+    } finally { failure.mockRestore(); }
+    const saved = (await http().post(`/chat/rooms/${generalId}/messages`).set(auth(aliceToken)).send({ body: 'Durability failure recovery', clientId: operationId }).expect(201)).body;
+    expect(await db.chatMessage.count({ where: { clientOperationId: operationId } })).toBe(1);
+    const replay = (await http().post(`/chat/rooms/${generalId}/messages`).set(auth(aliceToken)).send({ body: 'Durability failure recovery', clientId: operationId }).expect(201)).body;
+    expect(replay.id).toBe(saved.id);
+    expect(await db.chatMessage.count({ where: { clientOperationId: operationId } })).toBe(1);
   });
 
   test('direct messages: a 1:1 room is created once and both sides converge on it', async () => {

@@ -132,12 +132,13 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    * Continuous / Asynchronous Persistence Helper.
    * Immediately persists a newly buffered message to the Primary Database in the background.
    */
-  public async persistMessageAsync(messageId: string): Promise<boolean> {
+  public async persistMessageAsync(messageId: string, verifyPrimary = false): Promise<boolean> {
     const msg = this.bufferRepo.findById(messageId);
     if (!msg) return false;
-    if (msg.syncStatus === 'MIGRATED') return true;
+    if (msg.syncStatus === 'MIGRATED' && !verifyPrimary) return true;
 
     try {
+      if (msg.syncStatus === 'MIGRATED' && await this.matchesPrimary(msg)) return true;
       await this.migrateSingleMessage(msg);
       this.bufferRepo.markMigrated(msg.id, new Date().toISOString(), msg);
       return true;

@@ -3,6 +3,21 @@ import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+/** Resolve from the installed application, not the shell's working directory. */
+export function defaultChatDatabasePath(): string {
+  let directory = __dirname;
+  while (true) {
+    const manifest = path.join(directory, 'package.json');
+    if (fs.existsSync(manifest)) {
+      const name = JSON.parse(fs.readFileSync(manifest, 'utf8')).name;
+      if (name === 'tfhc-orderliness-monorepo') return path.join(directory, 'data/chat_shared.db');
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) throw new Error('Cannot locate chat data directory; configure CHAT_SHARED_DB_PATH explicitly.');
+    directory = parent;
+  }
+}
+
 export interface StatementSync {
   run(...params: unknown[]): { changes: number | bigint; lastInsertRowid: number | bigint };
   get(...params: unknown[]): unknown;
@@ -45,6 +60,7 @@ export interface BufferedMessageRecord {
 }
 
 export interface BufferStats {
+  databasePath: string | null;
   totalBuffered: number;
   pendingCount: number;
   processingCount: number;
@@ -129,7 +145,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
         this.config.get<string>('CHAT_BUFFER_DB_PATH') ||
         (process.env.NODE_ENV === 'test'
           ? path.join(process.cwd(), `test-data/chat_shared_${Date.now()}_${Math.random().toString(36).slice(2)}.db`)
-          : path.join(process.cwd(), 'data/chat_shared.db'));
+          : defaultChatDatabasePath());
 
       this.dbPath = path.resolve(resolvedPath);
       const dir = path.dirname(this.dbPath);
@@ -802,6 +818,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
         else if (r.syncStatus === 'FAILED') failed++;
       }
       return {
+        databasePath: this.dbPath || null,
         totalBuffered: this.memoryStore.size,
         pendingCount: pending,
         processingCount: processing,
@@ -833,6 +850,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     }
 
     return {
+      databasePath: this.dbPath,
       totalBuffered: Number(counts?.total ?? 0),
       pendingCount: Number(counts?.pending ?? 0),
       processingCount: Number(counts?.processing ?? 0),

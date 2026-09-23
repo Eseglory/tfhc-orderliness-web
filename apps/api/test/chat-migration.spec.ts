@@ -196,6 +196,16 @@ describe('ChatMigrationJob (Idempotent Midnight Migration from SQLite to Postgre
     expect(repo.findById('concurrent-edit')).toMatchObject({ body: 'after', syncStatus: 'PENDING' });
   });
 
+  test('does not trust a migrated flag when a durable acknowledgement is required', async () => {
+    repo.saveMessage({ id: 'stale-migrated', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'preserve', createdAt: '2026-01-01T00:00:00.000Z' });
+    repo.markMigrated('stale-migrated', new Date().toISOString());
+    mockPrisma.chatMessage.findUnique.mockResolvedValue(null);
+    mockPrisma.chatMessage.upsert.mockRejectedValue(new Error('Primary unavailable'));
+    expect(await job.persistMessageAsync('stale-migrated', true)).toBe(false);
+    expect(repo.findById('stale-migrated')?.syncStatus).toBe('FAILED');
+    expect(repo.findById('stale-migrated')?.body).toBe('preserve');
+  });
+
   test('propagates import failure without advancing checkpoint', async () => {
     repo.setSyncCheckpoint('2026-01-01T00:00:00.000Z');
     mockPrisma.chatMessage.findMany = jest.fn().mockRejectedValue(new Error('Unavailable'));

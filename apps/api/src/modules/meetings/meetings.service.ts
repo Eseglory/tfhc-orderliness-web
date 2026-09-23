@@ -440,8 +440,41 @@ export class MeetingsService {
           ? { include: { member: { select: { firstName: true, lastName: true } } } }
           : false,
         eventResponses: includeAttendance
-          ? { include: { member: { select: { firstName: true, lastName: true } } } }
+          ? {
+              include: {
+                member: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    memberCode: true,
+                    phoneNumber: true,
+                    roleInUnit: true,
+                    profilePhotoUrl: true,
+                    subTeam: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            }
           : { where: { memberId: memberId ?? '' } },
+        serviceCommitments: includeAttendance
+          ? {
+              include: {
+                member: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    memberCode: true,
+                    phoneNumber: true,
+                    roleInUnit: true,
+                    profilePhotoUrl: true,
+                    subTeam: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            }
+          : false,
         attendanceRecords: includeAttendance ? { include: { member: true }, orderBy: { actualArrivalTime: 'asc' } } : false,
       },
     });
@@ -465,6 +498,105 @@ export class MeetingsService {
       return meeting;
     }
 
+    let weeklyAvailability: {
+      cycleId: string;
+      weekStart: Date;
+      availableMembers: any[];
+      unavailableMembers: any[];
+    } | null = null;
+
+    try {
+      const meetingDate = new Date(meeting.startTime);
+      const tz = process.env.TFHC_TIMEZONE || 'Africa/Lagos';
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short',
+      });
+      const parts = formatter.formatToParts(meetingDate);
+      const getVal = (type: string) => parts.find((p) => p.type === type)?.value;
+      const year = Number(getVal('year'));
+      const month = Number(getVal('month'));
+      const day = Number(getVal('day'));
+      const weekday = getVal('weekday') || 'Mon';
+
+      const offsetMap: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+      const offsetFromMonday = offsetMap[weekday] ?? 0;
+
+      const mondayUtc = new Date(Date.UTC(year, month - 1, day));
+      mondayUtc.setUTCDate(mondayUtc.getUTCDate() - offsetFromMonday);
+      const weekStart = new Date(Date.UTC(mondayUtc.getUTCFullYear(), mondayUtc.getUTCMonth(), mondayUtc.getUTCDate()));
+
+      const cycle = await this.prisma.weeklyAvailabilityCycle.findUnique({
+        where: { weekStart },
+        include: {
+          commitments: {
+            where: { meetingId: id },
+            include: {
+              member: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  memberCode: true,
+                  phoneNumber: true,
+                  roleInUnit: true,
+                  profilePhotoUrl: true,
+                  subTeam: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+          responses: {
+            include: {
+              member: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  memberCode: true,
+                  phoneNumber: true,
+                  roleInUnit: true,
+                  profilePhotoUrl: true,
+                  subTeam: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (cycle) {
+        const committedMemberIds = new Set(cycle.commitments.filter((c) => c.status === 'COMMITTED').map((c) => c.memberId));
+        const availableMembers = cycle.commitments
+          .filter((c) => c.status === 'COMMITTED')
+          .map((c) => ({
+            ...c.member,
+            status: 'COMMITTED',
+            submittedAt: cycle.responses.find((r) => r.memberId === c.memberId)?.submittedAt ?? null,
+          }));
+
+        const unavailableMembers = cycle.responses
+          .filter((r) => !committedMemberIds.has(r.memberId))
+          .map((r) => ({
+            ...r.member,
+            status: 'UNCOMMITTED',
+            submittedAt: r.submittedAt ?? null,
+          }));
+
+        weeklyAvailability = {
+          cycleId: cycle.id,
+          weekStart: cycle.weekStart,
+          availableMembers,
+          unavailableMembers,
+        };
+      }
+    } catch {
+      // Safe fallback if cycle calculation fails
+    }
+
     const expectedMembers = await this.prisma.member.findMany({
       where: {
         status: 'ACTIVE',
@@ -485,7 +617,7 @@ export class MeetingsService {
       },
     });
     const expectedCount = expectedMembers.filter(member => canViewEvent(meeting.visibility, meeting.audiences, {memberId:member.id,subTeamId:member.subTeamId,roleInUnit:member.roleInUnit})).length;
-    return { ...meeting, expectedCount };
+    return { ...meeting, expectedCount, weeklyAvailability };
   }
 
   // -------------------------------------------------------------------------
