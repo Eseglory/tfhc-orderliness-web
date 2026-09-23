@@ -13,6 +13,7 @@ import { CalendarEventPayload } from './providers/calendar-provider.interface';
 import { google } from 'googleapis';
 import { CalendarSyncStatus } from '@prisma/client';
 import { visibilityWhere, EventViewer } from '../../common/event-visibility';
+import { recurrenceRuleToRRuleString } from '@tfhc/shared';
 
 export interface UnifiedCalendarItem {
   id: string;
@@ -269,6 +270,7 @@ export class CalendarService {
       include: {
         category: true,
         eventType: true,
+        serviceSchedule: true,
         invitations: {
           include: {
             member: {
@@ -301,16 +303,38 @@ export class CalendarService {
       })
       .filter((a): a is { email: string; displayName: string; responseStatus: any } => Boolean(a));
 
-    const isOnline = meeting.locationName?.toLowerCase().includes('google meet') || meeting.locationName?.toLowerCase().includes('online');
+    const isOnline =
+      meeting.locationName?.toLowerCase().includes('google meet') ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.locationName?.toLowerCase().includes('virtual') ||
+      meeting.address?.startsWith('http') ||
+      Boolean(meeting.notes?.includes('[Virtual Link:'));
+
+    const isWedSeries =
+      meeting.title.toLowerCase().includes('wednesday') &&
+      (Boolean(meeting.serviceScheduleId) || meeting.title.toLowerCase().includes('weekly'));
+
+    let recurrence: string[] | undefined = undefined;
+    if (meeting.serviceSchedule?.recurrenceRule) {
+      recurrence = ['RRULE:' + recurrenceRuleToRRuleString(meeting.serviceSchedule.recurrenceRule as any)];
+    } else if (isWedSeries) {
+      recurrence = ['RRULE:FREQ=WEEKLY;BYDAY=WE'];
+    }
+
+    let descriptionText = meeting.description || '';
+    if (isOnline && meeting.address?.startsWith('http') && !descriptionText.includes(meeting.address)) {
+      descriptionText = descriptionText ? `${descriptionText}\n\nJoin Google Meet: ${meeting.address}` : `Join Google Meet: ${meeting.address}`;
+    }
 
     const payload: CalendarEventPayload = {
       title: meeting.title,
-      description: meeting.description || undefined,
+      description: descriptionText || undefined,
       startTime: meeting.startTime,
       endTime: meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60000),
-      location: meeting.locationName,
+      location: isOnline && meeting.address?.startsWith('http') ? meeting.address : meeting.locationName,
       isOnline,
       conferenceType: isOnline ? 'GOOGLE_MEET' : undefined,
+      recurrence,
       attendees,
     };
 
@@ -696,7 +720,11 @@ export class CalendarService {
         startTime: m.startTime,
         endTime: m.endTime || new Date(m.startTime.getTime() + 60 * 60000),
         locationName: m.locationName || 'General',
-        meetingUrl: mapping?.meetingUrl || (m.locationName?.toLowerCase()?.includes('meet') ? 'https://meet.google.com' : null),
+        meetingUrl:
+          mapping?.meetingUrl ||
+          (m.address?.startsWith('http') ? m.address : null) ||
+          (m.notes ? m.notes.match(/\[Virtual Link:\s*([^\s\]]+)\]/i)?.[1] || null : null) ||
+          (m.locationName?.toLowerCase()?.includes('meet') ? 'https://meet.google.com' : null),
         status: m.status,
         isCompulsory: m.isCompulsory,
         visibility: m.visibility,

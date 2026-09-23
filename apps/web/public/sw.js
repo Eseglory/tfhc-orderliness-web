@@ -1,6 +1,6 @@
 /* Public resources only. Bump VERSION whenever this policy or shell changes. */
 importScripts('/pwa-runtime.js');
-const VERSION = 'v13';
+const VERSION = 'v14';
 const PREFIX = 'tfhc-pwa-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const ASSETS = `${PREFIX}assets-${VERSION}`;
@@ -48,10 +48,23 @@ self.addEventListener('fetch', event => {
       request.headers.has('Authorization') || url.pathname.startsWith('/api/') ||
       request.headers.has('RSC') || url.searchParams.has('_rsc')) return;
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(async () =>
-      (await (await caches.open(SHELL)).match('/offline.html')) ||
-      new Response('Offline. Reconnect and retry.', { status: 503, headers: { 'Content-Type': 'text/plain' } })
-    ));
+    // Only static, user-independent chat shells. Authenticated data is never cached here.
+    const chatShell = ['/member/chat', '/admin/chat'].includes(url.pathname);
+    event.respondWith((async () => {
+      const cache = await caches.open(SHELL);
+      try {
+        const result = await fetch(request);
+        if (chatShell && result.ok && !result.redirected && result.type === 'basic' &&
+            /text\/html/i.test(result.headers.get('Content-Type') || '') &&
+            !/private|no-store/i.test(result.headers.get('Cache-Control') || '')) {
+          try { await cache.put(url.pathname, result.clone()); } catch { /* Quota must not block navigation. */ }
+        }
+        return result;
+      } catch {
+        return (chatShell && await cache.match(url.pathname)) || await cache.match('/offline.html') ||
+          new Response('Offline. Reconnect and retry.', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+      }
+    })());
     return;
   }
   // No arbitrary image URLs, Next image optimizer, downloads or JSON endpoints.

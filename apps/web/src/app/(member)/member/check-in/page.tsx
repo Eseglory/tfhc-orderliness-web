@@ -19,9 +19,17 @@ export default function CheckInPage() {
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [activeRecord, setActiveRecord] = useState<any>(null);
   const [availabilityData, setAvailabilityData] = useState<any>(null);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
+  const [submittingCode, setSubmittingCode] = useState(false);
   const pending = useRef(false);
   const mounted = useRef(true);
   const meeting = meetings.find(m => m.id === meetingId);
+  const isOnlineService = Boolean(meeting?.isOnline) ||
+    meeting?.locationName?.toLowerCase().includes('online') ||
+    meeting?.locationName?.toLowerCase().includes('google meet') ||
+    meeting?.locationName?.toLowerCase().includes('virtual') ||
+    (meeting && meeting.geofenceRadiusMeters >= 50000);
   const isCommittedViaAvailability = Boolean(
     availabilityData?.submitted &&
       (availabilityData?.selectedMeetingIds?.includes(meetingId) || (!meetingId && availabilityData?.selectedMeetingIds?.length > 0))
@@ -103,6 +111,27 @@ export default function CheckInPage() {
     pending.current = true; setBusy(true); setError('');
     try {
       if (!navigator.onLine) throw new Error('You are offline. Connect to the internet, then try again.');
+
+      // If meeting is online, bypass GPS entirely and check in via online session
+      if (isOnlineService) {
+        const res = await fetchApi<{ success: boolean; sessionToken: string; record: any }>('/attendance/online/check-in', {
+          method: 'POST',
+          body: JSON.stringify({
+            meetingId: meeting.id,
+            deviceInfo: navigator.userAgent.slice(0, 500),
+          }),
+        });
+        if (res.sessionToken) {
+          localStorage.setItem(`tfhc_online_session_${meeting.id}`, res.sessionToken);
+        }
+        if (mounted.current) {
+          setResult(res.record);
+          setIsClockedIn(true);
+          setActiveRecord(res.record);
+        }
+        return;
+      }
+
       if (!navigator.geolocation) throw new Error('This browser does not support location access. Please use a supported browser.');
       const position = await new Promise<GeolocationPosition>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
@@ -148,19 +177,63 @@ export default function CheckInPage() {
     }
   };
 
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codeValue || !/^\d{6}$/.test(codeValue.trim())) {
+      setError('Please enter a valid 6-digit attendance code');
+      return;
+    }
+    setSubmittingCode(true);
+    setError('');
+    try {
+      const res = await fetchApi<{ success: boolean; record: any }>('/attendance/online/submit-code', {
+        method: 'POST',
+        body: JSON.stringify({
+          meetingId: meeting.id,
+          code: codeValue.trim(),
+        }),
+      });
+      if (mounted.current) {
+        setResult(res.record);
+        setIsClockedIn(true);
+        setActiveRecord(res.record);
+        setShowCodeInput(false);
+        setCodeValue('');
+      }
+    } catch (err: any) {
+      if (mounted.current) setError(err.message || 'Invalid or expired attendance code');
+    } finally {
+      if (mounted.current) setSubmittingCode(false);
+    }
+  };
+
   const clockOut = async () => {
     if (pending.current || !meeting || busy) return;
     pending.current = true; setBusy(true); setError('');
     try {
       if (!navigator.onLine) throw new Error('You are offline. Connect to the internet, then try again.');
-      await fetchApi('/attendance/clock-out', {
-        method: 'POST',
-        body: JSON.stringify({
-          meetingId: meeting.id,
-          deviceInfo: navigator.userAgent.slice(0, 500),
-        }),
-      });
-      localStorage.removeItem('tfhc_venue_session');
+
+      if (isOnlineService || activeRecord?.attendanceType === 'ONLINE') {
+        const token = localStorage.getItem(`tfhc_online_session_${meeting.id}`) || undefined;
+        await fetchApi('/attendance/online/check-out', {
+          method: 'POST',
+          body: JSON.stringify({
+            meetingId: meeting.id,
+            sessionToken: token,
+          }),
+        });
+        localStorage.removeItem(`tfhc_online_session_${meeting.id}`);
+      } else {
+        await fetchApi('/attendance/clock-out', {
+          method: 'POST',
+          body: JSON.stringify({
+            meetingId: meeting.id,
+            deviceInfo: navigator.userAgent.slice(0, 500),
+          }),
+        });
+        localStorage.removeItem('tfhc_venue_session');
+      }
+
       if (mounted.current) {
         setIsClockedIn(false);
         setActiveRecord(null);
@@ -269,16 +342,24 @@ export default function CheckInPage() {
                   </div>
                 )}
 
-                <div className="p-3 rounded-xl bg-surface-variant/40 border border-outline-variant/20 text-xs text-on-surface-variant space-y-1">
-                  <p className="font-bold text-on-surface">📍 Location Rules</p>
-                  {meeting.geofenceRadiusMeters >= 50000 ? (
-                    <p>No location restriction for this service. You can clock in from any location.</p>
-                  ) : (
+                {isOnlineService ? (
+                  <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                    <p className="font-extrabold flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
+                      <span className="material-symbols-outlined text-base">videocam</span>
+                      <span>Virtual / Online Gathering</span>
+                    </p>
+                    <p className="font-medium text-slate-600 dark:text-slate-300">
+                      No venue GPS check required. You can check in directly online or enter an attendance code.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-surface-variant/40 border border-outline-variant/20 text-xs text-on-surface-variant space-y-1">
+                    <p className="font-bold text-on-surface">📍 Location Rules</p>
                     <p>Your device GPS location must be within <strong>{meeting.geofenceRadiusMeters} meters</strong> of {meeting.locationName || 'the venue'} to mark attendance.</p>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {distance !== null && (
+                {!isOnlineService && distance !== null && (
                   <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
                     meeting.geofenceRadiusMeters >= 50000 || distance <= meeting.geofenceRadiusMeters
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
@@ -295,15 +376,79 @@ export default function CheckInPage() {
                     <span className="text-xs font-bold text-slate-400">Verifying session status…</span>
                   </div>
                 ) : isClockedIn ? (
-                  <button
-                    aria-label="Clock out now"
-                    onClick={clockOut}
-                    disabled={busy || !meeting}
-                    className="w-full rounded-xl p-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md border border-slate-700/20"
-                  >
-                    <span className="material-symbols-outlined text-red-500">logout</span>
-                    <span>{busy ? 'Clocking Out…' : 'Clock Out'}</span>
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      aria-label="Clock out now"
+                      onClick={clockOut}
+                      disabled={busy || !meeting}
+                      className="w-full rounded-xl p-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md border border-slate-700/20"
+                    >
+                      <span className="material-symbols-outlined text-red-500">logout</span>
+                      <span>{busy ? 'Clocking Out…' : isOnlineService ? 'Check Out of Online Meeting' : 'Clock Out'}</span>
+                    </button>
+                    {isOnlineService && (
+                      <Link
+                        href={`/member/meetings/${meeting.id}`}
+                        className="inline-flex items-center justify-center gap-1.5 w-full py-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-900"
+                      >
+                        <span className="material-symbols-outlined text-base">videocam</span>
+                        <span>Open Gathering Session / Google Meet</span>
+                      </Link>
+                    )}
+                  </div>
+                ) : isOnlineService ? (
+                  <div className="space-y-3">
+                    <button
+                      aria-label="Check in to online gathering"
+                      onClick={checkIn}
+                      disabled={busy || !meeting}
+                      className="w-full rounded-xl p-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
+                    >
+                      <span className="material-symbols-outlined">videocam</span>
+                      <span>{busy ? 'Starting Session…' : 'Check In to Online Gathering'}</span>
+                    </button>
+
+                    {showCodeInput ? (
+                      <form onSubmit={submitCode} className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 space-y-3">
+                        <label className="block text-xs font-bold text-on-surface">Enter 6-digit Meeting Code</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="••••••"
+                          value={codeValue}
+                          onChange={(e) => setCodeValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          className="w-full text-center tracking-[0.4em] font-mono font-bold text-xl py-2.5 px-3 rounded-xl border border-outline-variant bg-surface text-on-surface"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowCodeInput(false)}
+                            className="flex-1 py-2 px-3 rounded-lg border border-outline-variant text-xs font-bold text-slate-600 dark:text-slate-300"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={submittingCode || codeValue.length !== 6}
+                            className="flex-1 py-2 px-3 rounded-lg bg-primary text-white text-xs font-bold disabled:opacity-50"
+                          >
+                            {submittingCode ? 'Submitting…' : 'Submit Code'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowCodeInput(true)}
+                        className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-xs font-bold text-primary hover:bg-surface-container flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-base">pin</span>
+                        <span>Have an attendance code? Enter here</span>
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button
                     aria-label="Clock in now"

@@ -30,11 +30,18 @@ export enum AttendanceStatus {
   EXEMPT = 'EXEMPT',
 }
 
+export enum AttendanceType {
+  PHYSICAL = 'PHYSICAL',
+  ONLINE = 'ONLINE',
+}
+
 export enum AttendanceMethod {
   SYSTEM_GEO_QR = 'SYSTEM_GEO_QR',
   SYSTEM_GEO = 'SYSTEM_GEO',
   MANUAL = 'MANUAL',
   CORRECTION_APPROVED = 'CORRECTION_APPROVED',
+  ONLINE_SESSION = 'ONLINE_SESSION',
+  ONLINE_CODE = 'ONLINE_CODE',
 }
 
 export enum ExcuseStatus {

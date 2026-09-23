@@ -21,6 +21,10 @@ type CalendarItem = {
   locationName: string | null;
   status: string;
   meetingUrl?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  isRecurring?: boolean;
+  recurrenceRule?: string | null;
 };
 
 const SERVICE_EVENT_TYPE_KEYS = new Set(['SERVICE', 'SPECIAL_SERVICE']);
@@ -243,7 +247,7 @@ export default function MemberCalendarPage() {
                       className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl p-5 shadow-sm hover:border-outline-variant/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                     >
                       <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                               activityType(item) === 'SERVICE'
@@ -255,6 +259,18 @@ export default function MemberCalendarPage() {
                           >
                             {activityType(item)}
                           </span>
+                          {(item.isRecurring || item.title.toLowerCase().includes('weekly')) && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 inline-flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">autorenew</span>
+                              <span>Recurring</span>
+                            </span>
+                          )}
+                          {(item.locationName?.toLowerCase().includes('online') || item.locationName?.toLowerCase().includes('virtual') || item.locationName?.toLowerCase().includes('google meet') || item.meetingUrl) && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 inline-flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">videocam</span>
+                              <span>Online</span>
+                            </span>
+                          )}
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${item.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-700 font-bold' : 'bg-slate-100 text-slate-600'}`}>
                             {item.status}
                           </span>
@@ -270,13 +286,26 @@ export default function MemberCalendarPage() {
                           </span>
 
                           <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">location_on</span>
-                            {item.locationName || (item.meetingUrl ? 'Online Meeting' : 'Church Venue')}
+                            <span className="material-symbols-outlined text-sm">
+                              {item.meetingUrl || item.locationName?.toLowerCase().includes('online') ? 'videocam' : 'location_on'}
+                            </span>
+                            <span>{item.locationName || (item.meetingUrl ? 'Online Meeting' : 'Church Venue')}</span>
                           </span>
                         </div>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {item.meetingUrl && (
+                          <a
+                            href={item.meetingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-sm">videocam</span>
+                            <span>Join</span>
+                          </a>
+                        )}
                         <ShareEvent event={item} />
                         {(() => {
                           const now = new Date();

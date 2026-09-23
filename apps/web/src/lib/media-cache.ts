@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL, getAuthToken } from './api';
 
 /**
  * High-performance client-side media caching using CacheStorage & IndexedDB.
@@ -24,6 +25,12 @@ const objectUrlMemory = new Map<string, string>();
  */
 export async function getCachedMediaUrl(url: string): Promise<string> {
   if (!url || typeof window === 'undefined') return url;
+
+  if (url.startsWith('/chat/messages/')) {
+    const response = await fetch(`${API_BASE_URL}${url}`, { headers: { Authorization: `Bearer ${getAuthToken()}` }, cache: 'no-store' });
+    if (!response.ok) throw new Error('Attachment could not be loaded');
+    return URL.createObjectURL(await response.blob());
+  }
 
   // 1. In-memory object URL cache for instant synchronous access in the current session
   if (objectUrlMemory.has(url)) {

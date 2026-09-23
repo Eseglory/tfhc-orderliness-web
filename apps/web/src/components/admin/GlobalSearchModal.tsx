@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Users, Calendar, BarChart3, Clock, ArrowRight, X } from 'lucide-react';
 import { fetchApi } from '../../lib/api';
+import { useAuth, isEseosaGlory } from '../../lib/auth';
 
 interface SearchResultItem {
   id: string;
@@ -36,8 +37,18 @@ interface GlobalSearchModalProps {
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }) => {
   const router = useRouter();
+  const { user } = useAuth();
+  const isEseosa = isEseosaGlory(user);
+
+  const availableNav = useMemo(() => {
+    return STATIC_NAV_RESULTS.filter((item) => {
+      if (item.href === '/admin/settings' && !isEseosa) return false;
+      return true;
+    });
+  }, [isEseosa]);
+
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResultItem[]>(STATIC_NAV_RESULTS);
+  const [results, setResults] = useState<SearchResultItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,23 +57,24 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
       setSelectedIndex(0);
+      setResults(availableNav);
     } else {
       setQuery('');
-      setResults(STATIC_NAV_RESULTS);
+      setResults(availableNav);
     }
-  }, [isOpen]);
+  }, [isOpen, availableNav]);
 
   // Handle dynamic search for members & meetings
   useEffect(() => {
     if (!isOpen) return;
     const q = query.trim().toLowerCase();
     if (!q) {
-      setResults(STATIC_NAV_RESULTS);
+      setResults(availableNav);
       setLoading(false);
       return;
     }
 
-    const filteredNav = STATIC_NAV_RESULTS.filter(
+    const filteredNav = availableNav.filter(
       (item) => item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q)
     );
 
@@ -113,7 +125,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [query, isOpen]);
+  }, [query, isOpen, availableNav]);
 
   const handleSelect = useCallback(
     (item: SearchResultItem) => {

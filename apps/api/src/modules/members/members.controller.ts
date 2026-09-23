@@ -1,6 +1,7 @@
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateMemberDto, UpdateMemberDto, GoogleAccessDto } from './member.dto';
-import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ForbiddenException, Delete, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ForbiddenException, Delete, UseInterceptors, UploadedFile, Res, NotFoundException } from '@nestjs/common';
+import type { Response } from 'express';
 import { MembersService } from './members.service';
 import { MemberImportService } from './member-import.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -8,6 +9,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { Role, MemberStatus } from '@tfhc/shared';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
@@ -158,6 +160,18 @@ export class MembersController {
   async uploadPhoto(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updatePhoto(id, file);
+  }
+
+  @Public()
+  @Get(':id/photo')
+  async getMemberPhoto(@Param('id') id: string, @Res() res: Response) {
+    const photo = await this.membersService.getPhotoBuffer(id);
+    if (!photo) {
+      throw new NotFoundException('Photo not found');
+    }
+    res.setHeader('Content-Type', photo.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800, immutable');
+    res.send(photo.buffer);
   }
 
   @Roles(Role.ADMIN, Role.LEADER)

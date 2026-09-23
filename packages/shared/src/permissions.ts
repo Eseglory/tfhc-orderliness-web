@@ -155,7 +155,8 @@ export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
 const NON_FINANCE_KEYS = PERMISSION_CATALOG.filter((p) => !p.finance).map((p) => p.key);
 const FINANCE_KEYS = PERMISSION_CATALOG.filter((p) => p.finance).map((p) => p.key);
 const READ_ONLY_KEYS = PERMISSION_CATALOG.filter((p) =>
-  p.key.endsWith('.read') || p.key.endsWith('.view') || p.key.endsWith('.export'),
+  (p.key.endsWith('.read') || p.key.endsWith('.view') || p.key.endsWith('.export')) &&
+  !p.key.startsWith('settings.'),
 ).map((p) => p.key);
 
 export const SYSTEM_ROLE_DEFINITIONS: Record<
@@ -170,10 +171,10 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
   ADMINISTRATION: {
     name: 'Administrator',
     description:
-      'Full administrative and operational control: members, events, attendance, communications, settings, lookups, and financial operations (dues, expenses, payments, welfare).',
+      'Full administrative and operational control: members, events, attendance, communications, lookups, and financial operations (dues, expenses, payments, welfare). System settings reserved for Platform Owner.',
     permissions: [
       ...ALL_PERMISSION_KEYS.filter(
-        (k) => !['roles.create', 'roles.delete'].includes(k),
+        (k) => !['roles.create', 'roles.delete', 'settings.read', 'settings.update'].includes(k),
       ),
     ],
   },
@@ -189,7 +190,6 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       'lookups.read',
       'approvals.read',
       'approvals.act',
-      'settings.read',
     ],
   },
   SECRETARY: {
@@ -200,7 +200,7 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       ...NON_FINANCE_KEYS.filter(
         (k) =>
           !k.startsWith('roles.') &&
-          !['users.create', 'users.deactivate', 'settings.update', 'audit.read'].includes(k),
+          !['users.create', 'users.deactivate', 'settings.read', 'settings.update', 'audit.read'].includes(k),
       ),
       'users.read',
     ],

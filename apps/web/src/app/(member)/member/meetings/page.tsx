@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
+import { buildAdvancedGoogleCalendarUrl, extractVirtualUrl } from '../../../../lib/calendar-integration';
 
 export default function MemberMeetingsPage() {
   const router = useRouter();
@@ -140,10 +141,22 @@ export default function MemberMeetingsPage() {
                       <span className="font-headline-md text-xl text-[#0b1c30] dark:text-white font-black">{dayStr}</span>
                     </div>
                     <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <Link href={`/member/meetings/${m.id}`} className="min-w-0 hover:underline">
                           <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white truncate">{m.title}</h3>
                         </Link>
+                        {(m.serviceScheduleId || m.serviceSchedule || m.title.toLowerCase().includes('weekly')) && (
+                          <span className="shrink-0 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold text-[10px] px-1.5 py-0.5 rounded border border-purple-500/20 inline-flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[11px]">autorenew</span>
+                            <span>{m.title.toLowerCase().includes('wednesday') ? 'Every Wednesday' : 'Recurring'}</span>
+                          </span>
+                        )}
+                        {(m.locationName?.toLowerCase().includes('online') || m.locationName?.toLowerCase().includes('google meet') || m.locationName?.toLowerCase().includes('virtual') || extractVirtualUrl(m)) && (
+                          <span className="shrink-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/20 inline-flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[11px]">videocam</span>
+                            <span>Online</span>
+                          </span>
+                        )}
                         {m.isCompulsory && (
                           <span className="shrink-0 bg-amber-500/10 text-amber-700 font-bold text-[10px] px-1.5 py-0.5 rounded">
                             Mandatory
@@ -156,14 +169,59 @@ export default function MemberMeetingsPage() {
                           <span>{Number.isFinite(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span>
                         </span>
                         <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[14px]">location_on</span>
+                          <span className="material-symbols-outlined text-[14px]">
+                            {m.locationName?.toLowerCase().includes('online') || extractVirtualUrl(m) ? 'videocam' : 'location_on'}
+                          </span>
                           <span>{m.locationName || 'Church Sanctuary'}</span>
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
+                    {(() => {
+                      const virtualLink = extractVirtualUrl(m);
+                      return virtualLink ? (
+                        <a
+                          href={virtualLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1"
+                          title="Join Online Google Meet"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">videocam</span>
+                          <span>Join Meet</span>
+                        </a>
+                      ) : null;
+                    })()}
+                    {(() => {
+                      const isWed = m.title.toLowerCase().includes('wednesday');
+                      const calUrl = buildAdvancedGoogleCalendarUrl({
+                        id: m.id,
+                        title: m.title,
+                        description: m.description,
+                        notes: m.notes,
+                        startTime: m.startTime || m.meetingDate,
+                        endTime: m.endTime,
+                        locationName: m.locationName,
+                        virtualMeetingUrl: extractVirtualUrl(m),
+                        mode: m.locationName?.toLowerCase().includes('online') || extractVirtualUrl(m) ? 'VIRTUAL' : 'IN_PERSON',
+                        recurrenceRule: isWed && (m.serviceScheduleId || m.title.toLowerCase().includes('weekly')) ? 'FREQ=WEEKLY;BYDAY=WE' : null,
+                        timezone: 'Africa/Lagos',
+                      });
+                      return (
+                        <a
+                          href={calUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-surface-container-low text-primary hover:bg-surface-container rounded-xl text-xs font-bold transition-all flex items-center gap-1 border border-outline-variant/20"
+                          title="Add to Google Calendar"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">calendar_month</span>
+                          <span>Add to Cal</span>
+                        </a>
+                      );
+                    })()}
                     {(() => {
                       const now = new Date();
                       const start = new Date(m.startTime || m.meetingDate);

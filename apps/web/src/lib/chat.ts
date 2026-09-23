@@ -70,13 +70,14 @@ export interface RoomMember {
 
 export const chatApi = {
   forward: (id: string, roomId: string, clientId: string) => fetchApi<ChatMessage>(`/chat/messages/${id}/forward`, { method: 'POST', body: JSON.stringify({ roomId, clientId }) }),
-  rooms: () => fetchApi<ChatRoom[]>('/chat/rooms'),
+  changes: (id: string, cursor: string) => fetchApi<{ messages: ChatMessage[]; receipts: { memberId: string; lastReadAt: string | null; lastDeliveredAt: string | null }[]; removedIds: string[]; nextSyncCursor: string; hasMore: boolean }>(`/chat/rooms/${id}/changes?cursor=${encodeURIComponent(cursor)}`),
+  rooms: () => fetchApi<ChatRoom[]>('/chat/rooms?compactMedia=true'),
   room: (id: string) => fetchApi<ChatRoom>(`/chat/rooms/${id}`),
   messages: (id: string, cursor?: string, limit = 30, search?: string) =>
-    fetchApi<{ messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean }>(
-      `/chat/rooms/${id}/messages?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+    fetchApi<{ messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean; syncCursor?: string }>(
+      `/chat/rooms/${id}/messages?compactMedia=true&limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
     ),
-  send: (id: string, body: { body?: string; replyToId?: string; clientId?: string }) =>
+  send: (id: string, body: { body?: string; replyToId?: string; clientId?: string; attachmentUrl?: string; attachmentMeta?: unknown; type?: string }) =>
     fetchApi<ChatMessage>(`/chat/rooms/${id}/messages`, { method: 'POST', body: JSON.stringify(body) }),
   attach: (id: string, form: FormData) =>
     fetchApi<ChatMessage>(`/chat/rooms/${id}/attachments`, { method: 'POST', body: form }),
@@ -130,6 +131,7 @@ export function useChatSocket(events: ChatSocketEvents) {
   const handlers = useRef(events);
   handlers.current = events;
   const socketRef = useRef<Socket | null>(null);
+  const receivedIds = useRef(new Set<string>());
   const [connected, setConnected] = useState(false);
   const [online, setOnline] = useState<Set<string>>(new Set());
 
@@ -193,13 +195,16 @@ export function useChatSocket(events: ChatSocketEvents) {
       handlers.current.onReady?.(e);
     });
     on('message:new', (m: ChatMessage) => {
+      if (receivedIds.current.has(m.id)) return;
+      receivedIds.current.add(m.id);
+      if (receivedIds.current.size > 2000) receivedIds.current.delete(receivedIds.current.values().next().value!);
       handlers.current.onMessage?.(m);
     });
     on('message:delivered', e => handlers.current.onDelivered?.(e));
     on('message:reactions', e => handlers.current.onReactions?.(e));
     on('message:update', (m: ChatMessage) => handlers.current.onMessageUpdate?.({ ...m, mine: m.sender?.memberId === lastReady?.memberId }));
     on('message:typing', (e: { roomId: string; memberId: string; name: string; typing: boolean }) =>
-      handlers.current.onTyping?.(e),
+      e.memberId !== lastReady?.memberId && handlers.current.onTyping?.(e),
     );
     on('unread:update', () => handlers.current.onUnread?.());
     on('message:read', (e: { roomId: string; memberId: string; lastReadAt: string }) =>
@@ -236,7 +241,8 @@ export function useChatSocket(events: ChatSocketEvents) {
   }, []);
 
   const sendTyping = useCallback((roomId: string, typing: boolean) => {
-    socketRef.current?.emit('message:typing', { roomId, typing });
+    if (!socketRef.current?.connected) return;
+    socketRef.current?.volatile.emit('message:typing', { roomId, typing });
   }, []);
 
   const sendRead = useCallback((roomId: string, messageId?: string) => {
@@ -250,6 +256,7 @@ export function useChatSocket(events: ChatSocketEvents) {
       replyToId?: string;
       clientId?: string;
       attachmentUrl?: string;
+      attachmentMeta?: unknown;
       type?: string;
     }): Promise<ChatMessage> => {
       const socket = socketRef.current;
@@ -269,11 +276,7 @@ export function useChatSocket(events: ChatSocketEvents) {
         });
       }
       // Fallback to REST API if WebSocket is temporarily disconnected
-      return chatApi.send(payload.roomId, {
-        body: payload.body,
-        replyToId: payload.replyToId,
-        clientId: payload.clientId,
-      });
+      return chatApi.send(payload.roomId, payload);
     },
     [],
   );

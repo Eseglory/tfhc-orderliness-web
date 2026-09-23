@@ -52,6 +52,12 @@ export default function AdminLiveMeetingPage() {
   // Headcount Modal
   const [showHeadcountModal, setShowHeadcountModal] = useState(false);
 
+  // Attendance Code Modal
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [codeMinutes, setCodeMinutes] = useState(45);
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+
   // Manual Attendance Modal
   const [showManualModal, setShowManualModal] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
@@ -130,6 +136,27 @@ export default function AdminLiveMeetingPage() {
     }
   };
 
+  const handleGenerateCode = async () => {
+    setGeneratingCode(true);
+    try {
+      const res = await fetchApi<{ success: boolean; code: string; expiresAt: string }>(`/attendance/session/${meetingId}/code`, {
+        method: 'POST',
+        body: JSON.stringify({ validMinutes: codeMinutes }),
+      });
+      setMeeting((prev: any) => ({
+        ...prev,
+        attendanceCode: res.code,
+        attendanceCodeExpiresAt: res.expiresAt,
+      }));
+      setShowCodeModal(false);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate attendance code');
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMemberId) return;
@@ -161,6 +188,24 @@ export default function AdminLiveMeetingPage() {
   const graceCount = attendanceRecords.filter((r) => r.status === 'GRACE_PERIOD').length;
   const lateCount = attendanceRecords.filter((r) => r.status === 'LATE').length;
   const totalPresent = earlyCount + onTimeCount + graceCount + lateCount;
+
+  // Online-specific metrics
+  const nowMs = Date.now();
+  const isOnlineMeeting = Boolean(meeting?.isOnline) ||
+    meeting?.locationName?.toLowerCase().includes('online') ||
+    meeting?.locationName?.toLowerCase().includes('virtual') ||
+    meeting?.locationName?.toLowerCase().includes('google meet');
+  const onlineSessionCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_SESSION').length;
+  const onlineCodeCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_CODE').length;
+  const totalOnlineCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE').length;
+  const activeInSessionCount = attendanceRecords.filter(
+    (r) => r.attendanceType === 'ONLINE' && r.lastSeenAt && !r.leftAt && (nowMs - new Date(r.lastSeenAt).getTime() < 180000)
+  ).length;
+  const codeActive = Boolean(
+    meeting?.attendanceCode &&
+    meeting?.attendanceCodeExpiresAt &&
+    new Date() <= new Date(meeting.attendanceCodeExpiresAt)
+  );
 
   const isFutureMeeting = Boolean(meeting?.startTime && new Date(meeting.startTime) > new Date());
 
@@ -218,19 +263,6 @@ export default function AdminLiveMeetingPage() {
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
               Refresh
-            </button>
-            <button
-              onClick={() => setShowHeadcountModal(true)}
-              disabled={isFutureMeeting}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                isFutureMeeting
-                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-              }`}
-              title="Record or update official physical service headcount"
-            >
-              <Users className="w-4 h-4" />
-              {headcountData ? 'Edit Official Headcount' : 'Record Official Headcount'}
             </button>
             <button
               onClick={() => setShowManualModal(true)}
@@ -300,6 +332,118 @@ export default function AdminLiveMeetingPage() {
           </div>
         </section>
 
+        {/* Online Meeting Attendance & Code Management Showcase (Option B & C) */}
+        {isOnlineMeeting && (
+          <section className="bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-900 border border-blue-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  <Radio className="w-5 h-5 animate-pulse" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-bold text-white">Online Meeting Attendance Operations</h2>
+                    <span className="text-[10px] uppercase px-2 py-0.5 rounded-full font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                      Option B &amp; C Active
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Live session tracking via cryptographic tokens, heartbeat duration calculation &amp; fallback 6-digit codes.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCodeModal(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {codeActive ? 'Generate New Code' : 'Generate Attendance Code'}
+                </button>
+              </div>
+            </div>
+
+            {/* Online Metrics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Active in Session */}
+              <div className="bg-slate-950/80 p-4 rounded-2xl border border-emerald-500/40 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
+                    Active in Session Now
+                  </span>
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                </div>
+                <p className="mt-1 text-3xl font-black text-white">{activeInSessionCount}</p>
+                <p className="text-[11px] text-emerald-300/80">Heartbeat active within last 3 mins</p>
+              </div>
+
+              {/* Total Online Checked In */}
+              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">
+                  Total Online Check-Ins
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">{totalOnlineCount}</p>
+                <p className="text-[11px] text-slate-400">Total joined participants</p>
+              </div>
+
+              {/* Via Session (Option B) */}
+              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider block">
+                  Option B: Session
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">{onlineSessionCount}</p>
+                <p className="text-[11px] text-slate-400">Direct online session check-in</p>
+              </div>
+
+              {/* Via Code (Option C) */}
+              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                <span className="text-[10px] font-extrabold text-purple-400 uppercase tracking-wider block">
+                  Option C: Code
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">{onlineCodeCount}</p>
+                <p className="text-[11px] text-slate-400">Checked in via fallback code</p>
+              </div>
+            </div>
+
+            {/* Active Code Display Card */}
+            {codeActive && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-2xl bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono text-2xl sm:text-3xl font-black tracking-widest px-5">
+                    {meeting.attendanceCode}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-blue-200 block">
+                      Active Meeting Attendance Code
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Expires at {new Date(meeting.attendanceCodeExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(meeting.attendanceCode);
+                      setCopiedCode(true);
+                      setTimeout(() => setCopiedCode(false), 2000);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Official Physical Service Headcount Showcase */}
         <section className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
@@ -334,7 +478,7 @@ export default function AdminLiveMeetingPage() {
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              {headcountData ? 'Update Headcount' : 'Record Headcount Now'}
+              {headcountData ? 'Update Headcount' : 'Record Headcount'}
             </button>
           </div>
 
@@ -406,26 +550,15 @@ export default function AdminLiveMeetingPage() {
               </div>
             </div>
           ) : (
-            <div className="pt-5 pb-2 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="pt-5 pb-2 text-left">
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-300">
                   No official physical headcount recorded yet for this service.
                 </p>
                 <p className="text-xs text-slate-400 max-w-xl">
-                  Supervising ministers and ushers should take the physical count in the auditorium and record it here to establish the official church attendance record.
+                  Supervising ministers and ushers should take the physical count in the auditorium and click &ldquo;Record Headcount&rdquo; above to establish the official church attendance record.
                 </p>
               </div>
-              <button
-                onClick={() => setShowHeadcountModal(true)}
-                disabled={isFutureMeeting}
-                className={`px-5 py-2.5 rounded-xl font-bold text-xs transition ${
-                  isFutureMeeting
-                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
-                }`}
-              >
-                Enter Physical Headcount
-              </button>
             </div>
           )}
         </section>
@@ -544,33 +677,69 @@ export default function AdminLiveMeetingPage() {
                   <tr>
                     <th className="px-4 py-3">Member</th>
                     <th className="px-4 py-3">Sub-Team</th>
-                    <th className="px-4 py-3">Arrival Time</th>
-                    <th className="px-4 py-3">GPS Distance</th>
+                    <th className="px-4 py-3">Arrival &amp; Duration</th>
+                    <th className="px-4 py-3">Method &amp; Type</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
                   {attendanceRecords.length > 0 ? (
-                    attendanceRecords.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="font-bold text-slate-900 dark:text-white">
-                            {r.member?.firstName} {r.member?.lastName}
-                          </div>
-                          <span className="text-[11px] text-slate-400">{r.member?.memberCode}</span>
-                        </td>
-                        <td className="px-4 py-3 text-slate-500 font-medium">{r.member?.subTeam?.name || 'General'}</td>
-                        <td className="px-4 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">
-                          {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString() : 'N/A'}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
-                          {r.distanceFromVenue ? `${Math.round(r.distanceFromVenue)}m` : 'On-Site'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={r.status} />
-                        </td>
-                      </tr>
-                    ))
+                    attendanceRecords.map((r) => {
+                      const isActiveOnline = r.attendanceType === 'ONLINE' && r.lastSeenAt && !r.leftAt && (nowMs - new Date(r.lastSeenAt).getTime() < 180000);
+                      return (
+                        <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {isActiveOnline && (
+                                <span className="relative flex h-2 w-2 shrink-0" title="Active now in online session">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                              )}
+                              <div>
+                                <div className="font-bold text-slate-900 dark:text-white">
+                                  {r.member?.firstName} {r.member?.lastName}
+                                </div>
+                                <span className="text-[11px] text-slate-400">{r.member?.memberCode}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 font-medium">{r.member?.subTeam?.name || 'General'}</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                            <span className="font-mono text-[11px] block">
+                              {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                            </span>
+                            {r.durationMinutes !== null && r.durationMinutes !== undefined && (
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                                {r.durationMinutes} min session
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {r.attendanceType === 'ONLINE' ? (
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                r.method === 'ONLINE_CODE'
+                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20'
+                                  : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20'
+                              }`}>
+                                <span className="material-symbols-outlined text-xs">
+                                  {r.method === 'ONLINE_CODE' ? 'pin' : 'videocam'}
+                                </span>
+                                <span>{r.method === 'ONLINE_CODE' ? 'Online (Code)' : 'Online (Session)'}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                <span className="material-symbols-outlined text-xs">location_on</span>
+                                <span>Physical (GPS)</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge status={r.status} />
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
@@ -771,6 +940,91 @@ export default function AdminLiveMeetingPage() {
                     {savingMinister ? 'Assigning…' : 'Appoint Selected'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Generate Attendance Code Modal (Option C Fallback) */}
+        {showCodeModal && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Generate Meeting Attendance Code
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Option C Fallback for online attendance
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCodeModal(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Generate a cryptographically random, 6-digit dynamic code that members can enter on the meeting page or mobile web app to confirm their presence.
+                </p>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Code Expiration Window
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[15, 30, 45, 60].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setCodeMinutes(mins)}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                          codeMinutes === mins
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {mins} mins
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base text-blue-600">security</span>
+                    <span>Brute-Force Rate Limiting Active</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    Members are limited to 5 attempts per 15 minutes to guarantee security.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCodeModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateCode}
+                  disabled={generatingCode}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow-md shadow-blue-600/30 transition disabled:opacity-50"
+                >
+                  {generatingCode ? 'Generating Code…' : 'Generate & Activate Code'}
+                </button>
               </div>
             </div>
           </div>

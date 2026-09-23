@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BufferedMessageRecord, ChatBufferRepository } from './chat-buffer.repository';
 
@@ -14,6 +15,9 @@ export interface MigrationSummary {
   durationMs: number;
   postgresTotal?: number;
   sqliteTotal?: number;
+  status?: 'COMPLETE' | 'PARTIAL' | 'RUNNING';
+  importedCount?: number;
+  unchangedCount?: number;
 }
 
 @Injectable()
@@ -33,7 +37,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
 
       // 2. Startup recovery: sync any pending buffered messages to Postgres
       const stats = this.bufferRepo.getStats();
-      if (stats.pendingCount > 0) {
+      if (stats.pendingCount > 0 || stats.failedCount > 0) {
         this.logger.log(
           `[Startup Recovery] Found ${stats.pendingCount} pending buffered messages in SQLite. Starting synchronization...`,
         );
@@ -50,6 +54,22 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    */
   public async seedFromPrimaryDatabase(): Promise<{ totalDiscovered: number; inserted: number; skipped: number }> {
     try {
+      // Seed active member profiles into memory cache for sub-millisecond lookup
+      try {
+        const members = await this.prisma.member.findMany({
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            profilePhotoUrl: true,
+          },
+        });
+        this.bufferRepo.setMemberProfiles(members);
+      } catch (err: any) {
+        this.logger.warn(`[Profile Seed Failed] ${err?.message}`);
+      }
+
       const checkpoint = this.bufferRepo.getSyncCheckpoint();
       const startedAt = new Date().toISOString();
       let cursor: string | undefined;
@@ -104,7 +124,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
       return { totalDiscovered, inserted, skipped };
     } catch (err: any) {
       this.logger.error(`[Legacy Seed Failed] Could not seed historical messages from Primary DB: ${err.message}`);
-      return { totalDiscovered: 0, inserted: 0, skipped: 0 };
+      throw err;
     }
   }
 
@@ -114,15 +134,16 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    */
   public async persistMessageAsync(messageId: string): Promise<boolean> {
     const msg = this.bufferRepo.findById(messageId);
-    if (!msg || msg.syncStatus === 'MIGRATED') return true;
+    if (!msg) return false;
+    if (msg.syncStatus === 'MIGRATED') return true;
 
     try {
       await this.migrateSingleMessage(msg);
-      this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
+      this.bufferRepo.markMigrated(msg.id, new Date().toISOString(), msg);
       return true;
     } catch (err: any) {
       if (err?.code === 'P2002' && await this.matchesPrimary(msg)) {
-        this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
+        this.bufferRepo.markMigrated(msg.id, new Date().toISOString(), msg);
         return true;
       }
       this.bufferRepo.markFailed(msg.id, err?.message || 'Async persistence failure');
@@ -163,11 +184,18 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    * and ensures no messages are missing in either direction.
    */
   public async reconcileWithPrimaryDatabase(trigger = 'manual'): Promise<MigrationSummary> {
+    const reconciliationStarted = Date.now();
     // 1. Run migration for any pending records in SQLite
     const migrationResult = await this.runMigration(trigger);
 
     // 2. Seed any missing records from Postgres into SQLite (e.g. from direct DB updates)
-    await this.seedFromPrimaryDatabase();
+    let imported: { totalDiscovered: number; inserted: number; skipped: number };
+    try { imported = await this.seedFromPrimaryDatabase(); }
+    catch (error) {
+      this.bufferRepo.setSyncSummary({ ...migrationResult, status: 'PARTIAL', importFailed: true,
+        completedAt: new Date().toISOString(), durationMs: Date.now() - reconciliationStarted });
+      throw error;
+    }
 
     // 3. Audit total counts across both engines
     let postgresTotal = 0;
@@ -182,11 +210,14 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
       `[Reconciliation Audit] Trigger=${trigger}, Postgres Total=${postgresTotal}, SQLite Hot Store Total=${sqliteTotal}`,
     );
 
-    return {
-      ...migrationResult,
-      postgresTotal,
-      sqliteTotal,
+    const summary: MigrationSummary = {
+      ...migrationResult, postgresTotal, sqliteTotal,
+      completedAt: new Date().toISOString(), durationMs: Date.now() - reconciliationStarted,
+      status: migrationResult.failedCount || postgresTotal < 0 ? 'PARTIAL' : 'COMPLETE',
+      importedCount: imported.inserted, unchangedCount: imported.skipped,
     };
+    this.bufferRepo.setSyncSummary(summary);
+    return summary;
   }
 
   /**
@@ -203,6 +234,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
         failedCount: 0,
         duplicatesPrevented: 0,
         durationMs: 0,
+        status: 'RUNNING',
       };
     }
 
@@ -216,16 +248,14 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
     let duplicatesPrevented = 0;
 
     try {
-      const processedInRun = new Set<string>();
-      let batch: BufferedMessageRecord[] = this.bufferRepo
-        .getPendingBatch(100)
-        .filter((m) => !processedInRun.has(m.id));
+      let after: { createdAt: string; id: string } | undefined;
+      let batch = this.bufferRepo.getPendingBatch(100);
 
       while (batch.length > 0) {
         // Mark current batch as PROCESSING in SQLite
         for (const item of batch) {
           this.bufferRepo.markProcessing(item.id);
-          processedInRun.add(item.id);
+
         }
 
         // Process batch items
@@ -233,13 +263,13 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
           totalProcessed++;
           try {
             await this.migrateSingleMessage(msg);
-            this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
+            this.bufferRepo.markMigrated(msg.id, new Date().toISOString(), msg);
             migratedCount++;
           } catch (err: any) {
             // Check if failure was due to duplicate message (already in Postgres)
             if (err?.code === 'P2002' && await this.matchesPrimary(msg)) {
               duplicatesPrevented++;
-              this.bufferRepo.markMigrated(msg.id, new Date().toISOString());
+              this.bufferRepo.markMigrated(msg.id, new Date().toISOString(), msg);
               migratedCount++;
               this.logger.log(`[Chat Migration] Prevented duplicate insertion for message ${msg.id}`);
             } else {
@@ -251,7 +281,9 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
         }
 
         // Fetch next batch excluding already processed in this run
-        batch = this.bufferRepo.getPendingBatch(100).filter((m) => !processedInRun.has(m.id));
+        const last = batch[batch.length - 1];
+        after = { createdAt: last.createdAt, id: last.id };
+        batch = this.bufferRepo.getPendingBatch(100, after);
       }
 
       const durationMs = Date.now() - startTime;
@@ -271,7 +303,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
 
   private async matchesPrimary(msg: BufferedMessageRecord): Promise<boolean> {
     const saved = await this.prisma.chatMessage.findUnique({ where: msg.clientOperationId ? { clientOperationId: msg.clientOperationId } : { id: msg.id } });
-    return Boolean(saved && saved.roomId === msg.roomId && saved.senderMemberId === msg.senderMemberId && saved.body === msg.body);
+    return Boolean(saved && saved.roomId === msg.roomId && saved.senderMemberId === msg.senderMemberId && saved.id === msg.id && saved.body === msg.body && saved.attachmentUrl === msg.attachmentUrl && isDeepStrictEqual(saved.attachmentMeta ?? null, msg.attachmentMeta) && (saved.editedAt?.toISOString() || null) === msg.editedAt && (saved.deletedAt?.toISOString() || null) === msg.deletedAt);
   }
 
   private async migrateSingleMessage(msg: BufferedMessageRecord): Promise<void> {
@@ -293,22 +325,27 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
       ...(msg.replyToId ? { replyTo: { connect: { id: msg.replyToId } } } : {}),
     };
 
-    if (msg.clientOperationId) {
-      const saved = await this.prisma.chatMessage.upsert({
-        where: { clientOperationId: msg.clientOperationId },
-        create: createData,
-        update: {},
-      });
-      if (saved.roomId && (saved.roomId !== msg.roomId || saved.senderMemberId !== msg.senderMemberId)) throw new Error('Sync conflict: immutable message identity differs');
-      if (saved.body !== undefined && saved.body !== msg.body) this.logger.warn(`ChatSyncConflict id=${msg.id}; primary content preserved; local record retained`);
-    } else {
-      const saved = await this.prisma.chatMessage.upsert({
-        where: { id: msg.id },
-        create: createData,
-        update: {},
-      });
-      if (saved.roomId && (saved.roomId !== msg.roomId || saved.senderMemberId !== msg.senderMemberId)) throw new Error('Sync conflict: immutable message identity differs');
-      if (saved.body !== undefined && saved.body !== msg.body) this.logger.warn(`ChatSyncConflict id=${msg.id}; primary content preserved; local record retained`);
+    const saved = await this.prisma.chatMessage.upsert({
+      where: { id: msg.id }, create: createData, update: {},
+    });
+    if (saved.roomId && (saved.id !== msg.id || saved.roomId !== msg.roomId || saved.senderMemberId !== msg.senderMemberId)) {
+      throw new Error('Sync conflict: immutable message identity differs');
+    }
+    const remoteVersion = Math.max(saved.editedAt?.getTime() || 0, saved.deletedAt?.getTime() || 0);
+    const localVersion = Math.max(msg.editedAt ? Date.parse(msg.editedAt) : 0, msg.deletedAt ? Date.parse(msg.deletedAt) : 0);
+    if (localVersion > remoteVersion) {
+      // Compare-and-set: another writer cannot be overwritten by an older snapshot.
+      const updated = await this.prisma.chatMessage.updateMany({ where: {
+        id: msg.id, editedAt: saved.editedAt, deletedAt: saved.deletedAt,
+      }, data: {
+        body: msg.body, attachmentUrl: msg.attachmentUrl,
+        attachmentMeta: msg.attachmentMeta ? msg.attachmentMeta as Prisma.InputJsonValue : Prisma.DbNull,
+        editedAt: msg.editedAt ? new Date(msg.editedAt) : null,
+        deletedAt: msg.deletedAt ? new Date(msg.deletedAt) : null,
+      } });
+      if (!updated.count) throw new Error('Message changed during synchronization; retry required');
+    } else if (saved.body !== undefined && (saved.body !== msg.body || remoteVersion !== localVersion || saved.attachmentUrl !== msg.attachmentUrl || !isDeepStrictEqual(saved.attachmentMeta ?? null, msg.attachmentMeta))) {
+      throw new Error('Sync conflict: primary and local versions differ; both retained for reconciliation');
     }
   }
 }

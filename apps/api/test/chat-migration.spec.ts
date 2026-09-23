@@ -29,7 +29,7 @@ describe('ChatMigrationJob (Idempotent Midnight Migration from SQLite to Postgre
     mockPrisma = {
       chatMessage: {
         upsert: jest.fn().mockResolvedValue({ id: 'persisted-id' }),
-        findUnique: jest.fn().mockResolvedValue({ roomId: 'room-1', senderMemberId: 'member-1', body: 'Duplicate test' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'mig-dup-1', roomId: 'room-1', senderMemberId: 'member-1', body: 'Duplicate test', attachmentUrl: null, attachmentMeta: null, editedAt: null, deletedAt: null }),
       },
     };
 
@@ -176,4 +176,40 @@ describe('ChatMigrationJob (Idempotent Midnight Migration from SQLite to Postgre
     expect(report.postgresTotal).toBe(5);
     expect(report.sqliteTotal).toBeGreaterThanOrEqual(0);
   });
+  test('does not starve later messages when a full batch fails', async () => {
+    for (let i = 0; i < 105; i++) repo.saveMessage({ id: `batch-${String(i).padStart(3, '0')}`, roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'retry', createdAt: '2026-01-01T00:00:00.000Z' });
+    mockPrisma.chatMessage.upsert.mockRejectedValue(new Error('Offline'));
+    const result = await job.runMigration('failure-test');
+    expect(result.totalProcessed).toBe(105);
+    expect(result.failedCount).toBe(105);
+    mockPrisma.chatMessage.upsert.mockResolvedValue({});
+    expect((await job.runMigration('retry')).migratedCount).toBe(105);
+  });
+
+  test('leaves newer edits pending when an older snapshot finishes persisting', async () => {
+    repo.saveMessage({ id: 'concurrent-edit', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'before', createdAt: '2026-01-01T00:00:00.000Z' });
+    mockPrisma.chatMessage.upsert.mockImplementation(async () => {
+      repo.updateMessage('concurrent-edit', 'after', '2026-01-02T00:00:00.000Z');
+      return { id: 'concurrent-edit', body: 'before', attachmentUrl: null, attachmentMeta: null };
+    });
+    await job.persistMessageAsync('concurrent-edit');
+    expect(repo.findById('concurrent-edit')).toMatchObject({ body: 'after', syncStatus: 'PENDING' });
+  });
+
+  test('propagates import failure without advancing checkpoint', async () => {
+    repo.setSyncCheckpoint('2026-01-01T00:00:00.000Z');
+    mockPrisma.chatMessage.findMany = jest.fn().mockRejectedValue(new Error('Unavailable'));
+    await expect(job.seedFromPrimaryDatabase()).rejects.toThrow('Unavailable');
+    expect(repo.getSyncCheckpoint()).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  test('persists newer edits with compare-and-set rather than acknowledging a no-op', async () => {
+    repo.saveMessage({ id: 'edited', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'before', createdAt: '2026-01-01T00:00:00.000Z' });
+    repo.updateMessage('edited', 'after', '2026-01-02T00:00:00.000Z');
+    mockPrisma.chatMessage.upsert.mockResolvedValue({ id: 'edited', roomId: 'room-1', senderMemberId: 'member-1', body: 'before', editedAt: null, deletedAt: null });
+    mockPrisma.chatMessage.updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    expect(await job.persistMessageAsync('edited')).toBe(true);
+    expect(mockPrisma.chatMessage.updateMany.mock.calls[0][0].data.body).toBe('after');
+  });
+
 });

@@ -8,11 +8,14 @@ export interface QueuedChatMessage {
   createdAt: string;
 }
 
-function account() {
-  const token = getAuthToken();
-  if (!token) throw new Error('Sign in before saving a message.');
-  return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub as string;
+export function chatAccount(): string {
+  try {
+    const token = getAuthToken();
+    if (!token) return '';
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || '';
+  } catch { return ''; }
 }
+
 function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('tfhc-chat-outbox', 1);
@@ -46,13 +49,14 @@ async function deviceKey(owner: string): Promise<CryptoKey> {
   }
 }
 export async function queueChatMessage(message: QueuedChatMessage) {
-  const owner = account();
+  const owner = chatAccount();
+  if (!owner) throw new Error('Sign in before saving a message.');
   if (message.body.length > 4000) throw new Error('Message is too long');
   const key = await deviceKey(owner);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const id = `${owner}:${message.clientId}`;
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(id) }, key, new TextEncoder().encode(JSON.stringify(message)));
-  if (account() !== owner) throw new Error('Account changed');
+  if (chatAccount() !== owner) throw new Error('Account changed');
   const db = await database();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction('messages', 'readwrite');
@@ -67,7 +71,8 @@ export async function queueChatMessage(message: QueuedChatMessage) {
   });
 }
 export async function queuedChatMessages(): Promise<QueuedChatMessage[]> {
-  const owner = account();
+  const owner = chatAccount();
+  if (!owner) return [];
   const rows = await transaction<any[]>('messages', 'readonly', s => s.getAll());
   const own = rows.filter(row => row.owner === owner);
   if (!own.length) return [];
@@ -75,8 +80,9 @@ export async function queuedChatMessages(): Promise<QueuedChatMessage[]> {
   const result = await Promise.all(own.map(async row => JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: row.iv, additionalData: new TextEncoder().encode(row.id) }, key, row.ciphertext,
   ))) as QueuedChatMessage));
+  if (chatAccount() !== owner) throw new Error('Account changed');
   return result.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
-export async function acknowledgeChatMessage(clientId: string) {
-  await transaction('messages', 'readwrite', s => s.delete(`${account()}:${clientId}`));
+export async function acknowledgeChatMessage(clientId: string, owner = chatAccount()) {
+  await transaction('messages', 'readwrite', s => s.delete(`${owner}:${clientId}`));
 }

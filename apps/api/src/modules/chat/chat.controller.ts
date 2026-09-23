@@ -7,10 +7,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
@@ -44,7 +46,7 @@ export class ChatController {
     private readonly gateway: ChatGateway,
   ) {}
 
-  @Get('sync/status')
+  @Get(['sync/status', 'buffer-stats'])
   @UseGuards(PermissionsGuard)
   @RequirePermissions('messages.manage_rooms')
   syncStatus() { return this.chat.getBufferStats(); }
@@ -57,8 +59,12 @@ export class ChatController {
   // ---- Rooms -------------------------------------------------------------
 
   @Get('rooms')
-  listRooms(@CurrentUser() user: AuthenticatedUser) {
-    return this.chat.listRooms(viewerFrom(user));
+  async listRooms(@CurrentUser() user: AuthenticatedUser, @Query('compactMedia') compactMedia?: string) {
+    const rooms = await this.chat.listRooms(viewerFrom(user));
+    return compactMedia === 'true' ? rooms.map(room => ({ ...room, lastMessage: room.lastMessage ? {
+      ...room.lastMessage,
+      attachmentUrl: room.lastMessage.attachmentUrl?.startsWith('data:') ? `/chat/messages/${room.lastMessage.id}/attachment` : room.lastMessage.attachmentUrl,
+    } : null })) : rooms;
   }
 
   @Get('unread')
@@ -93,8 +99,30 @@ export class ChatController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('compactMedia') compactMedia?: string,
   ) {
-    return this.chat.listMessages(id, viewerFrom(user), { cursor, limit: limit ? Number(limit) : undefined, search });
+    return this.chat.listMessages(id, viewerFrom(user), { cursor, limit: limit ? Number(limit) : undefined, search }).then(page => compactMedia === 'true' ? {
+      ...page, messages: page.messages.map(message => ({ ...message,
+        attachmentUrl: message.attachmentUrl?.startsWith('data:') ? `/chat/messages/${message.id}/attachment` : message.attachmentUrl,
+      })),
+    } : page);
+  }
+
+  @Get('rooms/:id/changes')
+  async changes(@Param('id') id: string, @Query('cursor') cursor: string, @CurrentUser() user: AuthenticatedUser) {
+    const page = await this.chat.changes(id, viewerFrom(user), cursor || '0');
+    return { ...page, messages: page.messages.map(message => ({ ...message,
+      attachmentUrl: message.attachmentUrl?.startsWith('data:') ? `/chat/messages/${message.id}/attachment` : message.attachmentUrl,
+    })) };
+  }
+
+  @Get('messages/:id/attachment')
+  async attachment(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser, @Res() response: Response) {
+    const attachment = await this.chat.attachment(id, viewerFrom(user));
+    response.setHeader('Content-Type', attachment.mime);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.send(attachment.bytes);
   }
 
   @Post('rooms/:id/messages')
@@ -106,7 +134,7 @@ export class ChatController {
       attachmentUrl: body?.attachmentUrl,
       attachmentMeta: body?.attachmentMeta,
       replyToId: body?.replyToId,
-      operationId: body?.clientId,
+      operationId: body?.operationId || body?.clientId,
     });
     await this.gateway.fanOut(id, message);
     return message;

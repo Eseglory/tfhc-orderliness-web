@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import { API_BASE_URL } from '../../lib/api';
 
 const TONES = [
   'bg-primary-container text-on-primary-container',
@@ -12,6 +13,14 @@ function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return '?';
   return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+function resolvePhotoUrl(url?: string | null): string | null {
+  if (!url) return null;
+  if (url.startsWith('/members/')) {
+    return `${API_BASE_URL}${url}`;
+  }
+  return url;
 }
 
 export function Avatar({
@@ -28,11 +37,12 @@ export function Avatar({
   icon?: string;
 }) {
   const tone = TONES[name.length % TONES.length];
+  const resolvedPhoto = resolvePhotoUrl(photoUrl);
   return (
     <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
-      {photoUrl ? (
+      {resolvedPhoto ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoUrl} alt="" className="h-full w-full rounded-full object-cover" />
+        <img src={resolvedPhoto} alt="" className="h-full w-full rounded-full object-cover" />
       ) : (
         <span
           className={`flex h-full w-full items-center justify-center rounded-full font-semibold ${tone}`}

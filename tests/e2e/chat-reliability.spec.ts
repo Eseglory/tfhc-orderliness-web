@@ -62,10 +62,43 @@ test('a scheduled service notification opens a dismissible reminder', async ({ p
     await page.goto(`/member/chat?roomId=${roomId}`);
     const popup = page.getByRole('complementary', { name: 'Upcoming service reminder' });
     await expect(popup).toBeVisible();
+    const installPrompt = page.getByRole('region', { name: 'Install TFHC-ORDERLINESS' });
+    if (await installPrompt.isVisible()) await installPrompt.getByRole('button', { name: 'Dismiss banner' }).click();
     await popup.getByRole('button', { name: 'Dismiss', exact: true }).click();
     await expect(popup).not.toBeVisible();
     await page.reload();
     await expect(page.getByPlaceholder('Type a message…')).toBeVisible();
     await expect(popup).not.toBeVisible();
   } finally { await db.memberNotification.delete({ where: { id: reminder.id } }); }
+});
+
+// The production worker must preserve the actual chat shell across offline reload.
+test.describe('offline PWA chat shell', () => {
+  test.use({ serviceWorkers: 'allow' });
+  test('queued text survives an offline reload and sends once when connectivity returns', async ({ page, context }) => {
+    await page.addInitScript(value => localStorage.setItem('tfhc_token', value), token);
+    await page.goto(`/member/chat?roomId=${roomId}`);
+    await expect(page.getByPlaceholder('Type a message…')).toBeVisible();
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+    await page.reload();
+    await expect(page.getByPlaceholder('Type a message…')).toBeVisible();
+    await expect.poll(() => page.evaluate(async () => {
+      for (const key of await caches.keys()) if (key.startsWith('tfhc-pwa-shell-')) {
+        if (await (await caches.open(key)).match('/member/chat')) return true;
+      }
+      return false;
+    })).toBe(true);
+    await context.setOffline(true);
+    const body = `Offline PWA reload ${randomUUID()}`;
+    await page.getByPlaceholder('Type a message…').fill(body);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(page.getByPlaceholder('Type a message…')).toHaveValue('');
+    await page.reload();
+    await expect(page.locator('p').filter({ hasText: body })).toBeVisible();
+    await context.setOffline(false);
+    await expect.poll(() => db.chatMessage.count({ where: { body } }), { timeout: 15000 }).toBe(1);
+    await page.reload();
+    await expect(page.locator('p').filter({ hasText: body })).toBeVisible();
+    expect(await db.chatMessage.count({ where: { body } })).toBe(1);
+  });
 });

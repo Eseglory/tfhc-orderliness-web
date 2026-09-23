@@ -24,6 +24,8 @@ import {
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { ChangePasswordCard } from '../../../../components/ChangePasswordCard';
 import { ThemeSwitcher } from '../../../../components/ThemeSwitcher';
+import { useRouter } from 'next/navigation';
+import { useAuth, isEseosaGlory } from '../../../../lib/auth';
 import { fetchApi } from '../../../../lib/api';
 
 const POLICY_LABELS: Record<string, { label: string; description: string; step?: string }> = {
@@ -59,6 +61,10 @@ interface GoogleIntegrationStatus {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
+  const isEseosa = isEseosaGlory(user);
+
   const [recognition, setRecognition] = useState<any>(null);
   const [policy, setPolicy] = useState<Record<string, number> | null>(null);
   const [googleStatus, setGoogleStatus] = useState<GoogleIntegrationStatus | null>(null);
@@ -67,7 +73,14 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loadingRecognition, setLoadingRecognition] = useState(false);
 
+  useEffect(() => {
+    if (!authLoading && (!user || !isEseosa)) {
+      router.replace('/admin');
+    }
+  }, [authLoading, user, isEseosa, router]);
+
   const loadGoogleStatus = async () => {
+    if (!isEseosa) return;
     setLoadingGoogle(true);
     try {
       const status = await fetchApi<GoogleIntegrationStatus>('/calendar/integrations/google/status');
@@ -80,6 +93,8 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
+    if (authLoading || !isEseosa) return;
+
     fetchApi('/scoring/recognition')
       .then(setRecognition)
       .catch(() => {});
@@ -97,7 +112,7 @@ export default function SettingsPage() {
         handleConnectWithCode(code);
       }
     }
-  }, []);
+  }, [authLoading, isEseosa]);
 
   const handleConnectWithCode = async (code: string) => {
     setLoadingGoogle(true);
@@ -175,6 +190,30 @@ export default function SettingsPage() {
       setLoadingRecognition(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <AdminLayoutShell>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        </div>
+      </AdminLayoutShell>
+    );
+  }
+
+  if (!user || !isEseosa) {
+    return (
+      <AdminLayoutShell>
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-6">
+          <Shield className="w-12 h-12 text-rose-500 mb-3" />
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Access Denied</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+            System Settings and administrative policies are restricted exclusively to the Platform Owner (engreseglory@gmail.com).
+          </p>
+        </div>
+      </AdminLayoutShell>
+    );
+  }
 
   return (
     <AdminLayoutShell>

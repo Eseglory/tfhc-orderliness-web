@@ -8,7 +8,7 @@ import { CacheService } from '../../common/cache/cache.service';
 import { MailService } from '../mail/mail.service';
 import { renderReminderEmail } from '../mail/templates';
 import { AuditService } from '../../common/rbac/audit.service';
-import { occurrences } from './service-schedules';
+import { occurrences, SERVICE_SCHEDULES } from './service-schedules';
 import { randomUUID } from 'crypto';
 
 export type RecurringConfig = {
@@ -173,10 +173,18 @@ export class RecurringServicesService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     if (process.env.DISABLE_SCHEDULED_JOBS === 'true') return;
-    setImmediate(() => {
-      this.generateUpcoming().catch(() => {
-        this.logger.error('Recurring service generation failed; check configuration and database migrations');
-      });
+    setImmediate(async () => {
+      try {
+        for (const defaultSched of SERVICE_SCHEDULES) {
+          await this.prisma.serviceSchedule.updateMany({
+            where: { id: defaultSched.id, title: { not: defaultSched.title } },
+            data: { title: defaultSched.title },
+          });
+        }
+        await this.generateUpcoming(new Date(), true);
+      } catch (err) {
+        this.logger.error('Recurring service generation failed; check configuration and database migrations', err);
+      }
     });
   }
 
@@ -206,6 +214,16 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       const skipDates = new Set(schedule.exceptions.filter((e) => e.kind === 'SKIP').map((e) => e.occurrenceStart.getTime()));
       const modifiedDates = new Set(schedule.exceptions.filter((e) => e.kind === 'MODIFIED').map((e) => e.occurrenceStart.getTime()));
 
+      const template = SERVICE_SCHEDULES.find((s) => s.id === schedule.id);
+      const isOnline = template?.isOnline ?? false;
+      const locationName = template?.locationName ?? config.venue.name;
+      const address = template?.meetingUrl ?? (isOnline ? 'https://meet.google.com/ord-tfhc-wed' : null);
+      const notes = template?.notes ?? null;
+      const description = template?.description ?? null;
+      const geofenceRadiusMeters = isOnline ? 100000 : config.venue.radiusMeters;
+      const latitude = isOnline ? 0.0 : config.venue.latitude;
+      const longitude = isOnline ? 0.0 : config.venue.longitude;
+
       const data = occurrences(schedule, now)
         .filter(({ startTime }) => !skipDates.has(startTime.getTime()))
         .map(({ startTime, endTime }) => {
@@ -217,6 +235,8 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             eventTypeId,
             visibility: schedule.visibility,
             title: schedule.title,
+            description,
+            notes,
             categoryId: category.id,
             meetingDate: startTime,
             startTime,
@@ -224,10 +244,12 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             expectedArrivalTime,
             attendanceOpenTime: new Date(expectedArrivalTime.getTime() - 30 * 60000),
             attendanceCloseTime: endTime || new Date(startTime.getTime() + 10 * 60000),
-            locationName: config.venue.name,
-            latitude: config.venue.latitude,
-            longitude: config.venue.longitude,
-            geofenceRadiusMeters: config.venue.radiusMeters,
+            locationName,
+            address,
+            latitude,
+            longitude,
+            geofenceRadiusMeters,
+            isOnline,
             isCompulsory: false,
           };
         });
@@ -247,7 +269,21 @@ export class RecurringServicesService implements OnApplicationBootstrap {
           if (desired && !skipDates.has(key)) {
             await this.prisma.meeting.updateMany({
               where: { id: meeting.id, isException: false, OR: [{ status: 'SCHEDULED' }, { status: 'CANCELLED', scheduleCancelled: true }] },
-              data: { ...desired, id: meeting.id, status: 'SCHEDULED', scheduleCancelled: false },
+              data: {
+                ...desired,
+                id: meeting.id,
+                title: schedule.title,
+                locationName,
+                address,
+                notes,
+                description,
+                latitude,
+                longitude,
+                geofenceRadiusMeters,
+                isOnline,
+                status: 'SCHEDULED',
+                scheduleCancelled: false,
+              },
             });
           } else if (meeting.startTime.getTime() < now.getTime() + schedule.horizonDays * 86400000) {
             await this.prisma.meeting.updateMany({
@@ -262,6 +298,45 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       const toCreate = data.filter((d) => !modifiedDates.has(d.occurrenceStart.getTime()));
       const result = await this.prisma.meeting.createMany({ data: toCreate, skipDuplicates: true });
       created += result.count;
+
+      // Ensure audience and invitations are synced for all-member meetings (e.g. Wednesday Unit Weekly Meeting)
+      if (schedule.id === 'wednesday-unit-meeting' || isOnline) {
+        const activeMeetings = await this.prisma.meeting.findMany({
+          where: {
+            serviceScheduleId: schedule.id,
+            startTime: { gte: todayStartUtc },
+            status: 'SCHEDULED',
+          },
+          select: { id: true },
+        });
+
+        const activeMembers = await this.prisma.member.findMany({
+          where: { status: 'ACTIVE' },
+          select: { id: true },
+        });
+
+        for (const m of activeMeetings) {
+          const existingAudience = await this.prisma.eventAudience.findFirst({
+            where: { meetingId: m.id, scope: 'ALL_MEMBERS' },
+          });
+          if (!existingAudience) {
+            await this.prisma.eventAudience.create({
+              data: { meetingId: m.id, scope: 'ALL_MEMBERS' },
+            });
+          }
+
+          if (activeMembers.length > 0) {
+            await this.prisma.eventInvitation.createMany({
+              data: activeMembers.map((member) => ({
+                meetingId: m.id,
+                memberId: member.id,
+                status: 'INVITED',
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
     }
     return { created, configured: true };
   }

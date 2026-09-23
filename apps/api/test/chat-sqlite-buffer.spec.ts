@@ -186,4 +186,61 @@ describe('ChatBufferRepository (SQLite Realtime Buffer with WAL Mode)', () => {
     expect(stats.pendingCount).toBeGreaterThanOrEqual(1);
     expect(stats.dbSizeBytes).toBeGreaterThan(0);
   });
+  test('paginates tied timestamps and literal search without repeating records', () => {
+    for (const id of ['a', 'b', 'c', 'd']) repo.saveMessage({ id, roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: '100% complete', createdAt: '2026-01-01T00:00:00.000Z' });
+    const first = repo.listMessages('room-1', 2, undefined, '100%');
+    const second = repo.listMessages('room-1', 2, first.nextCursor!, '100%');
+    expect(first.messages.map(m => m.id)).toEqual(['d', 'c']);
+    expect(second.messages.map(m => m.id)).toEqual(['b', 'a']);
+    expect(second.hasMore).toBe(false);
+  });
+
+  test('retains notification recovery work across close/reopen', () => {
+    repo.saveMessage({ id: 'durable', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'saved', createdAt: '2026-01-01T00:00:00.000Z', notificationPayload: { recipients: ['member-2'] } });
+    repo.close();
+    repo.initDatabase(testDbPath);
+    expect(repo.findById('durable')?.body).toBe('saved');
+    expect(repo.pendingNotifications()).toEqual([{ rowId: expect.any(Number), messageId: 'durable', payload: { recipients: ['member-2'] } }]);
+    repo.acknowledgeNotifications('durable');
+    expect(repo.pendingNotifications()).toEqual([]);
+    expect(repo.findById('durable')).not.toBeNull();
+  });
+
+  test('sending advances local unread state before the asynchronous receipt commits', () => {
+    repo.saveMessage({ id: 'older', roomId: 'room-1', senderMemberId: 'member-2', type: 'TEXT', body: 'hello', createdAt: '2026-01-01T00:00:00.000Z' });
+    expect(repo.countUnread('room-1', 'member-1')).toBe(1);
+    repo.saveMessage({ id: 'answer', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'reply', createdAt: '2026-01-01T00:00:01.000Z' });
+    expect(repo.countUnread('room-1', 'member-1')).toBe(0);
+    repo.saveMessage({ id: 'newer', roomId: 'room-1', senderMemberId: 'member-2', type: 'TEXT', body: 'later', createdAt: '2026-01-01T00:00:02.000Z' });
+    expect(repo.countUnread('room-1', 'member-1')).toBe(1);
+  });
+
+  test('pages past unacknowledged notification failures without starving later work', () => {
+    for (let i = 0; i < 3; i++) repo.saveMessage({ id: `notification-${i}`, roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'saved', createdAt: '2026-01-01T00:00:00.000Z', notificationPayload: { recipients: ['member-2'] } });
+    const first = repo.pendingNotifications(2);
+    expect(first.map(m => m.messageId)).toEqual(['notification-0', 'notification-1']);
+    expect(repo.pendingNotifications(2, first[1].rowId).map(m => m.messageId)).toEqual(['notification-2']);
+    expect(repo.pendingNotifications(2).map(m => m.messageId)).toEqual(['notification-0', 'notification-1']);
+  });
+
+  test('retries exhausted failures on later reconciliations without hiding their messages', () => {
+    repo.saveMessage({ id: 'retry', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'keep me', createdAt: '2026-01-01T00:00:00.000Z' });
+    for (let i = 0; i < 6; i++) repo.markFailed('retry', 'Offline');
+    expect(repo.getPendingBatch().map(m => m.id)).toContain('retry');
+    expect(repo.getLatestMessage('room-1')?.id).toBe('retry');
+  });
+
+  test('change cursor replays new messages, edits and deletions in bounded batches', () => {
+    const cursor = repo.changeCursor();
+    repo.saveMessage({ id: 'delta', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'before', createdAt: '2026-01-01T00:00:00.000Z' });
+    repo.updateMessage('delta', 'after', '2026-01-02T00:00:00.000Z');
+    repo.deleteMessage('delta', '2026-01-03T00:00:00.000Z');
+    const first = repo.changesAfter('room-1', cursor, 1);
+    expect(first.ids).toEqual(['delta']);
+    expect(first.hasMore).toBe(true);
+    expect(repo.changesAfter('room-1', first.nextCursor).ids).toEqual(['delta']);
+    expect(repo.changesAfter('another-room', cursor).ids).toEqual([]);
+    expect(repo.changesAfter('room-1', repo.changeCursor()).ids).toEqual([]);
+  });
+
 });

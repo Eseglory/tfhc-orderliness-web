@@ -972,8 +972,8 @@ export class MeetingsService {
       throw new BadRequestException('Closed meetings cannot be reopened');
     }
     if (status === MeetingStatus.ACTIVE) {
-      if (meeting.startTime > new Date()) {
-        throw new BadRequestException('A future scheduled meeting cannot be activated before its start date and time');
+      if (meeting.attendanceOpenTime && meeting.attendanceOpenTime > new Date()) {
+        throw new BadRequestException('A future scheduled meeting cannot be activated before its attendance open time');
       }
     }
     if (status === MeetingStatus.CLOSED) {

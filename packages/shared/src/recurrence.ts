@@ -224,3 +224,42 @@ export function describeRecurrence(rule: RecurrenceRule): string {
   }
   return rule.interval === 1 ? 'Yearly' : `Every ${rule.interval} years`;
 }
+
+/**
+ * Convert a RecurrenceRule into an RFC-5545 RRULE string compatible with
+ * Google Calendar, Apple Calendar, and Outlook (e.g. "FREQ=WEEKLY;BYDAY=WE").
+ */
+export function recurrenceRuleToRRuleString(rule: RecurrenceRule): string {
+  const parts: string[] = [`FREQ=${rule.freq}`];
+  if (rule.interval && rule.interval > 1) {
+    parts.push(`INTERVAL=${rule.interval}`);
+  }
+
+  const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+  if (rule.freq === 'WEEKLY' && rule.byWeekday && rule.byWeekday.length > 0) {
+    const days = rule.byWeekday.map((d) => DAY_CODES[d]).filter(Boolean).join(',');
+    if (days) parts.push(`BYDAY=${days}`);
+  } else if (rule.freq === 'MONTHLY') {
+    if (rule.bySetPos && rule.bySetPos.length > 0) {
+      const pos = rule.bySetPos[0];
+      const dayCode = DAY_CODES[pos.weekday] || 'SU';
+      parts.push(`BYDAY=${pos.nth}${dayCode}`);
+    } else if (rule.byMonthday && rule.byMonthday.length > 0) {
+      parts.push(`BYMONTHDAY=${rule.byMonthday.join(',')}`);
+    }
+  }
+
+  if (rule.count) {
+    parts.push(`COUNT=${rule.count}`);
+  }
+  if (rule.until) {
+    const untilDate = new Date(rule.until);
+    if (Number.isFinite(untilDate.getTime())) {
+      const iso = untilDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      parts.push(`UNTIL=${iso}`);
+    }
+  }
+
+  return parts.join(';');
+}

@@ -6,6 +6,8 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { assertSettingsAuthority } from '../../common/rbac/authorization-rules';
 import { Role } from '@tfhc/shared';
 
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
@@ -16,14 +18,16 @@ export class ReportsController {
 
   @Get('settings')
   @RequirePermissions('settings.read')
-  async settings() {
+  async settings(@CurrentUser() user: any) {
+    assertSettingsAuthority(user);
     return this.reportsService.settings();
   }
 
   @Roles(Role.ADMIN)
   @RequirePermissions('settings.update')
   @Put('settings')
-  async updateSettings(@Body() body: any) {
+  async updateSettings(@CurrentUser() user: any, @Body() body: any) {
+    assertSettingsAuthority(user);
     return this.reportsService.updateSettings(body);
   }
 

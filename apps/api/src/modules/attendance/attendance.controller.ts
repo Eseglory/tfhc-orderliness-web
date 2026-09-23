@@ -43,6 +43,78 @@ export class AttendanceController {
     return this.attendanceService.clockOutMember(memberId, body?.meetingId, body?.deviceInfo);
   }
 
+  // -------------------------------------------------------------------------
+  // Online Meeting Attendance Endpoints
+  // -------------------------------------------------------------------------
+
+  @Post('online/check-in')
+  async checkInOnline(@CurrentUser('memberId') memberId: string, @Body() body: any) {
+    return this.attendanceService.checkInOnline({
+      memberId,
+      meetingId: body?.meetingId,
+      deviceInfo: body?.deviceInfo,
+    });
+  }
+
+  @Post('online/heartbeat')
+  async heartbeatOnline(@CurrentUser('memberId') memberId: string, @Body() body: any) {
+    return this.attendanceService.heartbeatOnline({
+      memberId,
+      meetingId: body?.meetingId,
+      sessionToken: body?.sessionToken,
+    });
+  }
+
+  @Post('online/check-out')
+  async checkOutOnline(@CurrentUser('memberId') memberId: string, @Body() body: any) {
+    return this.attendanceService.checkOutOnline({
+      memberId,
+      meetingId: body?.meetingId,
+      sessionToken: body?.sessionToken,
+    });
+  }
+
+  @Post('online/submit-code')
+  async submitAttendanceCode(@CurrentUser('memberId') memberId: string, @Body() body: any) {
+    return this.attendanceService.submitAttendanceCode({
+      memberId,
+      meetingId: body?.meetingId,
+      code: body?.code,
+    });
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.manage')
+  @Post('session/:meetingId/open')
+  async openAttendanceSession(@CurrentUser('userId') adminUserId: string, @Param('meetingId') meetingId: string) {
+    return this.attendanceService.openAttendanceSession(adminUserId, meetingId);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.manage')
+  @Post('session/:meetingId/close')
+  async closeAttendanceSession(@CurrentUser('userId') adminUserId: string, @Param('meetingId') meetingId: string) {
+    return this.attendanceService.closeAttendanceSession(adminUserId, meetingId);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.manage')
+  @Post('session/:meetingId/code')
+  async generateAttendanceCode(
+    @CurrentUser('userId') adminUserId: string,
+    @Param('meetingId') meetingId: string,
+    @Body() body: any,
+  ) {
+    return this.attendanceService.generateAttendanceCode(adminUserId, meetingId, body?.validMinutes);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.read')
+  @Get('session/:meetingId/live')
+  async getOnlineSessionLive(@Param('meetingId') meetingId: string) {
+    return this.attendanceService.getOnlineSessionLive(meetingId);
+  }
+
   @Roles(Role.ADMIN, Role.LEADER)
   @RequirePermissions('attendance.manage')
   @Post('manual')

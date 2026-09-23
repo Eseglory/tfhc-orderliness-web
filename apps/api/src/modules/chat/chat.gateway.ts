@@ -59,6 +59,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   afterInit(server: Namespace | Server) {
     this.io = server ?? this.server;
+    this.chat.onNotificationsCommitted?.(memberIds => {
+      for (const memberId of memberIds) this.notifyMember(memberId);
+      void this.prisma.pushSubscription.updateMany({ where: { user: { member: { id: { in: memberIds } } } }, data: { nextAttemptAt: new Date() } })
+        .then(() => this.pushService?.deliver())
+        .catch(error => this.logger.warn(`ChatPushRetryPending: ${error.message}`));
+    });
   }
 
   /** socketId -> Socket map, tolerating both the Server and Namespace shapes. */
@@ -486,6 +492,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async fanOut(roomId: string, message: unknown, createNotifications = true) {
     const started = Date.now();
     if (!this.io) return;
+    this.chat.cacheRealtimeMessage?.(message);
     // Resolve current membership before broadcasting; removed members may still
     // have an old socket room subscription.
 
@@ -499,51 +506,61 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       const isMine = dto.sender?.memberId === memberId;
       const payload = { ...(message as object), mine: isMine };
       this.io.to(`member:${memberId}`).emit('message:new', payload);
-      this.io.to(`member:${memberId}`).emit('unread:update');
 
       for (const socketId of this.online.get(memberId) ?? []) {
         const socket = this.liveSockets.get(socketId);
         if (!socket || !this.viewerOf(socket)) continue;
         void socket.join(`room:${roomId}`);
-        socket.emit('message:new', payload);
-        socket.emit('unread:update');
+
       }
     }
 
-    // Persist once per recipient. Push uses the existing durable notification
-    // dispatcher rather than a second, untracked fire-and-forget delivery.
+    // Persist once per recipient in background asynchronously.
+    // Instant message delivery to connected sockets must never block on database notification writes or push delivery.
     const notifications = recipientIds.filter(id => id !== dto.sender?.memberId).map(memberId => ({
       id: randomUUID(), memberId, type: 'CHAT_MESSAGE',
       title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
       body: (dto.body || 'New attachment').slice(0, 500),
       data: { roomId, messageId: dto.id, url: `/member/chat?roomId=${roomId}` },
     }));
+
     if (createNotifications && notifications.length && !(message as { [CHAT_NOTIFICATIONS_COMMITTED]?: boolean })[CHAT_NOTIFICATIONS_COMMITTED]) {
-      await this.prisma.$transaction(async tx => {
+      void this.processNotificationsBackground(room, dto, notifications, recipientIds);
+    }
+    this.logger.debug(`ChatFanOutFast message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
+  }
+
+  private async processNotificationsBackground(
+    room: { id: string; type: string; name: string | null },
+    dto: { id: string; body?: string; sender?: { memberId?: string; name?: string } },
+    notifications: Array<any>,
+    recipientIds: string[],
+  ) {
+    try {
+      const claimed = await this.prisma.$transaction(async tx => {
         const idempotencyKey = `chat:${dto.id}:notifications`;
         const claim = await tx.communicationDelivery.createMany({ data: [{
-          idempotencyKey, channel: 'PUSH', recipient: roomId,
+          idempotencyKey, channel: 'PUSH', recipient: room.id,
           templateKey: 'CHAT_INAPP', status: 'PENDING',
         }], skipDuplicates: true });
-        if (!claim.count) return;
+        if (!claim.count) return false;
         await tx.memberNotification.createMany({ data: notifications });
         await tx.communicationDelivery.update({ where: { idempotencyKey }, data: {
           status: 'SENT', attemptedAt: new Date(),
         } });
+        return true;
       });
+      if (!claimed) return;
+
+      for (const memberId of recipientIds) {
+        if (memberId === dto.sender?.memberId) continue;
+        this.notifyMember(memberId);
+
+      }
+      void this.pushService?.deliver().catch(error => this.logger.warn(`ChatPushRetryPending: ${error.message}`));
+    } catch (err: any) {
+      this.logger.warn(`ChatBackgroundNotificationsWarning: ${err?.message}`);
     }
-    for (const memberId of recipientIds) {
-      if (memberId === dto.sender?.memberId) continue;
-      this.notifyMember(memberId);
-      // Dispatch push notification to all subscribed devices for the recipient
-      void this.pushService?.sendDirectPush({ memberId }, {
-        title: room.type === 'DIRECT' ? dto.sender?.name || 'New message' : room.name || 'General',
-        body: (dto.body || 'New message').slice(0, 150),
-        url: `/member/chat?roomId=${roomId}`,
-      });
-    }
-    void this.pushService?.deliver();
-    this.logger.log(`ChatFanOut message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
   }
 
   notifyMember(memberId: string) {
@@ -551,17 +568,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.io.to(`member:${memberId}`).emit('notification:new');
       this.io.to(`member:${memberId}`).emit('unread:update');
     }
-    for (const socketId of this.online.get(memberId) ?? []) {
-      const sock = this.liveSockets.get(socketId);
-      sock?.emit('notification:new');
-      sock?.emit('unread:update');
-    }
+
   }
 
   async emitRoomEvent(roomId: string, event: string, payload: unknown) {
     if (!this.io) return;
     // Broadcast directly to the Socket.IO room (instant in-memory delivery)
-    this.io.to(`room:${roomId}`).emit(event, payload);
+    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+    if (!room) return;
+    const recipients = await this.chat.recipientMemberIds(room);
+    if (recipients.length) this.io.to(recipients.map(id => `member:${id}`)).emit(event, payload);
   }
 
   // -------------------------------------------------------------------------

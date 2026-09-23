@@ -10,10 +10,12 @@ import {
   isWardrobeCreateAuthorized,
   isEventCreateAuthorized,
   isFundExpenseApprovalAuthorized,
+  isSettingsAuthorized,
   assertFinanceCrudAuthority,
   assertWardrobeCreateAuthority,
   assertEventCreateAuthority,
   assertFundExpenseApprovalAuthority,
+  assertSettingsAuthority,
 } from '../src/common/rbac/authorization-rules';
 
 describe('Admin RBAC, Module Ownership & Welfare Fund Approval Workflow', () => {
@@ -398,6 +400,43 @@ describe('Admin RBAC, Module Ownership & Welfare Fund Approval Workflow', () => 
         if (disbursed) throw new ConflictException('Request is already disbursed');
       };
       expect(attemptRedisburse).toThrow(ConflictException);
+    });
+  });
+
+  describe('Module Ownership: System Settings & Policies Exclusivity', () => {
+    it('grants full settings authority to Eseosa Glory (engreseglory@gmail.com)', () => {
+      expect(isSettingsAuthorized(eseosaSuperAdmin)).toBe(true);
+      expect(() => assertSettingsAuthority(eseosaSuperAdmin)).not.toThrow();
+    });
+
+    it('denies settings authority and throws ForbiddenException for all other administrators', () => {
+      const otherAdmins = [
+        aanuWardrobeManager,
+        victoriaWardrobeManager,
+        passedEventManager,
+        confortEventManager,
+        nicoleApprovalManager,
+        dotunApprovalManager,
+        jacobApprovalManager,
+        lovethWelfareSecretary,
+        danielViewerAndApprover,
+        folawewoViewer,
+      ];
+
+      for (const admin of otherAdmins) {
+        expect(isSettingsAuthorized(admin)).toBe(false);
+        expect(() => assertSettingsAuthority(admin)).toThrow(ForbiddenException);
+      }
+    });
+
+    it('verifies non-superadmin roles do not receive settings.read or settings.update in defaults', () => {
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.FINANCE].permissions, 'settings.read')).toBe(false);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.ADMINISTRATION].permissions, 'settings.read')).toBe(false);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.ADMINISTRATION].permissions, 'settings.update')).toBe(false);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.VIEWER].permissions, 'settings.read')).toBe(false);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.SECRETARY].permissions, 'settings.read')).toBe(false);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.SUPER_ADMIN].permissions, 'settings.read')).toBe(true);
+      expect(checkPerm(SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.SUPER_ADMIN].permissions, 'settings.update')).toBe(true);
     });
   });
 });

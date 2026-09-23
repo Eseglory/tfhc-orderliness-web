@@ -16,6 +16,7 @@ import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { assertSettingsAuthority } from '../../common/rbac/authorization-rules';
 
 @Controller('calendar')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -92,30 +93,34 @@ export class CalendarController {
 
   @Get('integrations/google/auth-url')
   @RequirePermissions('events.create')
-  getGoogleAuthUrl(@CurrentUser('userId') userId: string, @Query('prefix') prefix?: string) {
+  getGoogleAuthUrl(@CurrentUser() user: any, @Query('prefix') prefix?: string) {
+    assertSettingsAuthority(user);
     return {
-      authUrl: this.calendarService.getAuthUrl(userId, prefix),
+      authUrl: this.calendarService.getAuthUrl(user.userId, prefix),
     };
   }
 
   @Post('integrations/google/connect')
   @RequirePermissions('events.create')
-  async connectGoogle(@Body() body: { code: string }, @CurrentUser('userId') userId: string) {
+  async connectGoogle(@Body() body: { code: string }, @CurrentUser() user: any) {
+    assertSettingsAuthority(user);
     if (!body?.code) {
       throw new BadRequestException('Authorization code is required');
     }
-    return this.calendarService.connectAccount(userId, body.code);
+    return this.calendarService.connectAccount(user.userId, body.code);
   }
 
   @Get('integrations/google/status')
-  async getGoogleStatus(@CurrentUser('userId') userId: string) {
-    return this.calendarService.getIntegrationStatus(userId);
+  async getGoogleStatus(@CurrentUser() user: any) {
+    assertSettingsAuthority(user);
+    return this.calendarService.getIntegrationStatus(user.userId);
   }
 
   @Post('integrations/google/disconnect')
   @RequirePermissions('events.update')
-  async disconnectGoogle(@CurrentUser('userId') userId: string) {
-    return this.calendarService.disconnect(userId);
+  async disconnectGoogle(@CurrentUser() user: any) {
+    assertSettingsAuthority(user);
+    return this.calendarService.disconnect(user.userId);
   }
 
   @Post('integrations/google/sync-meeting')

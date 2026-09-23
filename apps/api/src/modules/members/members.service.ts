@@ -151,6 +151,25 @@ export class MembersService {
     return { profilePhotoUrl: null };
   }
 
+  async getPhotoBuffer(id: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const member = await this.prisma.member.findUnique({
+      where: { id },
+      select: { profilePhotoUrl: true },
+    });
+    if (!member?.profilePhotoUrl) return null;
+    const url = member.profilePhotoUrl;
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        return {
+          contentType: match[1],
+          buffer: Buffer.from(match[2], 'base64'),
+        };
+      }
+    }
+    return null;
+  }
+
   async updateBanner(id: string, file?: { buffer: Buffer; size: number }) {
     if (!file?.buffer?.length) throw new BadRequestException('Choose a JPEG, PNG or WebP image');
     if (file.size > 1024 * 1024 || file.buffer.length > 1024 * 1024) throw new PayloadTooLargeException('Banner must be 1 MB or smaller');
@@ -351,6 +370,36 @@ export class MembersService {
         },
         include: { subTeam: true },
       });
+
+      // Automatically invite active new member to upcoming all-members recurring meetings (e.g. Wednesday Unit Weekly Meeting)
+      if (created.status === MemberStatus.ACTIVE) {
+        try {
+          const upcomingAllMemberMeetings = await this.prisma.meeting.findMany({
+            where: {
+              startTime: { gte: new Date() },
+              status: 'SCHEDULED',
+              OR: [
+                { audiences: { some: { scope: 'ALL_MEMBERS' } } },
+                { serviceScheduleId: 'wednesday-unit-meeting' },
+              ],
+            },
+            select: { id: true },
+          });
+          if (upcomingAllMemberMeetings.length > 0) {
+            await this.prisma.eventInvitation.createMany({
+              data: upcomingAllMemberMeetings.map((m) => ({
+                meetingId: m.id,
+                memberId: created.id,
+                status: 'INVITED' as const,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        } catch {
+          // Non-blocking for member creation
+        }
+      }
+
       this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
       return created;
     } catch (error: any) {

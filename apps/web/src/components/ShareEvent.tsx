@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { calendarFile, ShareableEvent } from '../lib/pwa/calendar';
+import { buildAdvancedGoogleCalendarUrl } from '../lib/calendar-integration';
 
 export function ShareEvent({ event }: { event: ShareableEvent }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -26,19 +27,19 @@ export function ShareEvent({ event }: { event: ShareableEvent }) {
   };
 
   const getGoogleCalendarUrl = () => {
-    const startIso = new Date(event.startTime).toISOString().replace(/-|:|\.\d+/g, '');
-    const endIso = event.endTime
-      ? new Date(event.endTime).toISOString().replace(/-|:|\.\d+/g, '')
-      : new Date(new Date(event.startTime).getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d+/g, '');
-
-    const params = new URLSearchParams({
-      action: 'TEMPLATE',
-      text: event.title,
-      dates: `${startIso}/${endIso}`,
-      details: `${event.title} - The Father’s House Church Orderliness Unit`,
-      location: event.locationName || 'The Father’s House Church',
+    return buildAdvancedGoogleCalendarUrl({
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      notes: event.notes,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      locationName: event.locationName,
+      virtualMeetingUrl: event.meetingUrl,
+      mode: event.locationName?.toLowerCase().includes('online') || event.locationName?.toLowerCase().includes('virtual') || event.locationName?.toLowerCase().includes('google meet') || event.meetingUrl ? 'VIRTUAL' : 'IN_PERSON',
+      recurrenceRule: event.recurrenceRule || (event.title.toLowerCase().includes('wednesday') && (event.isRecurring || event.title.toLowerCase().includes('weekly')) ? 'FREQ=WEEKLY;BYDAY=WE' : null),
+      timezone: 'Africa/Lagos',
     });
-    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
   const downloadIcs = () => {

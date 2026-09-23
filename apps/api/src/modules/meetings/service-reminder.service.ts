@@ -81,6 +81,7 @@ export class ServiceReminderService {
     const result = { targetedMembersCount: 0, pushSent: 0, emailSent: 0, chatCreated: 0, inAppCreated: 0 };
     const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId }, include: { audiences: true, category: true } });
     if (!meeting || ['CANCELLED', 'CLOSED'].includes(meeting.status)) return result;
+    const isAllMembers = Boolean(meeting.audiences?.some(a => a.scope === 'ALL_MEMBERS') || meeting.serviceScheduleId === 'wednesday-unit-meeting');
     const candidates = await this.prisma.member.findMany({ where: {
       status: MemberStatus.ACTIVE, ...(targetMemberId ? { id: targetMemberId } : {}),
       user: { isActive: true },
@@ -88,6 +89,7 @@ export class ServiceReminderService {
       OR: [
         { eventResponses: { some: { meetingId, attending: true } } },
         { AND: [{ eventResponses: { none: { meetingId } } }, { serviceCommitments: { some: { meetingId, status: 'COMMITTED' } } }] },
+        ...(isAllMembers ? [{ eventResponses: { none: { meetingId, attending: false } } }] : []),
       ],
     }, include: { user: true, approvedMember: true } });
     const members = candidates.filter(m => (!m.approvedMember || m.approvedMember.status === 'ACTIVE') && canViewEvent(meeting.visibility, meeting.audiences, {
@@ -98,8 +100,14 @@ export class ServiceReminderService {
     const format = (date: Date) => date.toLocaleString('en-GB', { timeZone: timezone, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
     const date = format(meeting.startTime);
     const arrival = format(meeting.expectedArrivalTime || meeting.startTime);
+    const isOnline = Boolean(
+      (meeting.address && meeting.address.startsWith('http')) ||
+      (meeting.locationName && /online|google meet|zoom|virtual/i.test(meeting.locationName))
+    );
     const title = window === 'active' ? `Service Attendance Open: ${meeting.title}` : `Service Reminder (${window}): ${meeting.title}`;
-    const body = `${meeting.title} starts ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName || 'Main Auditorium'}. Please prepare for your responsibilities.`;
+    const body = isOnline
+      ? `${meeting.title} (Online Meeting) starts ${date} (${timezone}). Join Google Meet: ${meeting.address || 'Online'}. Expected arrival: ${arrival}.`
+      : `${meeting.title} starts ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName || 'Main Auditorium'}. Please prepare for your responsibilities.`;
     const path = `/member/check-in?meetingId=${meeting.id}`;
     const appUrl = this.config.get<string>('APP_URL') || this.config.get<string>('APP_WEB_URL') || 'https://tfhc-orderliness-web.vercel.app';
 
@@ -114,18 +122,21 @@ export class ServiceReminderService {
         });
         if (!existingChatDelivery || existingChatDelivery.status !== 'SENT') {
           const message = await this.prisma.$transaction(async tx => {
-            const claim = await tx.communicationDelivery.upsert({
-              where: { idempotencyKey },
-              create: {
+            const claim = await tx.communicationDelivery.createMany({
+              skipDuplicates: true,
+              data: [{
                 channel: 'PUSH',
                 recipient: room.id,
                 templateKey: 'SERVICE_REMINDER_GENERAL_CHAT',
                 idempotencyKey,
                 status: 'PENDING',
                 attemptedAt: new Date(),
-              },
-              update: { status: 'PENDING', attemptedAt: new Date() },
+              }],
             });
+            if (!claim.count) {
+              const retry = await tx.communicationDelivery.updateMany({ where: { idempotencyKey, status: { not: 'SENT' } }, data: { status: 'PENDING', attemptedAt: new Date() } });
+              if (!retry.count) return null;
+            }
             const generalChatBody = `Service reminder: Tomorrow's service (${meeting.title}) is approaching on ${date} (${timezone}). Expected arrival: ${arrival}. Venue: ${meeting.locationName || 'Church Auditorium'}. Everyone scheduled and available to serve is encouraged to prepare ahead of time and be active and ready for assigned responsibilities.`;
             const msg = await tx.chatMessage.create({
               data: { roomId: room.id, type: 'SYSTEM', body: generalChatBody },
@@ -151,18 +162,21 @@ export class ServiceReminderService {
       let notification = null;
       if (!existingInApp || existingInApp.status !== 'SENT') {
         notification = await this.prisma.$transaction(async tx => {
-          await tx.communicationDelivery.upsert({
-            where: { idempotencyKey: inAppKey },
-            create: {
+          const claim = await tx.communicationDelivery.createMany({
+            skipDuplicates: true,
+            data: [{
               channel: 'PUSH',
               recipient: member.id,
               templateKey: `SERVICE_REMINDER_${window.toUpperCase()}_INAPP`,
               idempotencyKey: inAppKey,
               status: 'PENDING',
               attemptedAt: new Date(),
-            },
-            update: { status: 'PENDING', attemptedAt: new Date() },
+            }],
           });
+          if (!claim.count) {
+            const retry = await tx.communicationDelivery.updateMany({ where: { idempotencyKey: inAppKey, status: { not: 'SENT' } }, data: { status: 'PENDING', attemptedAt: new Date() } });
+            if (!retry.count) return null;
+          }
           const item = await tx.memberNotification.create({
             data: {
               memberId: member.id,
@@ -226,18 +240,32 @@ export class ServiceReminderService {
         update: { status: 'PENDING', attemptedAt: new Date() },
       });
 
+      const toUtcString = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      const gCalDates = `${toUtcString(meeting.startTime)}/${toUtcString(meeting.endTime || new Date(meeting.startTime.getTime() + 3600000))}`;
+      const isWednesdayUnitMeeting = meeting.serviceScheduleId === 'wednesday-unit-meeting';
+      const gCalRecur = isWednesdayUnitMeeting ? '&recur=RRULE:FREQ=WEEKLY;BYDAY=WE' : '';
+      const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(meeting.title)}&dates=${gCalDates}&ctz=${encodeURIComponent(timezone)}&location=${encodeURIComponent(meeting.address || meeting.locationName || 'Online')}&details=${encodeURIComponent((meeting.description || meeting.title) + (meeting.address ? `\n\nMeeting link: ${meeting.address}` : ''))}${gCalRecur}`;
+
       const rendered = renderBrandedEmail({
         category: 'reminder',
         heading: title,
         recipientName: member.firstName,
-        paragraphs: [body, 'You are receiving this reminder because you indicated availability for this service.'],
-        details: [
-          { label: 'Service', value: meeting.title },
-          { label: 'Starts', value: date },
-          { label: 'Arrival', value: arrival },
-          { label: 'Venue', value: meeting.locationName || 'Church Auditorium' },
+        paragraphs: [
+          body,
+          isOnline
+            ? `Add this recurring meeting to your Google Calendar:\n<a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline; font-weight: 600;">Click here to Add to Google Calendar</a>`
+            : 'You are receiving this reminder because you indicated availability for this service.',
         ],
-        cta: { label: 'View Service Details', url: `${appUrl}${path}`, tone: 'primary' },
+        details: [
+          { label: 'Event', value: meeting.title },
+          { label: 'Starts', value: date },
+          { label: 'Venue / Platform', value: meeting.locationName || 'Church Auditorium' },
+          ...(meeting.address && meeting.address.startsWith('http') ? [{ label: 'Meeting Link', value: meeting.address }] : []),
+          ...(isWednesdayUnitMeeting ? [{ label: 'Recurrence', value: 'Every Wednesday (Recurring)' }] : []),
+        ],
+        cta: meeting.address && meeting.address.startsWith('http')
+          ? { label: 'Join Google Meet', url: meeting.address, tone: 'primary' }
+          : { label: 'View Service Details', url: `${appUrl}${path}`, tone: 'primary' },
       });
       try {
         const sent = await this.mailService.sendEmail({

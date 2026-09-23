@@ -1,4 +1,15 @@
-export type ShareableEvent = { id: string; title: string; startTime: string; endTime: string | null; locationName: string | null };
+export type ShareableEvent = {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string | null;
+  locationName: string | null;
+  description?: string | null;
+  notes?: string | null;
+  meetingUrl?: string | null;
+  recurrenceRule?: string | null;
+  isRecurring?: boolean;
+};
 const escape = (text: string) => text.replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/\r/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
 const stamp = (date: string) => new Date(date).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 function fold(line: string) {

@@ -1193,9 +1193,17 @@ export default function AdminReportsPage() {
                         {/* Actual Attendance */}
                         <td className="py-3 px-4 text-center">
                           {r.attendanceStatus === 'ATTENDED' ? (
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                              Attended ({r.actualAttendanceStatus || 'PRESENT'})
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                Attended ({r.actualAttendanceStatus || 'PRESENT'})
+                              </span>
+                              {(r.attendanceMethod === 'ONLINE_SESSION' || r.attendanceMethod === 'ONLINE_CODE') && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-600 dark:text-blue-400">
+                                  <span className="material-symbols-outlined text-[11px]">videocam</span>
+                                  <span>{r.attendanceMethod === 'ONLINE_CODE' ? 'Online (Code)' : 'Online (Session)'}</span>
+                                </span>
+                              )}
+                            </div>
                           ) : r.attendanceStatus === 'EXCUSED' ? (
                             <span className="text-amber-600 dark:text-amber-400 font-bold">
                               Excused

@@ -1,5 +1,6 @@
 import { unitPolicy } from '../../common/unit-policy';
-import { Prisma } from '@prisma/client';
+import { Prisma, AttendanceType } from '@prisma/client';
+import * as crypto from 'crypto';
 import {
   Injectable,
   ForbiddenException,
@@ -92,7 +93,7 @@ export class AttendanceService {
     if (meeting.status !== 'ACTIVE') {
       throw new BadRequestException('Attendance check-in is not currently open for this meeting');
     }
-    if (meeting.startTime > serverTimestamp) {
+    if (serverTimestamp < meeting.attendanceOpenTime) {
       throw new BadRequestException('Attendance cannot be clocked for a future event or service');
     }
     if (
@@ -176,18 +177,29 @@ export class AttendanceService {
       if (!current || current.status !== 'ACTIVE' || new Date() > current.attendanceCloseTime) {
         throw new BadRequestException('Attendance check-in is no longer open for this meeting');
       }
+      const isOnline = Boolean(
+        (meeting as any).isOnline ||
+        meeting.geofenceRadiusMeters >= 50000 ||
+        meeting.locationName?.toLowerCase().includes('virtual') ||
+        meeting.locationName?.toLowerCase().includes('online') ||
+        meeting.address?.startsWith('http')
+      );
+
       return tx.attendanceRecord.create({
       data: {
         memberId: dto.memberId,
         meetingId: dto.meetingId,
         expectedArrivalTime: meeting.expectedArrivalTime,
         actualArrivalTime: serverTimestamp,
+        joinedAt: serverTimestamp,
+        lastSeenAt: serverTimestamp,
         status,
+        attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
         gpsLat: dto.latitude,
         gpsLong: dto.longitude,
         gpsAccuracy: dto.gpsAccuracy,
         distanceFromVenue,
-        method: AttendanceMethod.SYSTEM_GEO,
+        method: isOnline ? AttendanceMethod.ONLINE_SESSION : AttendanceMethod.SYSTEM_GEO,
         pointsEarned,
         deviceInfo: dto.deviceInfo,
       },
@@ -205,6 +217,524 @@ export class AttendanceService {
       }
       throw error;
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Online Meeting Attendance: Primary Mechanism (Option B - Session & Heartbeat)
+  // -------------------------------------------------------------------------
+
+  async checkInOnline(dto: {
+    memberId: string;
+    meetingId: string;
+    deviceInfo?: string;
+  }) {
+    if (!dto.meetingId || typeof dto.meetingId !== 'string' || !dto.meetingId.trim()) {
+      throw new BadRequestException('Choose a meeting to check in');
+    }
+    if (!dto.memberId) throw new ForbiddenException('A member profile is required');
+    const serverTimestamp = new Date();
+
+    // 1. Verify Member
+    const member = await this.prisma.member.findUnique({
+      where: { id: dto.memberId },
+    });
+    if (!member) throw new NotFoundException('Member profile not found');
+    if (member.status !== 'ACTIVE') {
+      throw new BadRequestException(`Member status is ${member.status}. Only ACTIVE members can check in.`);
+    }
+
+    // 2. Verify Meeting
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: dto.meetingId },
+      include: { category: true, audiences: true },
+    });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    if (meeting.status !== 'ACTIVE') {
+      throw new BadRequestException('Online attendance is not currently open for this meeting');
+    }
+    if (serverTimestamp < meeting.attendanceOpenTime || serverTimestamp > meeting.attendanceCloseTime) {
+      throw new BadRequestException('Attendance check-in is outside the allowed time window');
+    }
+    if (!canViewEvent(meeting.visibility, meeting.audiences, {
+      memberId: member.id,
+      subTeamId: member.subTeamId,
+      roleInUnit: member.roleInUnit,
+    })) {
+      throw new BadRequestException('This event is not open to you');
+    }
+
+    // 3. Time-based Attendance Classification & Points
+    const status = classifyAttendanceStatus(serverTimestamp, {
+      attendanceOpenTime: meeting.attendanceOpenTime,
+      expectedArrivalTime: meeting.expectedArrivalTime,
+      startTime: meeting.startTime,
+      gracePeriodMinutes: meeting.gracePeriodMinutes,
+      attendanceCloseTime: meeting.attendanceCloseTime,
+    });
+    const pointsEarned = calculateAttendancePoints(
+      status,
+      meeting.pointWeight * meeting.category.pointWeight,
+      await unitPolicy(this.prisma),
+    );
+
+    // 4. Generate cryptographically secure session token
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionTokenHash = crypto.createHash('sha256').update(sessionToken).digest('hex');
+
+    // 5. Create or update single AttendanceRecord (guarantees ONE attendance record per member per occurrence)
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM meetings WHERE id = ${meeting.id} FOR UPDATE`;
+      const current = await tx.meeting.findUnique({ where: { id: meeting.id } });
+      if (!current || current.status !== 'ACTIVE' || new Date() > current.attendanceCloseTime) {
+        throw new BadRequestException('Attendance check-in is no longer open for this meeting');
+      }
+
+      const existing = await tx.attendanceRecord.findUnique({
+        where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+      });
+
+      let record;
+      if (existing) {
+        record = await tx.attendanceRecord.update({
+          where: { id: existing.id },
+          data: {
+            sessionTokenHash,
+            lastSeenAt: serverTimestamp,
+            deviceInfo: dto.deviceInfo || existing.deviceInfo,
+            joinedAt: existing.joinedAt ?? serverTimestamp,
+            attendanceType: AttendanceType.ONLINE,
+          },
+          include: { meeting: { include: { category: true } }, member: true },
+        });
+      } else {
+        record = await tx.attendanceRecord.create({
+          data: {
+            memberId: dto.memberId,
+            meetingId: dto.meetingId,
+            expectedArrivalTime: meeting.expectedArrivalTime,
+            actualArrivalTime: serverTimestamp,
+            joinedAt: serverTimestamp,
+            lastSeenAt: serverTimestamp,
+            status,
+            attendanceType: AttendanceType.ONLINE,
+            method: AttendanceMethod.ONLINE_SESSION,
+            pointsEarned,
+            sessionTokenHash,
+            deviceInfo: dto.deviceInfo,
+          },
+          include: { meeting: { include: { category: true } }, member: true },
+        });
+      }
+      return { record, sessionToken };
+    }).then(({ record, sessionToken }) => {
+      this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
+      return {
+        success: true,
+        sessionToken,
+        record,
+        joinedAt: record.joinedAt,
+        status: record.status,
+        meetingId: dto.meetingId,
+      };
+    });
+  }
+
+  async heartbeatOnline(dto: {
+    memberId: string;
+    meetingId: string;
+    sessionToken: string;
+  }) {
+    if (!dto.memberId) throw new ForbiddenException('A member profile is required');
+    if (!dto.meetingId || !dto.sessionToken) {
+      throw new BadRequestException('Meeting ID and session token are required');
+    }
+    const tokenHash = crypto.createHash('sha256').update(dto.sessionToken).digest('hex');
+
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+      include: { meeting: true },
+    });
+    if (!record) {
+      throw new NotFoundException('No active attendance record found');
+    }
+    if (record.sessionTokenHash && record.sessionTokenHash !== tokenHash) {
+      throw new ForbiddenException('Invalid or expired attendance session token');
+    }
+
+    const now = new Date();
+    if (record.meeting.status === 'CLOSED') {
+      return {
+        success: false,
+        sessionClosed: true,
+        durationMinutes: record.durationMinutes ?? 0,
+        lastSeenAt: record.lastSeenAt,
+      };
+    }
+
+    const joinedAt = record.joinedAt || record.actualArrivalTime || now;
+    const durationMinutes = Math.max(1, Math.round((now.getTime() - joinedAt.getTime()) / 60000));
+
+    const updated = await this.prisma.attendanceRecord.update({
+      where: { id: record.id },
+      data: {
+        lastSeenAt: now,
+        durationMinutes,
+      },
+    });
+
+    return {
+      success: true,
+      durationMinutes: updated.durationMinutes,
+      lastSeenAt: updated.lastSeenAt,
+    };
+  }
+
+  async checkOutOnline(dto: {
+    memberId: string;
+    meetingId: string;
+    sessionToken?: string;
+  }) {
+    if (!dto.memberId) throw new ForbiddenException('A member profile is required');
+    if (!dto.meetingId) throw new BadRequestException('Meeting ID is required');
+
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+    });
+    if (!record) throw new NotFoundException('Attendance record not found');
+
+    if (dto.sessionToken && record.sessionTokenHash) {
+      const tokenHash = crypto.createHash('sha256').update(dto.sessionToken).digest('hex');
+      if (tokenHash !== record.sessionTokenHash) {
+        throw new ForbiddenException('Invalid session token');
+      }
+    }
+
+    const now = new Date();
+    const joinedAt = record.joinedAt || record.actualArrivalTime || now;
+    const durationMinutes = Math.max(1, Math.round((now.getTime() - joinedAt.getTime()) / 60000));
+
+    const updated = await this.prisma.attendanceRecord.update({
+      where: { id: record.id },
+      data: {
+        leftAt: now,
+        lastSeenAt: now,
+        durationMinutes,
+        sessionTokenHash: null,
+      },
+      include: { meeting: true },
+    });
+
+    this.cache.invalidateTags(['attendance', 'analytics', 'dashboard', 'leaderboard']);
+    return {
+      success: true,
+      clockedOut: true,
+      durationMinutes: updated.durationMinutes,
+      leftAt: updated.leftAt,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Online Meeting Attendance: Secondary / Fallback Mechanism (Option C - Code)
+  // -------------------------------------------------------------------------
+
+  private codeAttempts = new Map<string, { count: number; resetAt: number }>();
+
+  async generateAttendanceCode(adminUserId: string, meetingId: string, validMinutes = 45) {
+    if (!meetingId) throw new BadRequestException('Meeting ID is required');
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    if (meeting.status === 'CLOSED' || meeting.status === 'CANCELLED') {
+      throw new BadRequestException('Cannot generate code for a closed or cancelled meeting');
+    }
+
+    const code = crypto.randomInt(100000, 999999).toString();
+    const expiresAt = new Date(Date.now() + Math.min(validMinutes, 120) * 60000);
+
+    await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        attendanceCode: code,
+        attendanceCodeExpiresAt: expiresAt,
+      },
+    });
+
+    await this.audit.record({
+      actorUserId: adminUserId,
+      action: 'ATTENDANCE_CODE_GENERATED',
+      entity: 'Meeting',
+      entityId: meetingId,
+      newData: { code, expiresAt },
+    });
+
+    return {
+      success: true,
+      code,
+      expiresAt,
+      validMinutes,
+      meetingId,
+    };
+  }
+
+  async submitAttendanceCode(dto: {
+    memberId: string;
+    meetingId: string;
+    code: string;
+  }) {
+    if (!dto.memberId) throw new ForbiddenException('A member profile is required');
+    if (!dto.meetingId || !dto.code || !dto.code.trim()) {
+      throw new BadRequestException('Meeting ID and 6-digit code are required');
+    }
+    const cleanCode = dto.code.trim();
+    if (!/^\d{6}$/.test(cleanCode)) {
+      throw new BadRequestException('Attendance code must be a 6-digit number');
+    }
+
+    const rateKey = `rate:code:${dto.memberId}:${dto.meetingId}`;
+    const nowMs = Date.now();
+    const attempt = this.codeAttempts.get(rateKey);
+    if (attempt && attempt.resetAt > nowMs && attempt.count >= 5) {
+      const waitMin = Math.ceil((attempt.resetAt - nowMs) / 60000);
+      throw new BadRequestException(`Too many failed attempts. Please wait ${waitMin} minute(s) before trying again.`);
+    }
+
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: dto.meetingId },
+      include: { category: true, audiences: true },
+    });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    if (meeting.status !== 'ACTIVE') {
+      throw new BadRequestException('Attendance is not currently active for this meeting');
+    }
+
+    const now = new Date();
+    if (!meeting.attendanceCode || meeting.attendanceCode !== cleanCode) {
+      const count = (attempt && attempt.resetAt > nowMs ? attempt.count : 0) + 1;
+      this.codeAttempts.set(rateKey, { count, resetAt: nowMs + 15 * 60000 });
+      throw new BadRequestException('Invalid attendance code. Please check and try again.');
+    }
+    if (meeting.attendanceCodeExpiresAt && now > meeting.attendanceCodeExpiresAt) {
+      throw new BadRequestException('This attendance code has expired. Please ask the meeting host for a new code.');
+    }
+
+    this.codeAttempts.delete(rateKey);
+
+    const member = await this.prisma.member.findUnique({ where: { id: dto.memberId } });
+    if (!member || member.status !== 'ACTIVE') {
+      throw new BadRequestException('Only active members can record attendance');
+    }
+    if (!canViewEvent(meeting.visibility, meeting.audiences, {
+      memberId: member.id,
+      subTeamId: member.subTeamId,
+      roleInUnit: member.roleInUnit,
+    })) {
+      throw new BadRequestException('This event is not open to you');
+    }
+
+    const status = classifyAttendanceStatus(now, {
+      attendanceOpenTime: meeting.attendanceOpenTime,
+      expectedArrivalTime: meeting.expectedArrivalTime,
+      startTime: meeting.startTime,
+      gracePeriodMinutes: meeting.gracePeriodMinutes,
+      attendanceCloseTime: meeting.attendanceCloseTime,
+    });
+    const pointsEarned = calculateAttendancePoints(
+      status,
+      meeting.pointWeight * meeting.category.pointWeight,
+      await unitPolicy(this.prisma),
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.attendanceRecord.findUnique({
+        where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+      });
+
+      let record;
+      if (existing) {
+        record = await tx.attendanceRecord.update({
+          where: { id: existing.id },
+          data: {
+            lastSeenAt: now,
+            attendanceType: AttendanceType.ONLINE,
+            method: existing.method === AttendanceMethod.ONLINE_SESSION ? AttendanceMethod.ONLINE_SESSION : AttendanceMethod.ONLINE_CODE,
+          },
+          include: { meeting: { include: { category: true } }, member: true },
+        });
+      } else {
+        record = await tx.attendanceRecord.create({
+          data: {
+            memberId: dto.memberId,
+            meetingId: dto.meetingId,
+            expectedArrivalTime: meeting.expectedArrivalTime,
+            actualArrivalTime: now,
+            joinedAt: now,
+            lastSeenAt: now,
+            status,
+            attendanceType: AttendanceType.ONLINE,
+            method: AttendanceMethod.ONLINE_CODE,
+            pointsEarned,
+          },
+          include: { meeting: { include: { category: true } }, member: true },
+        });
+      }
+      return record;
+    }).then((record) => {
+      this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
+      return {
+        success: true,
+        record,
+        status: record.status,
+        method: record.method,
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Online Meeting Attendance: Admin Lifecycle & Live Monitoring
+  // -------------------------------------------------------------------------
+
+  async openAttendanceSession(adminUserId: string, meetingId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+    const now = new Date();
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: 'ACTIVE',
+        attendanceOpenTime: meeting.attendanceOpenTime > now ? now : meeting.attendanceOpenTime,
+      },
+    });
+    await this.audit.record({
+      actorUserId: adminUserId,
+      action: 'ATTENDANCE_SESSION_OPENED',
+      entity: 'Meeting',
+      entityId: meetingId,
+      newData: { status: 'ACTIVE', attendanceOpenTime: updated.attendanceOpenTime },
+    });
+    this.cache.invalidateTags(['attendance', 'meetings', 'dashboard']);
+    return { success: true, meeting: updated };
+  }
+
+  async closeAttendanceSession(adminUserId: string, meetingId: string) {
+    const meeting = await this.prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    const now = new Date();
+    const openRecords = await this.prisma.attendanceRecord.findMany({
+      where: { meetingId, leftAt: null, joinedAt: { not: null } },
+    });
+    for (const rec of openRecords) {
+      const joinedAt = rec.joinedAt || rec.actualArrivalTime || now;
+      const durationMinutes = Math.max(1, Math.round((now.getTime() - joinedAt.getTime()) / 60000));
+      await this.prisma.attendanceRecord.update({
+        where: { id: rec.id },
+        data: {
+          leftAt: now,
+          lastSeenAt: now,
+          durationMinutes,
+          sessionTokenHash: null,
+        },
+      });
+    }
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: { status: 'CLOSED' },
+    });
+
+    await this.audit.record({
+      actorUserId: adminUserId,
+      action: 'ATTENDANCE_SESSION_CLOSED',
+      entity: 'Meeting',
+      entityId: meetingId,
+      newData: { status: 'CLOSED' },
+    });
+    this.cache.invalidateTags(['attendance', 'meetings', 'dashboard', 'analytics', 'reports']);
+    return { success: true, meeting: updated };
+  }
+
+  async getOnlineSessionLive(meetingId: string) {
+    if (!meetingId) throw new BadRequestException('Meeting ID is required');
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: {
+        category: true,
+        eventType: true,
+        attendanceRecords: {
+          include: {
+            member: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredName: true,
+                profilePhotoUrl: true,
+                roleInUnit: true,
+                subTeam: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { actualArrivalTime: 'asc' },
+        },
+      },
+    });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    const totalActiveMembers = await this.prisma.member.count({ where: { status: 'ACTIVE' } });
+    const records = meeting.attendanceRecords;
+    const now = Date.now();
+
+    const earlyCount = records.filter((r) => r.status === 'EARLY').length;
+    const onTimeCount = records.filter((r) => r.status === 'ON_TIME').length;
+    const graceCount = records.filter((r) => r.status === 'GRACE_PERIOD').length;
+    const lateCount = records.filter((r) => r.status === 'LATE').length;
+    const presentCount = earlyCount + onTimeCount + graceCount;
+    const activeInSessionCount = records.filter((r) => (r as any).lastSeenAt && (now - (r as any).lastSeenAt.getTime() < 3 * 60000) && !(r as any).leftAt).length;
+
+    const codeActive = Boolean(
+      meeting.attendanceCode &&
+      meeting.attendanceCodeExpiresAt &&
+      new Date() <= meeting.attendanceCodeExpiresAt
+    );
+
+    return {
+      meeting: {
+        id: meeting.id,
+        title: meeting.title,
+        status: meeting.status,
+        isOnline: (meeting as any).isOnline,
+        startTime: meeting.startTime,
+        endTime: meeting.endTime,
+        attendanceOpenTime: meeting.attendanceOpenTime,
+        attendanceCloseTime: meeting.attendanceCloseTime,
+        locationName: meeting.locationName,
+        address: meeting.address,
+        attendanceCode: codeActive ? meeting.attendanceCode : null,
+        attendanceCodeExpiresAt: codeActive ? meeting.attendanceCodeExpiresAt : null,
+      },
+      stats: {
+        totalMembers: totalActiveMembers,
+        totalCheckedIn: records.length,
+        presentCount,
+        lateCount,
+        activeInSessionCount,
+        notJoinedCount: Math.max(0, totalActiveMembers - records.length),
+      },
+      roster: records.map((r) => ({
+        id: r.id,
+        memberId: r.memberId,
+        memberName: `${r.member.firstName} ${r.member.lastName}`,
+        memberPhoto: r.member.profilePhotoUrl,
+        subTeam: r.member.subTeam?.name || 'General',
+        status: r.status,
+        attendanceType: (r as any).attendanceType || 'PHYSICAL',
+        method: r.method,
+        joinedAt: (r as any).joinedAt || r.actualArrivalTime,
+        lastSeenAt: (r as any).lastSeenAt,
+        leftAt: (r as any).leftAt,
+        durationMinutes: (r as any).durationMinutes || (r.actualArrivalTime && (r as any).lastSeenAt ? Math.max(1, Math.round(((r as any).lastSeenAt.getTime() - r.actualArrivalTime.getTime()) / 60000)) : null),
+        pointsEarned: r.pointsEarned,
+      })),
+    };
   }
 
   async recordManualAttendance(dto: {
@@ -225,7 +755,7 @@ export class AttendanceService {
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
 
-    if (meeting.startTime > new Date()) {
+    if (meeting.attendanceOpenTime && meeting.attendanceOpenTime > new Date()) {
       throw new BadRequestException('Attendance cannot be recorded for a future scheduled event or meeting');
     }
 

@@ -185,26 +185,49 @@ export default function MyAttendancePage() {
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <div className="flex justify-between items-start mb-1">
-                        <h3 className="font-headline-sm text-headline-sm text-primary truncate leading-tight font-bold">{title}</h3>
-                        <span
-                          className={`font-label-md text-label-md px-2 py-0.5 rounded-full shrink-0 ml-2 border uppercase font-bold ${
-                            status === 'ON_TIME'
-                              ? 'text-tertiary-container bg-tertiary-container/10 border-tertiary-container/20'
-                              : status === 'EARLY'
-                              ? 'text-on-primary-fixed bg-primary-fixed border-on-primary-fixed/20'
-                              : status === 'LATE'
-                              ? 'text-on-error-container bg-error-container border-on-error-container/20'
-                              : 'text-on-surface-variant bg-surface-container-high border-outline-variant'
-                          }`}
-                        >
-                          {status.replace('_', ' ')}
-                        </span>
+                      <div className="flex justify-between items-start mb-1 flex-wrap gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                          <h3 className="font-headline-sm text-headline-sm text-primary truncate leading-tight font-bold">{title}</h3>
+                          {(record.attendanceType === 'ONLINE' || record.meeting?.isOnline) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold text-[10px] border border-blue-500/20">
+                              <span className="material-symbols-outlined text-xs">videocam</span>
+                              <span>Online</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {record.durationMinutes ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                              {record.durationMinutes} mins
+                            </span>
+                          ) : null}
+                          <span
+                            className={`font-label-md text-label-md px-2 py-0.5 rounded-full shrink-0 border uppercase font-bold ${
+                              status === 'ON_TIME'
+                                ? 'text-tertiary-container bg-tertiary-container/10 border-tertiary-container/20'
+                                : status === 'EARLY'
+                                ? 'text-on-primary-fixed bg-primary-fixed border-on-primary-fixed/20'
+                                : status === 'LATE'
+                                ? 'text-on-error-container bg-error-container border-on-error-container/20'
+                                : 'text-on-surface-variant bg-surface-container-high border-outline-variant'
+                            }`}
+                          >
+                            {status.replace('_', ' ')}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex justify-between items-center w-full">
-                        <div className="flex items-center gap-1 text-on-surface-variant font-body-md text-body-md">
-                          <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                          <span>{dateStr}</span>
+                        <div className="flex items-center gap-2 text-on-surface-variant font-body-md text-body-md flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[16px]">calendar_today</span>
+                            <span>{dateStr}</span>
+                          </div>
+                          {record.method === 'ONLINE_CODE' && (
+                            <span className="text-[10px] font-semibold text-slate-400">· via Code</span>
+                          )}
+                          {record.method === 'ONLINE_SESSION' && (
+                            <span className="text-[10px] font-semibold text-slate-400">· via Session</span>
+                          )}
                         </div>
                         <span className="font-label-md text-label-md text-primary font-bold">+{pts} pts</span>
                       </div>

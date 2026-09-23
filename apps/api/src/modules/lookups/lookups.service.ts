@@ -204,24 +204,23 @@ export class LookupsService implements OnApplicationBootstrap {
   /** Ensure every system event type from the shared catalogue exists. Never
    *  overwrites admin edits to name/colour/order; only fills gaps. */
   async syncSystemEventTypes() {
-    await Promise.all(
-      DEFAULT_EVENT_TYPES.map((def, i) =>
-        this.prisma.eventType.upsert({
-          where: { key: def.key },
-          update: { isSystem: true },
-          create: {
-            key: def.key,
-            name: def.name,
-            description: def.description,
-            icon: def.icon,
-            color: def.color,
-            defaultCompulsory: def.defaultCompulsory,
-            isSystem: true,
-            sortOrder: (i + 1) * 10,
-          },
-        })
-      )
-    );
+    for (let i = 0; i < DEFAULT_EVENT_TYPES.length; i++) {
+      const def = DEFAULT_EVENT_TYPES[i];
+      await this.prisma.eventType.upsert({
+        where: { key: def.key },
+        update: { isSystem: true },
+        create: {
+          key: def.key,
+          name: def.name,
+          description: def.description,
+          icon: def.icon,
+          color: def.color,
+          defaultCompulsory: def.defaultCompulsory,
+          isSystem: true,
+          sortOrder: (i + 1) * 10,
+        },
+      });
+    }
   }
 
   private slug(name: string): string {

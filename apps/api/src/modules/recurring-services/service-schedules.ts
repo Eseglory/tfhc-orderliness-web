@@ -53,12 +53,17 @@ export const SERVICE_SCHEDULES = [
   },
   {
     id: 'wednesday-unit-meeting',
-    title: 'Unit weekly meeting',
+    title: 'Wednesday Unit Weekly Meeting',
     dayOfWeek: 3,
     startMinutes: 1200,
     endMinutes: 1260,
     categoryName: 'Unit Meeting',
     eventTypeKey: 'MEETING',
+    isOnline: true,
+    locationName: 'Online / Google Meet',
+    meetingUrl: 'https://meet.google.com/ord-tfhc-wed',
+    description: 'Weekly online unit fellowship, operations review, and prayer meeting for all TFHC workforce & unit members.',
+    notes: '[Virtual Link: https://meet.google.com/ord-tfhc-wed]\nOnline meeting via Google Meet. Attendance and check-in open to all registered members.',
     recurrenceRule: { freq: 'WEEKLY', interval: 1, byWeekday: [3] },
   },
   {
@@ -94,11 +99,18 @@ export const SERVICE_SCHEDULES = [
 ];
 
 export type ScheduleShape = {
+  id?: string;
+  title?: string;
   dayOfWeek: number;
   startMinutes: number;
   endMinutes: number | null;
   recurrenceRule?: unknown;
   horizonDays?: number | null;
+  isOnline?: boolean;
+  locationName?: string;
+  meetingUrl?: string;
+  description?: string;
+  notes?: string;
 };
 
 // Africa/Lagos is UTC+01:00 year-round. Date arithmetic stays independent of host timezone.

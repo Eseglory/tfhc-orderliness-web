@@ -257,17 +257,22 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
 
   // Filter navigation tree by permissions
   const authorizedTree = useMemo(() => {
-    // During cold start while loading and no profile is loaded, keep all sections visible for instant render
-    if (loading && !user) {
-      return NAVIGATION_TREE;
-    }
     const isEseosa = isEseosaGlory(user);
     const isLovethUser = isLoveth(user);
+
+    // During cold start while loading and no profile is loaded, keep default sections visible but exclude restricted ones
+    if (loading && !user) {
+      return NAVIGATION_TREE.filter((p) => p.key !== 'administration' && p.key !== 'finance');
+    }
 
     return NAVIGATION_TREE.filter((parent) => {
       // Finance: only Eseosa Glory gets full Finance CRUD. Loveth gets Expenses creation.
       if (parent.key === 'finance') {
         if (!isEseosa && !isLovethUser) return false;
+      }
+      // Settings / Administration: ONLY Eseosa Glory (engreseglory@gmail.com) can see the settings menu in admin
+      if (parent.key === 'administration') {
+        if (!isEseosa) return false;
       }
       if (parent.anyOf && !canAny(...parent.anyOf)) return false;
       if (parent.children) {
@@ -275,6 +280,11 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         if (parent.key === 'finance' && isLovethUser && !isEseosa) {
           visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
         }
+        if (parent.key === 'administration' && !isEseosa) {
+          return false;
+        }
+        // System Settings child is strictly restricted to Eseosa Glory
+        visibleChildren = visibleChildren.filter((c) => c.href !== '/admin/settings' || isEseosa);
         return visibleChildren.length > 0;
       }
       return true;
@@ -284,6 +294,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
       if (parent.key === 'finance' && isLovethUser && !isEseosa) {
         visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
       }
+      visibleChildren = visibleChildren.filter((c) => c.href !== '/admin/settings' || isEseosa);
       return {
         ...parent,
         children: visibleChildren,
@@ -507,14 +518,16 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
                   <Users className="w-4 h-4 text-slate-400" />
                   <span>Member Portal View</span>
                 </Link>
-                <Link
-                  href="/admin/settings"
-                  onClick={() => setProfileMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  <Settings className="w-4 h-4 text-slate-400" />
-                  <span>Settings & Policies</span>
-                </Link>
+                {isEseosaGlory(user) && (
+                  <Link
+                    href="/admin/settings"
+                    onClick={() => setProfileMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Settings className="w-4 h-4 text-slate-400" />
+                    <span>Settings & Policies</span>
+                  </Link>
+                )}
                 <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                   <button
                     onClick={handleLogout}

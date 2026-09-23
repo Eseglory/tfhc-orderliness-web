@@ -17,6 +17,8 @@ export interface CalendarEventOptions {
   mode?: 'IN_PERSON' | 'VIRTUAL' | 'HYBRID';
   attendeeEmails?: string[];
   organizerName?: string | null;
+  recurrenceRule?: string | null;
+  timezone?: string | null;
 }
 
 /**
@@ -51,6 +53,8 @@ export function extractVirtualUrl(event: { notes?: string | null; address?: stri
  * Builds an advanced Google Calendar Web URL pre-filled with:
  * - Title
  * - Dates (ISO standard YYYYMMDDTHHmmssZ)
+ * - Recurrence (e.g. RRULE:FREQ=WEEKLY;BYDAY=WE)
+ * - Timezone (default Africa/Lagos)
  * - Details (Agenda, Google Meet link, Notes)
  * - Location (Google Meet URL / Physical address)
  * - add (comma-separated list of invited attendee emails for automatic invitation)
@@ -91,7 +95,15 @@ export function buildAdvancedGoogleCalendarUrl(opts: CalendarEventOptions): stri
     dates: `${startIso}/${endIso}`,
     details: detailsText,
     location: locationText,
+    ctz: opts.timezone || 'Africa/Lagos',
   });
+
+  if (opts.recurrenceRule) {
+    const ruleStr = opts.recurrenceRule.startsWith('RRULE:')
+      ? opts.recurrenceRule
+      : `RRULE:${opts.recurrenceRule}`;
+    params.set('recur', ruleStr);
+  }
 
   // Attach attendee emails if provided (Google Calendar auto-adds them as invited guests)
   if (opts.attendeeEmails && opts.attendeeEmails.length > 0) {
@@ -131,6 +143,10 @@ export function generateIcsFileContent(opts: CalendarEventOptions): string {
     .map((e) => `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;CN=${e}:mailto:${e}`)
     .join('\r\n');
 
+  const rruleIcs = opts.recurrenceRule
+    ? (opts.recurrenceRule.startsWith('RRULE:') ? opts.recurrenceRule : `RRULE:${opts.recurrenceRule}`)
+    : '';
+
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -142,6 +158,7 @@ export function generateIcsFileContent(opts: CalendarEventOptions): string {
     `DTSTAMP:${formatIso(new Date())}`,
     `DTSTART:${formatIso(start)}`,
     `DTEND:${formatIso(end)}`,
+    rruleIcs,
     `SUMMARY:${escapeIcs(opts.title)}`,
     `DESCRIPTION:${escapeIcs([opts.description, virtualUrl ? `Join Google Meet: ${virtualUrl}` : null, opts.notes].filter(Boolean).join('\n\n'))}`,
     `LOCATION:${escapeIcs(locationText)}`,

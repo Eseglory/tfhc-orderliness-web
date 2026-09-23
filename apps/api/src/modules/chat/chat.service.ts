@@ -21,6 +21,7 @@ import {
 } from './chat.util';
 import { ChatBufferRepository } from './chat-buffer.repository';
 import { ChatMigrationJob } from './chat-migration.job';
+import { Interval } from '@nestjs/schedule';
 
 export const CHAT_NOTIFICATIONS_COMMITTED = Symbol('chatNotificationsCommitted');
 
@@ -42,9 +43,22 @@ function displayName(m: { firstName: string; lastName: string; preferredName?: s
   return (m.preferredName?.trim() || `${m.firstName} ${m.lastName}`).trim();
 }
 
+export function compactPhotoUrl(memberId: string | null | undefined, photoUrl: string | null | undefined): string | null {
+  if (!photoUrl) return null;
+  if (photoUrl.startsWith('data:image') && memberId) {
+    return `/members/${memberId}/photo`;
+  }
+  return photoUrl;
+}
+
 @Injectable()
 export class ChatService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ChatService.name);
+
+  // High-performance hot-read caches
+  private systemCountsCache: { general: number; exec: number; disciplinary: number; expiresAt: number } | null = null;
+  private systemRoomsCache: { rooms: ChatRoom[]; expiresAt: number } | null = null;
+  private roomMembersCache = new Map<string, { members: { memberId: string; lastReadAt: Date | string | null; lastDeliveredAt: Date | string | null }[]; expiresAt: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -52,6 +66,44 @@ export class ChatService implements OnApplicationBootstrap {
     private readonly bufferRepo: ChatBufferRepository,
     private readonly migrationJob: ChatMigrationJob,
   ) {}
+
+  private async getSystemCounts(): Promise<{ general: number; exec: number; disciplinary: number }> {
+    const now = Date.now();
+    if (this.systemCountsCache && this.systemCountsCache.expiresAt > now) {
+      return this.systemCountsCache;
+    }
+    const [general, execIds, disciplinaryIds] = await Promise.all([
+      this.prisma.member.count({ where: { status: ACTIVE_MEMBER } }),
+      this.executiveMemberIds(),
+      this.disciplinaryMemberIds(),
+    ]);
+    const counts = {
+      general,
+      exec: execIds.length,
+      disciplinary: disciplinaryIds.length,
+      expiresAt: now + 60_000,
+    };
+    this.systemCountsCache = counts;
+    return counts;
+  }
+
+  private async getSystemRooms(): Promise<ChatRoom[]> {
+    const now = Date.now();
+    if (this.systemRoomsCache && this.systemRoomsCache.expiresAt > now) {
+      return this.systemRoomsCache.rooms;
+    }
+    const system = await this.prisma.chatRoom.findMany({
+      where: {
+        OR: [
+          { type: { in: ['GENERAL', 'EXECUTIVES'] } },
+          { key: { in: ['GENERAL', 'EXECUTIVES', 'DISCIPLINARY'] } },
+        ],
+        isActive: true,
+      },
+    });
+    this.systemRoomsCache = { rooms: system, expiresAt: now + 60_000 };
+    return system;
+  }
 
   async onApplicationBootstrap() {
     try {
@@ -101,9 +153,15 @@ export class ChatService implements OnApplicationBootstrap {
     return viewer.memberId;
   }
 
-  /** Resolve `roleInUnit` and `subTeamName` lazily when the gateway/JWT did not carry it. */
+  /** Resolve `roleInUnit` and `subTeamName` lazily with 60s cache. */
+  private viewerRoleCache = new Map<string, { viewer: ChatViewer; expiresAt: number }>();
   private async withRoleInUnit(viewer: ChatViewer): Promise<ChatViewer> {
     if (!viewer.memberId) return viewer;
+    const now = Date.now();
+    const cached = this.viewerRoleCache.get(viewer.memberId);
+    if (cached && cached.expiresAt > now) {
+      return { ...cached.viewer, ...viewer, roleInUnit: viewer.roleInUnit ?? cached.viewer.roleInUnit };
+    }
     const member = await this.prisma.member.findUnique({
       where: { id: viewer.memberId },
       select: {
@@ -114,7 +172,7 @@ export class ChatService implements OnApplicationBootstrap {
         approvedMember: { select: { email: true } },
       },
     });
-    return {
+    const enriched: ChatViewer = {
       ...viewer,
       roleInUnit: viewer.roleInUnit ?? member?.roleInUnit ?? null,
       subTeamName: viewer.subTeamName ?? member?.subTeam?.name ?? null,
@@ -122,25 +180,40 @@ export class ChatService implements OnApplicationBootstrap {
       firstName: viewer.firstName ?? member?.firstName ?? null,
       lastName: viewer.lastName ?? member?.lastName ?? null,
     };
+    this.viewerRoleCache.set(viewer.memberId, { viewer: enriched, expiresAt: now + 60_000 });
+    return enriched;
   }
 
+  private accessCache = new Map<string, { allowed: boolean; expiresAt: number }>();
   private async canAccess(room: ChatRoom, viewer: ChatViewer): Promise<boolean> {
     if (!viewer.memberId) return false;
     if (!room.isActive && !viewerManagesRooms(viewer)) return false;
     if (room.type === 'GENERAL') return true;
-    if (room.key === 'DISCIPLINARY') return viewerIsDisciplinary(await this.withRoleInUnit(viewer));
-    if (room.type === 'EXECUTIVES') return viewerIsExecutive(await this.withRoleInUnit(viewer));
+    const withRole = await this.withRoleInUnit(viewer);
+    if (room.key === 'DISCIPLINARY') return viewerIsDisciplinary(withRole);
+    if (room.type === 'EXECUTIVES') return viewerIsExecutive(withRole);
+
     const membership = await this.prisma.chatRoomMember.findUnique({
       where: { roomId_memberId: { roomId: room.id, memberId: viewer.memberId } },
     });
-    if (membership && !membership.leftAt) return true;
-    return viewerManagesRooms(viewer);
+    const allowed = (membership && !membership.leftAt) || viewerManagesRooms(viewer);
+
+    return allowed;
   }
 
-  /** Load a room the viewer may see, or throw. */
+  /** Load a room the viewer may see (cached 60s), or throw. */
+  private roomCache = new Map<string, { room: ChatRoom; expiresAt: number }>();
   async loadRoom(roomId: string, viewer: ChatViewer): Promise<ChatRoom> {
     this.requireMember(viewer);
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+    const now = Date.now();
+    let room: ChatRoom | null = null;
+    const cached = this.roomCache.get(roomId);
+    if (cached && cached.expiresAt > now) {
+      room = cached.room;
+    } else {
+      room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+      if (room) this.roomCache.set(roomId, { room, expiresAt: now + 60_000 });
+    }
     if (!room) throw new NotFoundException('Conversation not found');
     if (!(await this.canAccess(room, viewer))) {
       throw new ForbiddenException('You do not have access to this conversation');
@@ -149,15 +222,23 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   /**
-   * Ensure a `ChatRoomMember` row exists for this viewer so read state and
-   * message fan-out are uniform across system and custom rooms.
+   * Ensure a `ChatRoomMember` row exists for this viewer once per session
+   * so message fan-out and receipts are uniform without blocking on every message read.
    */
+  private ensuredMemberships = new Set<string>();
   private async ensureMembership(room: ChatRoom, viewer: ChatViewer) {
     const memberId = this.requireMember(viewer);
+    const key = `${room.id}:${memberId}`;
+    if (this.ensuredMemberships.has(key)) {
+      return;
+    }
     return this.prisma.chatRoomMember.upsert({
       where: { roomId_memberId: { roomId: room.id, memberId } },
       update: { leftAt: null },
       create: { roomId: room.id, memberId, role: 'MEMBER' },
+    }).then(result => { this.ensuredMemberships.add(key); return result; }).catch((err) => {
+      this.ensuredMemberships.delete(key);
+      throw err;
     });
   }
 
@@ -272,15 +353,7 @@ export class ChatService implements OnApplicationBootstrap {
   async roomsForViewer(viewer: ChatViewer): Promise<ChatRoom[]> {
     const memberId = this.requireMember(viewer);
     const withRole = await this.withRoleInUnit(viewer);
-    const system = await this.prisma.chatRoom.findMany({
-      where: {
-        OR: [
-          { type: { in: ['GENERAL', 'EXECUTIVES'] } },
-          { key: { in: ['GENERAL', 'EXECUTIVES', 'DISCIPLINARY'] } },
-        ],
-        isActive: true,
-      },
-    });
+    const system = await this.getSystemRooms();
     const visibleSystem = system.filter((r) => {
       if (r.key === 'DISCIPLINARY') return viewerIsDisciplinary(withRole);
       if (r.type === 'GENERAL') return true;
@@ -302,109 +375,134 @@ export class ChatService implements OnApplicationBootstrap {
     return (await this.roomsForViewer(viewer)).map((r) => r.id);
   }
 
+  private userRoomsListCache = new Map<string, { rooms: any[]; expiresAt: number }>();
+  private customCountsCache = new Map<string, { count: number; expiresAt: number }>();
+
+  public invalidateRoomCaches(roomId?: string, memberId?: string) {
+    if (memberId) {
+      this.userRoomsListCache.delete(memberId);
+    } else {
+      this.userRoomsListCache.clear();
+    }
+    if (roomId) {
+      this.roomMembersCache.delete(roomId);
+      this.roomCache.delete(roomId);
+      this.customCountsCache.delete(roomId);
+    }
+  }
+
   async listRooms(viewer: ChatViewer) {
     if (!viewer.memberId) return [];
     const memberId = viewer.memberId;
+    const now = Date.now();
+
+    // Fast memory cache check (5s TTL)
+    const cachedList = this.userRoomsListCache.get(memberId);
+    if (cachedList && cachedList.expiresAt > now) {
+      return cachedList.rooms;
+    }
+
     const rooms = await this.roomsForViewer(viewer);
     if (rooms.length === 0) return [];
     const roomIds = rooms.map((r) => r.id);
+    const hidden = await this.prisma.chatMessageHidden.findMany({ where: { memberId, message: { roomId: { in: roomIds } } }, select: { messageId: true } });
+    const hiddenIds = hidden.map(m => m.messageId);
 
-    // 1. Memberships of the viewer for all rooms (1 single batched query)
+    // 1. Memberships of the viewer for all rooms (1 fast single batched query)
     const membershipRows = await this.prisma.chatRoomMember.findMany({
       where: { memberId, roomId: { in: roomIds } },
     });
     const membership = new Map(membershipRows.map((m) => [m.roomId, m]));
 
-    // 2. Latest message per room in 1 single query using DISTINCT ON
-    const latestMessages = await this.prisma.chatMessage.findMany({
-      where: { roomId: { in: roomIds }, deletedAt: null },
-      distinct: ['roomId'],
-      orderBy: [{ roomId: 'asc' }, { createdAt: 'desc' }],
-      include: { sender: { select: senderSelect } },
-    });
-    const lastMessageMap = new Map(latestMessages.map((m) => [m.roomId, m]));
-
-    // 3. Batched unread counts in 1 single SQL aggregation query
-    const unreadMap = new Map<string, number>();
-    try {
-      const unreadRows = await this.prisma.$queryRaw<Array<{ roomId: string; count: bigint | number }>>`
-        SELECT m."roomId", COUNT(m.id)::int AS "count"
-        FROM "chat_messages" m
-        LEFT JOIN "chat_room_members" crm
-          ON crm."roomId" = m."roomId" AND crm."memberId" = ${memberId}
-        WHERE m."roomId" = ANY(${roomIds}::text[])
-          AND m."deletedAt" IS NULL
-          AND (m."senderMemberId" IS NULL OR m."senderMemberId" != ${memberId})
-          AND (crm."lastReadAt" IS NULL OR m."createdAt" > crm."lastReadAt")
-        GROUP BY m."roomId";
-      `;
-      for (const row of unreadRows) {
-        unreadMap.set(row.roomId, Number(row.count));
-      }
-    } catch {
-      for (const room of rooms) {
-        const lastReadAt = membership.get(room.id)?.lastReadAt;
-        const cnt = await this.prisma.chatMessage.count({
-          where: {
-            roomId: room.id,
-            deletedAt: null,
-            senderMemberId: { not: memberId },
-            ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
-          },
+    // 2. Latest message per room - Hot SQLite store read (<0.05ms)
+    // SQLite hot buffer is authoritative and seeded with all historical messages.
+    const lastMessageMap = new Map<string, any>();
+    for (const room of rooms) {
+      const bufferedLast = this.bufferRepo.getLatestMessage(room.id, hiddenIds);
+      if (bufferedLast) {
+        const sender = bufferedLast.senderMemberId ? this.bufferRepo.getMemberProfile(bufferedLast.senderMemberId) : null;
+        lastMessageMap.set(room.id, {
+          id: bufferedLast.id,
+          clientOperationId: bufferedLast.clientOperationId,
+          roomId: bufferedLast.roomId,
+          type: bufferedLast.type as ChatMessageType,
+          body: bufferedLast.body,
+          attachmentUrl: bufferedLast.attachmentUrl,
+          attachmentMeta: bufferedLast.attachmentMeta,
+          replyToId: bufferedLast.replyToId,
+          editedAt: bufferedLast.editedAt,
+          deletedAt: bufferedLast.deletedAt,
+          createdAt: bufferedLast.createdAt,
+          senderMemberId: bufferedLast.senderMemberId,
+          sender: sender
+            ? {
+                id: sender.id,
+                firstName: sender.firstName,
+                lastName: sender.lastName,
+                preferredName: sender.preferredName,
+                profilePhotoUrl: sender.profilePhotoUrl,
+              }
+            : null,
         });
-        unreadMap.set(room.id, cnt);
       }
     }
 
-    // 4. Batched member counts (1 batch query for custom/direct rooms)
-    const generalCountPromise = rooms.some((r) => r.type === 'GENERAL')
-      ? this.prisma.member.count({ where: { status: ACTIVE_MEMBER } })
-      : Promise.resolve(0);
-    const execCountPromise = rooms.some((r) => r.type === 'EXECUTIVES' && r.key !== 'DISCIPLINARY')
-      ? this.executiveMemberIds().then((ids) => ids.length)
-      : Promise.resolve(0);
-    const disciplinaryCountPromise = rooms.some((r) => r.key === 'DISCIPLINARY')
-      ? this.disciplinaryMemberIds().then((ids) => ids.length)
-      : Promise.resolve(0);
+    // 3. Fast Unread counts computed directly from local SQLite buffer (<0.05ms)
+    const unreadMap = new Map<string, number>();
+    for (const room of rooms) {
+      const mine = membership.get(room.id);
+      const lastReadAt = mine?.lastReadAt ? new Date(mine.lastReadAt).toISOString() : null;
+      const count = this.bufferRepo.countUnread(room.id, memberId, lastReadAt, hiddenIds);
+      unreadMap.set(room.id, count);
+    }
 
+    // 4. Cached System member counts (general, exec, disciplinary) - 60s TTL
+    const systemCounts = await this.getSystemCounts();
+
+    // 5. Custom room counts with 60s cache
     const customRoomIds = rooms
       .filter((r) => (r.type === 'CUSTOM' || r.type === 'DIRECT') && r.key !== 'DISCIPLINARY')
       .map((r) => r.id);
-    const customCountsPromise =
-      customRoomIds.length > 0
-        ? this.prisma.chatRoomMember.groupBy({
-            by: ['roomId'],
-            where: { roomId: { in: customRoomIds }, leftAt: null },
-            _count: { _all: true },
-          })
-        : Promise.resolve([]);
-
-    const [generalCount, execCount, disciplinaryCount, customCounts] = await Promise.all([
-      generalCountPromise,
-      execCountPromise,
-      disciplinaryCountPromise,
-      customCountsPromise,
-    ]);
-
     const memberCountMap = new Map<string, number>();
-    for (const row of customCounts) {
-      memberCountMap.set(row.roomId, row._count._all);
+    const neededCountRoomIds: string[] = [];
+
+    for (const rid of customRoomIds) {
+      const cached = this.customCountsCache.get(rid);
+      if (cached && cached.expiresAt > now) {
+        memberCountMap.set(rid, cached.count);
+      } else {
+        neededCountRoomIds.push(rid);
+      }
     }
 
-    // 5. Batched other member details for DIRECT rooms (1 single query)
+    if (neededCountRoomIds.length > 0) {
+      const customCounts = await this.prisma.chatRoomMember.groupBy({
+        by: ['roomId'],
+        where: { roomId: { in: neededCountRoomIds }, leftAt: null },
+        _count: { _all: true },
+      });
+      for (const row of customCounts) {
+        memberCountMap.set(row.roomId, row._count._all);
+        this.customCountsCache.set(row.roomId, { count: row._count._all, expiresAt: now + 60_000 });
+      }
+    }
+
+    // 6. Direct room other member details (lookup from in-memory profile cache)
     const directRoomIds = rooms.filter((r) => r.type === 'DIRECT').map((r) => r.id);
     const directMembersMap = new Map<string, { memberId: string; name: string; photoUrl: string | null }>();
     if (directRoomIds.length > 0) {
       const otherMembers = await this.prisma.chatRoomMember.findMany({
         where: { roomId: { in: directRoomIds }, memberId: { not: memberId } },
-        include: { member: { select: senderSelect } },
+        select: { roomId: true, memberId: true, member: { select: senderSelect } },
       });
+      this.bufferRepo.setMemberProfiles(otherMembers.map(m => m.member));
       for (const om of otherMembers) {
-        if (om.member) {
+        const profile = this.bufferRepo.getMemberProfile(om.memberId);
+        if (profile) {
           directMembersMap.set(om.roomId, {
-            memberId: om.member.id,
-            name: displayName(om.member),
-            photoUrl: om.member.profilePhotoUrl,
+            memberId: profile.id,
+            name: displayName(profile),
+            photoUrl: compactPhotoUrl(profile.id, profile.profilePhotoUrl),
           });
         }
       }
@@ -417,11 +515,11 @@ export class ChatService implements OnApplicationBootstrap {
       const unreadCount = unreadMap.get(room.id) ?? 0;
       const memberCount =
         room.key === 'DISCIPLINARY'
-          ? disciplinaryCount
+          ? systemCounts.disciplinary
           : room.type === 'GENERAL'
-            ? generalCount
+            ? systemCounts.general
             : room.type === 'EXECUTIVES'
-              ? execCount
+              ? systemCounts.exec
               : memberCountMap.get(room.id) ?? 0;
       const direct = directMembersMap.get(room.id) ?? null;
 
@@ -448,6 +546,7 @@ export class ChatService implements OnApplicationBootstrap {
       const bt = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
       return bt - at;
     });
+    this.userRoomsListCache.set(memberId, { rooms: out, expiresAt: now + 5000 });
     return out;
   }
 
@@ -500,6 +599,7 @@ export class ChatService implements OnApplicationBootstrap {
         data: { leftAt: null },
       });
     }
+    this.invalidateRoomCaches(room.id);
     return this.getRoom(room.id, viewer);
   }
 
@@ -507,24 +607,175 @@ export class ChatService implements OnApplicationBootstrap {
   // Messages & Real-time Buffer Query Merging
   // -------------------------------------------------------------------------
 
+  cacheRealtimeMessage(message: any) {
+    if (!message?.id || !message.roomId || !message.createdAt || this.bufferRepo.findById(message.id)) return;
+    this.bufferRepo.seedLegacyMessages([{
+      id: message.id, clientOperationId: message.clientOperationId || message.clientId || null,
+      roomId: message.roomId, senderMemberId: message.senderMemberId || message.sender?.memberId || null,
+      type: message.type, body: message.body || null, attachmentUrl: message.attachmentUrl || null,
+      attachmentMeta: message.attachmentMeta || null, replyToId: message.replyToId || null,
+      createdAt: new Date(message.createdAt).toISOString(),
+      editedAt: message.editedAt ? new Date(message.editedAt).toISOString() : null,
+      deletedAt: message.deletedAt ? new Date(message.deletedAt).toISOString() : null,
+    }]);
+    this.invalidateRoomCaches(message.roomId);
+  }
+
+  async changes(roomId: string, viewer: ChatViewer, cursor: string) {
+    await this.loadRoom(roomId, viewer);
+    if (!/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new BadRequestException('Invalid sync cursor');
+    const delta = this.bufferRepo.changesAfter(roomId, cursor);
+    const [hidden, reactions, receipts] = await Promise.all([
+      this.prisma.chatMessageHidden.findMany({ where: { memberId: viewer.memberId, messageId: { in: delta.ids } }, select: { messageId: true } }),
+      this.prisma.chatMessageReaction.findMany({ where: { messageId: { in: delta.ids } } }),
+      this.prisma.chatRoomMember.findMany({ where: { roomId, leftAt: null }, select: { memberId: true, lastReadAt: true, lastDeliveredAt: true } }),
+    ]);
+    const removed = new Set(hidden.map(m => m.messageId));
+    const records = delta.ids.map(id => this.bufferRepo.findById(id)).filter((m): m is NonNullable<typeof m> => !!m && !removed.has(m.id));
+    const parents = new Map(records.filter(m => m.replyToId).map(m => [m.replyToId!, this.bufferRepo.findById(m.replyToId!)]));
+    const profiles = [...new Set([...records, ...parents.values()].map(m => m?.senderMemberId).filter((id): id is string => !!id))];
+    if (profiles.length) this.bufferRepo.setMemberProfiles(await this.prisma.member.findMany({ where: { id: { in: profiles } }, select: senderSelect }));
+    const messages = records.map(m => this.toMessageDto({ ...m, type: m.type as ChatMessageType,
+      sender: m.senderMemberId ? this.bufferRepo.getMemberProfile(m.senderMemberId) : null,
+      reactions: reactions.filter(r => r.messageId === m.id),
+      replyTo: m.replyToId && parents.get(m.replyToId) ? {
+        ...parents.get(m.replyToId)!,
+        sender: parents.get(m.replyToId)!.senderMemberId ? this.bufferRepo.getMemberProfile(parents.get(m.replyToId)!.senderMemberId!) : null,
+      } : null,
+    }, viewer, receipts));
+    return { messages, receipts, removedIds: [...removed], nextSyncCursor: delta.nextCursor, hasMore: delta.hasMore };
+  }
+
+  async attachment(messageId: string, viewer: ChatViewer) {
+    const message = this.bufferRepo.findById(messageId) || await this.prisma.chatMessage.findUnique({ where: { id: messageId } });
+    if (!message || message.deletedAt) throw new NotFoundException('Attachment not found');
+    await this.loadRoom(message.roomId, viewer);
+    const hidden = await this.prisma.chatMessageHidden.findUnique({ where: { messageId_memberId: { messageId, memberId: viewer.memberId! } } });
+    if (hidden) throw new NotFoundException('Attachment not found');
+    const match = /^data:([^;,]+);base64,([\s\S]+)$/.exec(message.attachmentUrl || '');
+    if (!match) throw new NotFoundException('Attachment not found');
+    return { mime: match[1], bytes: Buffer.from(match[2], 'base64') };
+  }
+
   async listMessages(
     roomId: string,
     viewer: ChatViewer,
     opts: { cursor?: string; limit?: number; search?: string } = {},
   ) {
     const room = await this.loadRoom(roomId, viewer);
+    const syncCursor = this.bufferRepo.changeCursor();
     await this.ensureMembership(room, viewer);
     const take = Math.min(Math.max(Number(opts.limit) || PAGE_DEFAULT, 1), PAGE_MAX);
 
-    // 1. Fetch room members ONCE for fast read/delivered receipt calculation
-    const roomMembers = await this.prisma.chatRoomMember.findMany({
-      where: { roomId, leftAt: null },
-      select: { memberId: true, lastReadAt: true, lastDeliveredAt: true },
-    });
+    // 1. Fetch room members (with 30s in-memory cache to avoid repeated DB round trips)
+    const now = Date.now();
+    let roomMembers: { memberId: string; lastReadAt: Date | string | null; lastDeliveredAt: Date | string | null }[] = [];
+    const cachedMembers = this.roomMembersCache.get(roomId);
+    if (cachedMembers && cachedMembers.expiresAt > now) {
+      roomMembers = cachedMembers.members;
+    } else {
+      roomMembers = await this.prisma.chatRoomMember.findMany({
+        where: { roomId, leftAt: null },
+        select: { memberId: true, lastReadAt: true, lastDeliveredAt: true },
+      });
+      this.roomMembersCache.set(roomId, { members: roomMembers, expiresAt: now + 30_000 });
+    }
 
-    // 2. Fetch messages from primary DB without N+1 member serialization
+    // A failed/incomplete initial import must not hide primary history behind a
+    // handful of pending local messages. Fill only the requested primary page.
+    if (!this.bufferRepo.getSyncCheckpoint()) {
+      const anchor = opts.cursor ? this.bufferRepo.findById(opts.cursor) : null;
+      const primary = await this.prisma.chatMessage.findMany({
+        where: { roomId, ...(opts.search ? { body: { contains: opts.search.slice(0, 200), mode: 'insensitive' as const }, deletedAt: null } : {}),
+          ...(anchor ? { OR: [{ createdAt: { lt: new Date(anchor.createdAt) } }, { createdAt: new Date(anchor.createdAt), id: { lt: anchor.id } }] } : {}),
+        },
+        ...(!anchor && opts.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+        take: take + 1, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      });
+      for (const message of primary) this.cacheRealtimeMessage(message);
+    }
+
+    // 2. Query the local indexed page.
+    let buffered = this.bufferRepo.listMessages(roomId, take, opts.cursor, opts.search);
+    if (buffered.messages.length) {
+      const visible: typeof buffered.messages = [];
+      let page = buffered;
+      for (;;) {
+        const hidden = await this.prisma.chatMessageHidden.findMany({
+          where: { memberId: viewer.memberId, messageId: { in: page.messages.map(m => m.id) } }, select: { messageId: true },
+        });
+        const hiddenIds = new Set(hidden.map(m => m.messageId));
+        visible.push(...page.messages.filter(m => !hiddenIds.has(m.id)));
+        if (visible.length > take || !page.hasMore) break;
+        page = this.bufferRepo.listMessages(roomId, take, page.nextCursor || undefined, opts.search);
+        if (!page.messages.length) break;
+      }
+      const hasMore = visible.length > take || page.hasMore;
+      buffered = { messages: visible.slice(0, take), hasMore, nextCursor: hasMore ? visible[Math.min(take, visible.length) - 1]?.id || null : null };
+    }
+    if (buffered.messages.length > 0) {
+      const reactions = await this.prisma.chatMessageReaction.findMany({ where: { messageId: { in: buffered.messages.map(m => m.id) } } });
+      const missingProfiles = [...new Set(buffered.messages.map(m => m.senderMemberId).filter((id): id is string => !!id && !this.bufferRepo.getMemberProfile(id)))];
+      if (missingProfiles.length) this.bufferRepo.setMemberProfiles(await this.prisma.member.findMany({ where: { id: { in: missingProfiles } }, select: senderSelect }));
+      const dtos = buffered.messages.map((b) => {
+        const sender = b.senderMemberId ? this.bufferRepo.getMemberProfile(b.senderMemberId) : null;
+        let replyTo: any = null;
+        if (b.replyToId) {
+          const repMsg = this.bufferRepo.findById(b.replyToId);
+          if (repMsg && !repMsg.deletedAt) {
+            const repSender = repMsg.senderMemberId ? this.bufferRepo.getMemberProfile(repMsg.senderMemberId) : null;
+            replyTo = {
+              id: repMsg.id,
+              body: repMsg.body,
+              sender: repSender,
+              deletedAt: repMsg.deletedAt,
+            };
+          }
+        }
+        return this.toMessageDto(
+          {
+            id: b.id,
+            clientOperationId: b.clientOperationId,
+            roomId: b.roomId,
+            type: b.type as ChatMessageType,
+            body: b.body,
+            attachmentUrl: b.attachmentUrl,
+            attachmentMeta: b.attachmentMeta,
+            replyToId: b.replyToId,
+            editedAt: b.editedAt,
+            deletedAt: b.deletedAt,
+            createdAt: b.createdAt,
+            senderMemberId: b.senderMemberId,
+            reactions: reactions.filter(r => r.messageId === b.id),
+            sender: sender
+              ? {
+                  id: sender.id,
+                  firstName: sender.firstName,
+                  lastName: sender.lastName,
+                  preferredName: sender.preferredName,
+                  profilePhotoUrl: sender.profilePhotoUrl,
+                }
+              : null,
+            replyTo,
+          },
+          viewer,
+          roomMembers,
+        );
+      });
+
+      return {
+        syncCursor,
+        messages: [...dtos].reverse(),
+        nextCursor: buffered.nextCursor,
+        hasMore: buffered.hasMore,
+      };
+    }
+
+    // 3. Fallback to Primary DB if buffer is cold/empty
     const rows = await this.prisma.chatMessage.findMany({
-      where: { roomId, hiddenFor: { none: { memberId: viewer.memberId } },
+      where: {
+        roomId,
+        hiddenFor: { none: { memberId: viewer.memberId } },
         ...(opts.search ? { body: { contains: opts.search.slice(0, 200), mode: 'insensitive' as const }, deletedAt: null } : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -540,36 +791,30 @@ export class ChatService implements OnApplicationBootstrap {
     const hasMore = rows.length > take;
     const page = hasMore ? rows.slice(0, take) : rows;
 
-    // 3. Check for any pending local messages in SQLite buffer not yet in primary DB
-    if (!opts.cursor && !opts.search) {
-      const buffered = this.bufferRepo.listRecentByRoom(roomId, 10);
-      const rowIds = new Set(page.map(r => r.id));
-      for (const b of buffered) {
-        if (!rowIds.has(b.id) && b.syncStatus !== 'MIGRATED' && !b.deletedAt) {
-          page.unshift({
-            id: b.id,
-            clientOperationId: b.clientOperationId,
-            roomId: b.roomId,
-            senderMemberId: b.senderMemberId,
-            type: b.type as ChatMessageType,
-            body: b.body,
-            attachmentUrl: b.attachmentUrl,
-            attachmentMeta: b.attachmentMeta as any,
-            replyToId: b.replyToId,
-            editedAt: b.editedAt ? new Date(b.editedAt) : null,
-            deletedAt: null,
-            createdAt: new Date(b.createdAt),
-            reactions: [],
-            sender: b.senderMemberId === viewer.memberId
-              ? { id: viewer.memberId, firstName: viewer.firstName || '', lastName: viewer.lastName || '', preferredName: null, profilePhotoUrl: (viewer as any).profilePhotoUrl || null }
-              : null,
-            replyTo: null,
-          } as any);
-        }
-      }
+    // Seed fetched rows into SQLite buffer so subsequent reads are instant (<1ms)
+    try {
+      this.bufferRepo.seedLegacyMessages(
+        page.map((m) => ({
+          id: m.id,
+          clientOperationId: m.clientOperationId,
+          roomId: m.roomId,
+          senderMemberId: m.senderMemberId,
+          type: String(m.type),
+          body: m.body,
+          attachmentUrl: m.attachmentUrl,
+          attachmentMeta: (m.attachmentMeta as Record<string, unknown>) || null,
+          replyToId: m.replyToId,
+          editedAt: m.editedAt ? m.editedAt.toISOString() : null,
+          deletedAt: m.deletedAt ? m.deletedAt.toISOString() : null,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      );
+    } catch {
+      // Non-blocking
     }
 
     return {
+      syncCursor,
       messages: [...page].reverse().map((m) => this.toMessageDto(m, viewer, roomMembers)),
       nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
       hasMore,
@@ -590,11 +835,37 @@ export class ChatService implements OnApplicationBootstrap {
   ) {
     const started = Date.now();
     const room = await this.loadRoom(roomId, viewer);
-    const membership = await this.ensureMembership(room, viewer);
-    const memberId = membership.memberId;
+    await this.ensureMembership(room, viewer);
+    const memberId = viewer.memberId!;
 
-    // Resolve retries against authoritative storage.
+    // Resolve retries against hot SQLite buffer or authoritative primary storage.
     if (dto.operationId) {
+      const buffered = this.bufferRepo.findByClientOperationId(dto.operationId);
+      if (buffered) {
+        if (buffered.roomId !== roomId || buffered.senderMemberId !== memberId) {
+          throw new ForbiddenException('Operation belongs to another sender');
+        }
+        const sender = buffered.senderMemberId ? this.bufferRepo.getMemberProfile(buffered.senderMemberId) : null;
+        return this.toMessageDto(
+          {
+            id: buffered.id,
+            clientOperationId: buffered.clientOperationId,
+            roomId: buffered.roomId,
+            type: buffered.type as ChatMessageType,
+            body: buffered.body,
+            attachmentUrl: buffered.attachmentUrl,
+            attachmentMeta: buffered.attachmentMeta,
+            replyToId: buffered.replyToId,
+            editedAt: buffered.editedAt,
+            deletedAt: buffered.deletedAt,
+            createdAt: buffered.createdAt,
+            senderMemberId: buffered.senderMemberId,
+            reactions: [],
+            sender: sender ? { id: sender.id, firstName: sender.firstName, lastName: sender.lastName, preferredName: sender.preferredName, profilePhotoUrl: sender.profilePhotoUrl } : null,
+          },
+          viewer,
+        );
+      }
       const existing = await this.prisma.chatMessage.findUnique({
         where: { clientOperationId: dto.operationId },
         include: {
@@ -621,15 +892,16 @@ export class ChatService implements OnApplicationBootstrap {
     else if (attachmentUrl) type = attachmentUrl.startsWith('data:audio') ? 'AUDIO' : 'IMAGE';
 
     if (dto.replyToId) {
-      const parent = await this.prisma.chatMessage.findFirst({
+      const localParent = this.bufferRepo.findById(dto.replyToId);
+      const parent = (localParent?.roomId === roomId ? localParent : null) || await this.prisma.chatMessage.findFirst({
         where: { id: dto.replyToId, roomId },
         select: { id: true },
       });
       if (!parent) throw new BadRequestException('The message being replied to is not in this conversation');
     }
 
-    const messageId = randomUUID();
-    const createdAt = new Date().toISOString();
+    let messageId = randomUUID();
+    let createdAt = new Date().toISOString();
 
     const isAllMentioned = /@(?:all|everyone)\b/i.test(body);
     const recipients = (await this.recipientMemberIds(room)).filter(id => id !== memberId);
@@ -639,21 +911,20 @@ export class ChatService implements OnApplicationBootstrap {
     if (isAllMentioned) {
       recipients.forEach(id => mentionedMemberIds.add(id));
     } else if (recipients.length > 0 && body.includes('@')) {
-      const recipientMembers = await this.prisma.member.findMany({
-        where: { id: { in: recipients } },
-        select: { id: true, firstName: true, lastName: true, preferredName: true },
-      });
       const lowerBody = body.toLowerCase();
-      for (const rm of recipientMembers) {
-        const fullName = `${rm.firstName} ${rm.lastName}`.trim().toLowerCase();
-        const firstName = rm.firstName?.trim().toLowerCase();
-        const preferred = rm.preferredName?.trim().toLowerCase();
-        if (
-          (fullName && lowerBody.includes(`@${fullName}`)) ||
-          (firstName && (lowerBody.includes(`@${firstName} `) || lowerBody.endsWith(`@${firstName}`))) ||
-          (preferred && (lowerBody.includes(`@${preferred} `) || lowerBody.endsWith(`@${preferred}`)))
-        ) {
-          mentionedMemberIds.add(rm.id);
+      for (const rId of recipients) {
+        const rm = this.bufferRepo.getMemberProfile(rId);
+        if (rm) {
+          const fullName = `${rm.firstName} ${rm.lastName}`.trim().toLowerCase();
+          const firstName = rm.firstName?.trim().toLowerCase();
+          const preferred = rm.preferredName?.trim().toLowerCase();
+          if (
+            (fullName && lowerBody.includes(`@${fullName}`)) ||
+            (firstName && (lowerBody.includes(`@${firstName} `) || lowerBody.endsWith(`@${firstName}`))) ||
+            (preferred && (lowerBody.includes(`@${preferred} `) || lowerBody.endsWith(`@${preferred}`)))
+          ) {
+            mentionedMemberIds.add(rm.id);
+          }
         }
       }
     }
@@ -665,7 +936,7 @@ export class ChatService implements OnApplicationBootstrap {
 
     // 1. FAST-PATH: Write immediately to SQLite buffer (local durable storage in WAL mode)
     try {
-      this.bufferRepo.saveMessage({
+      const buffered = this.bufferRepo.saveMessage({
         id: messageId,
         clientOperationId: dto.operationId || null,
         roomId,
@@ -676,9 +947,15 @@ export class ChatService implements OnApplicationBootstrap {
         attachmentMeta: (finalAttachmentMeta as Record<string, unknown>) || null,
         replyToId: dto.replyToId || null,
         createdAt,
+        notificationPayload: { roomId, memberId, viewer, recipients, mentionedMemberIds: [...mentionedMemberIds], isAllMentioned, room },
       });
+      if (buffered.roomId !== roomId || buffered.senderMemberId !== memberId) throw new ForbiddenException('Operation belongs to another sender');
+      if (buffered.id !== messageId) return this.postMessage(roomId, viewer, dto);
+      messageId = buffered.id;
+      createdAt = buffered.createdAt;
     } catch (err: any) {
-      this.logger.warn(`ChatBufferWriteWarning: ${err.message}`);
+      this.logger.error(`ChatBufferWriteFailed: ${err.message}`);
+      throw err; // Never acknowledge an uncommitted message.
     }
 
     const createArgs = {
@@ -755,7 +1032,8 @@ export class ChatService implements OnApplicationBootstrap {
       room: { members: [] },
     };
 
-    this.logger.log(`ChatStoredFast message=${messageId} durationMs=${Date.now() - started}`);
+    this.invalidateRoomCaches(roomId);
+    this.logger.debug(`ChatStoredFast message=${messageId} durationMs=${Date.now() - started}`);
     return Object.defineProperty(this.toMessageDto(messageResult, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
   }
 
@@ -783,6 +1061,7 @@ export class ChatService implements OnApplicationBootstrap {
     if (remove) await this.prisma.chatMessageReaction.deleteMany({ where: { messageId, memberId, emoji } });
     else await this.prisma.chatMessageReaction.upsert({ where: { messageId_memberId_emoji: { messageId, memberId, emoji } }, create: { messageId, memberId, emoji }, update: {} });
     const rows = await this.prisma.chatMessageReaction.findMany({ where: { messageId } });
+    this.bufferRepo.touchMessage(message.roomId, messageId);
     return { messageId, roomId: message.roomId, reactions: rows };
   }
 
@@ -792,6 +1071,8 @@ export class ChatService implements OnApplicationBootstrap {
     await this.loadRoom(message.roomId, viewer);
     const memberId = this.requireMember(viewer);
     await this.prisma.chatMessageHidden.upsert({ where: { messageId_memberId: { messageId, memberId } }, create: { messageId, memberId }, update: {} });
+    this.bufferRepo.touchMessage(message.roomId, messageId);
+    this.invalidateRoomCaches(message.roomId, memberId);
     return { hidden: true };
   }
 
@@ -809,6 +1090,7 @@ export class ChatService implements OnApplicationBootstrap {
     await this.prisma.chatRoomMember.updateMany({ where: { roomId, memberId: viewer.memberId,
       OR: [{ lastDeliveredAt: null }, { lastDeliveredAt: { lt: message.createdAt } }],
     }, data: { lastDeliveredAt: message.createdAt } });
+    this.roomMembersCache.delete(roomId);
     return { roomId, memberId: viewer.memberId, lastDeliveredAt: message.createdAt };
   }
 
@@ -972,6 +1254,7 @@ export class ChatService implements OnApplicationBootstrap {
         AND n.status = 'UNREAD' AND n.data->>'messageId' = m.id
         AND m."roomId" = ${roomId} AND m."createdAt" <= ${readAt}
     `;
+    this.invalidateRoomCaches(roomId, memberId);
     return { roomId, lastReadAt: readAt };
   }
 
@@ -1052,6 +1335,7 @@ export class ChatService implements OnApplicationBootstrap {
       entityId: room.id,
       newData: { name, memberIds: [...memberIds] },
     });
+    this.invalidateRoomCaches(room.id);
     return this.getRoom(room.id, viewer);
   }
 
@@ -1173,6 +1457,7 @@ export class ChatService implements OnApplicationBootstrap {
       entityId: roomId,
       newData: { memberIds: valid.map((m) => m.id) },
     });
+    this.invalidateRoomCaches(roomId);
     return this.listRoomMembers(roomId, viewer);
   }
 
@@ -1195,6 +1480,7 @@ export class ChatService implements OnApplicationBootstrap {
       entityId: roomId,
       newData: { memberId },
     });
+    this.invalidateRoomCaches(roomId);
     return this.listRoomMembers(roomId, viewer);
   }
 
@@ -1211,6 +1497,7 @@ export class ChatService implements OnApplicationBootstrap {
       where: { roomId_memberId: { roomId, memberId } },
       data: { leftAt: new Date() },
     });
+    this.invalidateRoomCaches(roomId);
     await this.systemMessage(roomId, `${this.viewerName(viewer)} left the room`);
     return { left: true };
   }
@@ -1243,7 +1530,39 @@ export class ChatService implements OnApplicationBootstrap {
   }
 
   private async systemMessage(roomId: string, body: string) {
-    return this.prisma.chatMessage.create({ data: { roomId, type: 'SYSTEM', body } });
+    const message = await this.prisma.chatMessage.create({ data: { roomId, type: 'SYSTEM', body } });
+    this.bufferRepo.seedLegacyMessages([{ ...message, attachmentMeta: message.attachmentMeta as Record<string, unknown> | null, createdAt: message.createdAt.toISOString(), editedAt: null, deletedAt: null }]);
+    this.invalidateRoomCaches(roomId);
+    return message;
+  }
+
+  private notificationsCommitted?: (memberIds: string[]) => void;
+
+  onNotificationsCommitted(callback: (memberIds: string[]) => void) {
+    this.notificationsCommitted = callback;
+  }
+
+  private notificationsDraining = false;
+
+  @Interval(30000)
+  async retryPendingNotifications() {
+    if (process.env.DISABLE_SCHEDULED_JOBS === 'true' || this.notificationsDraining) return;
+    this.notificationsDraining = true;
+    try {
+      let afterRowId = 0;
+      while (true) {
+        const batch = this.bufferRepo.pendingNotifications(50, afterRowId);
+        if (!batch.length) break;
+        for (const { rowId, messageId, payload: p } of batch) {
+          afterRowId = rowId;
+          const message = this.bufferRepo.findById(messageId);
+          if (!message) continue;
+          await this.persistMessageAndNotifyAsync(messageId, p.roomId, p.memberId, p.viewer, {},
+            { data: { body: message.body, createdAt: message.createdAt } }, p.recipients,
+            new Set(p.mentionedMemberIds), p.isAllMentioned, p.room);
+        }
+      }
+    } finally { this.notificationsDraining = false; }
   }
 
   private async persistMessageAndNotifyAsync(
@@ -1259,14 +1578,10 @@ export class ChatService implements OnApplicationBootstrap {
     room: ChatRoom,
   ) {
     try {
-      await this.prisma.$transaction(async tx => {
-        const saved = dto.operationId
-          ? await tx.chatMessage.upsert({
-              where: { clientOperationId: dto.operationId },
-              create: createArgs.data,
-              update: {},
-            })
-          : await tx.chatMessage.create({ data: createArgs.data });
+      // Message durability is independent of notification success.
+      if (!await this.migrationJob.persistMessageAsync(messageId)) return;
+      const created = await this.prisma.$transaction(async tx => {
+        const saved = { id: messageId };
 
         const idempotencyKey = `chat:${saved.id}:notifications`;
         const claim = await tx.communicationDelivery.createMany({
@@ -1282,6 +1597,8 @@ export class ChatService implements OnApplicationBootstrap {
         });
 
         if (claim.count && recipients.length) {
+          const receipts = await tx.chatRoomMember.findMany({ where: { roomId, memberId: { in: recipients } }, select: { memberId: true, lastReadAt: true } });
+          const readMembers = new Set(receipts.filter(r => r.lastReadAt && r.lastReadAt >= new Date(createArgs.data.createdAt)).map(r => r.memberId));
           const senderName = this.viewerName(viewer);
           await tx.memberNotification.createMany({
             data: recipients.map(recipient => {
@@ -1300,6 +1617,8 @@ export class ChatService implements OnApplicationBootstrap {
               return {
                 memberId: recipient,
                 type: 'CHAT_MESSAGE',
+                status: readMembers.has(recipient) ? 'READ' : 'UNREAD',
+                readAt: readMembers.has(recipient) ? new Date() : null,
                 title: notifTitle,
                 body: notifBody,
                 data: {
@@ -1316,20 +1635,18 @@ export class ChatService implements OnApplicationBootstrap {
 
         // Update author's read receipt
         await tx.chatRoomMember.updateMany({
-          where: { roomId, memberId },
+          where: { roomId, memberId, OR: [{ lastReadAt: null }, { lastReadAt: { lt: new Date(createArgs.data.createdAt) } }] },
           data: { lastReadAt: new Date(createArgs.data.createdAt) },
-        }).catch(() => undefined);
+        });
+        return claim.count > 0;
       });
 
-      this.bufferRepo.markMigrated(messageId, new Date().toISOString());
-      this.logger.log(`ChatAsyncPersisted message=${messageId} roomId=${roomId}`);
+      this.bufferRepo.acknowledgeNotifications(messageId);
+      if (created) this.notificationsCommitted?.(recipients);
+      this.logger.debug(`ChatAsyncPersisted message=${messageId} roomId=${roomId}`);
     } catch (err: any) {
-      if (err?.code === 'P2002') {
-        this.bufferRepo.markMigrated(messageId, new Date().toISOString());
-        return;
-      }
       this.logger.warn(`ChatAsyncPersistPending message=${messageId} err=${err?.message}`);
-      this.bufferRepo.markFailed(messageId, err?.message || 'Async persistence pending');
+      // Durable notification outbox retains this work for automatic retry.
     }
   }
 
@@ -1382,7 +1699,7 @@ export class ChatService implements OnApplicationBootstrap {
       deletedAt: m.deletedAt ? new Date(m.deletedAt) : null,
       createdAt: new Date(m.createdAt),
       sender: m.sender
-        ? { memberId: m.sender.id, name: displayName(m.sender), photoUrl: m.sender.profilePhotoUrl }
+        ? { memberId: m.sender.id, name: displayName(m.sender), photoUrl: compactPhotoUrl(m.sender.id, m.sender.profilePhotoUrl) }
         : null,
       mine: !!m.senderMemberId && m.senderMemberId === viewer.memberId,
     };

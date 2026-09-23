@@ -67,6 +67,23 @@ export function assertFinanceCrudAuthority(user: { email?: string | null; isSupe
 }
 
 /**
+ * Enforce that only Eseosa Glory (Platform Owner) has full access to System Settings.
+ */
+export function isSettingsAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*')) return true;
+  return isEseosaGlory(user.email);
+}
+
+export function assertSettingsAuthority(user: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] }) {
+  if (!isSettingsAuthorized(user)) {
+    throw new ForbiddenException(
+      'System Settings access is restricted exclusively to the Platform Owner (Eseosa Glory).'
+    );
+  }
+}
+
+/**
  * Enforce that only Aanu and Victoria (and Super Admin Eseosa Glory) can create wardrobe records.
  */
 export function isWardrobeCreateAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {

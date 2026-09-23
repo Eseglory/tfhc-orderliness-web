@@ -77,6 +77,28 @@ function renderMessageTextWithMentions(text: string, isMine?: boolean) {
   return parts;
 }
 
+function ChatImage({ url, ...props }: { url: string } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
+  const ref = useRef<HTMLImageElement>(null);
+  const [src, setSrc] = useState(url.startsWith('/chat/messages/') ? undefined : url);
+  useEffect(() => {
+    if (!url.startsWith('/chat/messages/')) { setSrc(url); return; }
+    let cancelled = false;
+    let objectUrl: string | undefined;
+    setSrc(undefined);
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(e => e.isIntersecting)) return;
+      observer.disconnect();
+      void getCachedMediaUrl(url).then(value => {
+        if (cancelled) { URL.revokeObjectURL(value); return; }
+        objectUrl = value; setSrc(value);
+      }).catch(() => undefined);
+    }, { rootMargin: '200px' });
+    if (ref.current) observer.observe(ref.current);
+    return () => { cancelled = true; observer.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+  return <img {...props} ref={ref} src={src} style={{ minHeight: src ? undefined : 160, ...props.style }} />;
+}
+
 function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -84,24 +106,31 @@ function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState<1 | 1.5 | 2>(1);
   const [mediaSrc, setMediaSrc] = useState(url);
+  const ownedUrl = useRef<string>();
+  const currentUrl = useRef(url);
+  currentUrl.current = url;
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    getCachedMediaUrl(url).then(cached => {
-      if (alive) setMediaSrc(cached);
-    }).catch(() => undefined);
-    return () => { alive = false; };
+    setMediaSrc(url); setPlaying(false);
+    return () => { if (ownedUrl.current) URL.revokeObjectURL(ownedUrl.current); ownedUrl.current = undefined; };
   }, [url]);
 
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    if (playing) {
-      audioRef.current.pause();
-      setPlaying(false);
-    } else {
-      audioRef.current.play().then(() => setPlaying(true)).catch(() => undefined);
-    }
+  const togglePlay = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) { audio.pause(); setPlaying(false); return; }
+    try {
+      const cached = ownedUrl.current || await getCachedMediaUrl(url);
+      if (audioRef.current !== audio || currentUrl.current !== url) {
+        if (url.startsWith('/chat/messages/')) URL.revokeObjectURL(cached);
+        return;
+      }
+      if (url.startsWith('/chat/messages/')) ownedUrl.current = cached;
+      if (audio.src !== cached) audio.src = cached;
+      await audio.play();
+      setPlaying(true);
+    } catch { setPlaying(false); }
   };
 
   const handleTimeUpdate = () => {
@@ -137,8 +166,8 @@ function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
     <div className="flex items-center gap-3 py-1 px-1 min-w-[210px] max-w-[280px]">
       <audio
         ref={audioRef}
-        src={mediaSrc}
-        preload="metadata"
+        src={mediaSrc.startsWith('/chat/messages/') ? undefined : mediaSrc}
+        preload="none"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleTimeUpdate}
         onEnded={() => { setPlaying(false); setProgress(0); }}
@@ -429,8 +458,8 @@ export function MessageBubble({
               <span className="material-symbols-outlined text-[24px]">close</span>
             </button>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={message.attachmentUrl}
+            <ChatImage
+              url={message.attachmentUrl}
               alt={meta?.name || 'Full view'}
               className="max-h-[85vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
             />
@@ -492,8 +521,8 @@ export function MessageBubble({
                 {/* Image Attachment */}
                 {message.type === 'IMAGE' && message.attachmentUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={message.attachmentUrl}
+                  <ChatImage
+                    url={message.attachmentUrl}
                     alt={meta?.name || 'Shared image'}
                     loading="lazy"
                     decoding="async"
@@ -512,6 +541,14 @@ export function MessageBubble({
                   <a
                     href={message.attachmentUrl}
                     download={meta.name || 'document'}
+                    onClick={event => {
+                      if (!message.attachmentUrl?.startsWith('/chat/messages/')) return;
+                      event.preventDefault();
+                      void getCachedMediaUrl(message.attachmentUrl).then(url => {
+                        const link = document.createElement('a'); link.href = url; link.download = meta.name || 'document'; link.click();
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                      }).catch(() => undefined);
+                    }}
                     className={`mb-1.5 flex items-center gap-3 rounded-xl p-2.5 transition-all active:scale-[0.99] ${
                       mine
                         ? 'bg-black/15 hover:bg-black/25 text-white'

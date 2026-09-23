@@ -308,10 +308,10 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     await http().post(`/chat/messages/${source.id}/forward`).set(auth(aliceToken)).send({ roomId: restricted.id, clientId: `restricted-${run}` }).expect(403);
   });
 
-  test('media & attachments: strictly enforce 2 MB hard limit and support documents', async () => {
+  test('media & attachments: strictly enforce 3 MB hard limit and support documents', async () => {
     const generalId = (await http().get('/chat/rooms').set(auth(aliceToken)).expect(200)).body.find((r: any) => r.key === 'GENERAL').id;
 
-    // 1. Valid small file (<= 2 MB) succeeds
+    // 1. Valid small file (<= 3 MB) succeeds
     const smallDoc = Buffer.from('TFHC Orderliness Meeting Minutes - Test Document Content', 'utf-8');
     const docRes = await http()
       .post(`/chat/rooms/${generalId}/attachments`)
@@ -323,8 +323,8 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     expect(docRes.body.attachmentMeta.kind).toBe('document');
     expect(docRes.body.attachmentMeta.name).toBe('minutes.txt');
 
-    // 2. Over 2 MB file is strictly rejected by server (Multer / Service guard)
-    const oversizedBuffer = Buffer.alloc(2.2 * 1024 * 1024, 0x61); // 2.2 MB
+    // 2. Over 3 MB file is strictly rejected by server (Multer / Service guard)
+    const oversizedBuffer = Buffer.alloc(3.2 * 1024 * 1024, 0x61); // 2.3 MB
     const rejectRes = await http()
       .post(`/chat/rooms/${generalId}/attachments`)
       .set(auth(aliceToken))
@@ -380,5 +380,37 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     expect(typeof summary.total).toBe('number');
     expect(Array.isArray(summary.rooms)).toBe(true);
   });
+  test('compact media preserves legacy payloads and authorizes lazy downloads', async () => {
+    const room = (await http().post('/chat/rooms').set(auth(superToken)).send({ name: `Media ${run}`, memberIds: [aliceId] }).expect(201)).body;
+    createdRoomIds.push(room.id);
+    const bytes = Buffer.from('Isolated attachment contract test');
+    const message = (await http().post(`/chat/rooms/${room.id}/attachments`).set(auth(aliceToken))
+      .attach('file', bytes, { filename: 'check.txt', contentType: 'text/plain' }).expect(201)).body;
+    const legacy = (await http().get(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).expect(200)).body;
+    expect(legacy.messages.find((m: any) => m.id === message.id).attachmentUrl).toMatch(/^data:/);
+    const compact = (await http().get(`/chat/rooms/${room.id}/messages?compactMedia=true`).set(auth(aliceToken)).expect(200)).body;
+    const url = compact.messages.find((m: any) => m.id === message.id).attachmentUrl;
+    expect(url).toBe(`/chat/messages/${message.id}/attachment`);
+    const download = await http().get(url).set(auth(aliceToken)).expect(200);
+    expect(download.text).toBe(bytes.toString());
+    await http().get(url).set(auth(bobToken)).expect(403);
+  });
+
+  test('delta replay includes more than a page of missed messages without duplicates', async () => {
+    const room = (await http().post('/chat/rooms').set(auth(superToken)).send({ name: `Delta ${run}`, memberIds: [aliceId] }).expect(201)).body;
+    createdRoomIds.push(room.id);
+    const initial = (await http().get(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).expect(200)).body;
+    const ids = [];
+    for (let i = 0; i < 35; i++) {
+      const message = (await http().post(`/chat/rooms/${room.id}/messages`).set(auth(aliceToken)).send({ body: `Delta regression ${i}`, clientId: `delta-${run}-${i}` }).expect(201)).body;
+      ids.push(message.id);
+    }
+    const page = (await http().get(`/chat/rooms/${room.id}/changes?cursor=${initial.syncCursor}`).set(auth(aliceToken)).expect(200)).body;
+    expect(new Set(page.messages.map((m: any) => m.id))).toEqual(new Set(ids));
+    const empty = (await http().get(`/chat/rooms/${room.id}/changes?cursor=${page.nextSyncCursor}`).set(auth(aliceToken)).expect(200)).body;
+    expect(empty.messages).toEqual([]);
+    await http().get(`/chat/rooms/${room.id}/changes?cursor=0`).set(auth(bobToken)).expect(403);
+  }, 30000);
+
 });
 

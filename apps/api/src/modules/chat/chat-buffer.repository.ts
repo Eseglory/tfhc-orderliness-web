@@ -66,11 +66,14 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   private findByIdStmt!: StatementSync;
   private findByOpIdStmt!: StatementSync;
   private listByRoomStmt!: StatementSync;
+  private listByRoomCursorStmt!: StatementSync;
+  private searchByRoomStmt!: StatementSync;
   private countUnreadStmt!: StatementSync;
   private getLatestByRoomStmt!: StatementSync;
   private markReadInRoomStmt!: StatementSync;
   private updateBodyStmt!: StatementSync;
   private softDeleteStmt!: StatementSync;
+  private memberProfiles = new Map<string, { id: string; firstName: string; lastName: string; preferredName: string | null; profilePhotoUrl: string | null }>();
   private getPendingBatchStmt!: StatementSync;
   private markProcessingBatchStmt!: StatementSync;
   private markMigratedStmt!: StatementSync;
@@ -116,9 +119,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     if (this.db || this.isFallback) return;
 
     if (!NodeSqliteDatabaseSync) {
-      this.logger.warn('[Chat Buffer] node:sqlite not available in runtime; activating in-memory buffer fallback.');
-      this.isFallback = true;
-      return;
+      throw new Error('Durable chat storage requires a Node runtime with node:sqlite.');
     }
 
     try {
@@ -157,9 +158,9 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
 
       this.logger.log(`[Shared Realtime SQLite] Connected to shared SQLite database at: ${this.dbPath} (WAL mode, busy_timeout=10000ms)`);
     } catch (err) {
-      this.logger.warn(`[Chat Buffer] SQLite initialization deferred to memory fallback: ${(err as Error).message}`);
-      this.isFallback = true;
+      this.db?.close();
       this.db = null;
+      throw new Error(`Durable chat storage unavailable: ${(err as Error).message}`);
     }
   }
 
@@ -187,12 +188,21 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
       CREATE INDEX IF NOT EXISTS idx_chat_buf_room_created ON chat_message_buffer(room_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_chat_buf_sync_status ON chat_message_buffer(sync_status);
       CREATE INDEX IF NOT EXISTS idx_chat_buf_op_id ON chat_message_buffer(client_operation_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_buf_room_cursor ON chat_message_buffer(room_id, created_at DESC, id DESC);
+      CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS chat_notification_outbox (message_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS chat_changes (sequence INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL, message_id TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS idx_chat_changes_room_sequence ON chat_changes(room_id, sequence);
+      CREATE TRIGGER IF NOT EXISTS chat_message_insert_change AFTER INSERT ON chat_message_buffer
+        BEGIN INSERT INTO chat_changes(room_id, message_id) VALUES (NEW.room_id, NEW.id); END;
+      CREATE TRIGGER IF NOT EXISTS chat_message_update_change AFTER UPDATE OF body, edited_at, deleted_at, attachment_url, attachment_meta ON chat_message_buffer
+        BEGIN INSERT INTO chat_changes(room_id, message_id) VALUES (NEW.room_id, NEW.id); END;
     `);
   }
 
   private prepareStatements() {
     this.insertStmt = this.db.prepare(`
-      INSERT INTO chat_message_buffer (
+      INSERT OR IGNORE INTO chat_message_buffer (
         id, client_operation_id, room_id, sender_member_id, type, body,
         attachment_url, attachment_meta, reply_to_id, created_at, sync_status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
@@ -209,14 +219,39 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     this.listByRoomStmt = this.db.prepare(`
       SELECT * FROM chat_message_buffer
       WHERE room_id = ?
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT ?
+    `);
+
+    this.listByRoomCursorStmt = this.db.prepare(`
+      SELECT * FROM chat_message_buffer
+      WHERE room_id = ? AND (created_at < (SELECT created_at FROM chat_message_buffer WHERE id = ?)
+        OR (created_at = (SELECT created_at FROM chat_message_buffer WHERE id = ?) AND id < ?))
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `);
+
+    this.searchByRoomStmt = this.db.prepare(`
+      SELECT * FROM chat_message_buffer
+      WHERE room_id = ? AND deleted_at IS NULL AND body LIKE ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `);
+
+    this.countUnreadStmt = this.db.prepare(`
+      SELECT COUNT(*) as cnt FROM chat_message_buffer
+      WHERE room_id = ? AND deleted_at IS NULL
+        AND id NOT IN (SELECT value FROM json_each(?))
+        AND (sender_member_id IS NULL OR sender_member_id != ?)
+        AND (? IS NULL OR created_at > ?)
+        AND created_at > COALESCE((SELECT MAX(sent.created_at) FROM chat_message_buffer sent WHERE sent.room_id = ? AND sent.sender_member_id = ?), '')
     `);
 
     this.getLatestByRoomStmt = this.db.prepare(`
       SELECT * FROM chat_message_buffer
       WHERE room_id = ? AND deleted_at IS NULL
-      ORDER BY created_at DESC
+        AND id NOT IN (SELECT value FROM json_each(?))
+      ORDER BY created_at DESC, id DESC
       LIMIT 1
     `);
 
@@ -234,8 +269,8 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
 
     this.getPendingBatchStmt = this.db.prepare(`
       SELECT * FROM chat_message_buffer
-      WHERE sync_status = 'PENDING' OR (sync_status = 'FAILED' AND retry_count < 5)
-      ORDER BY created_at ASC
+      WHERE (sync_status = 'PENDING' OR sync_status = 'FAILED') AND (created_at > ? OR (created_at = ? AND id > ?))
+      ORDER BY created_at ASC, id ASC
       LIMIT ?
     `);
 
@@ -284,7 +319,9 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     attachmentMeta?: Record<string, unknown> | null;
     replyToId?: string | null;
     createdAt: string;
+    notificationPayload?: Record<string, unknown>;
   }): BufferedMessageRecord {
+    if (!this.db) throw new Error('Durable chat storage is not initialized');
     if (this.isFallback || !this.db) {
       if (msg.clientOperationId) {
         const existing = this.findByClientOperationId(msg.clientOperationId);
@@ -326,6 +363,8 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
 
     const metaStr = msg.attachmentMeta ? JSON.stringify(msg.attachmentMeta) : null;
 
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
     this.insertStmt.run(
       msg.id,
       msg.clientOperationId || null,
@@ -339,7 +378,44 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
       msg.createdAt,
     );
 
-    return this.findById(msg.id)!;
+      const saved = msg.clientOperationId ? this.findByClientOperationId(msg.clientOperationId) : this.findById(msg.id);
+      if (saved?.id === msg.id && msg.notificationPayload) {
+        this.db.prepare('INSERT OR IGNORE INTO chat_notification_outbox(message_id, payload) VALUES (?, ?)')
+          .run(msg.id, JSON.stringify(msg.notificationPayload));
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+
+    return (msg.clientOperationId ? this.findByClientOperationId(msg.clientOperationId) : this.findById(msg.id))!;
+  }
+
+  public changeCursor(): string {
+    return String((this.db?.prepare('SELECT COALESCE(MAX(sequence), 0) AS cursor FROM chat_changes').get() as { cursor: number } | undefined)?.cursor || 0);
+  }
+
+  public touchMessage(roomId: string, messageId: string) {
+    this.db?.prepare('INSERT INTO chat_changes(room_id, message_id) VALUES (?, ?)').run(roomId, messageId);
+  }
+
+  public changesAfter(roomId: string, cursor: string, limit = 100) {
+    if (!/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new Error('Invalid chat cursor');
+    const rows = (this.db?.prepare('SELECT sequence, message_id FROM chat_changes WHERE room_id = ? AND sequence > ? ORDER BY sequence LIMIT ?')
+      .all(roomId, Number(cursor), limit + 1) || []) as Array<{ sequence: number; message_id: string }>;
+    const page = rows.slice(0, limit);
+    return { ids: [...new Set(page.map(r => r.message_id))], nextCursor: String(page[page.length - 1]?.sequence ?? cursor), hasMore: rows.length > limit };
+  }
+
+  public pendingNotifications(limit = 50, afterRowId = 0): Array<{ rowId: number; messageId: string; payload: Record<string, any> }> {
+    if (!this.db) return [];
+    return (this.db.prepare('SELECT rowid, message_id, payload FROM chat_notification_outbox WHERE rowid > ? ORDER BY rowid LIMIT ?').all(afterRowId, limit) as Array<{ rowid: number; message_id: string; payload: string }>)
+      .map(row => ({ rowId: row.rowid, messageId: row.message_id, payload: JSON.parse(row.payload) }));
+  }
+
+  public acknowledgeNotifications(messageId: string) {
+    this.db?.prepare('DELETE FROM chat_notification_outbox WHERE message_id = ?').run(messageId);
   }
 
   public findById(id: string): BufferedMessageRecord | null {
@@ -372,15 +448,100 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     return rows.map((r) => this.mapRow(r));
   }
 
-  public getLatestMessage(roomId: string): BufferedMessageRecord | null {
+  public getLatestMessage(roomId: string, excludedIds: string[] = []): BufferedMessageRecord | null {
     if (this.isFallback || !this.db) {
       const filtered = Array.from(this.memoryStore.values())
         .filter((r) => r.roomId === roomId && !r.deletedAt)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       return filtered[0] || null;
     }
-    const row = this.getLatestByRoomStmt.get(roomId) as Record<string, any> | undefined;
+    const row = this.getLatestByRoomStmt.get(roomId, JSON.stringify(excludedIds)) as Record<string, any> | undefined;
     return row ? this.mapRow(row) : null;
+  }
+
+  public countUnread(roomId: string, memberId: string, lastReadAt?: string | null, excludedIds: string[] = []): number {
+    if (this.isFallback || !this.db) {
+      return Array.from(this.memoryStore.values()).filter(
+        (r) =>
+          r.roomId === roomId &&
+          !r.deletedAt &&
+          (!r.senderMemberId || r.senderMemberId !== memberId) &&
+          (!lastReadAt || r.createdAt > lastReadAt),
+      ).length;
+    }
+    const row = this.countUnreadStmt.get(roomId, JSON.stringify(excludedIds), memberId, lastReadAt || null, lastReadAt || null, roomId, memberId) as { cnt: number | bigint } | undefined;
+    return Number(row?.cnt ?? 0);
+  }
+
+  public listMessages(
+    roomId: string,
+    limit = 30,
+    cursor?: string,
+    search?: string,
+  ): { messages: BufferedMessageRecord[]; hasMore: boolean; nextCursor: string | null } {
+    const take = Math.min(Math.max(limit, 1), 100);
+    if (this.isFallback || !this.db) {
+      let items = Array.from(this.memoryStore.values()).filter(
+        (r) => r.roomId === roomId && !r.deletedAt,
+      );
+      if (search) {
+        const q = search.toLowerCase();
+        items = items.filter((r) => (r.body || '').toLowerCase().includes(q));
+      }
+      items.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+      if (cursor) {
+        const idx = items.findIndex((r) => r.id === cursor);
+        if (idx !== -1) items = items.slice(idx + 1);
+      }
+      const page = items.slice(0, take);
+      const hasMore = items.length > take;
+      const nextCursor = hasMore ? page[page.length - 1]?.id ?? null : null;
+      return { messages: page, hasMore, nextCursor };
+    }
+
+    const anchor = cursor ? this.findById(cursor) : null;
+    if (cursor && (!anchor || anchor.roomId !== roomId)) return { messages: [], hasMore: false, nextCursor: null };
+    const clauses = ['room_id = ?'];
+    const params: unknown[] = [roomId];
+    if (anchor) { clauses.push('(created_at < ? OR (created_at = ? AND id < ?))'); params.push(anchor.createdAt, anchor.createdAt, anchor.id); }
+    if (search) { clauses.push("deleted_at IS NULL AND body LIKE ? ESCAPE '\\'"); params.push('%' + search.replace(/[\\%_]/g, '\\$&') + '%'); }
+    const rows = this.db.prepare(`SELECT * FROM chat_message_buffer WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`)
+      .all(...params, take + 1) as Array<Record<string, any>>;
+
+    const hasMore = rows.length > take;
+    const page = hasMore ? rows.slice(0, take) : rows;
+    const nextCursor = hasMore ? String(page[page.length - 1]?.id) : null;
+    return {
+      messages: page.map((r) => this.mapRow(r)),
+      hasMore,
+      nextCursor,
+    };
+  }
+
+  public setMemberProfiles(profiles: Array<{ id: string; firstName: string; lastName: string; preferredName?: string | null; profilePhotoUrl?: string | null }>) {
+    for (const p of profiles) {
+      this.memberProfiles.set(p.id, {
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        preferredName: p.preferredName || null,
+        profilePhotoUrl: p.profilePhotoUrl || null,
+      });
+    }
+  }
+
+  public getMemberProfile(id: string): { id: string; firstName: string; lastName: string; preferredName: string | null; profilePhotoUrl: string | null } | null {
+    return this.memberProfiles.get(id) || null;
+  }
+
+  public setMemberProfile(id: string, profile: { firstName: string; lastName: string; preferredName?: string | null; profilePhotoUrl?: string | null }) {
+    this.memberProfiles.set(id, {
+      id,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      preferredName: profile.preferredName || null,
+      profilePhotoUrl: profile.profilePhotoUrl || null,
+    });
   }
 
   public updateMessage(id: string, body: string, editedAt: string): boolean {
@@ -415,14 +576,14 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   // Batch & Migration Operations
   // -------------------------------------------------------------------------
 
-  public getPendingBatch(batchSize = 100): BufferedMessageRecord[] {
+  public getPendingBatch(batchSize = 100, after?: { createdAt: string; id: string }): BufferedMessageRecord[] {
     if (this.isFallback || !this.db) {
       return Array.from(this.memoryStore.values())
-        .filter((r) => r.syncStatus === 'PENDING' || (r.syncStatus === 'FAILED' && r.retryCount < 5))
+        .filter((r) => (r.syncStatus === 'PENDING' || r.syncStatus === 'FAILED') && (!after || r.createdAt > after.createdAt || (r.createdAt === after.createdAt && r.id > after.id)))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .slice(0, batchSize);
     }
-    const rows = this.getPendingBatchStmt.all(batchSize) as Array<Record<string, any>>;
+    const rows = this.getPendingBatchStmt.all(after?.createdAt || '', after?.createdAt || '', after?.id || '', batchSize) as Array<Record<string, any>>;
     return rows.map((r) => this.mapRow(r));
   }
 
@@ -435,7 +596,13 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     this.markProcessingBatchStmt.run(id);
   }
 
-  public markMigrated(id: string, migratedAt: string) {
+  public markMigrated(id: string, migratedAt: string, snapshot?: BufferedMessageRecord) {
+    if (snapshot && this.db) {
+      this.db.prepare(`UPDATE chat_message_buffer SET sync_status = 'MIGRATED', migrated_at = ?, last_error = NULL
+        WHERE id = ? AND body IS ? AND edited_at IS ? AND deleted_at IS ? AND attachment_url IS ? AND attachment_meta IS ?`)
+        .run(migratedAt, id, snapshot.body, snapshot.editedAt, snapshot.deletedAt, snapshot.attachmentUrl, snapshot.attachmentMeta ? JSON.stringify(snapshot.attachmentMeta) : null);
+      return;
+    }
     if (this.isFallback || !this.db) {
       const record = this.memoryStore.get(id);
       if (record) {
@@ -679,6 +846,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
     if (this.db) {
       try {
         this.db.close();
+        this.db = null;
       } catch (err) {
         this.logger.warn(`Error closing SQLite buffer DB: ${(err as Error).message}`);
       }

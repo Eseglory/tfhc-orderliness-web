@@ -5,7 +5,7 @@ import { AuthTransition } from './AuthTransition';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { logout } from '../lib/api';
-import { useAuth } from '../lib/auth';
+import { useAuth, isEseosaGlory } from '../lib/auth';
 import { useChatUnread } from '../lib/chat';
 import { useNotifications } from '../lib/useNotifications';
 import { LogoIcon } from './LogoIcon';
@@ -106,13 +106,31 @@ export const Navbar: React.FC = () => {
 
   // While RBAC info is still loading we optimistically show items; the backend
   // enforces access regardless, so a brief flash of an extra link is harmless.
+  const isEseosa = isEseosaGlory(user);
+
   const visible = (item: NavItem) => {
+    if (isAdmin) {
+      if (item.label === 'Admin' || item.label === 'Settings' || item.href === '/admin/settings') {
+        if (!isEseosa) return false;
+      }
+    }
     if (!item.anyOf || item.anyOf.length === 0) return true;
     if (!user) return true;
     return canAny(...item.anyOf);
   };
 
-  const items = (isAdmin ? ADMIN_NAV : MEMBER_NAV).filter(visible);
+  const items = (isAdmin ? ADMIN_NAV : MEMBER_NAV)
+    .filter(visible)
+    .map((item) => {
+      if (!item.children) return item;
+      return {
+        ...item,
+        children: item.children.filter((c) => {
+          if (c.href === '/admin/settings' && !isEseosa) return false;
+          return visible(c);
+        }),
+      };
+    });
   const active = (href: string) => (href === '/admin' || href === '/member' ? pathname === href : pathname.startsWith(href));
   const groupActive = (item: NavItem) =>
     active(item.href) || Boolean(item.children?.some((c) => active(c.href)));

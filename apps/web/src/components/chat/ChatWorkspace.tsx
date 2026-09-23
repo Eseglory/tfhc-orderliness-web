@@ -10,13 +10,24 @@ import {
   dayLabel,
   useChatSocket,
 } from '../../lib/chat';
-import { queueChatMessage, queuedChatMessages, acknowledgeChatMessage } from '../../lib/chat-outbox';
+import { queueChatMessage, queuedChatMessages, acknowledgeChatMessage, chatAccount } from '../../lib/chat-outbox';
+import {
+  getLocalCachedRooms,
+  saveLocalCachedRooms,
+  getLocalCachedMessages,
+  saveLocalCachedMessages,
+  appendLocalCachedMessage,
+  mergeChatMessages,
+  getLocalSyncCursor,
+} from '../../lib/chat-store';
 import { Avatar } from './Avatar';
+import { VirtualChatList } from './VirtualChatList';
 import { MessageBubble, SystemLine } from './MessageBubble';
 import { useUpload } from '../UploadProgress';
 import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
 import { soundFx } from '../../lib/sound-fx';
+import { chatTiming } from '../../lib/chat-performance';
 
 const ROOM_ICON: Record<string, string> = {
   GENERAL: 'forum',
@@ -45,8 +56,8 @@ export function ChatWorkspace({
   const canManage = isSuperOwner;
   const canModerate = isSuperOwner || can('messages.moderate');
 
-  const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(deepLinkRoomId ?? null);
+  const [rooms, setRooms] = useState<ChatRoom[]>(() => getLocalCachedRooms());
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [forwarding, setForwarding] = useState<{ message: ChatMessage; clientId: string } | null>(null);
   const [forwardBusy, setForwardBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -76,16 +87,32 @@ export function ChatWorkspace({
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeIdRef = useRef<string | null>(activeId);
   activeIdRef.current = activeId;
+  const syncCursors = useRef(new Map<string, string>());
+  const roomsRefreshTimer = useRef<ReturnType<typeof setTimeout>>();
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const activeRoom = useMemo(() => rooms.find((r) => r.id === activeId) ?? null, [rooms, activeId]);
 
-  const loadRooms = useCallback(async () => {
+  const roomsRequest = useRef<Promise<void> | null>(null);
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
+  const loadRooms = useCallback(() => {
+    if (roomsRequest.current) return roomsRequest.current;
+    const account = chatAccount();
+    const request = (async () => {
     try {
-      setRooms(await chatApi.rooms());
+      const freshRooms = await chatApi.rooms();
+      if (chatAccount() !== account) return;
+      setRooms(freshRooms);
+      saveLocalCachedRooms(freshRooms);
     } catch (e) {
-      notify(e instanceof Error ? e.message : 'Could not load conversations.', 'error');
+      if (roomsRef.current.length === 0) {
+        notify(e instanceof Error ? e.message : 'Could not load conversations.', 'error');
+      }
     }
+    })().finally(() => { roomsRequest.current = null; });
+    roomsRequest.current = request;
+    return request;
   }, [notify]);
 
   useEffect(() => {
@@ -106,48 +133,100 @@ export function ChatWorkspace({
   const markRoomRead = useCallback(
     (roomId: string, messageId?: string) => {
       if (document.visibilityState !== 'visible') return;
-      setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, unreadCount: 0 } : r)));
+      setRooms((prev) => {
+        const next = prev.map((r) => (r.id === roomId ? { ...r, unreadCount: 0 } : r));
+        saveLocalCachedRooms(next);
+        return next;
+      });
       chatApi.markRead(roomId, messageId).then(() => window.dispatchEvent(new Event('tfhc:chat-read'))).catch(() => undefined);
-      socket.sendRead(roomId, messageId);
+
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
+  const synchronizeRoom = useCallback(async (roomId: string, cursor: string) => {
+    const account = chatAccount();
+    let next = cursor;
+    for (;;) {
+      const page = await chatApi.changes(roomId, next);
+      if (chatAccount() !== account || activeIdRef.current !== roomId) return;
+      setMessages(previous => {
+        const updated = mergeChatMessages(previous.filter(m => !page.removedIds.includes(m.id)), page.messages).map(message => ({
+          ...message,
+          readBy: page.receipts.filter(r => r.memberId !== message.sender?.memberId && r.lastReadAt && r.lastReadAt >= message.createdAt).length,
+          deliveredTo: page.receipts.filter(r => r.memberId !== message.sender?.memberId && r.lastDeliveredAt && r.lastDeliveredAt >= message.createdAt).length,
+        }));
+        saveLocalCachedMessages(roomId, updated, page.nextSyncCursor);
+        return updated;
+      });
+      next = page.nextSyncCursor;
+      syncCursors.current.set(roomId, next);
+      if (!page.hasMore) return;
+    }
+  }, []);
+
   const openRoom = useCallback(
     async (roomId: string) => {
+      const started = performance.now();
+      const account = chatAccount();
       activeIdRef.current = roomId;
       setActiveId(roomId);
       setMobileThread(true);
       setReplyTo(null);
       setEditing(null);
+      setNextCursor(null);
+      setTypingBy({});
       setInChatSearch('');
       setShowInChatSearch(false);
       setShowRoomInfo(false);
-      setLoadingRoom(true);
+
+      // Instant local-first render: read local hot store (<1ms)
+      const cached = getLocalCachedMessages(roomId);
+      const previousCursor = getLocalSyncCursor(roomId);
+      if (cached.length > 0) {
+        setMessages(cached);
+        requestAnimationFrame(() => chatTiming('conversation.cachedPaint', started));
+        setLoadingRoom(false);
+        scrollToBottom();
+      } else {
+        setMessages([]);
+        setLoadingRoom(true);
+      }
+
       socket.subscribe(roomId);
       try {
         const page = await chatApi.messages(roomId);
-        if (activeIdRef.current !== roomId) return;
-        setMessages(page.messages);
+        chatTiming('conversation.serverPage', started);
+        if (chatAccount() !== account || activeIdRef.current !== roomId) return;
+        setMessages((prev) => {
+          const combined = mergeChatMessages(previousCursor ? prev : prev.filter(m => m.pending || m.failed), page.messages);
+          saveLocalCachedMessages(roomId, combined, previousCursor || page.syncCursor);
+          return combined;
+        });
+        if (previousCursor || page.syncCursor) syncCursors.current.set(roomId, previousCursor || page.syncCursor!);
         setNextCursor(page.nextCursor);
         if (page.messages.length) markRoomRead(roomId, page.messages[page.messages.length - 1].id);
+        if (previousCursor) await synchronizeRoom(roomId, previousCursor);
       } catch (e) {
-        notify(e instanceof Error ? e.message : 'Could not load messages.', 'error');
+        if (cached.length === 0) {
+          notify(e instanceof Error ? e.message : 'Could not load messages.', 'error');
+        }
       } finally {
+        if (activeIdRef.current !== roomId) return;
         setLoadingRoom(false);
         scrollToBottom();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markRoomRead, notify, scrollToBottom],
+    [markRoomRead, notify, scrollToBottom, synchronizeRoom],
   );
 
   const loadRoomMembers = useCallback(async (roomId: string) => {
     try {
       setLoadingMembers(true);
       const data = await chatApi.roomMembers(roomId);
-      setRoomMembers(data || []);
+      if (activeIdRef.current === roomId) setRoomMembers(data || []);
     } catch (err) {
       console.error('Failed to load room members:', err);
     } finally {
@@ -156,22 +235,25 @@ export function ChatWorkspace({
   }, []);
 
   useEffect(() => {
-    if (activeId) {
+    if (activeId && showRoomInfo) {
       void loadRoomMembers(activeId);
     }
-  }, [activeId, loadRoomMembers]);
+  }, [activeId, showRoomInfo, loadRoomMembers]);
 
   const loadMore = async () => {
     if (!activeId || !nextCursor || loadingMore) return;
     setLoadingMore(true);
+    const roomId = activeId;
+    const prevTop = scrollRef.current?.scrollTop ?? 0;
     const prevHeight = scrollRef.current?.scrollHeight ?? 0;
     try {
       const page = await chatApi.messages(activeId, nextCursor);
-      setMessages((prev) => [...page.messages, ...prev]);
+      if (activeIdRef.current !== roomId) return;
+      setMessages((prev) => mergeChatMessages(prev, page.messages));
       setNextCursor(page.nextCursor);
       requestAnimationFrame(() => {
         const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight - prevHeight;
+        if (el) el.scrollTop = prevTop + el.scrollHeight - prevHeight;
       });
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not load earlier messages.', 'error');
@@ -186,18 +268,24 @@ export function ChatWorkspace({
       // Refresh room list unread & latest messages when socket reconnects
       if (!activeIdRef.current) return;
       const current = activeIdRef.current;
+      const cursor = syncCursors.current.get(current);
+      if (cursor) {
+        void synchronizeRoom(current, cursor).catch(() => undefined);
+        return;
+      }
       chatApi.messages(current).then((page) => {
         if (activeIdRef.current !== current) return;
         setMessages((previous) => {
-          const ids = new Set(page.messages.flatMap(m => [m.id, m.clientId].filter(Boolean)));
-          const newest = page.messages[page.messages.length - 1]?.createdAt ?? '';
-          return [...page.messages, ...previous.filter(message => !ids.has(message.id) &&
-            (message.pending || message.failed || message.createdAt > newest))];
+          const merged = mergeChatMessages(previous, page.messages);
+          saveLocalCachedMessages(current, merged, page.syncCursor);
+          return merged;
         });
+        if (page.syncCursor) syncCursors.current.set(current, page.syncCursor);
         setNextCursor(page.nextCursor);
       }).catch(() => undefined);
     },
     onMessage: (m) => {
+      appendLocalCachedMessage(m.roomId, m);
       // Audio notifications for messages
       if (!m.mine && m.sender?.memberId !== user?.memberId) {
         soundFx.unlockAudioContext();
@@ -210,8 +298,9 @@ export function ChatWorkspace({
 
       if (m.roomId === activeIdRef.current) {
         setMessages((prev) => {
-          const remaining = prev.filter(x => x.id !== m.id && (!m.clientId || x.id !== m.clientId));
-          return [...remaining, m];
+          const next = mergeChatMessages(prev, [m]);
+          saveLocalCachedMessages(m.roomId, next);
+          return next;
         });
         markRoomRead(m.roomId, m.id);
         scrollToBottom(true);
@@ -224,11 +313,15 @@ export function ChatWorkspace({
             : found
               ? { ...found, lastMessage: m }
               : null;
+        let updatedList: ChatRoom[];
         if (!bump) {
           void loadRooms();
           return prev;
+        } else {
+          updatedList = [bump, ...prev.filter((r) => r.id !== m.roomId)];
         }
-        return [bump, ...prev.filter((r) => r.id !== m.roomId)];
+        saveLocalCachedRooms(updatedList);
+        return updatedList;
       });
     },
     onRead: e => {
@@ -244,8 +337,17 @@ export function ChatWorkspace({
       myReactions: e.reactions.filter(r => r.memberId === user?.memberId).map(r => r.emoji),
     } : m)),
     onMessageUpdate: (m) => {
-      setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)));
-      setRooms((prev) => prev.map((r) => (r.lastMessage?.id === m.id ? { ...r, lastMessage: m } : r)));
+      appendLocalCachedMessage(m.roomId, m);
+      if (m.roomId === activeIdRef.current) setMessages((prev) => {
+        const next = prev.map((x) => (x.id === m.id ? m : x));
+        if (m.roomId) saveLocalCachedMessages(m.roomId, next);
+        return next;
+      });
+      setRooms((prev) => {
+        const next = prev.map((r) => (r.lastMessage?.id === m.id ? { ...r, lastMessage: m } : r));
+        saveLocalCachedRooms(next);
+        return next;
+      });
     },
     onTyping: (e) => {
       // Update global room typing for sidebar
@@ -271,9 +373,15 @@ export function ChatWorkspace({
       }
     },
     onUnread: () => {
-      void loadRooms();
+      clearTimeout(roomsRefreshTimer.current);
+      roomsRefreshTimer.current = setTimeout(() => { void loadRooms(); }, 200);
     },
   });
+
+  useEffect(() => () => {
+    clearTimeout(roomsRefreshTimer.current);
+    Object.values(typingTimers.current).forEach(clearTimeout);
+  }, []);
 
   // Deep-link open once rooms are available.
   useEffect(() => {
@@ -283,31 +391,35 @@ export function ChatWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkRoomId, rooms]);
 
-  const mergeSaved = useCallback((tempId: string, saved: ChatMessage) =>
-    setMessages((prev) => {
-      const next = prev.filter((m) => m.id !== tempId && (!saved.clientId || m.id !== saved.clientId));
-      return next.some((m) => m.id === saved.id) ? next : [...next, saved];
-    }), []);
+  const mergeSaved = useCallback((tempId: string, saved: ChatMessage) => {
+    appendLocalCachedMessage(saved.roomId, saved);
+    if (activeIdRef.current !== saved.roomId) return;
+    setMessages(prev => mergeChatMessages(prev.filter(m => m.id !== tempId), [saved]));
+  }, []);
 
   const draining = useRef(false);
   const drainOutbox = useCallback(async () => {
     if (draining.current || !navigator.onLine) return;
     draining.current = true;
     try {
+      const account = chatAccount();
       for (const item of await queuedChatMessages()) {
+        if (chatAccount() !== account) break;
         try {
           const saved = await chatApi.send(item.roomId, item);
-          await acknowledgeChatMessage(item.clientId);
-          if (activeIdRef.current === item.roomId) mergeSaved(item.clientId, saved);
+          await acknowledgeChatMessage(item.clientId, account);
+          if (chatAccount() !== account) break;
+          mergeSaved(item.clientId, saved);
         } catch { break; } // Preserve all unacknowledged records, in order.
       }
-    } finally { draining.current = false; }
+    } catch { /* Preserve the queue if device storage is temporarily unavailable. */ } finally { draining.current = false; }
   }, [mergeSaved]);
 
   useEffect(() => {
     const restore = async () => {
       try {
         const queued = await queuedChatMessages();
+        if (activeIdRef.current !== activeId) return;
         setMessages(previous => [...previous, ...queued.filter(q => q.roomId === activeId && !previous.some(m => m.id === q.clientId || m.clientId === q.clientId)).map(q => ({
           id: q.clientId, clientId: q.clientId, roomId: q.roomId, body: q.body, type: 'TEXT' as const,
           attachmentUrl: null, attachmentMeta: null, replyToId: q.replyToId || null, replyTo: null,
@@ -322,13 +434,30 @@ export function ChatWorkspace({
     return () => window.removeEventListener('online', resume);
   }, [activeId, loadingRoom, socket.connected, drainOutbox]);
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    let cancelled = false;
+    let delay = 2000;
+    const retry = async () => {
+      await drainOutbox();
+      if (!cancelled) timer = setTimeout(retry, delay = Math.min(delay * 2, 60000));
+    };
+    timer = setTimeout(retry, delay);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [drainOutbox, socket.connected]);
+
   const handleSendText = async (text: string) => {
+    const started = performance.now();
     const roomId = activeIdRef.current;
     if (!roomId) return;
     if (editing) {
       try {
         const updated = await chatApi.edit(editing.id, text);
-        setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+        setMessages((prev) => {
+          const next = prev.map((m) => (m.id === updated.id ? updated : m));
+          saveLocalCachedMessages(roomId, next);
+          return next;
+        });
         setEditing(null);
       } catch (e) {
         notify(e instanceof Error ? e.message : 'Could not edit the message.', 'error');
@@ -336,6 +465,7 @@ export function ChatWorkspace({
       }
       return;
     }
+    const account = chatAccount();
     const clientId = crypto.randomUUID();
     const tempId = clientId;
     const optimistic: ChatMessage = {
@@ -351,22 +481,57 @@ export function ChatWorkspace({
       editedAt: null,
       deletedAt: null,
       createdAt: new Date().toISOString(),
-      sender: null,
+      sender: user?.memberId
+        ? {
+            memberId: user.memberId,
+            name: [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Me',
+            photoUrl: user.photoUrl || user.profilePhotoUrl || null,
+          }
+        : null,
       mine: true,
       pending: true,
     };
-    // The draft is cleared only after the encrypted queue transaction commits.
-    await queueChatMessage({ clientId, roomId, body: text, replyToId: replyTo?.id, createdAt: optimistic.createdAt });
-    setMessages((prev) => [...prev, optimistic]);
+
+    // 1. INSTANT LOCAL STATE UPDATE (0ms) - WhatsApp-like immediate render
+    setMessages((prev) => {
+      const next = [...prev, optimistic];
+      saveLocalCachedMessages(roomId, next);
+      return next;
+    });
+
+    // 2. Immediately bump conversation in the sidebar
+    setRooms((prev) => {
+      const found = prev.find((r) => r.id === roomId);
+      if (!found) return prev;
+      const updated = [{ ...found, lastMessage: optimistic }, ...prev.filter((r) => r.id !== roomId)];
+      saveLocalCachedRooms(updated);
+      return updated;
+    });
+
+    requestAnimationFrame(() => chatTiming('send.optimisticPaint', started));
     scrollToBottom(true);
     const replyId = replyTo?.id;
     setReplyTo(null);
+
+    // Commit the outbox before transmission: an ACK must never race its insert.
+    try {
+      await queueChatMessage({ clientId, roomId, body: text, replyToId: replyId, createdAt: optimistic.createdAt });
+      chatTiming('send.outboxCommit', started);
+    } catch (error) {
+      setMessages(prev => prev.filter(m => m.id !== clientId));
+      saveLocalCachedMessages(roomId, getLocalCachedMessages(roomId).filter(m => m.id !== clientId));
+      setRooms(prev => prev.map(room => room.lastMessage?.id === clientId ? { ...room, lastMessage: getLocalCachedMessages(roomId).slice(-1)[0] || null } : room));
+      notify('Could not save this message on your device. Your text is still in the composer.', 'error');
+      throw error;
+    }
+    if (!navigator.onLine) return;
     void socket.sendMessage({ roomId, body: text, replyToId: replyId, clientId }).then(async saved => {
-      await acknowledgeChatMessage(clientId);
-      if (activeIdRef.current === roomId) mergeSaved(tempId, saved);
+      chatTiming('send.serverAck', started);
+      await acknowledgeChatMessage(clientId, account);
+      if (chatAccount() === account) mergeSaved(tempId, saved);
     }).catch(() => {
-      setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, pending: false, failed: true } : m));
-      notify(navigator.onLine ? 'Message saved on this device. Retry to send.' : 'Message queued on this device until you reconnect.', 'info');
+      if (chatAccount() === account && activeIdRef.current === roomId) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, pending: false, failed: true } : m));
+      notify('Message saved on this device. Sending will retry automatically.', 'info');
     });
   };
 
@@ -379,7 +544,11 @@ export function ChatWorkspace({
   const handleDelete = async (m: ChatMessage) => {
     try {
       const updated = await chatApi.remove(m.id);
-      setMessages((prev) => prev.map((x) => (x.id === m.id ? updated : x)));
+      setMessages((prev) => {
+        const next = prev.map((x) => (x.id === m.id ? updated : x));
+        if (m.roomId) saveLocalCachedMessages(m.roomId, next);
+        return next;
+      });
     } catch (e) {
       notify(e instanceof Error ? e.message : 'Could not delete the message.', 'error');
     }
@@ -434,13 +603,7 @@ export function ChatWorkspace({
   }, [activeId, inChatSearch, notify]);
   const displayedMessages = inChatSearch.trim() ? searchResults : messages;
 
-  const grouped: { day: string; items: ChatMessage[] }[] = [];
-  for (const m of displayedMessages) {
-    const label = dayLabel(m.createdAt);
-    const last = grouped[grouped.length - 1];
-    if (last && last.day === label) last.items.push(m);
-    else grouped.push({ day: label, items: [m] });
-  }
+
 
   const typingNames = Object.values(typingBy);
   const canManageRoom =
@@ -1026,10 +1189,11 @@ export function ChatWorkspace({
                     <p className="font-semibold">No messages yet — say hello 👋</p>
                   </div>
                 ) : (
-                  grouped.map((group) => (
-                    <div key={group.day}>
-                      <SystemLine text={group.day} />
-                      {group.items.map((m, i) => {
+                  <VirtualChatList items={displayedMessages} scrollRef={scrollRef}>
+                    {(m, index) => {
+                      const previous = displayedMessages[index - 1];
+                      const day = !previous || dayLabel(previous.createdAt) !== dayLabel(m.createdAt) ? dayLabel(m.createdAt) : null;
+                      const renderMessage = () => {
                         const handleStartCallFromMessage = (isVideo: boolean) => {
                           soundFx.unlockAudioContext();
                           const isCaller = m.mine;
@@ -1088,7 +1252,7 @@ export function ChatWorkspace({
                           return <SystemLine key={m.id} text={m.body ?? ''} />;
                         }
 
-                        const prev = group.items[i - 1];
+                        const prev = previous;
                         const showSender =
                           !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
                         return (
@@ -1116,9 +1280,10 @@ export function ChatWorkspace({
                             />
                           </div>
                         );
-                      })}
-                    </div>
-                  ))
+                      };
+                      return <>{day && <SystemLine text={day} />}{renderMessage()}</>;
+                    }}
+                  </VirtualChatList>
                 )}
 
                 {/* WhatsApp Bouncing 3-Dot Typing Bubble */}

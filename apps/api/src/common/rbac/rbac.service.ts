@@ -35,24 +35,23 @@ export class RbacService implements OnApplicationBootstrap {
   }
 
   private async bootstrapDefaults(): Promise<void> {
-    await Promise.all(
-      DEFAULT_EVENT_TYPES.map((t, i) =>
-        this.prisma.eventType.upsert({
-          where: { key: t.key },
-          update: { isSystem: true },
-          create: {
-            key: t.key,
-            name: t.name,
-            description: t.description,
-            icon: t.icon,
-            color: t.color,
-            defaultCompulsory: t.defaultCompulsory,
-            isSystem: true,
-            sortOrder: (i + 1) * 10,
-          },
-        })
-      )
-    );
+    for (let i = 0; i < DEFAULT_EVENT_TYPES.length; i++) {
+      const t = DEFAULT_EVENT_TYPES[i];
+      await this.prisma.eventType.upsert({
+        where: { key: t.key },
+        update: { isSystem: true },
+        create: {
+          key: t.key,
+          name: t.name,
+          description: t.description,
+          icon: t.icon,
+          color: t.color,
+          defaultCompulsory: t.defaultCompulsory,
+          isSystem: true,
+          sortOrder: (i + 1) * 10,
+        },
+      });
+    }
 
     const categories = [
       { name: 'Unit Meeting', basePoints: 10, pointWeight: 1.0, isSystem: true },
@@ -61,21 +60,18 @@ export class RbacService implements OnApplicationBootstrap {
       { name: 'Training', basePoints: 10, pointWeight: 1.5, isSystem: true },
       { name: 'Special Programme', basePoints: 15, pointWeight: 2.0, isSystem: true },
     ];
-    await Promise.all(
-      categories.map((c) =>
-        this.prisma.meetingCategory.upsert({ where: { name: c.name }, update: { isSystem: true }, create: c })
-      )
-    );
+    for (const c of categories) {
+      await this.prisma.meetingCategory.upsert({ where: { name: c.name }, update: { isSystem: true }, create: c });
+    }
+
     const chatRooms = [
       { key: 'GENERAL', name: 'General', description: 'Unit-wide conversation for every member.', type: 'GENERAL' as const },
       { key: 'EXECUTIVES', name: 'Executives', description: 'Private channel for unit executives and administrators.', type: 'EXECUTIVES' as const },
       { key: 'DISCIPLINARY', name: 'Disciplinary Committee', description: 'Confidential channel for Disciplinary Committee members, ethics reviews, and case discussions.', type: 'EXECUTIVES' as const },
     ];
-    await Promise.all(
-      chatRooms.map((r) =>
-        this.prisma.chatRoom.upsert({ where: { key: r.key }, update: {}, create: r })
-      )
-    );
+    for (const r of chatRooms) {
+      await this.prisma.chatRoom.upsert({ where: { key: r.key }, update: {}, create: r });
+    }
 
     await this.prisma.systemSetting.upsert({
       where: { key: 'recurring_services_config' },

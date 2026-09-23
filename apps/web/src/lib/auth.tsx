@@ -180,6 +180,12 @@ export function canManageFinance(user?: CurrentUser | null): boolean {
   return isEseosaGlory(user);
 }
 
+export function canManageSettings(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*')) return true;
+  return isEseosaGlory(user);
+}
+
 export function canManageApprovals(user?: CurrentUser | null): boolean {
   if (!user) return false;
   if (
