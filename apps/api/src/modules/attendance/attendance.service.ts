@@ -249,6 +249,14 @@ export class AttendanceService {
       include: { category: true, audiences: true },
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
+    const isOnline = Boolean(
+      (meeting as any).isOnline ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.address?.includes('meet.google.com')
+    );
+    if (isOnline) {
+      throw new BadRequestException('Online attendance requires a valid attendance code. Direct link check-in is not permitted.');
+    }
     if (meeting.status !== 'ACTIVE') {
       throw new BadRequestException('Online attendance is not currently open for this meeting');
     }
@@ -475,6 +483,84 @@ export class AttendanceService {
     };
   }
 
+  async getAttendanceCodeForAdmin(adminUserId: string, meetingId: string) {
+    if (!meetingId) throw new BadRequestException('Meeting ID is required');
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: { category: true, attendanceRecords: true },
+    });
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    const isOnline = Boolean(
+      (meeting as any).isOnline ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.address?.includes('meet.google.com')
+    );
+    if (!isOnline) {
+      throw new BadRequestException('Attendance codes are only used for online gatherings.');
+    }
+
+    // Auto-generate unique 6-digit code if not yet set for this occurrence (persisted server-side)
+    let code = meeting.attendanceCode;
+    if (!code) {
+      code = crypto.randomInt(100000, 999999).toString();
+      await this.prisma.meeting.update({
+        where: { id: meetingId },
+        data: { attendanceCode: code },
+      });
+      await this.audit.record({
+        actorUserId: adminUserId,
+        action: 'ONLINE_ATTENDANCE_CODE_AUTO_GENERATED',
+        entity: 'Meeting',
+        entityId: meetingId,
+        newData: { code },
+      });
+    }
+
+    const now = new Date();
+    // Valid window: 10 minutes before start through 10 minutes after start
+    const validFrom = new Date(meeting.startTime.getTime() - 10 * 60 * 1000);
+    const validUntil = new Date(meeting.startTime.getTime() + 10 * 60 * 1000);
+
+    let status: 'NOT_ACTIVE' | 'ACTIVE' | 'EXPIRED' = 'NOT_ACTIVE';
+    if (now < validFrom) {
+      status = 'NOT_ACTIVE';
+    } else if (now > validUntil) {
+      status = 'EXPIRED';
+    } else {
+      status = 'ACTIVE';
+    }
+
+    const startsInMinutes = Math.max(0, Math.ceil((validFrom.getTime() - now.getTime()) / 60000));
+    const presentCount = meeting.attendanceRecords.filter(
+      (r) =>
+        r.status === AttendanceStatus.EARLY ||
+        r.status === AttendanceStatus.ON_TIME ||
+        r.status === AttendanceStatus.GRACE_PERIOD ||
+        r.status === AttendanceStatus.LATE,
+    ).length;
+
+    await this.audit.record({
+      actorUserId: adminUserId,
+      action: 'ONLINE_ATTENDANCE_CODE_VIEWED',
+      entity: 'Meeting',
+      entityId: meetingId,
+    });
+
+    return {
+      meetingId: meeting.id,
+      title: meeting.title,
+      startTime: meeting.startTime,
+      attendanceCode: code,
+      validFrom,
+      validUntil,
+      status,
+      startsInMinutes,
+      presentCount,
+      totalRecords: meeting.attendanceRecords.length,
+    };
+  }
+
   async submitAttendanceCode(dto: {
     memberId: string;
     meetingId: string;
@@ -502,18 +588,35 @@ export class AttendanceService {
       include: { category: true, audiences: true },
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
-    if (meeting.status !== 'ACTIVE') {
-      throw new BadRequestException('Attendance is not currently active for this meeting');
+
+    const isOnline = Boolean(
+      (meeting as any).isOnline ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.address?.includes('meet.google.com')
+    );
+    if (!isOnline) {
+      throw new BadRequestException('Attendance code submission is only valid for online gatherings.');
+    }
+    if (meeting.status === 'CANCELLED') {
+      throw new BadRequestException('This service has been cancelled.');
     }
 
     const now = new Date();
+    // Valid window: 10 minutes before start to 10 minutes after start
+    const validFrom = new Date(meeting.startTime.getTime() - 10 * 60 * 1000);
+    const validUntil = new Date(meeting.startTime.getTime() + 10 * 60 * 1000);
+
+    if (now < validFrom) {
+      throw new BadRequestException('Attendance Not Yet Available. Attendance opens 10 minutes before the scheduled meeting start.');
+    }
+    if (now > validUntil) {
+      throw new BadRequestException('Attendance Closed. The attendance window for this meeting has closed. The attendance code is no longer valid.');
+    }
+
     if (!meeting.attendanceCode || meeting.attendanceCode !== cleanCode) {
       const count = (attempt && attempt.resetAt > nowMs ? attempt.count : 0) + 1;
       this.codeAttempts.set(rateKey, { count, resetAt: nowMs + 15 * 60000 });
-      throw new BadRequestException('Invalid attendance code. Please check and try again.');
-    }
-    if (meeting.attendanceCodeExpiresAt && now > meeting.attendanceCodeExpiresAt) {
-      throw new BadRequestException('This attendance code has expired. Please ask the meeting host for a new code.');
+      throw new BadRequestException('Attendance Code Invalid. The code you entered is incorrect. Please enter the current attendance code shared during the meeting.');
     }
 
     this.codeAttempts.delete(rateKey);
@@ -530,62 +633,95 @@ export class AttendanceService {
       throw new BadRequestException('This event is not open to you');
     }
 
-    const status = classifyAttendanceStatus(now, {
-      attendanceOpenTime: meeting.attendanceOpenTime,
-      expectedArrivalTime: meeting.expectedArrivalTime,
-      startTime: meeting.startTime,
-      gracePeriodMinutes: meeting.gracePeriodMinutes,
-      attendanceCloseTime: meeting.attendanceCloseTime,
+    // Idempotency: Check if member is already marked PRESENT
+    const existing = await this.prisma.attendanceRecord.findUnique({
+      where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+      include: { meeting: { include: { category: true } }, member: true },
     });
+
+    const isAlreadyPresent = existing && (
+      existing.status === AttendanceStatus.EARLY ||
+      existing.status === AttendanceStatus.ON_TIME ||
+      existing.status === AttendanceStatus.GRACE_PERIOD ||
+      existing.status === AttendanceStatus.LATE
+    );
+
+    if (isAlreadyPresent) {
+      return {
+        success: true,
+        alreadyRecorded: true,
+        message: 'You are already marked PRESENT for this meeting.',
+        record: existing,
+        status: 'PRESENT',
+        attendanceStatus: existing.status,
+        method: existing.method,
+      };
+    }
+
+    const classifiedStatus = classifyAttendanceStatus(now, {
+      attendanceOpenTime: validFrom,
+      expectedArrivalTime: meeting.expectedArrivalTime || meeting.startTime,
+      startTime: meeting.startTime,
+      gracePeriodMinutes: 10,
+      attendanceCloseTime: validUntil,
+    });
+
     const pointsEarned = calculateAttendancePoints(
-      status,
+      classifiedStatus,
       meeting.pointWeight * meeting.category.pointWeight,
       await unitPolicy(this.prisma),
     );
 
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.attendanceRecord.findUnique({
-        where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
-      });
-
-      let record;
-      if (existing) {
-        record = await tx.attendanceRecord.update({
-          where: { id: existing.id },
-          data: {
-            lastSeenAt: now,
-            attendanceType: AttendanceType.ONLINE,
-            method: existing.method === AttendanceMethod.ONLINE_SESSION ? AttendanceMethod.ONLINE_SESSION : AttendanceMethod.ONLINE_CODE,
-          },
-          include: { meeting: { include: { category: true } }, member: true },
-        });
-      } else {
-        record = await tx.attendanceRecord.create({
-          data: {
-            memberId: dto.memberId,
-            meetingId: dto.meetingId,
-            expectedArrivalTime: meeting.expectedArrivalTime,
-            actualArrivalTime: now,
-            joinedAt: now,
-            lastSeenAt: now,
-            status,
-            attendanceType: AttendanceType.ONLINE,
-            method: AttendanceMethod.ONLINE_CODE,
-            pointsEarned,
-          },
-          include: { meeting: { include: { category: true } }, member: true },
-        });
-      }
-      return record;
-    }).then((record) => {
-      this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
-      return {
-        success: true,
-        record,
-        status: record.status,
-        method: record.method,
-      };
+    const record = await this.prisma.attendanceRecord.upsert({
+      where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
+      update: {
+        lastSeenAt: now,
+        actualArrivalTime: now,
+        joinedAt: now,
+        attendanceType: AttendanceType.ONLINE,
+        method: AttendanceMethod.ONLINE_CODE,
+        status: classifiedStatus,
+        pointsEarned,
+      },
+      create: {
+        memberId: dto.memberId,
+        meetingId: dto.meetingId,
+        expectedArrivalTime: meeting.startTime,
+        actualArrivalTime: now,
+        joinedAt: now,
+        lastSeenAt: now,
+        status: classifiedStatus,
+        attendanceType: AttendanceType.ONLINE,
+        method: AttendanceMethod.ONLINE_CODE,
+        pointsEarned,
+      },
+      include: { meeting: { include: { category: true } }, member: true },
     });
+
+    this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);
+
+    await this.audit.record({
+      actorUserId: member.userId ?? undefined,
+      action: 'ONLINE_ATTENDANCE_RECORDED',
+      entity: 'AttendanceRecord',
+      entityId: record.id,
+      newData: {
+        meetingId: dto.meetingId,
+        memberId: dto.memberId,
+        method: AttendanceMethod.ONLINE_CODE,
+        status: classifiedStatus,
+        recordedAt: now,
+      },
+    });
+
+    return {
+      success: true,
+      alreadyRecorded: false,
+      record,
+      status: 'PRESENT',
+      attendanceStatus: record.status,
+      method: record.method,
+    };
   }
 
   // -------------------------------------------------------------------------

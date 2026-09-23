@@ -18,9 +18,6 @@ export default function MeetingDetailPage() {
 
   // Online Meeting Attendance State
   const [attendanceRecord, setAttendanceRecord] = useState<any>(null);
-  const [onlineSessionToken, setOnlineSessionToken] = useState<string>('');
-  const [checkingInOnline, setCheckingInOnline] = useState(false);
-  const [checkingOutOnline, setCheckingOutOnline] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [attendanceCodeInput, setAttendanceCodeInput] = useState('');
   const [codeSubmitting, setCodeSubmitting] = useState(false);
@@ -39,12 +36,6 @@ export default function MeetingDetailPage() {
         })
         .catch(() => {});
 
-      // Load saved online session token from localStorage
-      if (typeof window !== 'undefined') {
-        const savedToken = localStorage.getItem(`tfhc_online_session_${meetingId}`);
-        if (savedToken) setOnlineSessionToken(savedToken);
-      }
-
       // Check attendance status for the current member
       fetchApi<{ clockedIn: boolean; record: any }>(`/attendance/status?meetingId=${meetingId}`)
         .then((res) => {
@@ -56,115 +47,48 @@ export default function MeetingDetailPage() {
     }
   }, [meetingId]);
 
-  // Keep a 30s interval to update time-dependent check-in status smoothly
+  // Keep a 30s interval to update time-dependent status smoothly
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
 
-  // Heartbeat ping mechanism (every 45s while online session is active)
-  useEffect(() => {
-    if (!meetingId || !attendanceRecord || attendanceRecord.attendanceType !== 'ONLINE' || attendanceRecord.leftAt) {
-      return;
-    }
-
-    const token = onlineSessionToken || (typeof window !== 'undefined' ? localStorage.getItem(`tfhc_online_session_${meetingId}`) : '');
-    if (!token) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetchApi<{ success: boolean; durationMinutes?: number; lastSeenAt?: string; sessionClosed?: boolean }>('/attendance/online/heartbeat', {
-          method: 'POST',
-          body: JSON.stringify({ meetingId, sessionToken: token }),
-        });
-        if (res.sessionClosed) {
-          setAttendanceRecord((prev: any) => ({ ...prev, durationMinutes: res.durationMinutes, leftAt: new Date().toISOString() }));
-          localStorage.removeItem(`tfhc_online_session_${meetingId}`);
-        } else if (res.durationMinutes !== undefined) {
-          setAttendanceRecord((prev: any) => ({ ...prev, durationMinutes: res.durationMinutes, lastSeenAt: res.lastSeenAt }));
-        }
-      } catch (err) {
-        console.error('Online attendance heartbeat error:', err);
-      }
-    }, 45000);
-
-    return () => clearInterval(interval);
-  }, [meetingId, attendanceRecord, onlineSessionToken]);
-
-  const handleOnlineCheckIn = async (launchMeet = false, virtualUrl?: string | null) => {
-    setCheckingInOnline(true);
-    setError('');
-    setOnlineSuccessMsg('');
-    try {
-      const res = await fetchApi<{ success: boolean; sessionToken: string; record: any }>('/attendance/online/check-in', {
-        method: 'POST',
-        body: JSON.stringify({
-          meetingId,
-          deviceInfo: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 500) : 'Web Client',
-        }),
-      });
-      if (res.sessionToken) {
-        localStorage.setItem(`tfhc_online_session_${meetingId}`, res.sessionToken);
-        setOnlineSessionToken(res.sessionToken);
-      }
-      setAttendanceRecord(res.record);
-      setOnlineSuccessMsg('Successfully checked in to online gathering!');
-      if (launchMeet && virtualUrl) {
-        window.open(virtualUrl, '_blank', 'noopener,noreferrer');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to check in online');
-    } finally {
-      setCheckingInOnline(false);
-    }
-  };
-
-  const handleOnlineCheckOut = async () => {
-    setCheckingOutOnline(true);
-    setError('');
-    try {
-      const token = onlineSessionToken || localStorage.getItem(`tfhc_online_session_${meetingId}`) || undefined;
-      const res = await fetchApi<{ success: boolean; durationMinutes: number; leftAt: string }>('/attendance/online/check-out', {
-        method: 'POST',
-        body: JSON.stringify({ meetingId, sessionToken: token }),
-      });
-      localStorage.removeItem(`tfhc_online_session_${meetingId}`);
-      setOnlineSessionToken('');
-      setAttendanceRecord((prev: any) => ({
-        ...prev,
-        leftAt: res.leftAt,
-        durationMinutes: res.durationMinutes,
-      }));
-      setOnlineSuccessMsg(`Checked out successfully. Total recorded duration: ${res.durationMinutes} minutes.`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to check out');
-    } finally {
-      setCheckingOutOnline(false);
-    }
-  };
-
   const handleSubmitAttendanceCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!attendanceCodeInput || !/^\d{6}$/.test(attendanceCodeInput.trim())) {
-      setCodeError('Please enter a valid 6-digit number');
+    const cleanCode = attendanceCodeInput.trim();
+    if (!cleanCode || !/^\d{6}$/.test(cleanCode)) {
+      setCodeError('Please enter a valid 6-digit numeric attendance code.');
       return;
     }
     setCodeSubmitting(true);
     setCodeError('');
     try {
-      const res = await fetchApi<{ success: boolean; record: any }>('/attendance/online/submit-code', {
+      const res = await fetchApi<{ success: boolean; record: any; alreadyRecorded?: boolean }>('/attendance/online/submit-code', {
         method: 'POST',
         body: JSON.stringify({
           meetingId,
-          code: attendanceCodeInput.trim(),
+          code: cleanCode,
         }),
       });
       setAttendanceRecord(res.record);
       setShowCodeModal(false);
       setAttendanceCodeInput('');
-      setOnlineSuccessMsg('Attendance confirmed via meeting code!');
+      setOnlineSuccessMsg(
+        res.alreadyRecorded
+          ? 'You are already marked PRESENT for this meeting.'
+          : '✓ Attendance Confirmed! You are marked PRESENT.'
+      );
     } catch (err: any) {
-      setCodeError(err.message || 'Invalid or expired attendance code');
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not yet') || msg.toLowerCase().includes('not open')) {
+        setCodeError('Attendance Not Yet Available: Attendance opens 10 minutes before the meeting starts. Please try again later.');
+      } else if (msg.toLowerCase().includes('closed') || msg.toLowerCase().includes('expired')) {
+        setCodeError('Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
+      } else if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate')) {
+        setCodeError('Attendance Already Recorded: You are already marked PRESENT for this meeting.');
+      } else {
+        setCodeError(msg || 'Attendance Code Invalid: The code you entered is incorrect. Please enter the current attendance code shared during the meeting.');
+      }
     } finally {
       setCodeSubmitting(false);
     }
@@ -389,136 +313,118 @@ export default function MeetingDetailPage() {
           </div>
         )}
 
-        {attendanceRecord ? (
-          !attendanceRecord.leftAt ? (
-            /* Active Online Attendance Session */
-            <section className="rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-emerald-50/30 dark:from-emerald-950/50 dark:via-slate-900 dark:to-slate-900 p-5 shadow-md space-y-4">
+        {isVirtual ? (
+          /* Online Meeting Attendance Workflow */
+          attendanceRecord && ['PRESENT', 'EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(attendanceRecord.status) ? (
+            /* 1. Marked Present */
+            <section className="rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-emerald-50/30 dark:from-emerald-950/50 dark:via-slate-900 dark:to-slate-900 p-5 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
+                  <h3 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 uppercase tracking-wider">
+                    Attendance Confirmed
+                  </h3>
+                </div>
+                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                  PRESENT
+                </span>
+              </div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{title}</p>
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                You are marked <strong>PRESENT</strong> for this online meeting.
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Attendance recorded at:{' '}
+                <strong>
+                  {new Date(attendanceRecord.actualArrivalTime || attendanceRecord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </strong>
+                {attendanceRecord.method === 'ONLINE_CODE' && ' · Submitted valid attendance code'}
+              </p>
+            </section>
+          ) : currentTime < new Date(meetingStartTime.getTime() - 10 * 60000) ? (
+            /* 2. Before 10-minute window */
+            <section className="rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/30 p-5 shadow-xs space-y-2">
+              <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200">
+                <span className="material-symbols-outlined text-xl text-blue-600 dark:text-blue-400">lock_clock</span>
+                <h4 className="text-xs font-bold uppercase tracking-wider">
+                  Attendance Not Yet Available
+                </h4>
+              </div>
+              <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed font-medium">
+                Attendance opens 10 minutes before the meeting starts (
+                {new Date(meetingStartTime.getTime() - 10 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                ). Please try again later.
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                The 6-digit attendance code will be shared by the meeting host during the live session.
+              </p>
+            </section>
+          ) : currentTime <= new Date(meetingStartTime.getTime() + 10 * 60000) ? (
+            /* 3. Within 10-minute window */
+            <section className="rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/5 via-blue-50/30 to-purple-50/20 dark:from-primary/10 dark:to-slate-900 p-5 shadow-md space-y-3.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="relative flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                   </span>
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
-                    Online Attendance Active
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                    Attendance Window Active
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
-                    {attendanceRecord.status || 'PRESENT'}
-                  </span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                    {attendanceRecord.method === 'ONLINE_CODE' ? 'Via Code' : 'Via Session'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 py-1">
-                <div className="bg-white/70 dark:bg-slate-800/60 rounded-xl p-3 border border-emerald-200/60 dark:border-emerald-900/50">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                    Joined At
-                  </span>
-                  <span className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5 block">
-                    {attendanceRecord.joinedAt
-                      ? new Date(attendanceRecord.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : 'Just now'}
-                  </span>
-                </div>
-                <div className="bg-white/70 dark:bg-slate-800/60 rounded-xl p-3 border border-emerald-200/60 dark:border-emerald-900/50">
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                    Duration
-                  </span>
-                  <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300 mt-0.5 block">
-                    {Math.max(1, attendanceRecord.durationMinutes || 1)} mins
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                Your attendance session is actively synchronized. Stay on this meeting page or Google Meet while participating.
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-                {virtualMeetingUrl && (
-                  <a
-                    href={virtualMeetingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs py-3 px-4 rounded-xl shadow-xs flex justify-center items-center gap-2 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-lg">videocam</span>
-                    <span>Switch to Google Meet</span>
-                  </a>
-                )}
-                <button
-                  onClick={handleOnlineCheckOut}
-                  disabled={checkingOutOnline}
-                  className="sm:w-auto px-4 py-3 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50/80 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-base">logout</span>
-                  <span>{checkingOutOnline ? 'Checking Out…' : 'Check Out'}</span>
-                </button>
-              </div>
-            </section>
-          ) : (
-            /* Completed Online Attendance */
-            <section className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 p-5 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
-                  <h3 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 uppercase tracking-wider">
-                    Attendance Recorded &amp; Finalized
-                  </h3>
-                </div>
-                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
-                  {attendanceRecord.status}
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  Valid until {new Date(meetingStartTime.getTime() + 10 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
-              <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-medium">
-                Your online attendance has been successfully recorded and checked out. Total recorded meeting duration: <strong>{attendanceRecord.durationMinutes || 0} minutes</strong>.
-              </p>
-            </section>
-          )
-        ) : isVirtual && isCheckInEligible ? (
-          /* Online Gathering Check-In Options (Option B Primary + Option C Fallback) */
-          <section className="rounded-2xl border-2 border-blue-500/40 bg-gradient-to-br from-blue-50 via-indigo-50/30 to-purple-50/20 dark:from-blue-950/40 dark:to-slate-900 p-5 shadow-md space-y-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                </span>
-                <span className="text-xs font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">
-                  Online Attendance Open Now
-                </span>
+
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-[#0b1c30] dark:text-white">
+                  Online Meeting Attendance
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                  You have not marked your attendance. Enter the 6-digit attendance code announced during the online session.
+                </p>
               </div>
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                Closes at {closesTimeStr}
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-              This is an online gathering. No GPS verification is required. Click below to begin your attendance session, or enter an attendance code if provided.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-2.5">
-              <button
-                onClick={() => handleOnlineCheckIn(true, virtualMeetingUrl)}
-                disabled={checkingInOnline}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs sm:text-sm py-3.5 px-4 rounded-xl shadow-[0_4px_14px_rgba(37,99,235,0.35)] flex justify-center items-center gap-2 transition-transform duration-150 active:scale-[0.98] disabled:opacity-60"
-              >
-                <span className="material-symbols-outlined text-xl">videocam</span>
-                <span>{checkingInOnline ? 'Checking In…' : 'Check In & Join Online'}</span>
-              </button>
 
               <button
                 onClick={() => { setShowCodeModal(true); setCodeError(''); }}
-                className="sm:w-auto px-4 py-3.5 rounded-xl border border-blue-300 dark:border-blue-700 bg-white/80 dark:bg-slate-800 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                className="w-full bg-primary hover:bg-primary/90 text-white font-extrabold text-sm py-3.5 px-4 rounded-xl shadow-[0_4px_14px_rgba(242,50,12,0.25)] flex justify-center items-center gap-2 transition-transform duration-150 active:scale-[0.98]"
               >
-                <span className="material-symbols-outlined text-base">pin</span>
-                <span>Enter Code</span>
+                <span className="material-symbols-outlined text-xl">pin</span>
+                <span>MARK ATTENDANCE</span>
               </button>
+            </section>
+          ) : (
+            /* 4. After 10-minute window closed */
+            <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-5 shadow-xs space-y-2">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <span className="material-symbols-outlined text-xl text-slate-500">event_busy</span>
+                <h4 className="text-xs font-bold uppercase tracking-wider">
+                  Attendance Closed
+                </h4>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                The attendance window for this meeting has closed. The attendance code is no longer valid.
+              </p>
+            </section>
+          )
+        ) : attendanceRecord ? (
+          /* Physical Gathering - Attendance Recorded */
+          <section className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
+                <h3 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 uppercase tracking-wider">
+                  Attendance Recorded
+                </h3>
+              </div>
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
+                {attendanceRecord.status}
+              </span>
             </div>
+            <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed font-medium">
+              Your attendance has been successfully recorded for this service.
+            </p>
           </section>
         ) : isCheckInEligible ? (
           /* Physical Gathering Check-In */
@@ -774,7 +680,7 @@ export default function MeetingDetailPage() {
                 </span>
                 <p>
                   {isVirtual
-                    ? 'Online check-in is globally enabled from any location during the attendance window.'
+                    ? 'Online attendance is confirmed by submitting the 6-digit attendance code announced during the session.'
                     : 'GPS distance is automatically validated during check-in to confirm venue arrival.'}
                 </p>
               </div>
@@ -836,17 +742,17 @@ export default function MeetingDetailPage() {
           </section>
         )}
 
-        {/* Option C: Meeting Attendance Code Modal */}
+        {/* Online Attendance Code Modal */}
         {showCodeModal && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant/30 shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                     <span className="material-symbols-outlined text-lg">pin</span>
                   </div>
                   <h3 className="font-extrabold text-base text-[#0b1c30] dark:text-white">
-                    Enter Meeting Code
+                    Mark Attendance
                   </h3>
                 </div>
                 <button
@@ -857,9 +763,14 @@ export default function MeetingDetailPage() {
                 </button>
               </div>
 
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                If the meeting host or supervising minister shared an active 6-digit attendance code during this session, enter it below to confirm attendance.
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                  Enter the attendance code shared during the meeting.
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Attendance Code
+                </p>
+              </div>
 
               <form onSubmit={handleSubmitAttendanceCode} className="space-y-4">
                 <div>
@@ -868,7 +779,7 @@ export default function MeetingDetailPage() {
                     inputMode="numeric"
                     pattern="[0-9]*"
                     maxLength={6}
-                    placeholder="••••••"
+                    placeholder="______"
                     value={attendanceCodeInput}
                     onChange={(e) => setAttendanceCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     className="w-full text-center tracking-[0.4em] font-mono font-black text-2xl py-3.5 px-4 rounded-2xl border-2 border-outline-variant/30 bg-surface-container-low text-slate-900 dark:text-white focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-300 dark:placeholder:text-slate-600"
@@ -897,9 +808,9 @@ export default function MeetingDetailPage() {
                   <button
                     type="submit"
                     disabled={codeSubmitting || attendanceCodeInput.length !== 6}
-                    className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 py-3 px-4 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs font-bold tracking-wide uppercase transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {codeSubmitting ? 'Verifying…' : 'Submit Code'}
+                    {codeSubmitting ? 'Verifying…' : 'SUBMIT ATTENDANCE'}
                   </button>
                 </div>
               </form>

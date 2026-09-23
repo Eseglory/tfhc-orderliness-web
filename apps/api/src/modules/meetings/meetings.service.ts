@@ -514,7 +514,8 @@ export class MeetingsService {
       ) {
         throw new NotFoundException(`Meeting with ID ${id} not found`);
       }
-      return meeting;
+      const { attendanceCode, qrSecret, ...memberSafeMeeting } = meeting;
+      return memberSafeMeeting;
     }
 
     let weeklyAvailability: {
@@ -636,7 +637,8 @@ export class MeetingsService {
       },
     });
     const expectedCount = expectedMembers.filter(member => canViewEvent(meeting.visibility, meeting.audiences, {memberId:member.id,subTeamId:member.subTeamId,roleInUnit:member.roleInUnit})).length;
-    return { ...meeting, expectedCount, weeklyAvailability };
+    const { attendanceCode, qrSecret, ...adminSafeMeeting } = meeting;
+    return { ...adminSafeMeeting, expectedCount, weeklyAvailability };
   }
 
   // -------------------------------------------------------------------------

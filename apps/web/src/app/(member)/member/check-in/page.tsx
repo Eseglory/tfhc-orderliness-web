@@ -112,23 +112,9 @@ export default function CheckInPage() {
     try {
       if (!navigator.onLine) throw new Error('You are offline. Connect to the internet, then try again.');
 
-      // If meeting is online, bypass GPS entirely and check in via online session
+      // If meeting is online, GPS check-in is not permitted
       if (isOnlineService) {
-        const res = await fetchApi<{ success: boolean; sessionToken: string; record: any }>('/attendance/online/check-in', {
-          method: 'POST',
-          body: JSON.stringify({
-            meetingId: meeting.id,
-            deviceInfo: navigator.userAgent.slice(0, 500),
-          }),
-        });
-        if (res.sessionToken) {
-          localStorage.setItem(`tfhc_online_session_${meeting.id}`, res.sessionToken);
-        }
-        if (mounted.current) {
-          setResult(res.record);
-          setIsClockedIn(true);
-          setActiveRecord(res.record);
-        }
+        setShowCodeInput(true);
         return;
       }
 
@@ -179,18 +165,19 @@ export default function CheckInPage() {
 
   const submitCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!codeValue || !/^\d{6}$/.test(codeValue.trim())) {
-      setError('Please enter a valid 6-digit attendance code');
+    const cleanCode = codeValue.trim();
+    if (!cleanCode || !/^\d{6}$/.test(cleanCode)) {
+      setError('Please enter a valid 6-digit numeric attendance code.');
       return;
     }
     setSubmittingCode(true);
     setError('');
     try {
-      const res = await fetchApi<{ success: boolean; record: any }>('/attendance/online/submit-code', {
+      const res = await fetchApi<{ success: boolean; record: any; alreadyRecorded?: boolean }>('/attendance/online/submit-code', {
         method: 'POST',
         body: JSON.stringify({
           meetingId: meeting.id,
-          code: codeValue.trim(),
+          code: cleanCode,
         }),
       });
       if (mounted.current) {
@@ -201,7 +188,18 @@ export default function CheckInPage() {
         setCodeValue('');
       }
     } catch (err: any) {
-      if (mounted.current) setError(err.message || 'Invalid or expired attendance code');
+      const msg = err.message || '';
+      if (mounted.current) {
+        if (msg.toLowerCase().includes('not yet') || msg.toLowerCase().includes('not open')) {
+          setError('Attendance Not Yet Available: Attendance opens 10 minutes before the meeting starts. Please try again later.');
+        } else if (msg.toLowerCase().includes('closed') || msg.toLowerCase().includes('expired')) {
+          setError('Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
+        } else if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate')) {
+          setError('Attendance Already Recorded: You are already marked PRESENT for this meeting.');
+        } else {
+          setError(msg || 'Attendance Code Invalid: The code you entered is incorrect. Please enter the current attendance code shared during the meeting.');
+        }
+      }
     } finally {
       if (mounted.current) setSubmittingCode(false);
     }
@@ -263,7 +261,9 @@ export default function CheckInPage() {
           >
             <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
           </button>
-          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary">GPS Attendance &amp; Clock-In</h1>
+          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary">
+            {isOnlineService ? 'Online Meeting Attendance' : 'GPS Attendance & Clock-In'}
+          </h1>
         </div>
         <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
           <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
@@ -302,7 +302,7 @@ export default function CheckInPage() {
                 <div>
                   <p className="font-extrabold text-emerald-900 dark:text-emerald-100">Availability Already Submitted</p>
                   <p className="font-medium text-emerald-800 dark:text-emerald-300 mt-0.5">
-                    You have submitted your availability for this week&apos;s service. Remember to clock in when you arrive at church.
+                    You have submitted your availability for this week&apos;s service. Remember to mark your attendance when joining.
                   </p>
                 </div>
               </div>
@@ -313,12 +313,14 @@ export default function CheckInPage() {
                 <div>
                   <h2 className="text-lg font-bold text-primary">{meeting.title}</h2>
                   <p className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 mt-1">
-                    <span className="material-symbols-outlined text-primary text-[18px]">church</span>
-                    <span>{meeting.locationName || "The Father's House Church, 90 Alagbole–Akute Road"}</span>
+                    <span className="material-symbols-outlined text-primary text-[18px]">
+                      {isOnlineService ? 'videocam' : 'church'}
+                    </span>
+                    <span>{isOnlineService ? 'Online / Google Meet' : (meeting.locationName || "The Father's House Church, 90 Alagbole–Akute Road")}</span>
                   </p>
                 </div>
 
-                {/* State B: Already Clocked In Banner */}
+                {/* State B: Already Recorded Banner */}
                 {isClockedIn && (
                   <div
                     role="status"
@@ -331,13 +333,13 @@ export default function CheckInPage() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                       </span>
                       <span className="text-sm sm:text-base font-black tracking-wide uppercase text-emerald-700 dark:text-emerald-300">
-                        YOU HAVE ALREADY CLOCKED IN.
+                        {isOnlineService ? 'YOU ARE MARKED PRESENT.' : 'YOU HAVE ALREADY CLOCKED IN.'}
                       </span>
                     </div>
                     <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
                       {activeRecord?.actualArrivalTime
-                        ? `Clocked in at ${new Date(activeRecord.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                        : 'Your attendance session is active for this service.'}
+                        ? `Attendance recorded at ${new Date(activeRecord.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : 'Your attendance is recorded for this service.'}
                     </p>
                   </div>
                 )}
@@ -346,10 +348,10 @@ export default function CheckInPage() {
                   <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 space-y-1">
                     <p className="font-extrabold flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
                       <span className="material-symbols-outlined text-base">videocam</span>
-                      <span>Virtual / Online Gathering</span>
+                      <span>Online Gathering · Attendance Code Required</span>
                     </p>
                     <p className="font-medium text-slate-600 dark:text-slate-300">
-                      No venue GPS check required. You can check in directly online or enter an attendance code.
+                      No venue GPS verification required. Attendance is confirmed by submitting the 6-digit attendance code announced during the session.
                     </p>
                   </div>
                 ) : (
@@ -377,78 +379,137 @@ export default function CheckInPage() {
                   </div>
                 ) : isClockedIn ? (
                   <div className="space-y-2">
-                    <button
-                      aria-label="Clock out now"
-                      onClick={clockOut}
-                      disabled={busy || !meeting}
-                      className="w-full rounded-xl p-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md border border-slate-700/20"
-                    >
-                      <span className="material-symbols-outlined text-red-500">logout</span>
-                      <span>{busy ? 'Clocking Out…' : isOnlineService ? 'Check Out of Online Meeting' : 'Clock Out'}</span>
-                    </button>
-                    {isOnlineService && (
-                      <Link
-                        href={`/member/meetings/${meeting.id}`}
-                        className="inline-flex items-center justify-center gap-1.5 w-full py-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-900"
-                      >
-                        <span className="material-symbols-outlined text-base">videocam</span>
-                        <span>Open Gathering Session / Google Meet</span>
-                      </Link>
-                    )}
-                  </div>
-                ) : isOnlineService ? (
-                  <div className="space-y-3">
-                    <button
-                      aria-label="Check in to online gathering"
-                      onClick={checkIn}
-                      disabled={busy || !meeting}
-                      className="w-full rounded-xl p-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md"
-                    >
-                      <span className="material-symbols-outlined">videocam</span>
-                      <span>{busy ? 'Starting Session…' : 'Check In to Online Gathering'}</span>
-                    </button>
-
-                    {showCodeInput ? (
-                      <form onSubmit={submitCode} className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 space-y-3">
-                        <label className="block text-xs font-bold text-on-surface">Enter 6-digit Meeting Code</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          placeholder="••••••"
-                          value={codeValue}
-                          onChange={(e) => setCodeValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                          className="w-full text-center tracking-[0.4em] font-mono font-bold text-xl py-2.5 px-3 rounded-xl border border-outline-variant bg-surface text-on-surface"
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowCodeInput(false)}
-                            className="flex-1 py-2 px-3 rounded-lg border border-outline-variant text-xs font-bold text-slate-600 dark:text-slate-300"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={submittingCode || codeValue.length !== 6}
-                            className="flex-1 py-2 px-3 rounded-lg bg-primary text-white text-xs font-bold disabled:opacity-50"
-                          >
-                            {submittingCode ? 'Submitting…' : 'Submit Code'}
-                          </button>
-                        </div>
-                      </form>
+                    {isOnlineService ? (
+                      <div className="space-y-2">
+                        <Link
+                          href={`/member/meetings/${meeting.id}`}
+                          className="inline-flex items-center justify-center gap-1.5 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                        >
+                          <span className="material-symbols-outlined text-base">videocam</span>
+                          <span>View Gathering &amp; Google Meet</span>
+                        </Link>
+                      </div>
                     ) : (
                       <button
-                        type="button"
-                        onClick={() => setShowCodeInput(true)}
-                        className="w-full py-2.5 px-4 rounded-xl border border-outline-variant text-xs font-bold text-primary hover:bg-surface-container flex items-center justify-center gap-1.5 transition-colors"
+                        aria-label="Clock out now"
+                        onClick={clockOut}
+                        disabled={busy || !meeting}
+                        className="w-full rounded-xl p-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-950 font-black text-base transition-transform active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 shadow-md border border-slate-700/20"
                       >
-                        <span className="material-symbols-outlined text-base">pin</span>
-                        <span>Have an attendance code? Enter here</span>
+                        <span className="material-symbols-outlined text-red-500">logout</span>
+                        <span>{busy ? 'Clocking Out…' : 'Clock Out'}</span>
                       </button>
                     )}
                   </div>
+                ) : isOnlineService ? (
+                  (() => {
+                    const onlineValidFrom = new Date(new Date(meeting.startTime).getTime() - 10 * 60000);
+                    const onlineValidUntil = new Date(new Date(meeting.startTime).getTime() + 10 * 60000);
+                    const now = new Date();
+                    const isBeforeOnlineWindow = now < onlineValidFrom;
+                    const isAfterOnlineWindow = now > onlineValidUntil;
+                    const meetUrl = meeting.meetingUrl || (meeting.address?.startsWith('http') ? meeting.address : null);
+
+                    if (isBeforeOnlineWindow) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                            <p className="font-bold flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-base text-blue-600">lock_clock</span>
+                              <span>Attendance Not Yet Available</span>
+                            </p>
+                            <p>
+                              Attendance opens 10 minutes before the meeting starts ({onlineValidFrom.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please try again later.
+                            </p>
+                          </div>
+                          {meetUrl && (
+                            <a
+                              href={meetUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                            >
+                              <span className="material-symbols-outlined text-base">videocam</span>
+                              <span>Join Google Meet</span>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (isAfterOnlineWindow) {
+                      return (
+                        <div className="space-y-3">
+                          <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                            <p className="font-bold flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-base text-slate-500">event_busy</span>
+                              <span>Attendance Closed</span>
+                            </p>
+                            <p>
+                              The attendance window for this meeting has closed. The attendance code is no longer valid.
+                            </p>
+                          </div>
+                          {meetUrl && (
+                            <a
+                              href={meetUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                            >
+                              <span className="material-symbols-outlined text-base">videocam</span>
+                              <span>Join Google Meet</span>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        <form onSubmit={submitCode} className="p-4 rounded-2xl bg-surface-container border border-outline-variant/30 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-bold text-on-surface">Enter Attendance Code</label>
+                            <span className="text-[11px] text-slate-500">
+                              Closes at {onlineValidUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-on-surface-variant font-medium">
+                            Enter the 6-digit attendance code announced during the online session.
+                          </p>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            placeholder="______"
+                            value={codeValue}
+                            onChange={(e) => setCodeValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            className="w-full text-center tracking-[0.4em] font-mono font-black text-2xl py-3 px-4 rounded-xl border border-outline-variant/30 bg-surface text-on-surface focus:outline-hidden focus:border-primary"
+                            autoFocus
+                          />
+                          <button
+                            type="submit"
+                            disabled={submittingCode || codeValue.length !== 6}
+                            className="w-full rounded-xl py-3.5 bg-primary hover:bg-primary/90 text-white font-bold text-xs tracking-wide uppercase shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {submittingCode ? 'Verifying…' : 'SUBMIT ATTENDANCE'}
+                          </button>
+                        </form>
+
+                        {meetUrl && (
+                          <a
+                            href={meetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center gap-1.5 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                          >
+                            <span className="material-symbols-outlined text-base">videocam</span>
+                            <span>Join Google Meet</span>
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
                   <button
                     aria-label="Clock in now"

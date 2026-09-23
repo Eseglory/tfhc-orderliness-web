@@ -39,6 +39,7 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   // Attendance
   { key: 'attendance.read', group: 'Attendance', label: 'View attendance' },
   { key: 'attendance.manage', group: 'Attendance', label: 'Record / amend attendance' },
+  { key: 'attendance.online_code', group: 'Attendance', label: 'View and manage online meeting attendance codes' },
   { key: 'headcount.read', group: 'Attendance', label: 'View service headcount' },
   { key: 'headcount.record', group: 'Attendance', label: 'Record / update service headcount' },
 
@@ -174,7 +175,7 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       'Full administrative and operational control: members, events, attendance, communications, lookups, and financial operations (dues, expenses, payments, welfare). System settings reserved for Platform Owner.',
     permissions: [
       ...ALL_PERMISSION_KEYS.filter(
-        (k) => !['roles.create', 'roles.delete', 'settings.read', 'settings.update'].includes(k),
+        (k) => !['roles.create', 'roles.delete', 'settings.read', 'settings.update', 'attendance.online_code'].includes(k),
       ),
     ],
   },
@@ -200,7 +201,7 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       ...NON_FINANCE_KEYS.filter(
         (k) =>
           !k.startsWith('roles.') &&
-          !['users.create', 'users.deactivate', 'settings.read', 'settings.update', 'audit.read'].includes(k),
+          !['users.create', 'users.deactivate', 'settings.read', 'settings.update', 'audit.read', 'attendance.online_code'].includes(k),
       ),
       'users.read',
     ],
@@ -249,6 +250,7 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
       'events.cancel',
       'events.manage_types',
       'attendance.manage',
+      'attendance.online_code',
       'headcount.record',
     ],
   },

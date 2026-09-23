@@ -9,7 +9,7 @@ import { MailService } from '../mail/mail.service';
 import { renderReminderEmail } from '../mail/templates';
 import { AuditService } from '../../common/rbac/audit.service';
 import { occurrences, SERVICE_SCHEDULES } from './service-schedules';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomInt } from 'crypto';
 
 export type RecurringConfig = {
   venue: { name: string; latitude: number; longitude: number; radiusMeters: number };
@@ -250,6 +250,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             longitude,
             geofenceRadiusMeters,
             isOnline,
+            attendanceCode: isOnline ? randomInt(100000, 999999).toString() : null,
             isCompulsory: false,
           };
         });

@@ -69,6 +69,19 @@ export default function AdminLiveMeetingPage() {
   // Headcount Modal
   const [showHeadcountModal, setShowHeadcountModal] = useState(false);
 
+  // Online Attendance Code State
+  const [adminOnlineCodeData, setAdminOnlineCodeData] = useState<{
+    meetingId: string;
+    title: string;
+    startTime: string;
+    attendanceCode: string;
+    validFrom: string;
+    validUntil: string;
+    status: 'NOT_ACTIVE_YET' | 'ACTIVE' | 'EXPIRED';
+    startsInMinutes: number;
+    presentCount: number;
+  } | null>(null);
+
   // Attendance Code Modal
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [codeMinutes, setCodeMinutes] = useState(45);
@@ -314,19 +327,28 @@ export default function AdminLiveMeetingPage() {
     if (!meetingId) return;
     try {
       const [mtgData, attData, hcRes] = await Promise.all([
-        fetchApi(`/meetings/${meetingId}`),
-        fetchApi(`/attendance/meeting/${meetingId}`),
+        fetchApi<any>(`/meetings/${meetingId}`),
+        fetchApi<any[]>(`/attendance/meeting/${meetingId}`),
         fetchApi<any>(`/attendance/headcount/${meetingId}`).catch(() => null),
       ]);
       setMeeting(mtgData);
       setAttendanceRecords(attData || []);
       setHeadcountData(hcRes?.headcount || null);
+
+      if (can('attendance.online_code')) {
+        try {
+          const codeRes = await fetchApi<any>(`/attendance/session/${meetingId}/code`);
+          setAdminOnlineCodeData(codeRes);
+        } catch {
+          setAdminOnlineCodeData(null);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [meetingId]);
+  }, [meetingId, can]);
 
   const loadMembers = async () => {
     try {
@@ -734,9 +756,9 @@ export default function AdminLiveMeetingPage() {
           </div>
         </section>
 
-        {/* Online Meeting Attendance & Code Management Showcase (Option B & C) */}
+        {/* Dedicated Online Meeting Attendance Console & Code Card */}
         {isOnlineMeeting && (
-          <section className="bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-900 border border-blue-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden space-y-5">
+          <section className="bg-gradient-to-br from-blue-950/40 via-slate-900 to-slate-900 border border-blue-500/30 p-5 sm:p-6 rounded-3xl shadow-lg space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
               <div className="flex items-center gap-3">
                 <span className="p-2.5 rounded-2xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
@@ -744,110 +766,146 @@ export default function AdminLiveMeetingPage() {
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base sm:text-lg font-bold text-white">Online Meeting Attendance Operations</h2>
-                    <span className="text-[10px] uppercase px-2 py-0.5 rounded-full font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/40">
-                      Option B &amp; C Active
+                    <h2 className="text-base sm:text-lg font-bold text-white">ONLINE ATTENDANCE</h2>
+                    <span className="text-[10px] uppercase px-2.5 py-0.5 rounded-full font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                      Attendance Code Model
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Live session tracking via cryptographic tokens, heartbeat duration calculation &amp; fallback 6-digit codes.
+                    {meeting?.title || 'Wednesday Unit Weekly Meeting'} · Scheduled Start:{' '}
+                    {meeting?.startTime
+                      ? new Date(meeting.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '8:00 PM'} (WAT)
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowCodeModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  {codeActive ? 'Generate New Code' : 'Generate Attendance Code'}
-                </button>
+              {/* Quick Actions: Meet URL */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(meeting?.meetingUrl || meetingUrlInput) && (
+                  <a
+                    href={meeting?.meetingUrl || meetingUrlInput}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>Join Google Meet</span>
+                  </a>
+                )}
               </div>
             </div>
 
-            {/* Online Metrics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Active in Session */}
-              <div className="bg-slate-950/80 p-4 rounded-2xl border border-emerald-500/40 shadow-sm relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
-                    Active in Session Now
-                  </span>
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                </div>
-                <p className="mt-1 text-3xl font-black text-white">{activeInSessionCount}</p>
-                <p className="text-[11px] text-emerald-300/80">Heartbeat active within last 3 mins</p>
-              </div>
-
-              {/* Total Online Checked In */}
-              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-                <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">
-                  Total Online Check-Ins
-                </span>
-                <p className="mt-1 text-3xl font-black text-white">{totalOnlineCount}</p>
-                <p className="text-[11px] text-slate-400">Total joined participants</p>
-              </div>
-
-              {/* Via Session (Option B) */}
-              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-                <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider block">
-                  Option B: Session
-                </span>
-                <p className="mt-1 text-3xl font-black text-white">{onlineSessionCount}</p>
-                <p className="text-[11px] text-slate-400">Direct online session check-in</p>
-              </div>
-
-              {/* Via Code (Option C) */}
-              <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
-                <span className="text-[10px] font-extrabold text-purple-400 uppercase tracking-wider block">
-                  Option C: Code
-                </span>
-                <p className="mt-1 text-3xl font-black text-white">{onlineCodeCount}</p>
-                <p className="text-[11px] text-slate-400">Checked in via fallback code</p>
-              </div>
-            </div>
-
-            {/* Active Code Display Card */}
-            {codeActive && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-2xl bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono text-2xl sm:text-3xl font-black tracking-widest px-5">
-                    {meeting.attendanceCode}
+            {/* Attendance Code Card - Visible only to authorized dashboards (Glory & Comfort) */}
+            {can('attendance.online_code') && adminOnlineCodeData ? (
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/30 via-slate-900 to-indigo-950/40 border border-blue-500/40 shadow-md space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <span className="text-xs font-black tracking-wider text-blue-300 uppercase block">
+                      Attendance Code
+                    </span>
+                    <div className="inline-block py-2.5 px-5 rounded-2xl bg-blue-950/70 border-2 border-blue-400/60 font-mono text-3xl sm:text-4xl font-black text-white tracking-[0.3em] shadow-inner">
+                      {adminOnlineCodeData.attendanceCode}
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs font-bold text-blue-200 block">
-                      Active Meeting Attendance Code
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Expires at {new Date(meeting.attendanceCodeExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+
+                  {/* Status Indicator */}
+                  <div className="space-y-2 text-left sm:text-right">
+                    {adminOnlineCodeData.status === 'ACTIVE' ? (
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-extrabold">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span>🟢 ACTIVE</span>
+                      </div>
+                    ) : adminOnlineCodeData.status === 'NOT_ACTIVE_YET' ? (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Starts in {adminOnlineCodeData.startsInMinutes} minutes · Not active yet</span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold">
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>🔴 EXPIRED · Attendance window closed</span>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-slate-400">
+                      Valid from{' '}
+                      <strong className="text-slate-200">
+                        {new Date(adminOnlineCodeData.validFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </strong>{' '}
+                      to{' '}
+                      <strong className="text-slate-200">
+                        {new Date(adminOnlineCodeData.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </strong>
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800">
+                  <p className="text-xs text-slate-400">
+                    Share this 6-digit code with meeting participants during the online gathering to verify attendance.
+                  </p>
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(meeting.attendanceCode);
+                      navigator.clipboard.writeText(adminOnlineCodeData.attendanceCode);
                       setCopiedCode(true);
                       setTimeout(() => setCopiedCode(false), 2000);
                     }}
-                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5"
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-900 hover:bg-slate-200 shadow-sm transition-all"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                    {copiedCode ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedCode ? 'COPIED TO CLIPBOARD!' : 'COPY CODE'}</span>
                   </button>
                 </div>
               </div>
-            )}
+            ) : !can('attendance.online_code') ? (
+              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-slate-400 text-xs flex items-center gap-2.5">
+                <Shield className="w-4 h-4 text-slate-500" />
+                <span>
+                  Attendance code access is restricted to designated meeting administrators (Glory and Comfort).
+                </span>
+              </div>
+            ) : null}
+
+            {/* Attendance Overview Card */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/30">
+                <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block">
+                  Marked Present
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">{totalPresent}</p>
+                <p className="text-[11px] text-slate-400">Submitted valid attendance code</p>
+              </div>
+
+              <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block">
+                  Not Marked Yet
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">
+                  {Math.max(0, (unifiedRsvpData?.list?.length || members.length) - totalPresent)}
+                </p>
+                <p className="text-[11px] text-slate-400">Pending code submission</p>
+              </div>
+
+              <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+                <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider block">
+                  Total Expected / Roster
+                </span>
+                <p className="mt-1 text-3xl font-black text-white">
+                  {unifiedRsvpData?.list?.length || members.length}
+                </p>
+                <p className="text-[11px] text-slate-400">Unit membership total</p>
+              </div>
+            </div>
           </section>
         )}
 
-        {/* Official Physical Service Headcount Showcase */}
-        <section className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden">
+        {/* Official Physical Service Headcount Showcase (Only for physical services) */}
+        {!isOnlineMeeting && (
+          <section className="bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 sm:p-6 rounded-3xl shadow-lg relative overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -964,6 +1022,7 @@ export default function AdminLiveMeetingPage() {
             </div>
           )}
         </section>
+        )}
 
         {/* 5 Metric Real-Time Stats Grid - Swipeable on mobile */}
         <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pb-1 sm:pb-0">

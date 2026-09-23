@@ -74,12 +74,12 @@ export class AttendanceController {
     });
   }
 
-  @Post('online/submit-code')
+  @Post(['online/submit-code', 'online/mark'])
   async submitAttendanceCode(@CurrentUser('memberId') memberId: string, @Body() body: any) {
     return this.attendanceService.submitAttendanceCode({
       memberId,
-      meetingId: body?.meetingId,
-      code: body?.code,
+      meetingId: body?.meetingId || body?.meetingOccurrenceId,
+      code: body?.code || body?.attendanceCode,
     });
   }
 
@@ -98,7 +98,17 @@ export class AttendanceController {
   }
 
   @Roles(Role.ADMIN, Role.LEADER)
-  @RequirePermissions('attendance.manage')
+  @RequirePermissions('attendance.online_code')
+  @Get('session/:meetingId/code')
+  async getAttendanceCode(
+    @CurrentUser('userId') adminUserId: string,
+    @Param('meetingId') meetingId: string,
+  ) {
+    return this.attendanceService.getAttendanceCodeForAdmin(adminUserId, meetingId);
+  }
+
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('attendance.online_code')
   @Post('session/:meetingId/code')
   async generateAttendanceCode(
     @CurrentUser('userId') adminUserId: string,
