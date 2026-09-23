@@ -12,10 +12,9 @@ export default function MeetingDetailPage() {
   const meetingId = params?.id as string;
 
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
   const [meeting, setMeeting] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [isAvailabilityConfirmed, setIsAvailabilityConfirmed] = useState(false);
+  const [availabilityData, setAvailabilityData] = useState<any>(null);
 
   // Online Meeting Attendance State
   const [attendanceRecord, setAttendanceRecord] = useState<any>(null);
@@ -36,9 +35,7 @@ export default function MeetingDetailPage() {
 
       fetchApi<any>('/availability/current')
         .then((res) => {
-          if (res?.submitted && (res?.selectedMeetingIds?.includes(meetingId) || res?.selectedMeetingIds?.length > 0)) {
-            setIsAvailabilityConfirmed(Boolean(res?.selectedMeetingIds?.includes(meetingId)));
-          }
+          setAvailabilityData(res);
         })
         .catch(() => {});
 
@@ -173,22 +170,6 @@ export default function MeetingDetailPage() {
     }
   };
 
-  const respond = async (attending: boolean) => {
-    setSaving(true);
-    setError('');
-    try {
-      const response = await fetchApi(`/meetings/${meetingId}/response`, {
-        method: 'PUT',
-        body: JSON.stringify({ attending }),
-      });
-      setMeeting((current: any) => ({ ...current, eventResponses: [response] }));
-    } catch (err: any) {
-      setError(err.message || 'Could not save your response');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (!meeting) {
     return (
       <div className="bg-background min-h-screen text-on-background p-6 flex flex-col items-center justify-center">
@@ -213,9 +194,29 @@ export default function MeetingDetailPage() {
     );
   }
 
-  const response = meeting.eventResponses?.[0];
   const meetingStartTime = new Date(meeting.startTime);
-  const responseOpen = ['SCHEDULED', 'ACTIVE'].includes(meeting.status) && meetingStartTime > currentTime;
+
+  // Determine availability status from Weekly Availability cycle & service commitments
+  const memberAvailabilityStatus: 'AVAILABLE' | 'UNAVAILABLE' | 'PENDING' = (() => {
+    // 1. Direct commitment attached to meeting for this member
+    const directCommitment = meeting?.serviceCommitments?.[0]?.status;
+    if (directCommitment === 'COMMITTED') return 'AVAILABLE';
+    if (directCommitment === 'NOT_COMMITTED') return 'UNAVAILABLE';
+
+    // 2. Check weekly availability cycle response
+    if (availabilityData?.submitted) {
+      if (Array.isArray(availabilityData.selectedMeetingIds) && availabilityData.selectedMeetingIds.includes(meetingId)) {
+        return 'AVAILABLE';
+      }
+      return 'UNAVAILABLE';
+    }
+
+    // 3. Fallback to eventResponses if legacy response exists
+    if (meeting?.eventResponses?.[0]?.attending === true) return 'AVAILABLE';
+    if (meeting?.eventResponses?.[0]?.attending === false) return 'UNAVAILABLE';
+
+    return 'PENDING';
+  })();
 
   const title = meeting?.title || 'Church Gathering';
   const categoryName = meeting?.category?.name || 'Service';
@@ -478,18 +479,6 @@ export default function MeetingDetailPage() {
               </p>
             </section>
           )
-        ) : isAvailabilityConfirmed ? (
-          <section className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 p-5 shadow-xs space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">verified</span>
-              <h3 className="text-sm font-extrabold text-emerald-900 dark:text-emerald-100 uppercase tracking-wider">
-                Availability Confirmed
-              </h3>
-            </div>
-            <p className="text-xs sm:text-sm text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed">
-              You have confirmed your availability for this service via Weekly Availability. No additional check-in is required.
-            </p>
-          </section>
         ) : isVirtual && isCheckInEligible ? (
           /* Online Gathering Check-In Options (Option B Primary + Option C Fallback) */
           <section className="rounded-2xl border-2 border-blue-500/40 bg-gradient-to-br from-blue-50 via-indigo-50/30 to-purple-50/20 dark:from-blue-950/40 dark:to-slate-900 p-5 shadow-md space-y-3.5">
@@ -597,69 +586,95 @@ export default function MeetingDetailPage() {
           </section>
         )}
 
-        {/* RSVP Card */}
-        <section className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white">Will you attend this gathering?</h3>
-            {response && (
-              <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                  response.attending
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                }`}
-              >
-                {response.attending ? '✓ Responded: Attending' : '✗ Responded: Not Attending'}
+        {/* Weekly Availability Status Card */}
+        <section className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 p-5 shadow-xs space-y-3.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-xl">event_available</span>
+              <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white">Weekly Availability Status</h3>
+            </div>
+            {memberAvailabilityStatus === 'AVAILABLE' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                <span>Confirmed Available</span>
+              </span>
+            ) : memberAvailabilityStatus === 'UNAVAILABLE' ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
+                <span className="material-symbols-outlined text-[13px]">cancel</span>
+                <span>Indicated Unavailable</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                <span className="material-symbols-outlined text-[13px]">pending</span>
+                <span>Pending Weekly Poll</span>
               </span>
             )}
           </div>
 
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Letting unit leaders know your attendance plan helps with seat and logistics arrangements.
-          </p>
-
-          {error && <p role="alert" className="text-xs font-bold text-red-600">{error}</p>}
-
-          {responseOpen ? (
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-              <button
-                disabled={saving}
-                aria-pressed={response?.attending === true}
-                onClick={() => respond(true)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all ${
-                  response?.attending === true
-                    ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600 ring-offset-2'
-                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300'
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">check_circle</span>
-                <span>I Will Attend</span>
-              </button>
-
-              <button
-                disabled={saving}
-                aria-pressed={response?.attending === false}
-                onClick={() => respond(false)}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all ${
-                  response?.attending === false
-                    ? 'bg-slate-800 text-white shadow-sm ring-2 ring-slate-800 ring-offset-2'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">cancel</span>
-                <span>Not Attending</span>
-              </button>
+          {memberAvailabilityStatus === 'AVAILABLE' ? (
+            <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-900/50 p-3.5 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-lg">verified</span>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                  You indicated availability for this service
+                </p>
+                <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
+                  Recorded in your Weekly Availability submission. Unit coordinators reference this for attendance planning and service rosters.
+                </p>
+              </div>
+            </div>
+          ) : memberAvailabilityStatus === 'UNAVAILABLE' ? (
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800 p-3.5 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-lg">event_busy</span>
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  You indicated unavailable for this service
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Recorded in your Weekly Availability submission. If your schedule changes, you can update your selection while the weekly poll is open.
+                </p>
+              </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-500 italic bg-slate-50 dark:bg-slate-900/40 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800">
-              RSVP response window is closed for this gathering.
-            </p>
+            <div className="rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 p-3.5 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/60 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-lg">help_outline</span>
+              </div>
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                  Weekly availability not yet submitted
+                </p>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                  Complete this week&apos;s availability form to let your unit leaders know which services and meetings you can attend.
+                </p>
+                <div className="pt-1">
+                  <Link
+                    href="/member/availability"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs"
+                  >
+                    <span>Fill Weekly Availability</span>
+                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
           )}
 
-          <div className="pt-1 flex items-center justify-between text-xs text-on-surface-variant">
-            <span>Unable to attend?</span>
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-3 text-xs flex-wrap">
             <Link
               className="text-primary font-bold hover:underline inline-flex items-center gap-1"
+              href="/member/availability"
+            >
+              <span>Weekly Availability Form</span>
+              <span className="material-symbols-outlined text-xs">open_in_new</span>
+            </Link>
+
+            <Link
+              className="text-slate-500 hover:text-slate-800 dark:hover:text-white font-medium inline-flex items-center gap-1"
               href={`/member/submit-excuse?meetingId=${meetingId}`}
             >
               <span>Submit Absence Excuse</span>

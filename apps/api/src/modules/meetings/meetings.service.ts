@@ -476,7 +476,7 @@ export class MeetingsService {
                 },
               },
             }
-          : false,
+          : { where: { memberId: memberId ?? '' } },
         attendanceRecords: includeAttendance ? { include: { member: true }, orderBy: { actualArrivalTime: 'asc' } } : false,
         agendaItems: {
           orderBy: { order: 'asc' },
