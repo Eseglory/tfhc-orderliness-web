@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
-import { buildAdvancedGoogleCalendarUrl, extractVirtualUrl } from '../../../../lib/calendar-integration';
+import { buildAdvancedGoogleCalendarUrl, extractVirtualUrl, isOnlineUnitMeeting } from '../../../../lib/calendar-integration';
 
 export default function MemberMeetingsPage() {
   const router = useRouter();
@@ -151,7 +151,7 @@ export default function MemberMeetingsPage() {
                             <span>{m.title.toLowerCase().includes('wednesday') ? 'Every Wednesday' : 'Recurring'}</span>
                           </span>
                         )}
-                        {(m.locationName?.toLowerCase().includes('online') || m.locationName?.toLowerCase().includes('google meet') || m.locationName?.toLowerCase().includes('virtual') || extractVirtualUrl(m)) && (
+                        {isOnlineUnitMeeting(m) && (
                           <span className="shrink-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/20 inline-flex items-center gap-0.5">
                             <span className="material-symbols-outlined text-[11px]">videocam</span>
                             <span>Online</span>
@@ -170,9 +170,9 @@ export default function MemberMeetingsPage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">
-                            {m.locationName?.toLowerCase().includes('online') || extractVirtualUrl(m) ? 'videocam' : 'location_on'}
+                            {isOnlineUnitMeeting(m) ? 'videocam' : 'location_on'}
                           </span>
-                          <span>{m.locationName || 'Church Sanctuary'}</span>
+                          <span>{isOnlineUnitMeeting(m) ? (m.locationName || 'Online / Google Meet') : (m.locationName || 'Church Sanctuary')}</span>
                         </span>
                         <span className="flex items-center gap-1 text-[11px]">
                           <span className="material-symbols-outlined text-[13px] text-indigo-500">shield_person</span>
@@ -188,8 +188,9 @@ export default function MemberMeetingsPage() {
 
                   <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
                     {(() => {
-                      const virtualLink = extractVirtualUrl(m);
-                      return virtualLink ? (
+                      if (!isOnlineUnitMeeting(m)) return null;
+                      const virtualLink = m.meetingUrl || extractVirtualUrl(m) || 'https://meet.google.com/wkx-kgew-iqe';
+                      return (
                         <a
                           href={virtualLink}
                           target="_blank"
@@ -200,11 +201,10 @@ export default function MemberMeetingsPage() {
                           <span className="material-symbols-outlined text-[14px]">videocam</span>
                           <span>Join Meet</span>
                         </a>
-                      ) : null;
+                      );
                     })()}
                     {(() => {
-                      const isVirtual = Boolean(m.isOnline) || (Boolean(m.meetingUrl) && m.meetingUrl.includes('meet.google.com')) || (m.title.toLowerCase().includes('wednesday') && (m.title.toLowerCase().includes('meeting') || m.title.toLowerCase().includes('unit')));
-                      if (!isVirtual) return null;
+                      if (!isOnlineUnitMeeting(m)) return null;
                       const isWed = m.title.toLowerCase().includes('wednesday');
                       const calUrl = buildAdvancedGoogleCalendarUrl({
                         id: m.id,

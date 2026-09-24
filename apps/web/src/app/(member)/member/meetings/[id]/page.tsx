@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { fetchApi } from '../../../../../lib/api';
-import { buildAdvancedGoogleCalendarUrl, extractVirtualUrl } from '../../../../../lib/calendar-integration';
+import { buildAdvancedGoogleCalendarUrl, extractVirtualUrl, isOnlineUnitMeeting } from '../../../../../lib/calendar-integration';
 
 export default function MeetingDetailPage() {
   const router = useRouter();
@@ -188,7 +188,7 @@ export default function MeetingDetailPage() {
     year: 'numeric',
   });
 
-  const isVirtual = Boolean(meeting.isOnline) || (Boolean(meeting.meetingUrl) && meeting.meetingUrl.includes('meet.google.com')) || (title.toLowerCase().includes('wednesday') && (title.toLowerCase().includes('meeting') || title.toLowerCase().includes('unit')));
+  const isVirtual = isOnlineUnitMeeting(meeting);
   const virtualMeetingUrl = isVirtual ? (meeting.meetingUrl || extractVirtualUrl(meeting) || 'https://meet.google.com/wkx-kgew-iqe') : null;
   const isWedMeeting = title.toLowerCase().includes('wednesday') && (Boolean(meeting.serviceScheduleId) || title.toLowerCase().includes('weekly'));
   const recurrenceRuleStr = isWedMeeting ? 'FREQ=WEEKLY;BYDAY=WE' : null;

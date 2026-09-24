@@ -39,7 +39,7 @@ import { StatusBadge } from '../../../../../components/StatusBadge';
 import { HeadcountModal, HeadcountData } from '../../../../../components/HeadcountModal';
 import { fetchApi } from '../../../../../lib/api';
 import { useAuth } from '../../../../../lib/auth';
-import { buildAdvancedGoogleCalendarUrl, formatMeetingInviteMessage } from '../../../../../lib/calendar-integration';
+import { buildAdvancedGoogleCalendarUrl, formatMeetingInviteMessage, isOnlineUnitMeeting } from '../../../../../lib/calendar-integration';
 
 interface SupervisingMinisterCandidate {
   id: string;
@@ -456,12 +456,7 @@ export default function AdminLiveMeetingPage() {
 
   // Online-specific metrics
   const nowMs = Date.now();
-  const isOnlineMeeting = Boolean(meeting?.isOnline) ||
-    meeting?.locationName?.toLowerCase().includes('online') ||
-    meeting?.locationName?.toLowerCase().includes('virtual') ||
-    meeting?.locationName?.toLowerCase().includes('google meet') ||
-    meeting?.serviceScheduleId === 'wednesday-unit-meeting' ||
-    meeting?.title?.toLowerCase().includes('wednesday');
+  const isOnlineMeeting = isOnlineUnitMeeting(meeting);
   const onlineSessionCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_SESSION').length;
   const onlineCodeCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE' && r.method === 'ONLINE_CODE').length;
   const totalOnlineCount = attendanceRecords.filter((r) => r.attendanceType === 'ONLINE').length;

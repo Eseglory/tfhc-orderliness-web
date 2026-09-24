@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { calendarFile, ShareableEvent } from '../lib/pwa/calendar';
-import { buildAdvancedGoogleCalendarUrl } from '../lib/calendar-integration';
+import { buildAdvancedGoogleCalendarUrl, isOnlineUnitMeeting } from '../lib/calendar-integration';
 
 export function ShareEvent({ event }: { event: ShareableEvent }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,7 +138,7 @@ export function ShareEvent({ event }: { event: ShareableEvent }) {
       {/* Dropdown Menu for Desktop & Fallbacks */}
       {menuOpen && (
         <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-xl p-1.5 animate-in fade-in zoom-in-95 duration-100">
-          {(Boolean(event.meetingUrl) || Boolean((event as any).isOnline) || (event.title.toLowerCase().includes('wednesday') && (event.title.toLowerCase().includes('meeting') || event.title.toLowerCase().includes('unit')))) && (
+          {isOnlineUnitMeeting(event as any) && (
             <a
               href={getGoogleCalendarUrl()}
               target="_blank"

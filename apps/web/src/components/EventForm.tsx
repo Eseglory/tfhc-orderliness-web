@@ -26,6 +26,7 @@ import {
   buildAdvancedGoogleCalendarUrl,
   formatMeetingInviteMessage,
   generateIcsFileContent,
+  isOnlineUnitMeeting,
 } from '../lib/calendar-integration';
 
 export interface EventTypeOption { id: string; name: string; color: string | null; defaultCompulsory: boolean }
@@ -1178,35 +1179,37 @@ export function EventForm({
           </div>
 
           {/* Quick Calendar & Share Actions Bar */}
-          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                Google Calendar &amp; Meet Sync
-              </span>
-              <p className="text-[11px] text-slate-400">
-                {invitedAttendeeEmails.length} guest email(s) will be attached to the calendar event.
-              </p>
+          {isOnlineUnitMeeting({ title: v.title, mode: v.mode, isOnline: v.mode === 'VIRTUAL' }) && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  Google Calendar &amp; Meet Sync
+                </span>
+                <p className="text-[11px] text-slate-400">
+                  {invitedAttendeeEmails.length} guest email(s) will be attached to the calendar event.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyInvite}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 text-xs font-bold text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Copy className="w-3 h-3 text-amber-400" />
+                  {copySuccess ? 'Copied!' : 'Copy Invite'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenGoogleCalendar}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Google Calendar
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopyInvite}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 text-xs font-bold text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Copy className="w-3 h-3 text-amber-400" />
-                {copySuccess ? 'Copied!' : 'Copy Invite'}
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenGoogleCalendar}
-                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Google Calendar
-              </button>
-            </div>
-          </div>
+          )}
 
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold flex items-center gap-2">

@@ -57,6 +57,7 @@ import {
   buildAdvancedGoogleCalendarUrl,
   formatMeetingInviteMessage,
   extractVirtualUrl,
+  isOnlineUnitMeeting,
 } from '../../../../lib/calendar-integration';
 import { fetchApi } from '../../../../lib/api';
 import { useAuth, canCreateEvents } from '../../../../lib/auth';
@@ -850,6 +851,7 @@ function EventsManagementContent() {
 
                       {/* Quick Google Calendar & Virtual Meeting actions bar */}
                       {(() => {
+                        if (!isOnlineUnitMeeting(evt)) return null;
                         const virtualUrl = extractVirtualUrl(evt);
                         const googleCalUrl = buildAdvancedGoogleCalendarUrl({
                           id: evt.id,
@@ -1273,6 +1275,7 @@ function EventsManagementContent() {
 
                       {/* Google Calendar & Virtual Meeting Integration Card */}
                       {(() => {
+                        if (!isOnlineUnitMeeting(selectedFocusSession)) return null;
                         const virtualUrl = extractVirtualUrl(selectedFocusSession);
                         const googleCalUrl = buildAdvancedGoogleCalendarUrl({
                           id: selectedFocusSession.id,
@@ -1445,25 +1448,29 @@ function EventsManagementContent() {
 
                                 return (
                                   <div className="flex items-center justify-end gap-1.5">
-                                    <a
-                                      href={googleCalUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                      title="Sync with Google Calendar"
-                                    >
-                                      <CalendarDays className="w-3.5 h-3.5" />
-                                    </a>
-                                    {virtualUrl && (
-                                      <a
-                                        href={virtualUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                        title="Join Google Meet / Online Room"
-                                      >
-                                        <Video className="w-3.5 h-3.5" />
-                                      </a>
+                                    {isOnlineUnitMeeting(evt) && (
+                                      <>
+                                        <a
+                                          href={googleCalUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="p-1 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                          title="Sync with Google Calendar"
+                                        >
+                                          <CalendarDays className="w-3.5 h-3.5" />
+                                        </a>
+                                        {virtualUrl && (
+                                          <a
+                                            href={virtualUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            title="Join Google Meet / Online Room"
+                                          >
+                                            <Video className="w-3.5 h-3.5" />
+                                          </a>
+                                        )}
+                                      </>
                                     )}
                                     {canHeadcount && evt.status !== 'CANCELLED' && (
                                       <button
@@ -1559,25 +1566,29 @@ function EventsManagementContent() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        <a
-                          href={googleCalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1 rounded text-slate-400 hover:text-amber-400"
-                          title="Sync to Google Calendar"
-                        >
-                          <CalendarDays className="w-3.5 h-3.5" />
-                        </a>
-                        {virtualUrl && (
-                          <a
-                            href={virtualUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1 rounded text-slate-400 hover:text-blue-400"
-                            title="Join Virtual Meet"
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                          </a>
+                        {isOnlineUnitMeeting(evt) && (
+                          <>
+                            <a
+                              href={googleCalUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded text-slate-400 hover:text-amber-400"
+                              title="Sync to Google Calendar"
+                            >
+                              <CalendarDays className="w-3.5 h-3.5" />
+                            </a>
+                            {virtualUrl && (
+                              <a
+                                href={virtualUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 rounded text-slate-400 hover:text-blue-400"
+                                title="Join Virtual Meet"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </>
                         )}
                         {canHeadcount && evt.status !== 'CANCELLED' && (
                           <button

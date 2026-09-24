@@ -43,6 +43,7 @@ import {
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
+import { isOnlineUnitMeeting } from '../../../../lib/calendar-integration';
 import { useToast, Modal } from '../../../../components/ui';
 import {
   EventForm,
@@ -775,7 +776,7 @@ export default function AdvancedCalendarPage() {
                                 <Clock className="w-3 h-3" />
                                 {item.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </p>
-                              {item.meetingUrl && (
+                              {item.meetingUrl && (item.domainType !== 'MEETING' || isOnlineUnitMeeting(item)) && (
                                 <a
                                   href={item.meetingUrl}
                                   target="_blank"
@@ -835,7 +836,7 @@ export default function AdvancedCalendarPage() {
                           </div>
 
                           <div className="flex items-center gap-2">
-                            {item.meetingUrl && (
+                            {item.meetingUrl && (item.domainType !== 'MEETING' || isOnlineUnitMeeting(item)) && (
                               <a
                                 href={item.meetingUrl}
                                 target="_blank"
@@ -997,7 +998,7 @@ export default function AdvancedCalendarPage() {
                 </div>
 
                 {/* Google Meet Call Card */}
-                {selectedEvent.meetingUrl && (
+                {selectedEvent.meetingUrl && (selectedEvent.domainType !== 'MEETING' || isOnlineUnitMeeting(selectedEvent)) && (
                   <div className="p-4 rounded-2xl bg-blue-950/40 border border-blue-800/60 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/25">
