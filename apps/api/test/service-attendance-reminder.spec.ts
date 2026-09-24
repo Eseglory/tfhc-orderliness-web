@@ -627,11 +627,19 @@ describe('Active Service Reminder for Available Members Suite', () => {
   // ---------------------------------------------------------------------------
   // 13. Graceful handling of unassigned minister and empty availability
   // ---------------------------------------------------------------------------
+  it('does not announce restricted service reminders to the general chat', async () => {
+    meetings[1].visibility = 'RESTRICTED';
+    const result = await serviceReminderService.dispatchFiveHourServiceTeamReminder('meeting-midweek');
+    expect(result.chatCreated).toBe(0);
+    expect(mockPrisma.chatMessage.create).not.toHaveBeenCalled();
+  });
+
   it('Scenario 16: handles unassigned minister and empty availability gracefully without crashing', async () => {
     // Meeting with NO minister and NO commitments
     meetings.push({
       id: 'meeting-empty',
       title: 'Special Prayer Vigil',
+      visibility: 'PUBLIC',
       startTime: new Date('2026-09-24T20:00:00Z'),
       status: MeetingStatus.ACTIVE,
       supervisingMinisterId: null,
