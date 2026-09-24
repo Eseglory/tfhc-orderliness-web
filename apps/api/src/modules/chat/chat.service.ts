@@ -624,7 +624,8 @@ export class ChatService implements OnApplicationBootstrap {
 
   async changes(roomId: string, viewer: ChatViewer, cursor: string) {
     await this.loadRoom(roomId, viewer);
-    if (!/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new BadRequestException('Invalid sync cursor');
+    const parsed = /^(?:[a-f0-9-]{36}:)?(\d+)$/.exec(cursor);
+    if (!parsed || !Number.isSafeInteger(Number(parsed[1]))) throw new BadRequestException('Invalid sync cursor');
     const delta = this.bufferRepo.changesAfter(roomId, cursor);
     const [hidden, reactions, receipts] = await Promise.all([
       this.prisma.chatMessageHidden.findMany({ where: { memberId: viewer.memberId, messageId: { in: delta.ids } }, select: { messageId: true } }),

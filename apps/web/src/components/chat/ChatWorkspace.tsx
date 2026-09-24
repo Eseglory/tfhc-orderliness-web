@@ -1164,6 +1164,8 @@ export function ChatWorkspace({
             <div className="relative flex-1 flex overflow-hidden">
               <div
                 ref={scrollRef}
+                role="log"
+                aria-label="Conversation messages"
                 className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low px-4 py-4"
               >
                 {nextCursor && (

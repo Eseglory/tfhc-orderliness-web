@@ -80,7 +80,10 @@ function renderMessageTextWithMentions(text: string, isMine?: boolean) {
 function ChatImage({ url, ...props }: { url: string } & Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'>) {
   const ref = useRef<HTMLImageElement>(null);
   const [src, setSrc] = useState(url.startsWith('/chat/messages/') ? undefined : url);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    setFailed(false);
     if (!url.startsWith('/chat/messages/')) { setSrc(url); return; }
     let cancelled = false;
     let objectUrl: string | undefined;
@@ -91,12 +94,15 @@ function ChatImage({ url, ...props }: { url: string } & Omit<React.ImgHTMLAttrib
       void getCachedMediaUrl(url).then(value => {
         if (cancelled) { URL.revokeObjectURL(value); return; }
         objectUrl = value; setSrc(value);
-      }).catch(() => undefined);
+      }).catch(() => { if (!cancelled) setFailed(true); });
     }, { rootMargin: '200px' });
     if (ref.current) observer.observe(ref.current);
     return () => { cancelled = true; observer.disconnect(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [url]);
-  return <img {...props} ref={ref} src={src} style={{ minHeight: src ? undefined : 160, ...props.style }} />;
+  }, [url, attempt]);
+  return <>
+    <img {...props} key={attempt} ref={ref} src={src} onError={() => setFailed(true)} style={{ minHeight: src ? undefined : 160, ...props.style }} />
+    {failed && <button type="button" className="block px-3 py-2 text-sm underline" onClick={() => setAttempt(value => value + 1)}>Retry image</button>}
+  </>;
 }
 
 function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
@@ -123,10 +129,10 @@ function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
     try {
       const cached = ownedUrl.current || await getCachedMediaUrl(url);
       if (audioRef.current !== audio || currentUrl.current !== url) {
-        if (url.startsWith('/chat/messages/')) URL.revokeObjectURL(cached);
+        if (cached.startsWith('blob:')) URL.revokeObjectURL(cached);
         return;
       }
-      if (url.startsWith('/chat/messages/')) ownedUrl.current = cached;
+      if (cached.startsWith('blob:')) ownedUrl.current = cached;
       if (audio.src !== cached) audio.src = cached;
       await audio.play();
       setPlaying(true);
@@ -519,7 +525,7 @@ export function MessageBubble({
             ) : (
               <>
                 {/* Image Attachment */}
-                {message.type === 'IMAGE' && message.attachmentUrl && (
+                {message.type === 'IMAGE' && meta?.kind !== 'document' && message.attachmentUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <ChatImage
                     url={message.attachmentUrl}

@@ -253,4 +253,21 @@ describe('ChatBufferRepository (SQLite Realtime Buffer with WAL Mode)', () => {
     expect(repo.changesAfter('room-1', repo.changeCursor()).ids).toEqual([]);
   });
 
+  test('replays after SQLite replacement even when an old cursor is ahead of the new log', () => {
+    repo.saveMessage({ id: 'before-restart', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'saved', createdAt: '2026-01-01T00:00:00.000Z' });
+    const previous = repo.changeCursor();
+    repo.close();
+    repo.initDatabase(testDbPath);
+    expect(repo.changeCursor()).toBe(previous);
+    repo.close();
+    for (const suffix of ['', '-wal', '-shm']) if (fs.existsSync(testDbPath + suffix)) fs.unlinkSync(testDbPath + suffix);
+    repo.initDatabase(testDbPath);
+    repo.saveMessage({ id: 'recovered', roomId: 'room-1', senderMemberId: 'member-1', type: 'TEXT', body: 'restored from primary', createdAt: '2026-01-01T00:00:00.000Z' });
+    const replay = repo.changesAfter('room-1', previous);
+    expect(replay.ids).toEqual(['recovered']);
+    expect(replay.nextCursor).not.toBe(previous);
+    expect(repo.changesAfter('room-1', replay.nextCursor).ids).toEqual([]);
+    expect(repo.changesAfter('room-1', '999999').ids).toEqual(['recovered']);
+  });
+
 });

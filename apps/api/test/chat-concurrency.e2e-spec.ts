@@ -112,7 +112,7 @@ describe('Messaging Multi-User Concurrency & Stress E2E Test', () => {
       openSockets.push(s);
       s.on('ready', () => resolve(s));
       s.on('connect_error', reject);
-      setTimeout(() => reject(new Error('Socket timeout')), 4000);
+      setTimeout(() => reject(new Error('Socket timeout')), 4000).unref();
     });
 
   test('concurrent message sending: 10 users send messages simultaneously without loss or duplication', async () => {

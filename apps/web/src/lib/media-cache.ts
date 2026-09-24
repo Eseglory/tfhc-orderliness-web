@@ -17,24 +17,19 @@ interface CachedMediaMeta {
   lastAccessedAt: number;
 }
 
-const objectUrlMemory = new Map<string, string>();
 
 /**
  * Retrieves a cached Blob URL for a given media URL, or downloads and caches it.
- * Subsequent requests for the same media return immediately from the local device cache.
+ * The caller owns each returned blob URL and must revoke it after use.
+ * CacheStorage retains bytes, never previously revoked object URLs.
  */
 export async function getCachedMediaUrl(url: string): Promise<string> {
   if (!url || typeof window === 'undefined') return url;
 
   if (url.startsWith('/chat/messages/')) {
-    const response = await fetch(`${API_BASE_URL}${url}`, { headers: { Authorization: `Bearer ${getAuthToken()}` }, cache: 'no-store' });
+    const response = await fetch(`${API_BASE_URL}${url}`, { headers: { Authorization: `Bearer ${getAuthToken()}` }, cache: 'no-store', signal: AbortSignal.timeout(18000) });
     if (!response.ok) throw new Error('Attachment could not be loaded');
     return URL.createObjectURL(await response.blob());
-  }
-
-  // 1. In-memory object URL cache for instant synchronous access in the current session
-  if (objectUrlMemory.has(url)) {
-    return objectUrlMemory.get(url)!;
   }
 
   // If URL is already a data URI or blob URI, return directly
@@ -50,7 +45,6 @@ export async function getCachedMediaUrl(url: string): Promise<string> {
       if (match) {
         const blob = await match.blob();
         const objUrl = URL.createObjectURL(blob);
-        objectUrlMemory.set(url, objUrl);
         updateAccessTime(url);
         return objUrl;
       }
@@ -67,7 +61,6 @@ export async function getCachedMediaUrl(url: string): Promise<string> {
 
         recordCacheMeta(url, blob.size);
         const objUrl = URL.createObjectURL(blob);
-        objectUrlMemory.set(url, objUrl);
         return objUrl;
       }
     } catch {
@@ -133,11 +126,6 @@ async function evictIfNecessary(incomingBytes: number) {
       await cache.delete(oldest.url);
       currentTotal -= oldest.size;
 
-      // Revoke in-memory object URL if exists
-      if (objectUrlMemory.has(oldest.url)) {
-        URL.revokeObjectURL(objectUrlMemory.get(oldest.url)!);
-        objectUrlMemory.delete(oldest.url);
-      }
     }
 
     saveCacheMetaList(list);

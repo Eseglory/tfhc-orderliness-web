@@ -125,7 +125,7 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
       s.on('ready', () => resolve(s));
       s.on('connect_error', (e) => reject(e));
       s.on('disconnect', () => reject(new Error('disconnected')));
-      setTimeout(() => reject(new Error('no ready event')), 4000);
+      setTimeout(() => reject(new Error('no ready event')), 4000).unref();
     });
 
   test('system rooms: General is visible to all; Executives only to executives/staff', async () => {
@@ -288,7 +288,7 @@ describe('In-app chat: rooms, direct messages, moderation, realtime (real Postgr
     await http().post(`/chat/rooms/${generalId}/messages`).set(auth(aliceToken)).send({ body: `realtime ${run}` }).expect(201);
     const evt = await Promise.race([
       delivered,
-      new Promise((_, rej) => setTimeout(() => rej(new Error('no realtime delivery')), 4000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('no realtime delivery')), 4000).unref()),
     ]);
     expect((evt as any).body).toBe(`realtime ${run}`);
     expect((evt as any).mine).toBe(false);

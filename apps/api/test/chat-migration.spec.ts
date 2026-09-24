@@ -222,4 +222,16 @@ describe('ChatMigrationJob (Idempotent Midnight Migration from SQLite to Postgre
     expect(mockPrisma.chatMessage.updateMany.mock.calls[0][0].data.body).toBe('after');
   });
 
+  test('full audit finds historical backfills despite a newer import checkpoint', async () => {
+    repo.setSyncCheckpoint('2026-09-23T00:00:00.000Z');
+    mockPrisma.chatMessage.findMany = jest.fn().mockResolvedValueOnce([{
+      id: 'historical-backfill', clientOperationId: null, roomId: 'room-1', senderMemberId: null,
+      type: 'SYSTEM', body: 'Recovered history', attachmentUrl: null, attachmentMeta: null,
+      replyToId: null, editedAt: null, deletedAt: null, createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    }]).mockResolvedValue([]);
+    await job.seedFromPrimaryDatabase(true);
+    expect(mockPrisma.chatMessage.findMany.mock.calls[0][0].where).toBeUndefined();
+    expect(repo.findById('historical-backfill')?.body).toBe('Recovered history');
+  });
+
 });

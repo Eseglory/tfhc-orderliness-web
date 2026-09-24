@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } fro
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 /** Resolve from the installed application, not the shell's working directory. */
 export function defaultChatDatabasePath(): string {
@@ -74,6 +75,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   private readonly logger = new Logger(ChatBufferRepository.name);
   private db: DatabaseSync | null = null;
   private dbPath!: string;
+  private changeEpoch?: string;
   private isFallback = false;
   private memoryStore = new Map<string, BufferedMessageRecord>();
 
@@ -154,6 +156,7 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
       }
 
       this.db = new NodeSqliteDatabaseSync(this.dbPath);
+      this.changeEpoch = undefined;
 
       // Configure SQLite for high concurrency across localhost & production, WAL mode, crash safety
       this.db.exec('PRAGMA journal_mode = WAL;');
@@ -409,7 +412,19 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public changeCursor(): string {
-    return String((this.db?.prepare('SELECT COALESCE(MAX(sequence), 0) AS cursor FROM chat_changes').get() as { cursor: number } | undefined)?.cursor || 0);
+    const epoch = this.getChangeEpoch();
+    const sequence = (this.db!.prepare('SELECT COALESCE(MAX(sequence), 0) AS cursor FROM chat_changes').get() as { cursor: number }).cursor;
+    return `${epoch}:${sequence}`;
+  }
+
+  private getChangeEpoch(): string {
+    if (!this.db) throw new Error('Chat storage is not initialized');
+    if (!this.changeEpoch) {
+      this.db.exec('CREATE TABLE IF NOT EXISTS chat_sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+      this.db.prepare('INSERT OR IGNORE INTO chat_sync_meta(key, value) VALUES (?, ?)').run('change_epoch', randomUUID());
+      this.changeEpoch = (this.db.prepare('SELECT value FROM chat_sync_meta WHERE key = ?').get('change_epoch') as { value: string }).value;
+    }
+    return this.changeEpoch;
   }
 
   public touchMessage(roomId: string, messageId: string) {
@@ -417,11 +432,16 @@ export class ChatBufferRepository implements OnApplicationBootstrap, OnApplicati
   }
 
   public changesAfter(roomId: string, cursor: string, limit = 100) {
-    if (!/^\d+$/.test(cursor) || !Number.isSafeInteger(Number(cursor))) throw new Error('Invalid chat cursor');
+    const parsed = /^(?:([a-f0-9-]{36}):)?(\d+)$/.exec(cursor);
+    if (!parsed || !Number.isSafeInteger(Number(parsed[2]))) throw new Error('Invalid chat cursor');
+    const epoch = this.getChangeEpoch();
+    // Legacy cursors and cursors from an erased Render filesystem replay once.
+    // The response contains the current epoch so subsequent pages advance normally.
+    const after = parsed[1] === epoch ? Number(parsed[2]) : 0;
     const rows = (this.db?.prepare('SELECT sequence, message_id FROM chat_changes WHERE room_id = ? AND sequence > ? ORDER BY sequence LIMIT ?')
-      .all(roomId, Number(cursor), limit + 1) || []) as Array<{ sequence: number; message_id: string }>;
+      .all(roomId, after, limit + 1) || []) as Array<{ sequence: number; message_id: string }>;
     const page = rows.slice(0, limit);
-    return { ids: [...new Set(page.map(r => r.message_id))], nextCursor: String(page[page.length - 1]?.sequence ?? cursor), hasMore: rows.length > limit };
+    return { ids: [...new Set(page.map(r => r.message_id))], nextCursor: `${epoch}:${page[page.length - 1]?.sequence ?? after}`, hasMore: rows.length > limit };
   }
 
   public pendingNotifications(limit = 50, afterRowId = 0): Array<{ rowId: number; messageId: string; payload: Record<string, any> }> {

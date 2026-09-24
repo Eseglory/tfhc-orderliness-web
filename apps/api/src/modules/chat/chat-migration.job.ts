@@ -52,7 +52,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
    * Seeds all historical messages from the Primary Database into the SQLite hot store.
    * Ensures that existing chat history is completely preserved, unified, and instantly available.
    */
-  public async seedFromPrimaryDatabase(): Promise<{ totalDiscovered: number; inserted: number; skipped: number }> {
+  public async seedFromPrimaryDatabase(fullAudit = false): Promise<{ totalDiscovered: number; inserted: number; skipped: number }> {
     try {
       // Seed active member profiles into memory cache for sub-millisecond lookup
       try {
@@ -70,7 +70,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
         this.logger.warn(`[Profile Seed Failed] ${err?.message}`);
       }
 
-      const checkpoint = this.bufferRepo.getSyncCheckpoint();
+      const checkpoint = fullAudit ? null : this.bufferRepo.getSyncCheckpoint();
       const startedAt = new Date().toISOString();
       let cursor: string | undefined;
       let totalDiscovered = 0, inserted = 0, skipped = 0;
@@ -191,7 +191,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
 
     // 2. Seed any missing records from Postgres into SQLite (e.g. from direct DB updates)
     let imported: { totalDiscovered: number; inserted: number; skipped: number };
-    try { imported = await this.seedFromPrimaryDatabase(); }
+    try { imported = await this.seedFromPrimaryDatabase(trigger === 'manual' || trigger === 'midnight-cron'); }
     catch (error) {
       this.bufferRepo.setSyncSummary({ ...migrationResult, status: 'PARTIAL', importFailed: true,
         completedAt: new Date().toISOString(), durationMs: Date.now() - reconciliationStarted });

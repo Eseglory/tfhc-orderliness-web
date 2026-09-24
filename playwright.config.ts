@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config } from 'dotenv';
 import * as path from 'path';
+import * as os from 'os';
 
 config({ path: path.resolve(__dirname, 'apps/api/.env.test'), override: true, quiet: true });
 config({ path: path.resolve(__dirname, '.env.test'), override: true, quiet: true });
@@ -34,7 +35,7 @@ export default defineConfig({
   ],
   globalSetup: './tests/e2e/setup.ts',
   webServer: [
-    { command: 'node apps/api/dist/apps/api/src/main.js', url: `http://127.0.0.1:${apiPort}/health`, reuseExistingServer: false, env: { DATABASE_URL: database, JWT_SECRET: 'e2e-local-only-secret', PORT: apiPort, GOOGLE_OAUTH_CLIENT_IDS: 'e2e-test.apps.googleusercontent.com', DISABLE_RATE_LIMIT: 'true', DISABLE_SCHEDULED_JOBS: 'true', SMTP_HOST: '', SMTP_USER: '', SMTP_PASSWORD: '', CORS_ORIGIN: `http://127.0.0.1:${webPort}`, APP_WEB_URL: `http://127.0.0.1:${webPort}` }, timeout: 120000 },
+    { command: 'node apps/api/dist/apps/api/src/main.js', url: `http://127.0.0.1:${apiPort}/health`, reuseExistingServer: false, env: { DATABASE_URL: database, CHAT_SHARED_DB_PATH: path.join(os.tmpdir(), `tfhc-playwright-${process.pid}.db`), JWT_SECRET: 'e2e-local-only-secret', PORT: apiPort, GOOGLE_OAUTH_CLIENT_IDS: 'e2e-test.apps.googleusercontent.com', DISABLE_RATE_LIMIT: 'true', DISABLE_SCHEDULED_JOBS: 'true', SMTP_HOST: '', SMTP_USER: '', SMTP_PASSWORD: '', CORS_ORIGIN: `http://127.0.0.1:${webPort}`, APP_WEB_URL: `http://127.0.0.1:${webPort}` }, timeout: 120000 },
     { command: `corepack yarn workspace @tfhc/web exec next start -p ${webPort}`, url: `http://127.0.0.1:${webPort}/login`, reuseExistingServer: false, env: { PWA_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: 'e2e-test.apps.googleusercontent.com', NEXT_DIST_DIR: `.next-e2e-${webPort}` }, timeout: 120000 },
   ],
 });
