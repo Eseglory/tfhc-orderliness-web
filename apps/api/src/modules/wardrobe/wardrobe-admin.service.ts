@@ -65,15 +65,19 @@ export class WardrobeAdminService {
       },
     });
     if (!item) throw new NotFoundException('Wardrobe item not found');
-    return item;
+    return {
+      ...item,
+      notes: item.description ?? null,
+    };
   }
 
   async createItem(dto: CreateWardrobeItemDto) {
-    return this.prisma.wardrobeItem.create({
+    const description = (dto.description !== undefined ? dto.description : dto.notes)?.trim();
+    const created = await this.prisma.wardrobeItem.create({
       data: {
         name: dto.name.trim(),
         category: dto.category.trim().toUpperCase(),
-        description: dto.description?.trim(),
+        description,
         gender: dto.gender || 'ALL',
         imageUrl: dto.imageUrl,
         active: dto.active ?? true,
@@ -81,16 +85,21 @@ export class WardrobeAdminService {
       },
       include: { variants: true },
     });
+    return {
+      ...created,
+      notes: created.description ?? null,
+    };
   }
 
   async updateItem(id: string, dto: UpdateWardrobeItemDto) {
     await this.getItem(id);
-    return this.prisma.wardrobeItem.update({
+    const description = (dto.description !== undefined ? dto.description : dto.notes)?.trim();
+    const updated = await this.prisma.wardrobeItem.update({
       where: { id },
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.category ? { category: dto.category.trim().toUpperCase() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description?.trim() } : {}),
+        ...(description !== undefined ? { description } : {}),
         ...(dto.gender ? { gender: dto.gender } : {}),
         ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
@@ -98,6 +107,10 @@ export class WardrobeAdminService {
       },
       include: { variants: true },
     });
+    return {
+      ...updated,
+      notes: updated.description ?? null,
+    };
   }
 
   async deleteItem(id: string) {
@@ -113,11 +126,12 @@ export class WardrobeAdminService {
 
   async createVariant(itemId: string, dto: CreateWardrobeVariantDto) {
     await this.getItem(itemId);
+    const colorCode = (dto.colorCode || dto.colorHex)?.trim();
     return this.prisma.wardrobeItemVariant.create({
       data: {
         itemId,
         colorName: dto.colorName.trim(),
-        colorCode: dto.colorCode?.trim(),
+        colorCode,
         imageUrl: dto.imageUrl,
         active: dto.active ?? true,
         sortOrder: dto.sortOrder ?? 0,
@@ -128,12 +142,13 @@ export class WardrobeAdminService {
   async updateVariant(id: string, dto: UpdateWardrobeVariantDto) {
     const variant = await this.prisma.wardrobeItemVariant.findUnique({ where: { id } });
     if (!variant) throw new NotFoundException('Variant not found');
+    const colorCode = (dto.colorCode || dto.colorHex)?.trim();
 
     return this.prisma.wardrobeItemVariant.update({
       where: { id },
       data: {
         ...(dto.colorName ? { colorName: dto.colorName.trim() } : {}),
-        ...(dto.colorCode !== undefined ? { colorCode: dto.colorCode?.trim() } : {}),
+        ...(colorCode !== undefined ? { colorCode } : {}),
         ...(dto.imageUrl !== undefined ? { imageUrl: dto.imageUrl } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
         ...(dto.sortOrder !== undefined ? { sortOrder: dto.sortOrder } : {}),
@@ -238,7 +253,7 @@ export class WardrobeAdminService {
         data: {
           title: dto.title.trim(),
           description: dto.description?.trim(),
-          genderTarget: dto.genderTarget || 'ALL',
+          genderTarget: dto.genderTarget || dto.gender || 'ALL',
           coverImageUrl: dto.coverImageUrl,
           notes: dto.notes?.trim(),
           isTemplate: dto.isTemplate ?? false,
@@ -251,9 +266,9 @@ export class WardrobeAdminService {
         await tx.wardrobeOutfitItem.createMany({
           data: dto.items.map((it, idx) => ({
             outfitId: outfit.id,
-            itemId: it.itemId,
+            itemId: (it.itemId || it.wardrobeItemId)!,
             variantId: it.variantId || null,
-            layerOrder: it.layerOrder ?? idx,
+            layerOrder: it.layerOrder ?? it.sortOrder ?? idx,
             required: it.required ?? true,
             notes: it.notes?.trim(),
           })),
@@ -276,12 +291,13 @@ export class WardrobeAdminService {
     await this.getOutfit(id);
 
     return this.prisma.$transaction(async (tx) => {
+      const genderTarget = dto.genderTarget || dto.gender;
       await tx.wardrobeOutfit.update({
         where: { id },
         data: {
           ...(dto.title ? { title: dto.title.trim() } : {}),
           ...(dto.description !== undefined ? { description: dto.description?.trim() } : {}),
-          ...(dto.genderTarget ? { genderTarget: dto.genderTarget } : {}),
+          ...(genderTarget ? { genderTarget } : {}),
           ...(dto.coverImageUrl !== undefined ? { coverImageUrl: dto.coverImageUrl } : {}),
           ...(dto.notes !== undefined ? { notes: dto.notes?.trim() } : {}),
           ...(dto.isTemplate !== undefined ? { isTemplate: dto.isTemplate } : {}),
@@ -295,9 +311,9 @@ export class WardrobeAdminService {
           await tx.wardrobeOutfitItem.createMany({
             data: dto.items.map((it, idx) => ({
               outfitId: id,
-              itemId: it.itemId,
+              itemId: (it.itemId || it.wardrobeItemId)!,
               variantId: it.variantId || null,
-              layerOrder: it.layerOrder ?? idx,
+              layerOrder: it.layerOrder ?? it.sortOrder ?? idx,
               required: it.required ?? true,
               notes: it.notes?.trim(),
             })),
@@ -344,7 +360,7 @@ export class WardrobeAdminService {
       where.scheduledDate = { gte: startOfMonth, lte: endOfMonth };
     }
 
-    return this.prisma.wardrobeSchedule.findMany({
+    const rows = await this.prisma.wardrobeSchedule.findMany({
       where,
       include: {
         outfit: {
@@ -367,6 +383,11 @@ export class WardrobeAdminService {
       },
       orderBy: { scheduledDate: 'asc' },
     });
+
+    return rows.map((s) => ({
+      ...s,
+      notes: s.instructions ?? (s as any).notes ?? null,
+    }));
   }
 
   async getSchedule(id: string) {
@@ -385,7 +406,10 @@ export class WardrobeAdminService {
       },
     });
     if (!schedule) throw new NotFoundException('Schedule not found');
-    return schedule;
+    return {
+      ...schedule,
+      notes: schedule.instructions ?? (schedule as any).notes ?? null,
+    };
   }
 
   async createSchedule(dto: CreateWardrobeScheduleDto, creatorUserId?: string) {
@@ -393,8 +417,9 @@ export class WardrobeAdminService {
 
     const scheduledDate = new Date(dto.scheduledDate);
     const endDate = dto.endDate ? new Date(dto.endDate) : null;
+    const instructions = dto.instructions !== undefined ? dto.instructions?.trim() : dto.notes !== undefined ? dto.notes?.trim() : undefined;
 
-    return this.prisma.wardrobeSchedule.create({
+    const created = await this.prisma.wardrobeSchedule.create({
       data: {
         outfitId: dto.outfitId,
         title: dto.title.trim(),
@@ -404,7 +429,7 @@ export class WardrobeAdminService {
         endDate,
         eventType: dto.eventType || 'SUNDAY_SERVICE',
         status: dto.status || 'PUBLISHED',
-        instructions: dto.instructions?.trim(),
+        instructions,
         createdById: creatorUserId,
       },
       include: {
@@ -419,13 +444,19 @@ export class WardrobeAdminService {
         meeting: true,
       },
     });
+
+    return {
+      ...created,
+      notes: created.instructions ?? null,
+    };
   }
 
   async updateSchedule(id: string, dto: UpdateWardrobeScheduleDto) {
     await this.getSchedule(id);
     if (dto.outfitId) await this.getOutfit(dto.outfitId);
+    const instructions = dto.instructions !== undefined ? dto.instructions?.trim() : dto.notes !== undefined ? dto.notes?.trim() : undefined;
 
-    return this.prisma.wardrobeSchedule.update({
+    const updated = await this.prisma.wardrobeSchedule.update({
       where: { id },
       data: {
         ...(dto.outfitId ? { outfitId: dto.outfitId } : {}),
@@ -436,7 +467,7 @@ export class WardrobeAdminService {
         ...(dto.endDate !== undefined ? { endDate: dto.endDate ? new Date(dto.endDate) : null } : {}),
         ...(dto.eventType ? { eventType: dto.eventType } : {}),
         ...(dto.status ? { status: dto.status } : {}),
-        ...(dto.instructions !== undefined ? { instructions: dto.instructions?.trim() } : {}),
+        ...(instructions !== undefined ? { instructions } : {}),
       },
       include: {
         outfit: {
@@ -450,6 +481,11 @@ export class WardrobeAdminService {
         meeting: true,
       },
     });
+
+    return {
+      ...updated,
+      notes: updated.instructions ?? null,
+    };
   }
 
   async setPublishStatus(id: string, publish: boolean) {
@@ -471,8 +507,11 @@ export class WardrobeAdminService {
    * Finds all Sundays in the given year/month and creates schedule slots.
    */
   async generateMonthlySundays(dto: GenerateMonthlySundaysDto, creatorUserId?: string) {
-    const outfit = await this.getOutfit(dto.defaultOutfitId);
-    const { year, month, initialStatus = 'DRAFT' } = dto;
+    const targetOutfitId = dto.defaultOutfitId || dto.outfitId;
+    if (!targetOutfitId) throw new BadRequestException('Please specify an outfit');
+    const outfit = await this.getOutfit(targetOutfitId);
+    const { year, month } = dto;
+    const initialStatus = dto.status || dto.initialStatus || 'DRAFT';
 
     const sundays: Date[] = [];
     const date = new Date(Date.UTC(year, month - 1, 1, 8, 0, 0));

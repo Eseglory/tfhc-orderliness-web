@@ -42,3 +42,13 @@ Recovery files are under `data/storage-backups/recovery-20260923/`, with private
 ## Final readiness checks — 24 September 2026
 
 The isolated release passed 30 SQLite/migration regressions, 19 API/WebSocket integration tests with clean shutdown, and seven desktop/mobile browser checks. Live pre-release reads matched all 29 primary message records across six conversations; pending, processing and failed SQLite counts were all zero. Authenticated WebSocket reconnect succeeded. Generation-aware change cursors recover after an ephemeral SQLite rebuild, while midnight/manual reconciliation also checks historical backfills.
+
+## Deployment and final live verification — 24 September 2026
+
+Release `01bddde0e61d239e258d8382e39bdb6a8c3312b8` is live on Render (`dep-daq9jl7f3r2c73954bv0`) and Vercel (`dpl_GAAHhMVvgnEFptJR1NdKz35Qz2RL`), aliased to https://tfhc-orderliness-web.vercel.app. No hosting plan was changed. Aggregate evidence is saved in `docs/chat-release-verification-20260924.json`.
+
+The final live check matched all **37** current PostgreSQL records against the API/SQLite history across six rooms. Pending/processing/failed counts are all zero; the new generation-aware cursor is active; authenticated WebSocket reconnect passed. The increase from the earlier 29-record snapshot consisted of one real service reminder and seven clearly labelled benchmark messages created by concurrent local testing against the shared primary database. Those seven tests and their 189 notifications were backed up before authorized cleanup; messages remain as tombstones. A fresh pre/post comparison preserved all 37 IDs and found the other 30 records field-identical, including the earlier two tombstones. No real message was changed or lost. Private snapshots are under `data/storage-backups/release-20260924/`.
+
+One cleanup update was committed during the old/new Render instance switchover. The existing reconciliation imported that tombstone and left the other 36 records unchanged: **COMPLETE**, zero failures, **616 ms** server duration (**2,200 ms** including the network request). Full parity was verified afterward. The 00:00/12:00 Africa/Lagos schedule remains active.
+
+The deployed browser rendered existing chat without duplicate IDs or JavaScript errors. Its first authenticated opening measured **8,853 ms**; a genuine offline reload then rendered cached messages in **82 ms**. No production messages were sent by these verification runs. Final warm API measurements were room list **3,528 ms**, page median **1,333 ms**, socket ready **2,797 ms**, reconnect **2,883 ms**. These results establish fast cached rendering, not sub-second uncached network access. Free Render cold starts remain an operational limitation.

@@ -173,8 +173,62 @@ export class MeetingsService {
       });
     }
 
+    if (supervisingMinisterId && this.serviceReminderService) {
+      this.serviceReminderService
+        .notifySupervisingMinisterAssigned(meetingId, supervisingMinisterId)
+        .catch((err) => {
+          // Log notification error safely without breaking assignment transaction
+          this.prisma.auditLog
+            .create({
+              data: {
+                actorUserId: actorUserId || 'SYSTEM',
+                action: 'SUPERVISING_MINISTER_NOTIFY_FAILED',
+                entity: 'Meeting',
+                entityId: meetingId,
+                newData: { error: err?.message || String(err) },
+              },
+            })
+            .catch(() => {});
+        });
+    }
+
     this.cache.invalidateTags(['calendar', 'meetings', 'analytics', 'dashboard']);
     return updated;
+  }
+
+  async getServiceAvailableMembers(meetingId: string) {
+    const commitments = await this.prisma.memberServiceCommitment.findMany({
+      where: {
+        meetingId,
+        status: 'COMMITTED',
+        member: { status: 'ACTIVE' },
+      },
+      include: {
+        member: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            preferredName: true,
+            memberCode: true,
+            roleInUnit: true,
+            profilePhotoUrl: true,
+            subTeam: { select: { id: true, name: true } },
+          },
+        },
+      },
+      orderBy: [
+        { member: { firstName: 'asc' } },
+        { member: { lastName: 'asc' } },
+      ],
+    });
+
+    const members = commitments.map((c) => c.member);
+    return {
+      meetingId,
+      totalAvailable: members.length,
+      members,
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -359,6 +413,16 @@ export class MeetingsService {
             serviceSchedule: { select: { id: true, title: true, recurrenceRule: true } },
             eventType: { select: { key: true, name: true, color: true, icon: true } },
             category: { select: { name: true } },
+            supervisingMinister: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredName: true,
+                roleInUnit: true,
+                subTeam: { select: { id: true, name: true } },
+              },
+            },
           },
           orderBy: { startTime: 'asc' },
         }),
@@ -937,6 +1001,14 @@ export class MeetingsService {
         },
       });
     });
+
+    if (
+      supervisingMinisterId &&
+      supervisingMinisterId !== existing.supervisingMinisterId &&
+      this.serviceReminderService
+    ) {
+      this.serviceReminderService.notifySupervisingMinisterAssigned(id, supervisingMinisterId).catch(() => {});
+    }
 
     await this.audit.record({
       actorUserId,

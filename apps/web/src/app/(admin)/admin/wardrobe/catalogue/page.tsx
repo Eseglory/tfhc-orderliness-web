@@ -22,6 +22,7 @@ import {
 import { apiRequest } from '@/lib/api';
 import { useAuth, canCreateWardrobe } from '@/lib/auth';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
+import { useToast } from '@/components/ui';
 
 interface Variant {
   id: string;
@@ -109,6 +110,7 @@ const DEFAULT_COLORS: DynamicColor[] = [
 
 export default function WardrobeCataloguePage() {
   const { user } = useAuth();
+  const { notify } = useToast();
   const [items, setItems] = useState<WardrobeItem[]>([]);
   const [categories, setCategories] = useState<DynamicCategory[]>(DEFAULT_CATEGORIES);
   const [colors, setColors] = useState<DynamicColor[]>(DEFAULT_COLORS);
@@ -220,41 +222,46 @@ export default function WardrobeCataloguePage() {
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!itemName.trim() || !itemCategory.trim()) {
-      setMessage({ type: 'error', text: 'Name and Category are required' });
+      const err = 'Name and Category are required';
+      setMessage({ type: 'error', text: err });
+      notify(err, 'error');
       return;
     }
 
     try {
       setSubmittingItem(true);
+      const itemPayload = {
+        name: itemName.trim(),
+        category: itemCategory,
+        gender: itemGender,
+        notes: itemNotes,
+        description: itemNotes,
+        imageUrl: itemImage || undefined,
+      };
+
       if (editingItem) {
         await apiRequest(`/admin/wardrobe/items/${editingItem.id}`, {
           method: 'PATCH',
-          body: {
-            name: itemName,
-            category: itemCategory,
-            gender: itemGender,
-            notes: itemNotes,
-            imageUrl: itemImage || undefined
-          }
+          body: itemPayload,
         });
-        setMessage({ type: 'success', text: `Updated "${itemName}" successfully` });
+        const successText = `Updated "${itemName}" successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       } else {
         await apiRequest('/admin/wardrobe/items', {
           method: 'POST',
-          body: {
-            name: itemName,
-            category: itemCategory,
-            gender: itemGender,
-            notes: itemNotes,
-            imageUrl: itemImage || undefined
-          }
+          body: itemPayload,
         });
-        setMessage({ type: 'success', text: `Created "${itemName}" successfully` });
+        const successText = `Created "${itemName}" successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       }
       setIsItemModalOpen(false);
       fetchCatalogue();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to save wardrobe item' });
+      const errText = err.message || 'Failed to save wardrobe item';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     } finally {
       setSubmittingItem(false);
     }
@@ -267,10 +274,14 @@ export default function WardrobeCataloguePage() {
       await apiRequest(`/admin/wardrobe/items/${item.id}`, {
         method: 'DELETE'
       });
-      setMessage({ type: 'success', text: `Deleted "${item.name}"` });
+      const successText = `Deleted "${item.name}" successfully`;
+      setMessage({ type: 'success', text: successText });
+      notify(successText, 'success');
       fetchCatalogue();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to delete item' });
+      const errText = err.message || 'Failed to delete item';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     }
   };
 
@@ -287,7 +298,9 @@ export default function WardrobeCataloguePage() {
     e.preventDefault();
     if (!activeItemForVariants) return;
     if (!variantColorName.trim()) {
-      setMessage({ type: 'error', text: 'Color name is required' });
+      const err = 'Color name is required';
+      setMessage({ type: 'error', text: err });
+      notify(err, 'error');
       return;
     }
 
@@ -296,13 +309,16 @@ export default function WardrobeCataloguePage() {
       await apiRequest(`/admin/wardrobe/items/${activeItemForVariants.id}/variants`, {
         method: 'POST',
         body: {
-          colorName: variantColorName,
+          colorName: variantColorName.trim(),
           colorHex: variantColorHex,
+          colorCode: variantColorHex,
           imageUrl: variantImage || undefined,
-          isDefault: variantIsDefault
+          isDefault: variantIsDefault,
         }
       });
-      setMessage({ type: 'success', text: `Added variant "${variantColorName}" to ${activeItemForVariants.name}` });
+      const successText = `Added variant "${variantColorName}" to ${activeItemForVariants.name}`;
+      setMessage({ type: 'success', text: successText });
+      notify(successText, 'success');
       setVariantColorName('');
       setVariantImage(null);
       setVariantIsDefault(false);
@@ -314,7 +330,9 @@ export default function WardrobeCataloguePage() {
       const updated = list.find((i: any) => i.id === activeItemForVariants.id);
       if (updated) setActiveItemForVariants(updated);
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to add variant' });
+      const errText = err.message || 'Failed to add variant';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     } finally {
       setSubmittingVariant(false);
     }
@@ -326,7 +344,9 @@ export default function WardrobeCataloguePage() {
       await apiRequest(`/admin/wardrobe/variants/${variantId}`, {
         method: 'DELETE'
       });
-      setMessage({ type: 'success', text: 'Removed color variant' });
+      const successText = 'Removed color variant successfully';
+      setMessage({ type: 'success', text: successText });
+      notify(successText, 'success');
       
       const res = await apiRequest<any>('/admin/wardrobe/items');
       const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
@@ -336,7 +356,9 @@ export default function WardrobeCataloguePage() {
         if (updated) setActiveItemForVariants(updated);
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to remove variant' });
+      const errText = err.message || 'Failed to remove variant';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     }
   };
 

@@ -498,7 +498,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
     // Make sure members with a live socket who haven't joined this room yet
     // (e.g. a brand-new DM) still get it and a badge bump.
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+    const room = this.chat.getRoomCached(roomId) || await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
     if (!room) return;
     const recipientIds = await this.chat.recipientMemberIds(room);
     const dto = message as { id: string; body?: string; sender?: { memberId?: string; name?: string } };
@@ -573,8 +573,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   async emitRoomEvent(roomId: string, event: string, payload: unknown) {
     if (!this.io) return;
-    // Broadcast directly to the Socket.IO room (instant in-memory delivery)
-    const room = await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
+    // Emit once to the current authorized member rooms.
+    const room = this.chat.getRoomCached(roomId) || await this.prisma.chatRoom.findUnique({ where: { id: roomId } });
     if (!room) return;
     const recipients = await this.chat.recipientMemberIds(room);
     if (recipients.length) this.io.to(recipients.map(id => `member:${id}`)).emit(event, payload);

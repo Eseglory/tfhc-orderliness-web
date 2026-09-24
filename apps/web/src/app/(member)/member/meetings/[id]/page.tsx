@@ -188,25 +188,25 @@ export default function MeetingDetailPage() {
     year: 'numeric',
   });
 
-  const virtualMeetingUrl = meeting.meetingUrl || extractVirtualUrl(meeting) || (meeting.address?.startsWith('http') ? meeting.address : null);
-  const isVirtual = Boolean(virtualMeetingUrl) || Boolean(meeting.isOnline) || meeting.locationName?.toLowerCase().includes('online') || meeting.locationName?.toLowerCase().includes('google meet') || meeting.locationName?.toLowerCase().includes('virtual');
+  const isVirtual = Boolean(meeting.isOnline) || (Boolean(meeting.meetingUrl) && meeting.meetingUrl.includes('meet.google.com')) || (title.toLowerCase().includes('wednesday') && (title.toLowerCase().includes('meeting') || title.toLowerCase().includes('unit')));
+  const virtualMeetingUrl = isVirtual ? (meeting.meetingUrl || extractVirtualUrl(meeting) || 'https://meet.google.com/wkx-kgew-iqe') : null;
   const isWedMeeting = title.toLowerCase().includes('wednesday') && (Boolean(meeting.serviceScheduleId) || title.toLowerCase().includes('weekly'));
   const recurrenceRuleStr = isWedMeeting ? 'FREQ=WEEKLY;BYDAY=WE' : null;
 
-  const googleCalUrl = buildAdvancedGoogleCalendarUrl({
+  const googleCalUrl = isVirtual ? buildAdvancedGoogleCalendarUrl({
     id: meeting.id,
     title,
     description,
     notes: meeting.notes,
     startTime: meetingStartTime,
     endTime: closeTimeDate,
-    locationName: isVirtual ? 'Online / Google Meet' : locationName,
+    locationName: 'Online / Google Meet',
     virtualMeetingUrl,
-    mode: isVirtual ? 'VIRTUAL' : 'IN_PERSON',
+    mode: 'VIRTUAL',
     recurrenceRule: recurrenceRuleStr,
     timezone: 'Africa/Lagos',
     agendaItems: meeting.agendaItems || [],
-  });
+  }) : '';
 
   return (
     <div className="bg-background min-h-screen text-on-background pb-32 font-body-md">
@@ -267,13 +267,44 @@ export default function MeetingDetailPage() {
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-semibold mt-1 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-base text-primary">calendar_month</span>
-              <span>{dateFormatted} · 8:00 PM (WAT)</span>
+              <span>{dateFormatted} · {meetingStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (WAT)</span>
             </p>
           </div>
 
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed pt-1">
             {description}
           </p>
+
+          {/* Supervising Minister Card */}
+          <div className="pt-3 border-t border-outline-variant/15 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                <span className="material-symbols-outlined text-lg">shield_person</span>
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Supervising Minister
+                </span>
+                {meeting.supervisingMinister ? (
+                  <p className="text-xs sm:text-sm font-bold text-on-surface truncate">
+                    {meeting.supervisingMinister.preferredName || `${meeting.supervisingMinister.firstName} ${meeting.supervisingMinister.lastName}`}
+                    <span className="font-normal text-slate-500 text-xs ml-1.5">
+                      ({meeting.supervisingMinister.subTeam?.name || meeting.supervisingMinister.roleInUnit || 'Executive'})
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs sm:text-sm font-medium text-slate-400 italic">
+                    Supervising Minister: Not yet assigned
+                  </p>
+                )}
+              </div>
+            </div>
+            {meeting.supervisingMinister && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] shrink-0">
+                Assigned
+              </span>
+            )}
+          </div>
 
           {/* Quick Actions Row */}
           <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-outline-variant/15">
@@ -288,15 +319,17 @@ export default function MeetingDetailPage() {
                 <span>Join Google Meet</span>
               </a>
             )}
-            <a
-              href={googleCalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-surface-container-low hover:bg-surface-container text-primary rounded-xl text-xs font-bold transition-all border border-outline-variant/25"
-            >
-              <span className="material-symbols-outlined text-base">calendar_add_on</span>
-              <span>Add to Google Calendar</span>
-            </a>
+            {isVirtual && (
+              <a
+                href={googleCalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-surface-container-low hover:bg-surface-container text-primary rounded-xl text-xs font-bold transition-all border border-outline-variant/25"
+              >
+                <span className="material-symbols-outlined text-base">calendar_add_on</span>
+                <span>Add to Google Calendar</span>
+              </a>
+            )}
           </div>
         </section>
 

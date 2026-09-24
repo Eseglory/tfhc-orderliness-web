@@ -242,7 +242,11 @@ export function formatMeetingInviteMessage(opts: CalendarEventOptions): string {
     });
   }
 
-  msg += `\n🔗 *Add to Google Calendar:*\n${buildAdvancedGoogleCalendarUrl(opts)}\n\n_The Father's House Church_`;
+  if (opts.mode === 'VIRTUAL') {
+    msg += `\n🔗 *Add to Google Calendar:*\n${buildAdvancedGoogleCalendarUrl(opts)}\n`;
+  }
+
+  msg += `\n_The Father's House Church_`;
 
   return msg;
 }

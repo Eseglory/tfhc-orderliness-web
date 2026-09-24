@@ -8,6 +8,7 @@ import { AbsenceProcessingJob } from '../src/jobs/absence-processing.job';
 import { MailService } from '../src/modules/mail/mail.service';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { ServiceReminderService } from '../src/modules/meetings/service-reminder.service';
 
 describe('Supervising Minister & Disciplinary Committee Suite', () => {
   let meetingsService: MeetingsService;
@@ -290,6 +291,20 @@ describe('Supervising Minister & Disciplinary Committee Suite', () => {
     meetingCategory: {
       findUnique: jest.fn().mockResolvedValue({ id: 'cat-1', name: 'Sunday Service' }),
     },
+    memberServiceCommitment: {
+      findMany: jest.fn().mockImplementation(({ where }) => {
+        return Promise.resolve([
+          {
+            id: 'commit-1',
+            meetingId: where.meetingId,
+            status: 'COMMITTED',
+            committedAt: new Date(),
+            notes: 'Available to coordinate',
+            member: membersStore.get(nicoleId),
+          },
+        ]);
+      }),
+    },
     $transaction: jest.fn().mockImplementation((cb) => cb(mockPrisma)),
   };
 
@@ -315,6 +330,14 @@ describe('Supervising Minister & Disciplinary Committee Suite', () => {
     get: jest.fn().mockReturnValue('http://localhost:3000'),
   };
 
+  const mockServiceReminder: any = {
+    notifySupervisingMinisterAssigned: jest.fn().mockResolvedValue({
+      inAppSent: true,
+      emailSent: true,
+      chatSent: true,
+    }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -326,6 +349,7 @@ describe('Supervising Minister & Disciplinary Committee Suite', () => {
         { provide: AbsenceProcessingJob, useValue: mockAbsenceJob },
         { provide: MailService, useValue: mockMail },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: ServiceReminderService, useValue: mockServiceReminder },
       ],
     }).compile();
 
@@ -399,6 +423,30 @@ describe('Supervising Minister & Disciplinary Committee Suite', () => {
       );
 
       expect(updated.supervisingMinisterId).toBeNull();
+    });
+
+    it('should trigger notifySupervisingMinisterAssigned when minister is appointed', async () => {
+      mockServiceReminder.notifySupervisingMinisterAssigned.mockClear();
+      await meetingsService.appointSupervisingMinister(
+        meetingId,
+        { memberId: adedotunId },
+        'admin-user',
+      );
+
+      expect(mockServiceReminder.notifySupervisingMinisterAssigned).toHaveBeenCalledWith(
+        meetingId,
+        adedotunId,
+      );
+    });
+  });
+
+  describe('Service Available Members from Weekly Availability', () => {
+    it('should retrieve members who indicated availability for a specific service', async () => {
+      const result = await meetingsService.getServiceAvailableMembers(meetingId);
+      expect(result.meetingId).toBe(meetingId);
+      expect(result.totalAvailable).toBe(1);
+      expect(result.members[0].id).toBe(nicoleId);
+      expect(result.members[0].firstName).toBe('Nicole');
     });
   });
 

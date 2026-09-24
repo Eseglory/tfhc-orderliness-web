@@ -16,6 +16,10 @@ export class CreateWardrobeItemDto {
 
   @IsString()
   @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
   gender?: string; // "ALL", "MALE", "FEMALE"
 
   @IsString()
@@ -46,6 +50,10 @@ export class UpdateWardrobeItemDto {
 
   @IsString()
   @IsOptional()
+  notes?: string;
+
+  @IsString()
+  @IsOptional()
   gender?: string;
 
   @IsString()
@@ -72,6 +80,14 @@ export class CreateWardrobeVariantDto {
 
   @IsString()
   @IsOptional()
+  colorHex?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
+  @IsString()
+  @IsOptional()
   imageUrl?: string;
 
   @IsBoolean()
@@ -94,6 +110,14 @@ export class UpdateWardrobeVariantDto {
 
   @IsString()
   @IsOptional()
+  colorHex?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
+  @IsString()
+  @IsOptional()
   imageUrl?: string;
 
   @IsBoolean()
@@ -107,8 +131,12 @@ export class UpdateWardrobeVariantDto {
 
 export class OutfitItemComponentDto {
   @IsString()
-  @IsNotEmpty()
-  itemId: string;
+  @IsOptional()
+  itemId?: string;
+
+  @IsString()
+  @IsOptional()
+  wardrobeItemId?: string;
 
   @IsString()
   @IsOptional()
@@ -117,6 +145,10 @@ export class OutfitItemComponentDto {
   @IsInt()
   @IsOptional()
   layerOrder?: number;
+
+  @IsInt()
+  @IsOptional()
+  sortOrder?: number;
 
   @IsBoolean()
   @IsOptional()
@@ -139,6 +171,10 @@ export class CreateWardrobeOutfitDto {
   @IsString()
   @IsOptional()
   genderTarget?: string; // "ALL", "BROTHERS", "SISTERS"
+
+  @IsString()
+  @IsOptional()
+  gender?: string;
 
   @IsString()
   @IsOptional()
@@ -175,6 +211,10 @@ export class UpdateWardrobeOutfitDto {
   @IsString()
   @IsOptional()
   genderTarget?: string;
+
+  @IsString()
+  @IsOptional()
+  gender?: string;
 
   @IsString()
   @IsOptional()
@@ -236,6 +276,10 @@ export class CreateWardrobeScheduleDto {
   @IsString()
   @IsOptional()
   instructions?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class UpdateWardrobeScheduleDto {
@@ -275,6 +319,10 @@ export class UpdateWardrobeScheduleDto {
   @IsString()
   @IsOptional()
   instructions?: string;
+
+  @IsString()
+  @IsOptional()
+  notes?: string;
 }
 
 export class GenerateMonthlySundaysDto {
@@ -287,13 +335,22 @@ export class GenerateMonthlySundaysDto {
   month: number; // 1-12
 
   @IsString()
-  @IsNotEmpty()
-  defaultOutfitId: string;
+  @IsOptional()
+  defaultOutfitId?: string;
+
+  @IsString()
+  @IsOptional()
+  outfitId?: string;
 
   @IsString()
   @IsIn(['DRAFT', 'PUBLISHED'])
   @IsOptional()
   initialStatus?: string;
+
+  @IsString()
+  @IsIn(['DRAFT', 'PUBLISHED'])
+  @IsOptional()
+  status?: string;
 }
 
 export class CreateWardrobeCategoryDto {

@@ -64,6 +64,15 @@ export class ServiceReminderService {
           }
         }
       }
+
+      // Evaluate the dedicated 5-Hour Service Team Reminder grounded in weekly availability
+      try {
+        const teamReminders = await this.evaluateFiveHourServiceTeamReminders(now);
+        remindersSent += teamReminders.remindersSent;
+      } catch (error) {
+        this.logger.error(`FiveHourServiceTeamReminderEvaluationFailed: ${error}`);
+      }
+
       return { processed: meetings.length, remindersSent };
     } finally { this.isEvaluating = false; }
   }
@@ -462,5 +471,550 @@ export class ServiceReminderService {
         notYetTaken: notYetTakenCount,
       },
     };
+  }
+
+  /**
+   * Immediately notify the appointed Supervising Minister via In-App notification,
+   * Branded Email, and post an update message to the General Chat Group.
+   * Completely idempotent and protected against duplicate dispatches.
+   */
+  async notifySupervisingMinisterAssigned(meetingId: string, ministerMemberId: string) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: {
+        supervisingMinister: {
+          include: {
+            user: true,
+            approvedMember: true,
+            subTeam: true,
+          },
+        },
+      },
+    });
+
+    if (!meeting || !meeting.supervisingMinister || meeting.supervisingMinister.id !== ministerMemberId) {
+      return { inAppSent: false, emailSent: false, chatSent: false };
+    }
+
+    const minister = meeting.supervisingMinister;
+    const timezone = this.config.get<string>('TFHC_TIMEZONE') || 'Africa/Lagos';
+    const dateStr = meeting.startTime.toLocaleDateString('en-GB', {
+      timeZone: timezone,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    const timeStr = meeting.startTime.toLocaleTimeString('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const ministerName = (minister.preferredName?.trim() || `${minister.firstName} ${minister.lastName}`).trim();
+    const appUrl = this.config.get<string>('APP_URL') || this.config.get<string>('APP_WEB_URL') || 'https://tfhc-orderliness-web.vercel.app';
+    const path = `/member/meetings/${meeting.id}`;
+
+    let inAppSent = false;
+    let emailSent = false;
+    let chatSent = false;
+
+    // 1. In-App Notification (Idempotent)
+    const inAppKey = `minister-assignment-${meeting.id}-${minister.id}-inapp`;
+    const existingInApp = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: inAppKey } });
+    if (!existingInApp || existingInApp.status !== 'SENT') {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const claim = await tx.communicationDelivery.createMany({
+            skipDuplicates: true,
+            data: [{
+              channel: 'PUSH',
+              recipient: minister.id,
+              templateKey: 'SERVICE_ASSIGNMENT_INAPP',
+              idempotencyKey: inAppKey,
+              status: 'PENDING',
+              attemptedAt: new Date(),
+            }],
+          });
+          if (!claim.count) {
+            const retry = await tx.communicationDelivery.updateMany({
+              where: { idempotencyKey: inAppKey, status: { not: 'SENT' } },
+              data: { status: 'PENDING', attemptedAt: new Date() },
+            });
+            if (!retry.count) return;
+          }
+
+          const notification = await tx.memberNotification.create({
+            data: {
+              memberId: minister.id,
+              type: 'SERVICE_ASSIGNMENT',
+              title: 'Service Assignment',
+              body: `You have been assigned as the Supervising Minister for the ${meeting.title}.\n\nDate: ${dateStr}\nTime: ${timeStr} (${timezone})\n\nPlease review the service details and prepare accordingly.`,
+              data: { meetingId: meeting.id, url: path },
+              expiresAt: meeting.attendanceCloseTime,
+            },
+          });
+
+          await tx.communicationDelivery.update({
+            where: { idempotencyKey: inAppKey },
+            data: { notificationId: notification.id, status: 'SENT', attemptedAt: new Date() },
+          });
+        });
+        inAppSent = true;
+        this.gateway?.notifyMember(minister.id);
+      } catch (err) {
+        this.logger.error(`Supervising minister in-app notification failed for member=${minister.id}: ${err}`);
+      }
+    }
+
+    // 2. Email Notification (Idempotent)
+    const rawEmail = minister.approvedMember?.normalizedEmail || minister.user?.email;
+    const validated = validateEmail(rawEmail, { allowTestDomains: process.env.NODE_ENV !== 'production' });
+    if (validated.isValid) {
+      const emailKey = `minister-assignment-${meeting.id}-${minister.id}-email`;
+      const existingEmail = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: emailKey } });
+      if (!existingEmail || existingEmail.status !== 'SENT') {
+        try {
+          await this.prisma.communicationDelivery.upsert({
+            where: { idempotencyKey: emailKey },
+            create: {
+              channel: 'EMAIL',
+              recipient: validated.normalizedEmail,
+              templateKey: 'SERVICE_ASSIGNMENT_EMAIL',
+              idempotencyKey: emailKey,
+              provider: 'SMTP',
+              status: 'PENDING',
+              attemptedAt: new Date(),
+            },
+            update: { status: 'PENDING', attemptedAt: new Date() },
+          });
+
+          const emailContent = renderBrandedEmail({
+            category: 'notification',
+            heading: 'Service Assignment: Supervising Minister',
+            recipientName: minister.firstName,
+            paragraphs: [
+              `You have been assigned as the Supervising Minister for the <strong>${meeting.title}</strong>.`,
+              `Please review the service details and prepare to coordinate with the service team.`,
+            ],
+            details: [
+              { label: 'Service', value: meeting.title },
+              { label: 'Date', value: dateStr },
+              { label: 'Time', value: `${timeStr} (${timezone})` },
+              { label: 'Location', value: meeting.address || meeting.locationName || 'Online' },
+              { label: 'Role', value: 'Supervising Minister' },
+            ],
+            cta: {
+              label: 'View Gathering Details',
+              url: `${appUrl}${path}`,
+            },
+          });
+
+          await this.mailService.sendEmail({
+            to: validated.normalizedEmail,
+            subject: emailContent.subject || `Service Assignment: Supervising Minister - ${meeting.title}`,
+            text: emailContent.text || `You have been assigned as the Supervising Minister for ${meeting.title}.\nDate: ${dateStr}\nTime: ${timeStr} (${timezone})\nPlease review the service details and prepare accordingly.`,
+            html: emailContent.html,
+          });
+
+          await this.prisma.communicationDelivery.update({
+            where: { idempotencyKey: emailKey },
+            data: { status: 'SENT', attemptedAt: new Date() },
+          });
+          emailSent = true;
+        } catch (err) {
+          this.logger.error(`Supervising minister email failed for member=${minister.id}: ${err}`);
+        }
+      }
+    }
+
+    // 3. General Chat Group Announcement (Idempotent)
+    const room = await this.prisma.chatRoom.findUnique({ where: { key: 'GENERAL' } });
+    if (room && meeting.visibility === 'PUBLIC') {
+      const chatKey = `minister-assignment-${meeting.id}-${minister.id}-general-chat`;
+      const existingChat = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: chatKey } });
+      if (!existingChat || existingChat.status !== 'SENT') {
+        const chatBody = `📋 Service Assignment Update\n\nThe Supervising Minister for *${meeting.title}* has been assigned.\n\n👤 *Supervising Minister:* ${ministerName}\n📅 *Date:* ${dateStr}\n🕐 *Time:* ${timeStr}\n\nThank you for serving and coordinating the service.`;
+
+        try {
+          const msg = await this.prisma.$transaction(async (tx) => {
+            const claim = await tx.communicationDelivery.createMany({
+              skipDuplicates: true,
+              data: [{
+                channel: 'PUSH',
+                recipient: room.id,
+                templateKey: 'SERVICE_ASSIGNMENT_GENERAL_CHAT',
+                idempotencyKey: chatKey,
+                status: 'PENDING',
+                attemptedAt: new Date(),
+              }],
+            });
+            if (!claim.count) {
+              const retry = await tx.communicationDelivery.updateMany({
+                where: { idempotencyKey: chatKey, status: { not: 'SENT' } },
+                data: { status: 'PENDING', attemptedAt: new Date() },
+              });
+              if (!retry.count) return null;
+            }
+
+            const chatMsg = await tx.chatMessage.create({
+              data: { roomId: room.id, type: 'SYSTEM', body: chatBody },
+            });
+
+            await tx.communicationDelivery.update({
+              where: { idempotencyKey: chatKey },
+              data: { status: 'SENT', attemptedAt: new Date() },
+            });
+
+            return chatMsg;
+          });
+
+          if (msg) {
+            chatSent = true;
+            if (this.chatService) {
+              try {
+                (this.chatService as any)['bufferRepo']?.seedLegacyMessages([
+                  { ...msg, attachmentMeta: null, createdAt: msg.createdAt.toISOString(), editedAt: null, deletedAt: null },
+                ]);
+              } catch {}
+            }
+            await this.gateway?.fanOut(room.id, { ...msg, sender: null, mine: false }, false);
+          }
+        } catch (err) {
+          this.logger.error(`Supervising minister general chat update failed for meeting=${meeting.id}: ${err}`);
+        }
+      }
+    }
+
+    return { inAppSent, emailSent, chatSent };
+  }
+
+  /**
+   * Evaluates all upcoming meetings approximately 5 hours away and triggers the
+   * dedicated 5-Hour Service Team Reminder grounded in Weekly Availability data.
+   */
+  async evaluateFiveHourServiceTeamReminders(now = new Date()): Promise<{ processed: number; remindersSent: number }> {
+    // Window: between 4.0 and 5.2 hours in advance (robust against delayed cron ticks)
+    const windowStart = new Date(now.getTime() + 4.0 * 3600000);
+    const windowEnd = new Date(now.getTime() + 5.2 * 3600000);
+
+    const meetings = await this.prisma.meeting.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'SCHEDULED'] },
+        archivedAt: null,
+        OR: [{ serviceScheduleId: null }, { serviceSchedule: { enabled: true } }],
+        startTime: { gte: windowStart, lte: windowEnd },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    let remindersSent = 0;
+    for (const meeting of meetings) {
+      try {
+        const result = await this.dispatchFiveHourServiceTeamReminder(meeting.id, now);
+        remindersSent += result.chatCreated + result.inAppCreated + result.emailSent;
+      } catch (err) {
+        this.logger.error(`FiveHourServiceTeamReminderFailed meeting=${meeting.id}: ${err}`);
+      }
+    }
+
+    return { processed: meetings.length, remindersSent };
+  }
+
+  /**
+   * Dispatches the 5-Hour Service Team Reminder:
+   * 1. Retrieves actual committed members from Weekly Availability for this specific meeting.
+   * 2. Retrieves the assigned Supervising Minister (handling unassigned gracefully).
+   * 3. Posts the beautiful reminder to the existing General Chat Group.
+   * 4. Sends personalized in-app notifications and branded emails to the service team & minister.
+   * 5. Strict idempotent delivery using persistent CommunicationDelivery records.
+   * 6. DOES NOT create any attendance records.
+   */
+  async dispatchFiveHourServiceTeamReminder(meetingId: string, now = new Date()) {
+    const result = { chatCreated: 0, inAppCreated: 0, emailSent: 0, availableMembersCount: 0 };
+
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      include: {
+        supervisingMinister: {
+          include: {
+            user: true,
+            approvedMember: true,
+            subTeam: true,
+          },
+        },
+      },
+    });
+
+    if (!meeting || ['CANCELLED', 'CLOSED'].includes(meeting.status)) {
+      return result;
+    }
+
+    // 1. Retrieve members who submitted availability for THIS specific service
+    const commitments = await this.prisma.memberServiceCommitment.findMany({
+      where: {
+        meetingId: meeting.id,
+        status: 'COMMITTED',
+        member: { status: MemberStatus.ACTIVE },
+      },
+      include: {
+        member: {
+          include: {
+            user: true,
+            approvedMember: true,
+            subTeam: true,
+          },
+        },
+      },
+      orderBy: [
+        { member: { firstName: 'asc' } },
+        { member: { lastName: 'asc' } },
+      ],
+    });
+
+    const availableMembers = commitments.map((c) => c.member);
+    result.availableMembersCount = availableMembers.length;
+
+    const timezone = this.config.get<string>('TFHC_TIMEZONE') || 'Africa/Lagos';
+    const dateStr = meeting.startTime.toLocaleDateString('en-GB', {
+      timeZone: timezone,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    const timeStr = meeting.startTime.toLocaleTimeString('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const minister = meeting.supervisingMinister;
+    const ministerName = minister
+      ? (minister.preferredName?.trim() || `${minister.firstName} ${minister.lastName}`).trim()
+      : null;
+
+    const teamListFormatted = availableMembers.length > 0
+      ? availableMembers.map((m) => `🙌 ${(m.preferredName?.trim() || m.firstName).trim()}`).join('\n')
+      : 'No members have indicated availability for this service yet.';
+
+    const appUrl = this.config.get<string>('APP_URL') || this.config.get<string>('APP_WEB_URL') || 'https://tfhc-orderliness-web.vercel.app';
+    const path = `/member/meetings/${meeting.id}`;
+
+    // 2. Post 5-Hour Reminder to General Chat Group (Idempotent)
+    const room = await this.prisma.chatRoom.findUnique({ where: { key: 'GENERAL' } });
+    if (room && meeting.visibility === 'PUBLIC') {
+      const chatKey = `service-team-rem-5h-${meeting.id}-general-chat`;
+      const existingChat = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: chatKey } });
+      if (!existingChat || existingChat.status !== 'SENT') {
+        const generalChatBody = [
+          '🔔 *5-HOUR SERVICE REMINDER*',
+          '',
+          `*${meeting.title}*`,
+          `🕐 ${timeStr}`,
+          '',
+          '*Supervising Minister*',
+          `👤 ${ministerName || 'Not yet assigned'}`,
+          '',
+          '*Those Available to Serve*',
+          teamListFormatted,
+          '',
+          'Thank you for making yourselves available.',
+          "Let's prepare and serve together. 🙏",
+          '',
+          'See you at the service!',
+        ].join('\n');
+
+        try {
+          const msg = await this.prisma.$transaction(async (tx) => {
+            const claim = await tx.communicationDelivery.createMany({
+              skipDuplicates: true,
+              data: [{
+                channel: 'PUSH',
+                recipient: room.id,
+                templateKey: 'SERVICE_TEAM_REMINDER_5H_CHAT',
+                idempotencyKey: chatKey,
+                status: 'PENDING',
+                attemptedAt: new Date(),
+              }],
+            });
+            if (!claim.count) {
+              const retry = await tx.communicationDelivery.updateMany({
+                where: { idempotencyKey: chatKey, status: { not: 'SENT' } },
+                data: { status: 'PENDING', attemptedAt: new Date() },
+              });
+              if (!retry.count) return null;
+            }
+
+            const chatMsg = await tx.chatMessage.create({
+              data: { roomId: room.id, type: 'SYSTEM', body: generalChatBody },
+            });
+
+            await tx.communicationDelivery.update({
+              where: { idempotencyKey: chatKey },
+              data: { status: 'SENT', attemptedAt: new Date() },
+            });
+
+            return chatMsg;
+          });
+
+          if (msg) {
+            result.chatCreated++;
+            if (this.chatService) {
+              try {
+                (this.chatService as any)['bufferRepo']?.seedLegacyMessages([
+                  { ...msg, attachmentMeta: null, createdAt: msg.createdAt.toISOString(), editedAt: null, deletedAt: null },
+                ]);
+              } catch {}
+            }
+            await this.gateway?.fanOut(room.id, { ...msg, sender: null, mine: false }, false);
+          }
+        } catch (err) {
+          this.logger.error(`5-Hour general chat reminder failed for meeting=${meeting.id}: ${err}`);
+        }
+      }
+    }
+
+    // 3. Compile Participants: Supervising Minister + Available Service Team Members
+    interface ParticipantTarget {
+      member: typeof availableMembers[0];
+      role: string;
+      isMinister: boolean;
+    }
+
+    const participantsMap = new Map<string, ParticipantTarget>();
+
+    if (minister && minister.status === MemberStatus.ACTIVE) {
+      participantsMap.set(minister.id, {
+        member: minister as any,
+        role: 'Supervising Minister',
+        isMinister: true,
+      });
+    }
+
+    for (const mem of availableMembers) {
+      if (!participantsMap.has(mem.id)) {
+        participantsMap.set(mem.id, {
+          member: mem,
+          role: 'Service Team Member',
+          isMinister: false,
+        });
+      }
+    }
+
+    const participants = Array.from(participantsMap.values());
+
+    // 4. Send targeted In-App Notification and Branded Email to each participant
+    for (const participant of participants) {
+      const member = participant.member;
+      const inAppKey = `service-team-rem-5h-${meeting.id}-${member.id}-inapp`;
+      const existingInApp = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: inAppKey } });
+
+      if (!existingInApp || existingInApp.status !== 'SENT') {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            const claim = await tx.communicationDelivery.createMany({
+              skipDuplicates: true,
+              data: [{
+                channel: 'PUSH',
+                recipient: member.id,
+                templateKey: 'SERVICE_TEAM_REMINDER_5H_INAPP',
+                idempotencyKey: inAppKey,
+                status: 'PENDING',
+                attemptedAt: new Date(),
+              }],
+            });
+            if (!claim.count) {
+              const retry = await tx.communicationDelivery.updateMany({
+                where: { idempotencyKey: inAppKey, status: { not: 'SENT' } },
+                data: { status: 'PENDING', attemptedAt: new Date() },
+              });
+              if (!retry.count) return;
+            }
+
+            const item = await tx.memberNotification.create({
+              data: {
+                memberId: member.id,
+                type: 'SERVICE_TEAM_REMINDER',
+                title: `5-Hour Service Reminder: ${meeting.title}`,
+                body: `${meeting.title} is coming up in 5 hours at ${timeStr} (${timezone}).\nYour role: ${participant.role}.\nSupervising Minister: ${ministerName || 'Not yet assigned'}.\nThank you for preparing and serving together!`,
+                data: { meetingId: meeting.id, role: participant.role, url: path },
+                expiresAt: meeting.attendanceCloseTime,
+              },
+            });
+
+            await tx.communicationDelivery.update({
+              where: { idempotencyKey: inAppKey },
+              data: { notificationId: item.id, status: 'SENT', attemptedAt: new Date() },
+            });
+          });
+          result.inAppCreated++;
+          this.gateway?.notifyMember(member.id);
+        } catch (err) {
+          this.logger.error(`5-Hour in-app reminder failed for member=${member.id}: ${err}`);
+        }
+      }
+
+      // Email dispatch
+      const rawEmail = member.approvedMember?.normalizedEmail || member.user?.email;
+      const validated = validateEmail(rawEmail, { allowTestDomains: process.env.NODE_ENV !== 'production' });
+      if (validated.isValid) {
+        const emailKey = `service-team-rem-5h-${meeting.id}-${member.id}-email`;
+        const existingEmail = await this.prisma.communicationDelivery.findUnique({ where: { idempotencyKey: emailKey } });
+        if (!existingEmail || existingEmail.status !== 'SENT') {
+          try {
+            await this.prisma.communicationDelivery.upsert({
+              where: { idempotencyKey: emailKey },
+              create: {
+                channel: 'EMAIL',
+                recipient: validated.normalizedEmail,
+                templateKey: 'SERVICE_TEAM_REMINDER_5H_EMAIL',
+                idempotencyKey: emailKey,
+                provider: 'SMTP',
+                status: 'PENDING',
+                attemptedAt: new Date(),
+              },
+              update: { status: 'PENDING', attemptedAt: new Date() },
+            });
+
+            const emailContent = renderBrandedEmail({
+              category: 'reminder',
+              heading: `5-Hour Service Reminder: ${meeting.title}`,
+              recipientName: member.firstName,
+              paragraphs: [
+                `<strong>${meeting.title}</strong> is coming up in 5 hours at ${timeStr} (${timezone}).`,
+                `You are receiving this reminder as part of the service team coordinating today's gathering.`,
+                `Supervising Minister: <strong>${ministerName || 'Not yet assigned'}</strong>`,
+              ],
+              details: [
+                { label: 'Service', value: meeting.title },
+                { label: 'Date', value: dateStr },
+                { label: 'Time', value: `${timeStr} (${timezone})` },
+                { label: 'Venue', value: meeting.address || meeting.locationName || 'Online' },
+                { label: 'Your Role', value: participant.role },
+              ],
+              cta: {
+                label: 'View Gathering Details',
+                url: `${appUrl}${path}`,
+              },
+            });
+
+            await this.mailService.sendEmail({
+              to: validated.normalizedEmail,
+              subject: emailContent.subject || `5-Hour Service Team Reminder: ${meeting.title}`,
+              text: emailContent.text || `${meeting.title} starts in 5 hours at ${timeStr} (${timezone}).\nRole: ${participant.role}\nSupervising Minister: ${ministerName || 'Not yet assigned'}\nPlease review details in the app.`,
+              html: emailContent.html,
+            });
+
+            await this.prisma.communicationDelivery.update({
+              where: { idempotencyKey: emailKey },
+              data: { status: 'SENT', attemptedAt: new Date() },
+            });
+            result.emailSent++;
+          } catch (err) {
+            this.logger.error(`5-Hour email reminder failed for member=${member.id}: ${err}`);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 }

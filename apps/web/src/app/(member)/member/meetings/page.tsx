@@ -174,6 +174,14 @@ export default function MemberMeetingsPage() {
                           </span>
                           <span>{m.locationName || 'Church Sanctuary'}</span>
                         </span>
+                        <span className="flex items-center gap-1 text-[11px]">
+                          <span className="material-symbols-outlined text-[13px] text-indigo-500">shield_person</span>
+                          <span className={m.supervisingMinister ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-400 italic'}>
+                            {m.supervisingMinister
+                              ? `Min: ${m.supervisingMinister.preferredName || m.supervisingMinister.firstName + ' ' + m.supervisingMinister.lastName}`
+                              : 'Supervising Minister: Not yet assigned'}
+                          </span>
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -195,6 +203,8 @@ export default function MemberMeetingsPage() {
                       ) : null;
                     })()}
                     {(() => {
+                      const isVirtual = Boolean(m.isOnline) || (Boolean(m.meetingUrl) && m.meetingUrl.includes('meet.google.com')) || (m.title.toLowerCase().includes('wednesday') && (m.title.toLowerCase().includes('meeting') || m.title.toLowerCase().includes('unit')));
+                      if (!isVirtual) return null;
                       const isWed = m.title.toLowerCase().includes('wednesday');
                       const calUrl = buildAdvancedGoogleCalendarUrl({
                         id: m.id,
@@ -203,9 +213,9 @@ export default function MemberMeetingsPage() {
                         notes: m.notes,
                         startTime: m.startTime || m.meetingDate,
                         endTime: m.endTime,
-                        locationName: m.locationName,
-                        virtualMeetingUrl: extractVirtualUrl(m),
-                        mode: m.locationName?.toLowerCase().includes('online') || extractVirtualUrl(m) ? 'VIRTUAL' : 'IN_PERSON',
+                        locationName: 'Online / Google Meet',
+                        virtualMeetingUrl: m.meetingUrl || extractVirtualUrl(m) || 'https://meet.google.com/wkx-kgew-iqe',
+                        mode: 'VIRTUAL',
                         recurrenceRule: isWed && (m.serviceScheduleId || m.title.toLowerCase().includes('weekly')) ? 'FREQ=WEEKLY;BYDAY=WE' : null,
                         timezone: 'Africa/Lagos',
                       });

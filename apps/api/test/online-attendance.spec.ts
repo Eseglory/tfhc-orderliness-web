@@ -273,9 +273,11 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
       expect(result.alreadyRecorded).toBe(false);
       expect(result.status).toBe('PRESENT');
       expect(result.method).toBe(AttendanceMethod.ONLINE_CODE);
+      expect(result.actualArrivalTime).toEqual(new Date('2026-09-30T19:00:00.000Z'));
       expect(mockAttendanceRecords.length).toBe(1);
       expect(mockAttendanceRecords[0].method).toBe(AttendanceMethod.ONLINE_CODE);
       expect(mockAttendanceRecords[0].attendanceType).toBe(AttendanceType.ONLINE);
+      expect(mockAttendanceRecords[0].actualArrivalTime).toEqual(new Date('2026-09-30T19:00:00.000Z'));
     });
   });
 
@@ -343,7 +345,9 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
 
       expect(result.success).toBe(true);
       expect(result.status).toBe('PRESENT');
+      expect(result.actualArrivalTime).toEqual(new Date('2026-09-30T19:05:00.000Z'));
       expect(mockAttendanceRecords.length).toBe(1);
+      expect(mockAttendanceRecords[0].actualArrivalTime).toEqual(new Date('2026-09-30T19:05:00.000Z'));
     });
   });
 

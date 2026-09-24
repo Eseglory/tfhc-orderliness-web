@@ -649,14 +649,29 @@ export class AttendanceService {
     );
 
     if (isAlreadyPresent) {
+      let updatedRecord = existing;
+      if (!existing.actualArrivalTime) {
+        updatedRecord = await this.prisma.attendanceRecord.update({
+          where: { id: existing.id },
+          data: {
+            actualArrivalTime: now,
+            joinedAt: existing.joinedAt || now,
+            lastSeenAt: now,
+            method: AttendanceMethod.ONLINE_CODE,
+            attendanceType: AttendanceType.ONLINE,
+          },
+          include: { meeting: { include: { category: true } }, member: true },
+        });
+      }
       return {
         success: true,
         alreadyRecorded: true,
         message: 'You are already marked PRESENT for this meeting.',
-        record: existing,
+        record: updatedRecord,
         status: 'PRESENT',
-        attendanceStatus: existing.status,
-        method: existing.method,
+        attendanceStatus: updatedRecord.status,
+        method: updatedRecord.method,
+        actualArrivalTime: updatedRecord.actualArrivalTime,
       };
     }
 
@@ -723,6 +738,7 @@ export class AttendanceService {
       status: 'PRESENT',
       attendanceStatus: record.status,
       method: record.method,
+      actualArrivalTime: record.actualArrivalTime,
     };
   }
 
@@ -866,6 +882,7 @@ export class AttendanceService {
         status: r.status,
         attendanceType: (r as any).attendanceType || 'PHYSICAL',
         method: r.method,
+        actualArrivalTime: r.actualArrivalTime || (r as any).joinedAt || null,
         joinedAt: (r as any).joinedAt || r.actualArrivalTime,
         lastSeenAt: (r as any).lastSeenAt,
         leftAt: (r as any).leftAt,
@@ -923,7 +940,7 @@ export class AttendanceService {
           where: { id: existing.id },
           data: {
             status: dto.status,
-            ...(arrival ? {actualArrivalTime:arrival} : {}),
+            ...(arrival ? { actualArrivalTime: arrival } : {}),
             method: AttendanceMethod.MANUAL,
             attendanceType: isOnline ? AttendanceType.ONLINE : (existing.attendanceType || AttendanceType.PHYSICAL),
             distanceFromVenue: isOnline ? null : existing.distanceFromVenue,

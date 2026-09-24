@@ -157,12 +157,30 @@ describe('Active Service Reminder for Available Members Suite', () => {
 
     mockPrisma = {
       meeting: {
-        findUnique: jest.fn(async ({ where }) => meetings.find((m) => m.id === where.id) || null),
+        findUnique: jest.fn(async ({ where }) => {
+          const m = meetings.find((x) => x.id === where.id);
+          if (!m) return null;
+          return {
+            ...m,
+            supervisingMinister: m.supervisingMinisterId
+              ? members.find((x) => x.id === m.supervisingMinisterId)
+              : null,
+          };
+        }),
         findMany: jest.fn(async ({ where }) => {
-          return meetings.filter((m) => {
-            if (where?.status?.in && !where.status.in.includes(m.status)) return false;
-            return true;
-          });
+          return meetings
+            .filter((m) => {
+              if (where?.status?.in && !where.status.in.includes(m.status)) return false;
+              if (where?.startTime?.gte && m.startTime < where.startTime.gte) return false;
+              if (where?.startTime?.lte && m.startTime > where.startTime.lte) return false;
+              return true;
+            })
+            .map((m) => ({
+              ...m,
+              supervisingMinister: m.supervisingMinisterId
+                ? members.find((x) => x.id === m.supervisingMinisterId)
+                : null,
+            }));
         }),
       },
       member: {
@@ -188,6 +206,20 @@ describe('Active Service Reminder for Available Members Suite', () => {
       memberServiceCommitment: {
         findFirst: jest.fn(async ({ where }) => {
           return commitments.find((c) => c.memberId === where.memberId && c.meetingId === where.meetingId && (!where.status || c.status === where.status)) || null;
+        }),
+        findMany: jest.fn(async ({ where }) => {
+          return commitments
+            .filter((c) => (!where?.meetingId || c.meetingId === where.meetingId) && (!where?.status || c.status === where.status))
+            .map((c) => ({
+              ...c,
+              member: members.find((m) => m.id === c.memberId) || null,
+            }));
+        }),
+      },
+      chatMessage: {
+        create: jest.fn(async ({ data }) => {
+          const msg = { id: `msg-${Date.now()}`, ...data, createdAt: new Date() };
+          return msg;
         }),
       },
       eventResponse: {
@@ -481,5 +513,149 @@ describe('Active Service Reminder for Available Members Suite', () => {
     expect(stats?.reminder.inApp.created).toBe(3);
     expect(stats?.attendance.taken).toBe(1); // John
     expect(stats?.attendance.notYetTaken).toBe(2); // Jane, Mark
+  });
+
+  // ---------------------------------------------------------------------------
+  // 9. Supervising Minister Assignment: In-App, Email, General Chat, Idempotent
+  // ---------------------------------------------------------------------------
+  it('Scenario 12: notifySupervisingMinisterAssigned sends in-app, email, and posts to general chat idempotently', async () => {
+    // Set supervising minister
+    meetings[0].supervisingMinisterId = 'mem-john';
+
+    const result = await serviceReminderService.notifySupervisingMinisterAssigned('meeting-sunday', 'mem-john');
+
+    expect(result.inAppSent).toBe(true);
+    expect(result.emailSent).toBe(true);
+    expect(result.chatSent).toBe(true);
+    expect(mockMailService.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'john@example.com',
+        subject: expect.stringContaining('Supervising Minister'),
+      }),
+    );
+    expect(mockPrisma.memberNotification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          memberId: 'mem-john',
+          type: 'SERVICE_ASSIGNMENT',
+        }),
+      }),
+    );
+    expect(mockPrisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          roomId: 'room-gen',
+          body: expect.stringContaining('Supervising Minister'),
+        }),
+      }),
+    );
+
+    // Call again to verify idempotency
+    const repeatResult = await serviceReminderService.notifySupervisingMinisterAssigned('meeting-sunday', 'mem-john');
+    expect(repeatResult.inAppSent).toBe(false);
+    expect(repeatResult.emailSent).toBe(false);
+    expect(repeatResult.chatSent).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 10. Five-Hour Service Team Reminder: Timing & Dispatch
+  // ---------------------------------------------------------------------------
+  it('Scenario 13: 5-Hour Service Team Reminder evaluates upcoming service and dispatches reminder', async () => {
+    // Service exactly 5 hours from now
+    const now = new Date('2026-09-24T13:00:00Z');
+    const serviceStartTime = new Date('2026-09-24T18:00:00Z'); // 5 hours later
+    meetings[1].startTime = serviceStartTime;
+    meetings[1].supervisingMinisterId = 'mem-john';
+
+    // Jane is committed to serve for meeting-midweek
+    commitments.push({
+      id: 'c-midweek-jane',
+      cycleId: 'cyc-1',
+      memberId: 'mem-jane',
+      meetingId: 'meeting-midweek',
+      status: ServiceCommitmentStatus.COMMITTED,
+    });
+
+    const evaluated = await serviceReminderService.evaluateFiveHourServiceTeamReminders(now);
+    expect(evaluated.processed).toBeGreaterThanOrEqual(1);
+    expect(evaluated.remindersSent).toBeGreaterThanOrEqual(1);
+
+    // Verify chat message content
+    expect(mockPrisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          roomId: 'room-gen',
+          body: expect.stringContaining('5-HOUR SERVICE REMINDER'),
+        }),
+      }),
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11. CRITICAL: 5-Hour Reminder MUST NOT create attendance records
+  // ---------------------------------------------------------------------------
+  it('Scenario 14: 5-Hour Service Team Reminder creates ZERO attendance records', async () => {
+    meetings[1].startTime = new Date('2026-09-24T18:00:00Z');
+    meetings[1].supervisingMinisterId = 'mem-john';
+
+    const initialAttendanceCount = attendanceRecords.length;
+
+    await serviceReminderService.dispatchFiveHourServiceTeamReminder('meeting-midweek', new Date('2026-09-24T13:00:00Z'));
+
+    // Verify no attendance records were created or modified
+    expect(attendanceRecords.length).toBe(initialAttendanceCount);
+    expect(mockPrisma.attendanceRecord.create).toBeUndefined(); // ensure no create call on attendanceRecord
+  });
+
+  // ---------------------------------------------------------------------------
+  // 12. Idempotency of 5-Hour Service Team Reminder
+  // ---------------------------------------------------------------------------
+  it('Scenario 15: 5-Hour Service Team Reminder is strictly idempotent across multiple runs', async () => {
+    meetings[1].startTime = new Date('2026-09-24T18:00:00Z');
+    const refTime = new Date('2026-09-24T13:00:00Z');
+
+    const firstRun = await serviceReminderService.dispatchFiveHourServiceTeamReminder('meeting-midweek', refTime);
+    expect(firstRun.chatCreated).toBe(1);
+
+    // Second run with same or slightly different worker time
+    const secondRun = await serviceReminderService.dispatchFiveHourServiceTeamReminder('meeting-midweek', new Date('2026-09-24T13:05:00Z'));
+    expect(secondRun.chatCreated).toBe(0);
+    expect(secondRun.inAppCreated).toBe(0);
+    expect(secondRun.emailSent).toBe(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 13. Graceful handling of unassigned minister and empty availability
+  // ---------------------------------------------------------------------------
+  it('Scenario 16: handles unassigned minister and empty availability gracefully without crashing', async () => {
+    // Meeting with NO minister and NO commitments
+    meetings.push({
+      id: 'meeting-empty',
+      title: 'Special Prayer Vigil',
+      startTime: new Date('2026-09-24T20:00:00Z'),
+      status: MeetingStatus.ACTIVE,
+      supervisingMinisterId: null,
+      locationName: 'Main Sanctuary',
+      audiences: [],
+    });
+
+    const res = await serviceReminderService.dispatchFiveHourServiceTeamReminder('meeting-empty', new Date('2026-09-24T15:00:00Z'));
+
+    expect(res.chatCreated).toBe(1);
+    // General chat should have been called with "Not yet assigned" and empty message text
+    expect(mockPrisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          body: expect.stringContaining('Not yet assigned'),
+        }),
+      }),
+    );
+    expect(mockPrisma.chatMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          body: expect.stringContaining('No members have indicated availability for this service yet.'),
+        }),
+      }),
+    );
   });
 });

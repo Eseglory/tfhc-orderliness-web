@@ -138,16 +138,18 @@ export function ShareEvent({ event }: { event: ShareableEvent }) {
       {/* Dropdown Menu for Desktop & Fallbacks */}
       {menuOpen && (
         <div className="absolute right-0 top-full mt-1.5 z-50 w-56 rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-xl p-1.5 animate-in fade-in zoom-in-95 duration-100">
-          <a
-            href={getGoogleCalendarUrl()}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setMenuOpen(false)}
-            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-on-surface rounded-xl hover:bg-surface-container-high transition-colors"
-          >
-            <span className="material-symbols-outlined text-sm text-blue-600">event</span>
-            <span>Add to Google Calendar</span>
-          </a>
+          {(Boolean(event.meetingUrl) || Boolean((event as any).isOnline) || (event.title.toLowerCase().includes('wednesday') && (event.title.toLowerCase().includes('meeting') || event.title.toLowerCase().includes('unit')))) && (
+            <a
+              href={getGoogleCalendarUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-on-surface rounded-xl hover:bg-surface-container-high transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm text-blue-600">event</span>
+              <span>Add to Google Calendar</span>
+            </a>
+          )}
 
           <button
             onClick={downloadIcs}

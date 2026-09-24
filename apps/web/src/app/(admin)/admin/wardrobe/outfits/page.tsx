@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { useAuth, canCreateWardrobe } from '@/lib/auth';
+import { useToast } from '@/components/ui';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 
 interface Variant {
@@ -66,6 +67,7 @@ interface WardrobeOutfit {
 
 export default function WardrobeOutfitsPage() {
   const { user } = useAuth();
+  const { notify } = useToast();
   const [outfits, setOutfits] = useState<WardrobeOutfit[]>([]);
   const [catalogue, setCatalogue] = useState<WardrobeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,13 +150,13 @@ export default function WardrobeOutfitsPage() {
     setEditingOutfit(outfit);
     setTitle(outfit.title);
     setDescription(outfit.description || '');
-    setGender(outfit.gender);
+    setGender(outfit.gender || (outfit as any).genderTarget || 'UNISEX');
     setIsTemplate(outfit.isTemplate);
     setCoverImageUrl(outfit.coverImageUrl || null);
     setSelectedLayers(
-      outfit.items.map((i) => ({
-        wardrobeItemId: i.wardrobeItemId,
-        variantId: i.variantId || undefined
+      outfit.items.map((i: any) => ({
+        wardrobeItemId: i.wardrobeItemId || i.itemId || i.item?.id || '',
+        variantId: i.variantId || i.variant?.id || undefined
       }))
     );
     setIsBuilderModalOpen(true);
@@ -187,26 +189,33 @@ export default function WardrobeOutfitsPage() {
   const handleSaveOutfit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setMessage({ type: 'error', text: 'Outfit title is required' });
+      const errText = 'Outfit title is required';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
       return;
     }
 
     if (selectedLayers.length === 0) {
-      setMessage({ type: 'error', text: 'Please add at least one clothing piece to this outfit' });
+      const errText = 'Please add at least one clothing piece to this outfit';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
       return;
     }
 
     try {
       setSubmitting(true);
       const payload = {
-        title,
-        description,
+        title: title.trim(),
+        description: description?.trim() || undefined,
         gender,
+        genderTarget: gender,
         isTemplate,
         coverImageUrl: coverImageUrl || undefined,
         items: selectedLayers.map((l, index) => ({
+          itemId: l.wardrobeItemId,
           wardrobeItemId: l.wardrobeItemId,
           variantId: l.variantId || undefined,
+          layerOrder: index,
           sortOrder: index
         }))
       };
@@ -216,19 +225,25 @@ export default function WardrobeOutfitsPage() {
           method: 'PATCH',
           body: payload
         });
-        setMessage({ type: 'success', text: `Updated outfit "${title}"` });
+        const successText = `Updated outfit "${title}" successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       } else {
         await apiRequest('/admin/wardrobe/outfits', {
           method: 'POST',
           body: payload
         });
-        setMessage({ type: 'success', text: `Created outfit "${title}"` });
+        const successText = `Created outfit "${title}" successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       }
 
       setIsBuilderModalOpen(false);
       fetchData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to save outfit' });
+      const errText = err.message || 'Failed to save outfit';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -241,10 +256,14 @@ export default function WardrobeOutfitsPage() {
       await apiRequest(`/admin/wardrobe/outfits/${outfit.id}`, {
         method: 'DELETE'
       });
-      setMessage({ type: 'success', text: `Deleted outfit "${outfit.title}"` });
+      const successText = `Deleted outfit "${outfit.title}" successfully`;
+      setMessage({ type: 'success', text: successText });
+      notify(successText, 'success');
       fetchData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to delete outfit' });
+      const errText = err.message || 'Failed to delete outfit';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     }
   };
 

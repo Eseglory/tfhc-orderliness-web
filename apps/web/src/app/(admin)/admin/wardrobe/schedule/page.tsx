@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 import { useAuth, canCreateWardrobe } from '@/lib/auth';
+import { useToast } from '@/components/ui';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 
 interface OutfitItemLayer {
@@ -80,6 +81,7 @@ const EVENT_TYPES = [
 
 export default function WardrobeSchedulePage() {
   const { user } = useAuth();
+  const { notify } = useToast();
   const [schedules, setSchedules] = useState<WardrobeSchedule[]>([]);
   const [outfits, setOutfits] = useState<WardrobeOutfit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,8 +166,8 @@ export default function WardrobeSchedulePage() {
     setScheduleTitle(sched.title);
     setScheduleEventType(sched.eventType);
     setScheduleDate(new Date(sched.scheduledDate).toISOString().slice(0, 16));
-    setScheduleOutfitId(sched.outfit.id);
-    setScheduleNotes(sched.notes || '');
+    setScheduleOutfitId(sched.outfit?.id || '');
+    setScheduleNotes(sched.notes || (sched as any).instructions || '');
     setScheduleStatus(sched.status);
     setIsScheduleModalOpen(true);
   };
@@ -173,7 +175,9 @@ export default function WardrobeSchedulePage() {
   const handleSaveSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleTitle.trim() || !scheduleDate || !scheduleOutfitId) {
-      setMessage({ type: 'error', text: 'Title, Date, and Outfit are required' });
+      const errText = 'Title, Date, and Outfit are required';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
       return;
     }
 
@@ -185,6 +189,7 @@ export default function WardrobeSchedulePage() {
         scheduledDate: new Date(scheduleDate).toISOString(),
         outfitId: scheduleOutfitId,
         notes: scheduleNotes || undefined,
+        instructions: scheduleNotes || undefined,
         status: scheduleStatus
       };
 
@@ -193,19 +198,25 @@ export default function WardrobeSchedulePage() {
           method: 'PATCH',
           body: payload
         });
-        setMessage({ type: 'success', text: `Updated schedule for ${scheduleTitle}` });
+        const successText = `Updated schedule for ${scheduleTitle} successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       } else {
         await apiRequest('/admin/wardrobe/schedules', {
           method: 'POST',
           body: payload
         });
-        setMessage({ type: 'success', text: `Scheduled outfit for ${scheduleTitle}` });
+        const successText = `Scheduled outfit for ${scheduleTitle} successfully`;
+        setMessage({ type: 'success', text: successText });
+        notify(successText, 'success');
       }
 
       setIsScheduleModalOpen(false);
       fetchScheduleData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to save wardrobe schedule' });
+      const errText = err.message || 'Failed to save wardrobe schedule';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     } finally {
       setSubmittingSchedule(false);
     }
@@ -218,13 +229,17 @@ export default function WardrobeSchedulePage() {
         method: 'PATCH',
         body: { status: newStatus }
       });
+      const successText = `Schedule "${sched.title}" is now ${newStatus === 'PUBLISHED' ? 'Published' : 'Draft'}`;
       setMessage({
         type: 'success',
-        text: `Schedule "${sched.title}" is now ${newStatus === 'PUBLISHED' ? 'Published' : 'Draft'}`
+        text: successText
       });
+      notify(successText, 'success');
       fetchScheduleData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to update status' });
+      const errText = err.message || 'Failed to update status';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     }
   };
 
@@ -235,17 +250,23 @@ export default function WardrobeSchedulePage() {
       await apiRequest(`/admin/wardrobe/schedules/${sched.id}`, {
         method: 'DELETE'
       });
-      setMessage({ type: 'success', text: `Removed schedule for "${sched.title}"` });
+      const successText = `Removed schedule for "${sched.title}" successfully`;
+      setMessage({ type: 'success', text: successText });
+      notify(successText, 'success');
       fetchScheduleData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to delete schedule' });
+      const errText = err.message || 'Failed to delete schedule';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     }
   };
 
   const handleGenerateMonthlySundays = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkOutfitId) {
-      setMessage({ type: 'error', text: 'Please select a default outfit for monthly generation' });
+      const errText = 'Please select a default outfit for monthly generation';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
       return;
     }
 
@@ -257,17 +278,22 @@ export default function WardrobeSchedulePage() {
           year: Number(bulkYear),
           month: Number(bulkMonth),
           defaultOutfitId: bulkOutfitId,
+          outfitId: bulkOutfitId,
           status: bulkStatus
         }
       });
+      const successText = `Successfully generated ${res.data?.length || 'all'} Sunday wardrobe schedules for ${new Date(bulkYear, bulkMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
       setMessage({
         type: 'success',
-        text: `Successfully generated ${res.data?.length || 'all'} Sunday wardrobe schedules for ${new Date(bulkYear, bulkMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`
+        text: successText
       });
+      notify(successText, 'success');
       setIsBulkModalOpen(false);
       fetchScheduleData();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to generate monthly Sundays' });
+      const errText = err.message || 'Failed to generate monthly Sundays';
+      setMessage({ type: 'error', text: errText });
+      notify(errText, 'error');
     } finally {
       setSubmittingBulk(false);
     }

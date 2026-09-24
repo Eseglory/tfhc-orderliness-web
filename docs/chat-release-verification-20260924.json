@@ -1,0 +1,112 @@
+{
+  "commit": "01bddde0e61d239e258d8382e39bdb6a8c3312b8",
+  "deployments": {
+    "render": {
+      "id": "dep-daq9jl7f3r2c73954bv0",
+      "status": "live"
+    },
+    "vercel": {
+      "id": "dpl_GAAHhMVvgnEFptJR1NdKz35Qz2RL",
+      "status": "READY",
+      "url": "https://tfhc-orderliness-web.vercel.app"
+    }
+  },
+  "regressions": {
+    "sqliteAndMigration": 30,
+    "apiAndWebsocket": 19,
+    "browserReadiness": 7,
+    "performanceHarness": 1
+  },
+  "productionApi": {
+    "verifiedAt": "2026-09-24T03:39:00.256Z",
+    "operations": "read-only; authenticated socket connect/reconnect; no test messages",
+    "health": {
+      "data": {
+        "status": "ok"
+      },
+      "ms": 571.5170410000001
+    },
+    "anonymousAccessDenied": true,
+    "storage": {
+      "databasePath": "/app/data/chat_shared.db",
+      "totalBuffered": 37,
+      "pendingCount": 0,
+      "processingCount": 0,
+      "migratedCount": 37,
+      "failedCount": 0,
+      "dbSizeBytes": 4096,
+      "lastPrimaryImport": "2026-09-24T03:38:30.954Z",
+      "lastRun": {
+        "startedAt": "2026-09-24T03:38:30.708Z",
+        "completedAt": "2026-09-24T03:38:31.324Z",
+        "totalProcessed": 0,
+        "migratedCount": 0,
+        "failedCount": 0,
+        "duplicatesPrevented": 0,
+        "durationMs": 616,
+        "postgresTotal": 37,
+        "sqliteTotal": 37,
+        "status": "COMPLETE",
+        "importedCount": 1,
+        "unchangedCount": 36
+      },
+      "schedule": "00:00 and 12:00",
+      "timeZone": "Africa/Lagos",
+      "authority": "PostgreSQL",
+      "acknowledgement": "PostgreSQL commit and durable notification work before success"
+    },
+    "primaryMessages": 37,
+    "roomListMs": 3528.496083,
+    "messagesComparedIncludingTombstones": 37,
+    "restartSafeCursors": true,
+    "roomCount": 6,
+    "messagePageMs": {
+      "samples": 6,
+      "p50": 1333.1328329999997,
+      "max": 1977.5151669999996
+    },
+    "websocketConnectMs": 2797.175417000002,
+    "websocketReconnectMs": 2883.497707999999
+  },
+  "messageIntegrity": {
+    "beforeCount": 37,
+    "afterCount": 37,
+    "nonCleanupRecordsFieldIdentical": 30,
+    "authorizedTestTombstones": 7,
+    "missingRecords": 0
+  },
+  "productionBrowser": {
+    "verifiedAt": "2026-09-24T03:33:56.112Z",
+    "url": "https://tfhc-orderliness-web.vercel.app",
+    "initialOpenMs": 8853,
+    "offlineReloadMs": 82,
+    "renderedMessages": 16,
+    "duplicateIds": 0,
+    "browserErrors": 0,
+    "productionMessagesCreated": 0,
+    "releaseMarker": "Conversation messages accessible log"
+  },
+  "authorizedCleanup": {
+    "backedUpTestMessages": 7,
+    "softDeletedTestMessages": 7,
+    "backedUpTestNotificationsRemoved": 189,
+    "remainingRealRecordsUntouched": true
+  },
+  "liveReconciliation": {
+    "elapsedMs": 2200,
+    "result": {
+      "startedAt": "2026-09-24T03:38:30.708Z",
+      "completedAt": "2026-09-24T03:38:31.324Z",
+      "totalProcessed": 0,
+      "migratedCount": 0,
+      "failedCount": 0,
+      "duplicatesPrevented": 0,
+      "durationMs": 616,
+      "postgresTotal": 37,
+      "sqliteTotal": 37,
+      "status": "COMPLETE",
+      "importedCount": 1,
+      "unchangedCount": 36
+    }
+  }
+}

@@ -204,6 +204,15 @@ export class ChatService implements OnApplicationBootstrap {
 
   /** Load a room the viewer may see (cached 60s), or throw. */
   private roomCache = new Map<string, { room: ChatRoom; expiresAt: number }>();
+
+  getRoomCached(roomId: string): ChatRoom | null {
+    const cached = this.roomCache.get(roomId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.room;
+    }
+    return null;
+  }
+
   async loadRoom(roomId: string, viewer: ChatViewer): Promise<ChatRoom> {
     this.requireMember(viewer);
     const now = Date.now();
@@ -406,13 +415,13 @@ export class ChatService implements OnApplicationBootstrap {
     const rooms = await this.roomsForViewer(viewer);
     if (rooms.length === 0) return [];
     const roomIds = rooms.map((r) => r.id);
-    const hidden = await this.prisma.chatMessageHidden.findMany({ where: { memberId, message: { roomId: { in: roomIds } } }, select: { messageId: true } });
-    const hiddenIds = hidden.map(m => m.messageId);
 
-    // 1. Memberships of the viewer for all rooms (1 fast single batched query)
-    const membershipRows = await this.prisma.chatRoomMember.findMany({
-      where: { memberId, roomId: { in: roomIds } },
-    });
+    // Run hidden messages and memberships queries concurrently
+    const [hidden, membershipRows] = await Promise.all([
+      this.prisma.chatMessageHidden.findMany({ where: { memberId, message: { roomId: { in: roomIds } } }, select: { messageId: true } }),
+      this.prisma.chatRoomMember.findMany({ where: { memberId, roomId: { in: roomIds } } }),
+    ]);
+    const hiddenIds = hidden.map(m => m.messageId);
     const membership = new Map(membershipRows.map((m) => [m.roomId, m]));
 
     // 2. Latest message per room - Hot SQLite store read (<0.05ms)
@@ -548,6 +557,7 @@ export class ChatService implements OnApplicationBootstrap {
       return bt - at;
     });
     this.userRoomsListCache.set(memberId, { rooms: out, expiresAt: now + 5000 });
+    this.logger.log(`CHAT_LOAD_ROOMS userId=${memberId} roomsCount=${out.length} durationMs=${Date.now() - now}`);
     return out;
   }
 
@@ -765,6 +775,7 @@ export class ChatService implements OnApplicationBootstrap {
         );
       });
 
+      this.logger.log(`CHAT_LOAD_MESSAGES roomId=${roomId} userId=${viewer.memberId} count=${dtos.length} durationMs=${Date.now() - now}`);
       return {
         syncCursor,
         messages: [...dtos].reverse(),
@@ -815,6 +826,7 @@ export class ChatService implements OnApplicationBootstrap {
       // Non-blocking
     }
 
+    this.logger.log(`CHAT_LOAD_MESSAGES_FALLBACK roomId=${roomId} userId=${viewer.memberId} count=${page.length} durationMs=${Date.now() - now}`);
     return {
       syncCursor,
       messages: [...page].reverse().map((m) => this.toMessageDto(m, viewer, roomMembers)),
@@ -977,9 +989,10 @@ export class ChatService implements OnApplicationBootstrap {
       },
     };
 
-    // Render's free filesystem is ephemeral. Never let the device discard its
-    // durable outbox until PostgreSQL confirms the message, including retries.
+    // Preserve primary durability and notification recovery before acknowledgement.
+    const dbStart = Date.now();
     await this.requirePrimaryPersistence(messageId);
+    const dbDurationMs = Date.now() - dbStart;
 
     // Notifications remain outside the acknowledgement's critical path.
     void this.persistMessageAndNotifyAsync(
@@ -993,7 +1006,7 @@ export class ChatService implements OnApplicationBootstrap {
       mentionedMemberIds,
       isAllMentioned,
       room,
-    );
+    ).catch(err => this.logger.warn(`ChatAsyncNotificationPending: ${err?.message}`));
 
     // 3. Construct instant outgoing message DTO
     const senderDto: SenderRow = {
@@ -1040,9 +1053,13 @@ export class ChatService implements OnApplicationBootstrap {
       room: { members: [] },
     };
 
+    const finalDto = this.toMessageDto(messageResult, viewer);
     this.invalidateRoomCaches(roomId);
-    this.logger.debug(`ChatStoredFast message=${messageId} durationMs=${Date.now() - started}`);
-    return Object.defineProperty(this.toMessageDto(messageResult, viewer), CHAT_NOTIFICATIONS_COMMITTED, { value: true });
+    const totalDurationMs = Date.now() - started;
+    this.logger.log(
+      `CHAT_SEND requestId=${dto.operationId || messageId} conversationId=${roomId} userId=${memberId} dbDurationMs=${dbDurationMs} processingDurationMs=${totalDurationMs - dbDurationMs} totalDurationMs=${totalDurationMs}`
+    );
+    return Object.defineProperty(finalDto, CHAT_NOTIFICATIONS_COMMITTED, { value: true });
   }
 
   private async requirePrimaryPersistence(messageId: string): Promise<void> {

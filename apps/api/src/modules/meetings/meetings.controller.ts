@@ -92,6 +92,12 @@ export class MeetingsController {
     return this.meetingsService.appointSupervisingMinister(id, body ?? {}, userId);
   }
 
+  @RequirePermissions('events.read')
+  @Get(':id/available-members')
+  getAvailableMembers(@Param('id') id: string) {
+    return this.meetingsService.getServiceAvailableMembers(id);
+  }
+
   @Get('calendar')
   calendar(
     @Query('from') from: string,

@@ -279,7 +279,7 @@ export default function AdminLiveMeetingPage() {
         return {
           ...item,
           hasAttended: true,
-          actualArrivalTime: att.actualArrivalTime || null,
+          actualArrivalTime: att.actualArrivalTime || att.joinedAt || null,
           attendanceStatus: att.status || null,
           attendanceType: att.attendanceType || null,
           attendanceMethod: att.attendanceMethod || null,
@@ -730,9 +730,14 @@ export default function AdminLiveMeetingPage() {
                     </span>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    No supervising minister appointed yet. Admins can appoint manually or trigger random selection.
-                  </p>
+                  <div className="mt-1">
+                    <p className="text-sm font-bold text-amber-400">
+                      Supervising Minister: Not yet assigned
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      No supervising minister appointed yet. Admins can appoint manually or trigger random selection.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -755,6 +760,29 @@ export default function AdminLiveMeetingPage() {
                 {meeting?.supervisingMinister ? 'Change Minister' : 'Appoint Minister'}
               </button>
             </div>
+          </div>
+
+          {/* Service Team Coordination Banner */}
+          <div className="mt-4 pt-3.5 border-t border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-indigo-400" />
+              <span className="text-slate-300 font-semibold">
+                Available Service Team:
+              </span>
+              <span className="font-extrabold text-amber-300">
+                {members.filter((m) => m.status === 'ATTENDING').length} available to serve
+              </span>
+              <span className="text-[10px] text-slate-500">(Weekly Availability)</span>
+            </div>
+            <button
+              onClick={() => {
+                setRsvpFilter('ATTENDING');
+                setShowRsvpModal(true);
+              }}
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 font-bold underline transition-colors cursor-pointer self-start sm:self-auto"
+            >
+              View Service Team List ({members.filter((m) => m.status === 'ATTENDING').length}) →
+            </button>
           </div>
         </section>
 
@@ -1426,7 +1454,12 @@ export default function AdminLiveMeetingPage() {
                           <td className="px-4 py-3 text-slate-500 font-medium">{r.member?.subTeam?.name || 'General'}</td>
                           <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
                             <span className="font-mono text-[11px] block">
-                              {r.actualArrivalTime ? new Date(r.actualArrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'}
+                              {(() => {
+                                const arrivalTime = r.actualArrivalTime || r.joinedAt;
+                                return arrivalTime
+                                  ? new Date(arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                  : 'N/A';
+                              })()}
                             </span>
                             {r.durationMinutes !== null && r.durationMinutes !== undefined && (
                               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">

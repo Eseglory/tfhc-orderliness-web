@@ -356,6 +356,51 @@ function EventsManagementContent() {
     }
   }, [paginatedEvents, selectedFocusSession]);
 
+  // Available service team for the focused session
+  const [availableTeam, setAvailableTeam] = useState<{
+    loading: boolean;
+    totalAvailable: number;
+    members: Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      preferredName?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      roleInUnit?: string | null;
+      subTeam?: { name: string } | null;
+      committedAt: string;
+      notes?: string | null;
+    }>;
+  }>({ loading: false, totalAvailable: 0, members: [] });
+
+  useEffect(() => {
+    if (!selectedFocusSession?.id) {
+      setAvailableTeam({ loading: false, totalAvailable: 0, members: [] });
+      return;
+    }
+    let cancelled = false;
+    setAvailableTeam((prev) => ({ ...prev, loading: true }));
+    fetchApi(`/meetings/${selectedFocusSession.id}/available-members`)
+      .then((res: any) => {
+        if (!cancelled && res) {
+          setAvailableTeam({
+            loading: false,
+            totalAvailable: res.totalAvailable || 0,
+            members: res.members || [],
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableTeam({ loading: false, totalAvailable: 0, members: [] });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFocusSession?.id]);
+
   // Unique venues
   const uniqueVenues = useMemo(() => {
     const set = new Set<string>();
@@ -779,17 +824,21 @@ function EventsManagementContent() {
                               <span className="text-slate-500 text-[11px] italic">Not recorded</span>
                             )}
                           </div>
-                          {evt.supervisingMinister && (
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/60">
-                              <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                                <ShieldCheck className="w-3 h-3 text-indigo-400" />
-                                Supervising Minister:
-                              </span>
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/60">
+                            <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                              Supervising Minister:
+                            </span>
+                            {evt.supervisingMinister ? (
                               <span className="font-bold text-indigo-400 text-[11px]">
                                 {evt.supervisingMinister.firstName} {evt.supervisingMinister.lastName}
                               </span>
-                            </div>
-                          )}
+                            ) : (
+                              <span className="text-slate-500 text-[11px] italic">
+                                Not yet assigned
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-slate-800/60">
                             <span className="text-slate-400 text-[11px]">Attendance Policy:</span>
                             <span className="font-semibold text-slate-700 dark:text-slate-300">
@@ -1117,14 +1166,63 @@ function EventsManagementContent() {
                             <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                             Supervising Minister
                           </span>
-                          <p className="font-bold text-indigo-400 text-xs mt-0.5 truncate">
+                          <p className={`font-bold text-xs mt-0.5 truncate ${selectedFocusSession.supervisingMinister ? 'text-indigo-400' : 'text-slate-500 italic'}`}>
                             {selectedFocusSession.supervisingMinister
                               ? `${selectedFocusSession.supervisingMinister.firstName} ${selectedFocusSession.supervisingMinister.lastName}`
-                              : 'Unassigned'}
+                              : 'Not yet assigned'}
                           </p>
                           <p className="text-slate-400 text-[10px] truncate">
-                            {selectedFocusSession.supervisingMinister?.subTeam?.name || selectedFocusSession.supervisingMinister?.roleInUnit || 'Executive Pool'}
+                            {selectedFocusSession.supervisingMinister?.subTeam?.name || selectedFocusSession.supervisingMinister?.roleInUnit || (selectedFocusSession.supervisingMinister ? 'Executive Pool' : 'Needs assignment')}
                           </p>
+                        </div>
+                      </div>
+
+                      {/* Available Service Team (Weekly Availability) */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5 text-indigo-400" />
+                            Available Service Team ({availableTeam.totalAvailable})
+                          </h4>
+                          <span className="text-[10px] text-slate-500 font-medium">Via Weekly Availability</span>
+                        </div>
+                        <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 text-xs">
+                          {availableTeam.loading ? (
+                            <div className="py-2 text-slate-500 flex items-center gap-2">
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                              Loading available service team...
+                            </div>
+                          ) : availableTeam.members.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-[11px] text-slate-400">
+                                {availableTeam.totalAvailable} {availableTeam.totalAvailable === 1 ? 'member has' : 'members have'} indicated availability to serve:
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                                {availableTeam.members.map((m) => (
+                                  <div
+                                    key={m.id}
+                                    className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="font-semibold text-slate-900 dark:text-white truncate">
+                                        {m.firstName} {m.lastName}
+                                      </p>
+                                      <p className="text-[10px] text-slate-500 truncate">
+                                        {m.subTeam?.name || m.roleInUnit || 'Service Member'}
+                                      </p>
+                                    </div>
+                                    <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                      Available
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-slate-500 italic py-1 text-[11px]">
+                              No members have indicated availability for this service yet.
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -1292,9 +1390,13 @@ function EventsManagementContent() {
                               <div className="font-bold text-slate-900 dark:text-white">{evt.title}</div>
                               <div className="flex items-center gap-2 text-[11px]">
                                 <span className="text-amber-500 dark:text-amber-400 font-semibold">{evt.eventType?.name || evt.category?.name || 'General Gathering'}</span>
-                                {evt.supervisingMinister && (
+                                {evt.supervisingMinister ? (
                                   <span className="text-indigo-400 font-bold">
                                     · Min: {evt.supervisingMinister.firstName} {evt.supervisingMinister.lastName}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500 italic">
+                                    · Min: Not yet assigned
                                   </span>
                                 )}
                               </div>
@@ -1448,6 +1550,10 @@ function EventsManagementContent() {
                                 <span className="text-amber-400 font-bold">{evt.headcount.totalHeadcount} physical headcount</span>
                               </>
                             )}
+                            <span>•</span>
+                            <span className={evt.supervisingMinister ? 'text-indigo-400 font-semibold' : 'text-slate-500 italic'}>
+                              Min: {evt.supervisingMinister ? `${evt.supervisingMinister.firstName} ${evt.supervisingMinister.lastName}` : 'Not yet assigned'}
+                            </span>
                           </div>
                         </div>
                       </div>

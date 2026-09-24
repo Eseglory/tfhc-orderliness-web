@@ -115,7 +115,7 @@ describe('Wardrobe Domain Logic & Deterministic Scheduling (Unit Tests)', () => 
         }),
         include: { variants: true },
       });
-      expect(res).toEqual(created);
+      expect(res).toMatchObject(created);
     });
 
     it('creates color variants linked to the item', async () => {

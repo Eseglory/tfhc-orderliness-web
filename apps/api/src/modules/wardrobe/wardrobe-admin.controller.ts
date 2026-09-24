@@ -100,13 +100,30 @@ export class WardrobeAdminController {
 
   @Put('items/:id')
   @RequirePermissions('wardrobe.manage')
-  async updateItem(@Param('id') id: string, @Body() dto: UpdateWardrobeItemDto) {
+  async updateItem(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeItemDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateItem(id, dto);
+  }
+
+  @Patch('items/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchItem(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeItemDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateItem(id, dto);
   }
 
   @Delete('items/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteItem(@Param('id') id: string) {
+  async deleteItem(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteItem(id);
   }
 
@@ -130,13 +147,27 @@ export class WardrobeAdminController {
   async updateVariant(
     @Param('id') id: string,
     @Body() dto: UpdateWardrobeVariantDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateVariant(id, dto);
+  }
+
+  @Patch('variants/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchVariant(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeVariantDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateVariant(id, dto);
   }
 
   @Delete('variants/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteVariant(@Param('id') id: string) {
+  async deleteVariant(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteVariant(id);
   }
 
@@ -198,13 +229,27 @@ export class WardrobeAdminController {
   async updateOutfit(
     @Param('id') id: string,
     @Body() dto: UpdateWardrobeOutfitDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateOutfit(id, dto);
+  }
+
+  @Patch('outfits/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchOutfit(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeOutfitDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateOutfit(id, dto);
   }
 
   @Delete('outfits/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteOutfit(@Param('id') id: string) {
+  async deleteOutfit(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteOutfit(id);
   }
 
@@ -243,7 +288,20 @@ export class WardrobeAdminController {
   async updateSchedule(
     @Param('id') id: string,
     @Body() dto: UpdateWardrobeScheduleDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateSchedule(id, dto);
+  }
+
+  @Patch('schedules/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchSchedule(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeScheduleDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateSchedule(id, dto);
   }
 
@@ -252,17 +310,20 @@ export class WardrobeAdminController {
   async setPublishStatus(
     @Param('id') id: string,
     @Body() body: { publish: boolean },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.setPublishStatus(id, Boolean(body.publish));
   }
 
   @Delete('schedules/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteSchedule(@Param('id') id: string) {
+  async deleteSchedule(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteSchedule(id);
   }
 
-  @Post('schedules/generate-monthly')
+  @Post(['schedules/generate-monthly', 'schedules/bulk-monthly'])
   @RequirePermissions('wardrobe.manage')
   async generateMonthlySundays(
     @Body() dto: GenerateMonthlySundaysDto,
@@ -306,13 +367,27 @@ export class WardrobeAdminController {
   async updateCategory(
     @Param('id') id: string,
     @Body() dto: UpdateWardrobeCategoryDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateCategory(id, dto);
+  }
+
+  @Patch('categories/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchCategory(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeCategoryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateCategory(id, dto);
   }
 
   @Delete('categories/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteCategory(@Param('id') id: string) {
+  async deleteCategory(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteCategory(id);
   }
 
@@ -350,13 +425,27 @@ export class WardrobeAdminController {
   async updateColor(
     @Param('id') id: string,
     @Body() dto: UpdateWardrobeColorDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    assertWardrobeCreateAuthority(user);
+    return this.adminService.updateColor(id, dto);
+  }
+
+  @Patch('colors/:id')
+  @RequirePermissions('wardrobe.manage')
+  async patchColor(
+    @Param('id') id: string,
+    @Body() dto: UpdateWardrobeColorDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.updateColor(id, dto);
   }
 
   @Delete('colors/:id')
   @RequirePermissions('wardrobe.manage')
-  async deleteColor(@Param('id') id: string) {
+  async deleteColor(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertWardrobeCreateAuthority(user);
     return this.adminService.deleteColor(id);
   }
 }
