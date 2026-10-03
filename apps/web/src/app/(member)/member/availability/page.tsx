@@ -101,7 +101,7 @@ export default function MemberAvailabilityPage() {
           <div>
             <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
             <p className="text-[11px] font-semibold text-on-surface-variant">
-              {isRecovery ? 'Tuesday Recovery Window (Closes 11:59 PM WAT)' : 'Open: Monday 12:00 AM – 12:00 PM WAT'}
+              {isRecovery ? 'Recovery Window (Closes 11:59 PM WAT)' : 'Open: Monday 12:00 AM – Tuesday 12:00 PM WAT'}
             </p>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function MemberAvailabilityPage() {
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1 font-semibold">
                         {isRecovery
                           ? 'Tuesday recovery window remains open until 11:59 PM WAT. You may update your service selection below.'
-                          : 'Window remains open until Monday at 12:00 PM WAT. You may update your service selection below.'}
+                          : 'Window remains open until Tuesday at 12:00 PM WAT. You may update your service selection below.'}
                       </p>
                     ) : (
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1">
@@ -192,10 +192,10 @@ export default function MemberAvailabilityPage() {
                       Submit This Week&apos;s Availability
                     </h2>
                     <p className="text-xs sm:text-sm text-amber-900 dark:text-amber-200 font-medium leading-relaxed">
-                      Following Monday&apos;s missed window, availability has been reopened today for this week only. Please select the services you expect to attend below.
+                      Following the missed window, availability has been reopened today for this week only. Please select the services you expect to attend below.
                     </p>
                     <p className="text-[11px] text-on-surface-variant font-medium pt-1">
-                      Standard schedule remains every Monday 12:00 AM – 12:00 PM WAT.
+                      Standard schedule remains Monday 12:00 AM – Tuesday 12:00 PM WAT.
                     </p>
                   </div>
                 </div>
@@ -214,7 +214,7 @@ export default function MemberAvailabilityPage() {
                       Let us know which services you will attend this week. Submitting your availability serves as your attendance confirmation.
                     </p>
                     <p className="text-xs text-blue-800 dark:text-blue-300 font-bold pt-1">
-                      Deadline: Monday at 12:00 PM WAT
+                      Deadline: Tuesday at 12:00 PM WAT
                     </p>
                   </div>
                 </div>
@@ -327,7 +327,7 @@ export default function MemberAvailabilityPage() {
                   </p>
                 ) : (
                   <p className="text-center text-[11px] text-on-surface-variant">
-                    You can update this until Monday at 12:00 PM WAT.
+                    You can update this until Tuesday at 12:00 PM WAT.
                   </p>
                 )}
               </div>

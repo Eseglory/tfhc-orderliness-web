@@ -490,5 +490,162 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
     'Ladies: Colour Riot pant trouser suit. Men: 2025 Conference Outfit.',
   );
 
-  console.log('✅ High-Fidelity Uniform Roster Seeded');
+  // =========================================================================
+  // OCTOBER 2026 UNIFORM ROSTER
+  // =========================================================================
+  const nativeGreenWear = await upsertItem(
+    'item-native-green',
+    'Traditional Native Attire (Touch of Green)',
+    'NATIVE_WEAR',
+    'ALL',
+    'Touch of Emerald Green',
+    '#15803D',
+    'Traditional African native wear with elegant emerald green accents (Agbada / Kaftan / Senator / Ankara / Lace / Gele)',
+  );
+
+  const conf2026Outfit = await upsertItem(
+    'item-conf-2026-outfit',
+    '2026 Conference Outfit',
+    'SUIT',
+    'ALL',
+    '2026 Royal Blue & Gold',
+    '#1E3A8A',
+    'Official 2026 Annual Church Conference uniform outfit for all members',
+  );
+
+  const greyDress = await upsertItem(
+    'item-dress-grey',
+    'Grey Corporate Dress / Gown',
+    'GOWN',
+    'FEMALE',
+    'Classic Grey',
+    '#6B7280',
+    'Tailored classic grey corporate gown/dress for sisters',
+  );
+
+  const redNeckScarf = await upsertItem(
+    'item-scarf-red',
+    'Red Neckline Silk Scarf',
+    'SCARF',
+    'FEMALE',
+    'Crimson Red',
+    '#DC2626',
+    'Vibrant crimson red scarf worn elegantly on the neckline',
+  );
+
+  const greySuit = await upsertItem(
+    'item-suit-grey',
+    'Grey Corporate Suit',
+    'SUIT',
+    'MALE',
+    'Classic Grey',
+    '#6B7280',
+    'Sharp classic tailored grey corporate 2-piece suit for brothers',
+  );
+
+  const adireBottom = await upsertItem(
+    'item-adire-bottom',
+    'Adire Pant Trouser / Skirt',
+    'TROUSERS',
+    'ALL',
+    'Indigo & Earth Adire',
+    '#312E81',
+    'Traditional Nigerian Adire patterned pant trousers or skirts',
+  );
+
+  const blackTurtleneck = await upsertItem(
+    'item-turtleneck-black',
+    'Black Turtleneck Top',
+    'SHIRT',
+    'ALL',
+    'Midnight Black',
+    '#111827',
+    'Sleek fitted black turtleneck long-sleeve knit top for all members',
+  );
+
+  // Oct 4: Native for all (Touch of Green)
+  const outfitOct04 = await upsertOutfit(
+    'outfit-oct-04',
+    'Native for All (Touch of Green)',
+    'ALL',
+    '• All Members (Brothers & Sisters): Native for all with a touch of green. Traditional Nigerian attire (Agbada / Kaftan / Senator / Ankara / Lace / Gele).',
+    [
+      { item: nativeGreenWear, layerOrder: 1, notes: 'All: Native wear with a touch of green' },
+    ],
+    '/wardrobe/native-touch-green.jpg',
+  );
+  await upsertSchedule(
+    'sched-oct-04',
+    'Sunday 4th October: Native for All (Touch of Green)',
+    '2026-10-04',
+    outfitOct04.id,
+    'Native for all (Touch of Green).',
+  );
+
+  // Oct 11: 2026 Conference outfit for all
+  const outfitOct11 = await upsertOutfit(
+    'outfit-oct-11',
+    '2026 Conference Outfit (For All)',
+    'ALL',
+    '• All Members (Brothers & Sisters): Official 2026 Annual Conference uniform outfit for all members.',
+    [
+      { item: conf2026Outfit, layerOrder: 1, notes: 'All: 2026 Conference uniform outfit' },
+      { item: blackShoes, layerOrder: 2, notes: 'All: Formal shoes / heels' },
+    ],
+    '/wardrobe/conference-2026.jpg',
+  );
+  await upsertSchedule(
+    'sched-oct-11',
+    'Sunday 11th October: 2026 Conference Outfit for All',
+    '2026-10-11',
+    outfitOct11.id,
+    '2026 Conference outfit for all.',
+  );
+
+  // Oct 18: Ladies: Grey Dress and Red Scarf on the neck | Men: Grey suit / Black Shirt / Red Tie
+  const outfitOct18 = await upsertOutfit(
+    'outfit-oct-18',
+    'Ladies: Grey Dress & Red Scarf | Men: Grey Suit, Black Shirt & Red Tie',
+    'ALL',
+    '• Sisters/Ladies: Grey Dress and Red Scarf on the neck.\n• Brothers/Men: Grey suit, Black Shirt and Red Tie.',
+    [
+      { item: greyDress, layerOrder: 1, notes: 'Ladies: Grey corporate dress' },
+      { item: redNeckScarf, layerOrder: 2, notes: 'Ladies: Red scarf on the neck' },
+      { item: greySuit, layerOrder: 3, notes: 'Men: Grey corporate suit' },
+      { item: blackShirt, layerOrder: 4, notes: 'Men: Black formal shirt' },
+      { item: redTie, layerOrder: 5, notes: 'Men: Red necktie' },
+      { item: blackShoes, layerOrder: 6, notes: 'All: Formal black shoes / heels' },
+    ],
+    '/wardrobe/grey-red-accent.jpg',
+  );
+  await upsertSchedule(
+    'sched-oct-18',
+    'Sunday 18th October: Grey Corporate & Red Accents',
+    '2026-10-18',
+    outfitOct18.id,
+    'Ladies: Grey Dress and Red Scarf on the neck. Men: Grey suit / Black Shirt / Red Tie.',
+  );
+
+  // Oct 25: Adire Pant / Skirt and Black turtleneck for all
+  const outfitOct25 = await upsertOutfit(
+    'outfit-oct-25',
+    'Adire Pant / Skirt & Black Turtleneck (For All)',
+    'ALL',
+    '• Sisters/Ladies: Adire Pant Trouser or Skirt with Black turtleneck top.\n• Brothers/Men: Adire Pant Trouser with Black turtleneck top.',
+    [
+      { item: adireBottom, layerOrder: 1, notes: 'All: Adire pant trousers or skirt' },
+      { item: blackTurtleneck, layerOrder: 2, notes: 'All: Black turtleneck top' },
+      { item: blackShoes, layerOrder: 3, notes: 'All: Black shoes / heels' },
+    ],
+    '/wardrobe/adire-black-turtleneck.jpg',
+  );
+  await upsertSchedule(
+    'sched-oct-25',
+    'Sunday 25th October: Adire Pant / Skirt & Black Turtleneck',
+    '2026-10-25',
+    outfitOct25.id,
+    'Adire Pant / Skirt and Black turtleneck for all.',
+  );
+
+  console.log('✅ High-Fidelity Uniform Roster Seeded (Including October 2026)');
 }

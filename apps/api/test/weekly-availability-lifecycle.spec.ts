@@ -150,7 +150,7 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
   });
 
   describe('1. WAT Timezone Calculations & Window Boundaries', () => {
-    it('accurately computes Monday 12:00 AM WAT opensAt and Monday 12:00 PM WAT closesAt', () => {
+    it('accurately computes Monday 12:00 AM WAT opensAt and Tuesday 12:00 PM WAT closesAt', () => {
       // Test given Monday in Lagos: 2026-09-14 06:00:00 WAT (05:00 UTC)
       const testTime = new Date('2026-09-14T05:00:00.000Z');
       const windows = service.getWatCycleWindows(testTime);
@@ -159,13 +159,13 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
       // Monday 00:00:00 WAT = Sunday 23:00:00 UTC (2026-09-13T23:00:00Z)
       expect(windows.opensAt.toISOString()).toBe('2026-09-13T23:00:00.000Z');
 
-      // Monday 12:00:00 PM WAT (noon) = Monday 11:00:00 UTC (2026-09-14T11:00:00Z)
-      expect(windows.closesAt.toISOString()).toBe('2026-09-14T11:00:00.000Z');
+      // Tuesday 12:00:00 PM WAT (noon) = Tuesday 11:00:00 UTC (2026-09-15T11:00:00Z)
+      expect(windows.closesAt.toISOString()).toBe('2026-09-15T11:00:00.000Z');
 
       // Next window opens following Monday at 12:00 AM WAT (2026-09-20T23:00:00Z)
       expect(windows.nextOpensAt.toISOString()).toBe('2026-09-20T23:00:00.000Z');
 
-      // 06:00 WAT is within [00:00, 12:00) WAT
+      // 06:00 WAT is within [00:00 Mon, 12:00 Tue) WAT
       expect(windows.isOpen).toBe(true);
     });
 
@@ -175,31 +175,35 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
       expect(windows.isOpen).toBe(true);
     });
 
-    it('Monday 11:59:59 AM WAT -> window is open and allows submission', () => {
-      const mondayMorningWat = new Date('2026-09-14T10:59:59.000Z');
-      const windows = service.getWatCycleWindows(mondayMorningWat);
+    it('Monday 12:00:00 PM WAT (noon) -> window remains open', () => {
+      const mondayNoonWat = new Date('2026-09-14T11:00:00.000Z');
+      const windows = service.getWatCycleWindows(mondayNoonWat);
       expect(windows.isOpen).toBe(true);
     });
 
-    it('Monday 12:00:00 PM WAT (noon) -> window is closed', () => {
-      const mondayNoonWat = new Date('2026-09-14T11:00:00.000Z');
-      const windows = service.getWatCycleWindows(mondayNoonWat);
+    it('Tuesday 11:59:59 AM WAT -> window is open and allows submission', () => {
+      const tuesdayMorningWat = new Date('2026-09-15T10:59:59.000Z');
+      const windows = service.getWatCycleWindows(tuesdayMorningWat);
+      expect(windows.isOpen).toBe(true);
+    });
+
+    it('Tuesday 12:00:00 PM WAT (noon) -> window is closed', () => {
+      const tuesdayNoonWat = new Date('2026-09-15T11:00:00.000Z');
+      const windows = service.getWatCycleWindows(tuesdayNoonWat);
       expect(windows.isOpen).toBe(false);
     });
 
-    it('Monday after 12:00 PM WAT (e.g. 12:01 PM, 6:00 PM WAT) -> window is closed', () => {
-      const mondayEveningWat = new Date('2026-09-14T17:00:00.000Z');
-      const windows = service.getWatCycleWindows(mondayEveningWat);
+    it('Tuesday after 12:00 PM WAT (e.g. 12:01 PM, 6:00 PM WAT) -> window is closed', () => {
+      const tuesdayEveningWat = new Date('2026-09-15T17:00:00.000Z');
+      const windows = service.getWatCycleWindows(tuesdayEveningWat);
       expect(windows.isOpen).toBe(false);
     });
 
-    it('Tuesday to Sunday -> window is closed', () => {
-      const tuesday = new Date('2026-09-15T10:00:00.000Z');
+    it('Wednesday to Sunday -> window is closed', () => {
       const wednesday = new Date('2026-09-16T12:00:00.000Z');
       const friday = new Date('2026-09-18T15:00:00.000Z');
       const sunday = new Date('2026-09-20T08:00:00.000Z');
 
-      expect(service.getWatCycleWindows(tuesday).isOpen).toBe(false);
       expect(service.getWatCycleWindows(wednesday).isOpen).toBe(false);
       expect(service.getWatCycleWindows(friday).isOpen).toBe(false);
       expect(service.getWatCycleWindows(sunday).isOpen).toBe(false);
@@ -207,7 +211,7 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
   });
 
   describe('2. Member Submission Validation & Open/Closed Enforcement', () => {
-    it('allows active members to submit during the open Monday window', async () => {
+    it('allows active members to submit during the open Monday and Tuesday window', async () => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2026-09-14T07:00:00.000Z')); // Monday 08:00 AM WAT
 
@@ -217,6 +221,12 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
       expect(res.selectedMeetingIds).toEqual(['mtg-tue', 'mtg-sun']);
       expect(inMemoryResponses.length).toBe(1);
       expect(inMemoryCommitments.length).toBe(2);
+
+      // Tuesday 10:00 AM WAT (within the Monday-Tuesday noon window)
+      jest.setSystemTime(new Date('2026-09-15T09:00:00.000Z'));
+      const resTue = await service.submit('mem-2', ['mtg-tue']);
+      expect(resTue.selectedMeetingIds).toEqual(['mtg-tue']);
+      expect(inMemoryResponses.length).toBe(2);
 
       jest.useRealTimers();
     });
@@ -238,9 +248,9 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
       jest.useRealTimers();
     });
 
-    it('rejects submissions when window is closed (Monday after 12:00 PM WAT)', async () => {
+    it('rejects submissions when window is closed (Tuesday after 12:00 PM WAT)', async () => {
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-09-14T11:01:00.000Z')); // Monday 12:01 PM WAT
+      jest.setSystemTime(new Date('2026-09-15T11:01:00.000Z')); // Tuesday 12:01 PM WAT
 
       await service.openCurrentWeek();
       await expect(service.submit('mem-1', ['mtg-tue'])).rejects.toThrow(ForbiddenException);
@@ -248,9 +258,9 @@ describe('Weekly Availability Lifecycle & WAT Timezone Rules Suite', () => {
       jest.useRealTimers();
     });
 
-    it('rejects submissions on Tuesday, Wednesday, Friday, Sunday', async () => {
+    it('rejects submissions on Wednesday, Friday, Sunday', async () => {
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-09-15T09:00:00.000Z')); // Tuesday 10:00 AM WAT
+      jest.setSystemTime(new Date('2026-09-16T09:00:00.000Z')); // Wednesday 10:00 AM WAT
 
       await expect(service.submit('mem-1', ['mtg-tue'])).rejects.toThrow(ForbiddenException);
 

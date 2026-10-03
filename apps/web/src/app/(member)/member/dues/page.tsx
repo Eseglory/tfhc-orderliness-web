@@ -247,6 +247,88 @@ export default function MemberDuesPage() {
   );
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function processReceiptFile(file: File): Promise<{ dataUrl: string; sizeLabel: string }> {
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('PDF receipt must be 10 MB or smaller.');
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Failed to read PDF file.'));
+      reader.onload = () => {
+        resolve({
+          dataUrl: reader.result as string,
+          sizeLabel: formatFileSize(file.size),
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // For images, optimize and resize to ensure fast upload and avoid payload size limits
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read receipt image.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Invalid image file.'));
+      img.onload = () => {
+        try {
+          const MAX_DIM = 1600;
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            const raw = reader.result as string;
+            resolve({ dataUrl: raw, sizeLabel: formatFileSize(file.size) });
+            return;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Use high quality JPEG for universal browser & device compatibility
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          const approxBytes = Math.round((dataUrl.length * 3) / 4);
+          resolve({
+            dataUrl,
+            sizeLabel: formatFileSize(approxBytes),
+          });
+        } catch {
+          // Fallback to raw data url if canvas operations fail
+          resolve({
+            dataUrl: reader.result as string,
+            sizeLabel: formatFileSize(file.size),
+          });
+        }
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function DeclareModal({
   target,
   onClose,
@@ -262,29 +344,51 @@ function DeclareModal({
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [receiptName, setReceiptName] = useState<string>('');
+  const [receiptSize, setReceiptSize] = useState<string>('');
+  const [processingReceipt, setProcessingReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErr('Receipt file size must be less than 5 MB.');
+    setErr('');
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|heic|heif)$/i.test(file.name);
+
+    if (!isPdf && !isImage) {
+      setErr('Please select a valid image (PNG, JPG, WebP) or PDF receipt.');
       return;
     }
 
+    if (file.size > 15 * 1024 * 1024) {
+      setErr('Receipt file size must be less than 15 MB.');
+      return;
+    }
+
+    setProcessingReceipt(true);
     setReceiptName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setReceiptUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+
+    try {
+      const { dataUrl, sizeLabel } = await processReceiptFile(file);
+      setReceiptUrl(dataUrl);
+      setReceiptSize(sizeLabel);
+    } catch (e: any) {
+      setErr(e?.message || 'Could not process receipt file. Please select a different image.');
+      setReceiptUrl(null);
+      setReceiptName('');
+      setReceiptSize('');
+    } finally {
+      setProcessingReceipt(false);
+      e.target.value = '';
+    }
   };
 
   const submit = async () => {
     setErr('');
     if (!(Number(amount) > 0)) return setErr('Enter the amount you paid.');
+    if (processingReceipt) return setErr('Please wait for the receipt to finish processing.');
     setSaving(true);
     try {
       await fetchApi('/me/finance/payments', {
@@ -397,7 +501,12 @@ function DeclareModal({
               <span>Attach Proof of Payment / Receipt</span>
             </span>
 
-            {receiptUrl ? (
+            {processingReceipt ? (
+              <div className="flex items-center justify-center gap-2.5 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/40 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                <span className="material-symbols-outlined animate-spin text-primary text-base">progress_activity</span>
+                <span>Optimizing receipt for upload…</span>
+              </div>
+            ) : receiptUrl ? (
               <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {receiptUrl.startsWith('data:image') ? (
@@ -415,7 +524,9 @@ function DeclareModal({
                     <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 truncate">
                       {receiptName || 'Receipt Attached'}
                     </p>
-                    <p className="text-[10px] text-emerald-700 dark:text-emerald-400">Ready to submit</p>
+                    <p className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                      Ready to submit{receiptSize ? ` • ${receiptSize}` : ''}
+                    </p>
                   </div>
                 </div>
 
@@ -424,8 +535,10 @@ function DeclareModal({
                   onClick={() => {
                     setReceiptUrl(null);
                     setReceiptName('');
+                    setReceiptSize('');
                   }}
                   className="p-1 text-emerald-700 hover:text-red-600 rounded-lg transition-colors shrink-0"
+                  title="Remove receipt"
                 >
                   <span className="material-symbols-outlined text-lg">delete</span>
                 </button>
@@ -436,7 +549,7 @@ function DeclareModal({
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   Click to upload transfer screenshot or receipt
                 </span>
-                <span className="text-[10px] text-slate-500">Supports PNG, JPG, WebP, PDF (up to 5 MB)</span>
+                <span className="text-[10px] text-slate-500">Supports PNG, JPG, WebP, PDF (up to 15 MB)</span>
                 <input
                   type="file"
                   accept="image/*,application/pdf"
@@ -458,13 +571,18 @@ function DeclareModal({
             </button>
             <button
               onClick={submit}
-              disabled={saving}
+              disabled={saving || processingReceipt}
               className="rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white px-5 py-2.5 text-xs font-extrabold shadow-sm transition-transform active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
             >
               {saving ? (
                 <>
                   <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
                   <span>Submitting…</span>
+                </>
+              ) : processingReceipt ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                  <span>Processing Receipt…</span>
                 </>
               ) : (
                 <>

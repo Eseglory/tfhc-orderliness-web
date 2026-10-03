@@ -25,11 +25,19 @@ export class PaymentsService {
       throw new BadRequestException(`Method must be one of: ${METHODS.join(', ')}`);
     }
 
-    const metadata = dto.metadata && typeof dto.metadata === 'object'
-      ? dto.metadata
-      : dto.receiptUrl
-      ? { receiptUrl: String(dto.receiptUrl), receiptName: dto.receiptName ? String(dto.receiptName) : 'Receipt' }
-      : undefined;
+    let metadata: Record<string, unknown> | undefined =
+      dto.metadata && typeof dto.metadata === 'object' ? (dto.metadata as Record<string, unknown>) : undefined;
+
+    if (!metadata && dto.receiptUrl) {
+      const receiptUrl = String(dto.receiptUrl).trim();
+      if (receiptUrl.length > 20 * 1024 * 1024) {
+        throw new BadRequestException('Receipt file exceeds 15 MB limit');
+      }
+      metadata = {
+        receiptUrl,
+        receiptName: dto.receiptName ? String(dto.receiptName).slice(0, 255).trim() : 'Receipt',
+      };
+    }
 
     return {
       purpose: dto.purpose as PaymentPurpose,

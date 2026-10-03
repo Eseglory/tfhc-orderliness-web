@@ -75,8 +75,8 @@ export class AvailabilityService {
     // opensAt: Monday 00:00:00.000 WAT (Sunday 23:00:00 UTC)
     const opensAt = new Date(Date.UTC(mYear, mMonth, mDay, 0 - 1, 0, 0, 0));
 
-    // closesAt: Monday 12:00:00.000 WAT (Monday 11:00:00 UTC)
-    const closesAt = new Date(Date.UTC(mYear, mMonth, mDay, 12 - 1, 0, 0, 0));
+    // closesAt: Tuesday 12:00:00.000 WAT (Tuesday 11:00:00 UTC)
+    const closesAt = new Date(Date.UTC(mYear, mMonth, mDay + 1, 12 - 1, 0, 0, 0));
 
     // nextOpensAt: Next Monday 00:00:00.000 WAT
     const nextOpensAt = new Date(Date.UTC(mYear, mMonth, mDay + 7, 0 - 1, 0, 0, 0));
@@ -434,7 +434,7 @@ export class AvailabilityService {
 
     const isRecovery =
       cycle.state === WeeklyAvailabilityState.OPEN &&
-      cycle.closesAt.getTime() > cycle.opensAt.getTime() + 12 * 3600000;
+      cycle.closesAt.getTime() > cycle.opensAt.getTime() + 36 * 3600000;
 
     return {
       cycle: {

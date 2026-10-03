@@ -79,6 +79,17 @@ export async function fetchApi<T = any>(
     } catch (e) {
       // JSON parse error fallback
     }
+
+    if (
+      response.status === 413 ||
+      (typeof errorMessage === 'string' &&
+        (errorMessage.toLowerCase().includes('entity too large') ||
+          errorMessage.toLowerCase().includes('payload too large') ||
+          errorMessage.toLowerCase().includes('too large')))
+    ) {
+      errorMessage = 'The uploaded receipt or file is too large. Please select a clearer, smaller image or PDF.';
+    }
+
     throw new ApiError(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage, response.status);
   }
 

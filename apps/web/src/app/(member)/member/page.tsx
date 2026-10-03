@@ -296,7 +296,7 @@ export default function MemberDashboard() {
                       {availabilityData?.cycle?.isRecovery ? 'Tuesday Recovery Open' : 'Weekly Availability Open'}
                     </span>
                     <span className="text-[11px] text-on-surface-variant font-medium">
-                      {availabilityData?.cycle?.isRecovery ? 'Closes Tonight 11:59 PM WAT' : 'Closes Monday 12:00 PM WAT'}
+                      {availabilityData?.cycle?.isRecovery ? 'Closes Tonight 11:59 PM WAT' : 'Closes Tuesday 12:00 PM WAT'}
                     </span>
                   </div>
                   <h2 className="text-base sm:text-lg font-black text-on-surface mt-1">

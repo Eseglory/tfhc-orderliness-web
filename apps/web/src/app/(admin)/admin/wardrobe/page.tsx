@@ -65,6 +65,10 @@ export default function AdminWardrobeOverviewPage() {
   const getOutfitImage = (schedule: any) => {
     if (schedule?.outfit?.coverImageUrl) return schedule.outfit.coverImageUrl;
     const title = `${schedule?.title || ''} ${schedule?.outfit?.title || ''}`.toLowerCase();
+    if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
+    if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
+    if (title.includes('grey') || title.includes('red scarf')) return '/wardrobe/grey-red-accent.jpg';
+    if (title.includes('adire') || title.includes('turtleneck')) return '/wardrobe/adire-black-turtleneck.jpg';
     if (title.includes('native') || title.includes('traditional')) return '/wardrobe/native-all.jpg';
     if (title.includes('carton') || title.includes('red tie')) return '/wardrobe/carton-red-tie.jpg';
     if (title.includes('colour riot') || title.includes('color riot')) return '/wardrobe/colour-riot-suit.jpg';

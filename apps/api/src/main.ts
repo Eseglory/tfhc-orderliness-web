@@ -11,10 +11,26 @@ dotenv.config();
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+    bodyParser: false,
+  });
+
+  // Support JSON and URL-encoded payloads up to 15 MB (e.g. proof-of-payment receipts),
+  // while preserving rawBody buffer for webhook signature verifications.
+  app.use(
+    json({
+      limit: '15mb',
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
+  app.use(urlencoded({ extended: true, limit: '15mb' }));
 
   // This is a pure JSON API consumed by a separately-hosted web
   // client, not an HTML-serving origin, so the default CSP (which assumes
