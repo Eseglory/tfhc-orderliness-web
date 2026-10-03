@@ -24,7 +24,7 @@
     { "name": "Amaka Otega", "amount": 2000, "paidMonths": [1,2,3,4,5,6,8,9,10,11,12], "note": "not in the directory; July unpaid" },
     { "name": "Martha John-Williams", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9] },
     { "name": "Adekunle Oluwatobi", "amount": 2000, "paidMonths": [1,2,3,4,5,6], "note": "not in the directory (distinct from Lahan Oluwatobiloba)" },
-    { "name": "David Folawewo", "amount": 2500, "paidMonths": [1,2,3,4,5,6,8,9,10,11,12], "note": "not in the directory; July unpaid" },
+    { "name": "David Folawewo", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "note": "matches directory 'Folawewo David'" },
     { "name": "Lahan Oluwatobiloba", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8] },
     { "name": "Precious Udoh", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "note": "not in the directory" },
     { "name": "Matthew Taiwo", "amount": 2000, "paidMonths": [1,2,3,4,5,6] },
