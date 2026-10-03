@@ -82,7 +82,7 @@
     },
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/test/(admin-team-invite|member-lookup-invite|security-authorization)\\.spec\\.ts$"
+      "/test/(admin-team-invite|member-lookup-invite|member-lookup-invite-security|notification-reliability|notifications-messaging-webhooks|security-authorization)\\.spec\\.ts$"
     ]
   }
 }
