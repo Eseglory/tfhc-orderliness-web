@@ -67,10 +67,21 @@ export class AuthService {
     }
 
     const { user } = await this.prisma.$transaction(async (tx) => {
-      const approved = await tx.approvedMember.findUnique({
+      let approved = await tx.approvedMember.findUnique({
         where: { normalizedEmail },
         include: { member: { include: { user: true } } },
       });
+      if (!approved && tx.approvedMember.findFirst) {
+        approved = await tx.approvedMember.findFirst({
+          where: {
+            OR: [
+              { email: { equals: normalizedEmail, mode: 'insensitive' } },
+              { normalizedEmail: { equals: normalizedEmail, mode: 'insensitive' } },
+            ],
+          },
+          include: { member: { include: { user: true } } },
+        });
+      }
       if (!approved || approved.status !== 'ACTIVE') {
         throw new ForbiddenException({
           code: 'EMAIL_NOT_IN_LOOKUP_TABLE',
@@ -80,7 +91,19 @@ export class AuthService {
 
       const existingUser = approved.member?.user || (await tx.user.findUnique({ where: { email: normalizedEmail } }));
       if (existingUser) {
-        throw new ConflictException('An account already exists. Sign in or use password recovery.');
+        if (existingUser.googleSubject) {
+          throw new ConflictException('This account was registered using Google Sign-In. Please sign in with Google or use "Forgot password" to set a password.');
+        }
+
+        const isFullySetupAccount =
+          existingUser.passwordAuthEnabled &&
+          (existingUser.passwordChangedAt != null || existingUser.emailVerifiedAt != null) &&
+          !existingUser.inviteTokenHash &&
+          existingUser.isActive !== false;
+
+        if (isFullySetupAccount) {
+          throw new ConflictException('An account already exists. Sign in or use password recovery.');
+        }
       }
 
       let member = approved.member;
@@ -147,13 +170,24 @@ export class AuthService {
         emailVerifyTokenHash: null,
         emailVerifyExpiresAt: null,
         isActive: true,
+        deactivatedAt: null,
       };
 
-      const user = await tx.user.create({
-        data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
-      });
+      let user: any;
+      if (existingUser) {
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: { role: Role.MEMBER, ...verifyFields },
+        });
+      } else {
+        user = await tx.user.create({
+          data: { email: normalizedEmail, role: Role.MEMBER, ...verifyFields },
+        });
+      }
 
-      await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
+      if (member.userId !== user.id) {
+        await tx.member.update({ where: { id: member.id }, data: { userId: user.id } });
+      }
 
       await tx.approvedMember.update({
         where: { id: approved.id },
@@ -222,9 +256,29 @@ export class AuthService {
 
   async forgotPassword(dto: { email: string }) {
     const normalizedEmail = dto.email.trim().toLowerCase();
-    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail }, include: { member: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: { member: { include: { approvedMember: true } } },
+    });
     let devUrl: string | undefined;
-    if (user && user.passwordAuthEnabled) {
+    if (user) {
+      if (user.role === Role.MEMBER && this.prisma.approvedMember?.findFirst) {
+        let approved = user.member?.approvedMember;
+        if (!approved) {
+          approved = await this.prisma.approvedMember.findFirst({
+            where: {
+              OR: [
+                { normalizedEmail },
+                { email: { equals: normalizedEmail, mode: 'insensitive' } },
+              ],
+            },
+          });
+        }
+        if (!approved || approved.status !== 'ACTIVE') {
+          return { ok: true, devUrl };
+        }
+      }
+
       const rawToken = crypto.randomBytes(32).toString('hex');
       await this.prisma.user.update({
         where: { id: user.id },
@@ -251,10 +305,34 @@ export class AuthService {
       throw new BadRequestException({ code: 'RESET_INVALID', message: 'This reset link is invalid or has expired. Request a new one.' });
     }
     const tokenHash = hashInviteToken(dto.token.trim());
-    const user = await this.prisma.user.findUnique({ where: { passwordResetTokenHash: tokenHash }, include: { member: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { passwordResetTokenHash: tokenHash },
+      include: { member: { include: { approvedMember: true } } },
+    });
     if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() < Date.now()) {
       throw new BadRequestException({ code: 'RESET_INVALID', message: 'This reset link is invalid or has expired. Request a new one.' });
     }
+
+    if (user.role === Role.MEMBER && this.prisma.approvedMember?.findFirst) {
+      let approved = user.member?.approvedMember;
+      if (!approved) {
+        approved = await this.prisma.approvedMember.findFirst({
+          where: {
+            OR: [
+              { normalizedEmail: user.email.toLowerCase() },
+              { email: { equals: user.email, mode: 'insensitive' } },
+            ],
+          },
+        });
+      }
+      if (!approved || approved.status !== 'ACTIVE') {
+        throw new ForbiddenException({
+          code: 'EMAIL_NOT_IN_LOOKUP_TABLE',
+          message: 'Your email address is not in the church member lookup table. Contact an administrator.',
+        });
+      }
+    }
+
     const passwordHash = await argon2.hash(dto.password);
     const updated = await this.prisma.user.update({
       where: { id: user.id },
@@ -262,10 +340,15 @@ export class AuthService {
         passwordHash,
         passwordResetTokenHash: null,
         passwordResetExpiresAt: null,
+        passwordAuthEnabled: true,
+        isActive: true,
+        deactivatedAt: null,
         // A working reset link also proves control of the inbox.
         emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
         passwordChangedAt: new Date(),
         lastLoginAt: new Date(),
+        inviteTokenHash: null,
+        inviteExpiresAt: null,
       },
       include: { member: true },
     });
@@ -317,14 +400,64 @@ export class AuthService {
     });
 
     if (!user) {
+      if (this.prisma.approvedMember?.findFirst) {
+        const approved = await this.prisma.approvedMember.findFirst({
+          where: {
+            OR: [
+              { normalizedEmail },
+              { email: { equals: normalizedEmail, mode: 'insensitive' } },
+            ],
+          },
+        });
+        if (approved && approved.status === 'ACTIVE') {
+          throw new UnauthorizedException(
+            'Your email is on the approved member list, but you have not created your password yet. Please click "Create an account" below to set up your password.',
+          );
+        }
+      }
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.role === Role.MEMBER && !user.passwordAuthEnabled) {
-      throw new ForbiddenException({ code: 'PASSWORD_AUTH_DISABLED', message: 'Use Google sign-in or password recovery to access this account.' });
+    if (user.role === Role.MEMBER) {
+      let approvedMember = user.member?.approvedMember;
+      if (!approvedMember && this.prisma.approvedMember?.findFirst) {
+        approvedMember = await this.prisma.approvedMember.findFirst({
+          where: {
+            OR: [
+              { normalizedEmail },
+              { email: { equals: normalizedEmail, mode: 'insensitive' } },
+            ],
+          },
+        });
+        if (approvedMember && user.member && approvedMember.memberId !== user.member.id) {
+          await this.prisma.approvedMember.update({
+            where: { id: approvedMember.id },
+            data: { memberId: user.member.id },
+          }).catch(() => undefined);
+        }
+      }
+      if (this.prisma.approvedMember?.findFirst && (!approvedMember || approvedMember.status !== 'ACTIVE')) {
+        throw new ForbiddenException({
+          code: 'MEMBER_NOT_AUTHORIZED',
+          message: 'This account is not currently authorized to access TFHC Orderliness. Your email is not in the approved member lookup table.',
+        });
+      }
     }
 
-    if (!user.isActive && !user.inviteTokenHash) {
+    if (user.role === Role.MEMBER && !user.passwordAuthEnabled) {
+      if (user.googleSubject) {
+        throw new ForbiddenException({
+          code: 'PASSWORD_AUTH_DISABLED',
+          message: 'This account was registered with Google. Use Google sign-in or use "Forgot password?" to set a password.',
+        });
+      }
+      throw new ForbiddenException({
+        code: 'PASSWORD_AUTH_DISABLED',
+        message: 'Password login is not yet set up for this account. Please click "Create an account" below or use "Forgot password?".',
+      });
+    }
+
+    if (Boolean(user.deactivatedAt) || (user.isActive === false && !user.inviteTokenHash && !user.invitedAt)) {
       throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
     }
 
@@ -347,6 +480,7 @@ export class AuthService {
         inviteExpiresAt: null,
         inviteAcceptedAt: user.inviteAcceptedAt || new Date(),
         isActive: true,
+        deactivatedAt: null,
       },
     }).catch(() => undefined);
 
@@ -364,19 +498,6 @@ export class AuthService {
     if (user.role === Role.MEMBER) {
       if (!user.member || (user.member.status !== 'ACTIVE' && !user.inviteTokenHash)) {
         throw new ForbiddenException({ code: 'MEMBER_ACCOUNT_INACTIVE', message: 'This member account is not currently active.' });
-      }
-      let approvedMember = user.member.approvedMember;
-      if (!approvedMember) {
-        approvedMember = await this.prisma.approvedMember.findUnique({ where: { normalizedEmail } });
-        if (approvedMember && approvedMember.memberId !== user.member.id) {
-          await this.prisma.approvedMember.update({
-            where: { id: approvedMember.id },
-            data: { memberId: user.member.id },
-          }).catch(() => undefined);
-        }
-      }
-      if (!approvedMember || approvedMember.status !== 'ACTIVE' || approvedMember.normalizedEmail !== normalizedEmail) {
-        throw new ForbiddenException({ code: 'MEMBER_NOT_AUTHORIZED', message: 'This account is not currently authorized to access TFHC Orderliness. Your email is not in the approved member lookup table.' });
       }
     }
 
@@ -469,7 +590,18 @@ export class AuthService {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         return await this.prisma.$transaction(async tx => {
-          const approved = await tx.approvedMember.findUnique({ where: { normalizedEmail }, include: { member: { include: { user: true } } } });
+          let approved = await tx.approvedMember.findUnique({ where: { normalizedEmail }, include: { member: { include: { user: true } } } });
+          if (!approved && tx.approvedMember.findFirst) {
+            approved = await tx.approvedMember.findFirst({
+              where: {
+                OR: [
+                  { email: { equals: normalizedEmail, mode: 'insensitive' } },
+                  { normalizedEmail: { equals: normalizedEmail, mode: 'insensitive' } },
+                ],
+              },
+              include: { member: { include: { user: true } } },
+            });
+          }
           if (!approved || approved.status !== 'ACTIVE') {
             throw new ForbiddenException({
               code: 'EMAIL_NOT_IN_LOOKUP_TABLE',

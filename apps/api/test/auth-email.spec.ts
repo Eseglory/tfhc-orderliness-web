@@ -80,6 +80,23 @@ describe('AuthService.registerUser', () => {
     await expect(makeService(prisma as any).registerUser({ email: 'jane@tfhc.org', password: 'longenough12', firstName: 'J', lastName: 'D', phoneNumber: '0801' }))
       .rejects.toBeInstanceOf(ConflictException);
   });
+
+  it('allows registration for an approved member with an unactivated invite stub', async () => {
+    const stubUser = { id: 'u9', role: 'MEMBER', passwordAuthEnabled: false, googleSubject: null, inviteTokenHash: 'stubHash', isActive: false };
+    const tx = {
+      approvedMember: { findUnique: jest.fn(async () => activeApproved({ member: { id: 'mem1', status: 'ACTIVE', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801', userId: 'u9', user: stubUser } })), update: jest.fn() },
+      user: { update: jest.fn(async () => ({ ...stubUser, isActive: true, passwordAuthEnabled: true })), findUnique: jest.fn(async () => stubUser) },
+      member: { update: jest.fn() },
+    };
+    const prisma = {
+      approvedMember: { findUnique: jest.fn(async () => activeApproved({ member: { id: 'mem1', status: 'ACTIVE', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801', userId: 'u9', user: stubUser } })) },
+      user: { findUnique: jest.fn(async () => stubUser) },
+      $transaction: jest.fn(async (fn: any) => fn(tx)),
+    };
+    const res = await makeService(prisma as any).registerUser({ email: 'jane@tfhc.org', password: 'longenough12', firstName: 'Jane', lastName: 'Doe', phoneNumber: '0801' });
+    expect(tx.user.update).toHaveBeenCalled();
+    expect(res).toHaveProperty('accessToken');
+  });
 });
 
 describe('AuthService.verifyEmail', () => {
@@ -113,6 +130,16 @@ describe('AuthService.forgotPassword / resetPassword', () => {
   it('stores a reset token and emails a password-enabled account', async () => {
     const mail = { sendEmail: jest.fn(async () => ({ messageId: 'm' })) };
     const prisma = { user: { findUnique: jest.fn(async () => ({ id: 'u1', passwordAuthEnabled: true, member: { firstName: 'Jane' } })), update: jest.fn() } };
+    await makeService(prisma as any, mail).forgotPassword({ email: 'jane@tfhc.org' });
+    expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordResetTokenHash: expect.any(String) }) }));
+    expect(mail.sendEmail).toHaveBeenCalled();
+  });
+
+  it('stores a reset token and emails an account even if passwordAuthEnabled is false', async () => {
+    const mail = { sendEmail: jest.fn(async () => ({ messageId: 'm' })) };
+    const prisma = {
+      user: { findUnique: jest.fn(async () => ({ id: 'u1', passwordAuthEnabled: false, member: { firstName: 'Jane' } })), update: jest.fn() },
+    };
     await makeService(prisma as any, mail).forgotPassword({ email: 'jane@tfhc.org' });
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordResetTokenHash: expect.any(String) }) }));
     expect(mail.sendEmail).toHaveBeenCalled();

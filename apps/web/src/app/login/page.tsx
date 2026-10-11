@@ -42,7 +42,7 @@ export default function LoginPage() {
     try {
       const data = await fetchApi('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
       saveAuthToken(data.accessToken, rememberMe);
