@@ -447,10 +447,10 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
   // =========================================================================
   // SCENARIO 10 (Security Test 48):
   // Unauthorized admin / member access to attendance code.
-  // Expected: Only Glory and Comfort roles have permission, other roles do not.
+  // Expected: Only Glory, Comfort, and Paseda roles have permission, other roles do not.
   // =========================================================================
   describe('Security Test 10: Authorization controls strictly protect the attendance code', () => {
-    it('verifies that only SUPER_ADMIN (Glory) and EVENT_MANAGER (Comfort) hold attendance.online_code permission', () => {
+    it('verifies that only SUPER_ADMIN (Glory) and EVENT_MANAGER (Comfort & Paseda) hold attendance.online_code permission', () => {
       const requiredPermission = 'attendance.online_code';
 
       // Glory's role: SUPER_ADMIN (wildcard '*')
@@ -460,7 +460,7 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
         superAdminPermissions.includes(requiredPermission);
       expect(gloryCanAccess).toBe(true);
 
-      // Comfort's role: EVENT_MANAGER
+      // Comfort & Paseda's role: EVENT_MANAGER
       const eventManagerPermissions = SYSTEM_ROLE_DEFINITIONS.EVENT_MANAGER.permissions;
       const comfortCanAccess =
         eventManagerPermissions.includes(PERMISSION_WILDCARD) ||

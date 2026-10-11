@@ -137,7 +137,7 @@ export const AUTHORIZED_PERSONS = {
   AANU_OYENIRAN: 'aanuoyeniran@gmail.com',
   VICTORIA_OLANREWAJU: 'olarenwajuvictoria@gmail.com',
   CONFORT_STEPHEN: 'comfort.osariroya@gmail.com',
-  PASEDA_OLUWAFEMI: 'fpaseda@yahoo.com',
+  PASEDA_OLUWAFEMI: 'folashadeogunlade86@gmail.com',
 } as const;
 
 export function isEseosaGlory(user?: CurrentUser | null): boolean {

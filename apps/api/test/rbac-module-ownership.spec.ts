@@ -51,7 +51,7 @@ describe('Admin RBAC, Module Ownership & Welfare Fund Approval Workflow', () => 
 
   const passedEventManager = {
     userId: 'passed-uuid-4',
-    email: 'fpaseda@yahoo.com',
+    email: 'folashadeogunlade86@gmail.com',
     role: 'ADMIN',
     isSuperAdmin: false,
     permissions: SYSTEM_ROLE_DEFINITIONS[SYSTEM_ROLE.EVENT_MANAGER].permissions,

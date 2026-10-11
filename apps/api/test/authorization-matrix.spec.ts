@@ -66,7 +66,7 @@ describe('TFHC-ORDERLINESS Authorization Matrix Rules', () => {
 
   const pasedaUser = {
     userId: 'paseda-id',
-    email: 'fpaseda@yahoo.com',
+    email: 'folashadeogunlade86@gmail.com',
     role: 'ADMIN',
     isSuperAdmin: false,
   };

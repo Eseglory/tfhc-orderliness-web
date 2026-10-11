@@ -821,7 +821,7 @@ export default function AdminLiveMeetingPage() {
               </div>
             </div>
 
-            {/* Attendance Code Card - Visible only to authorized dashboards (Glory & Comfort) */}
+            {/* Attendance Code Card - Visible only to authorized dashboards (Glory, Comfort & Paseda) */}
             {can('attendance.online_code') && adminOnlineCodeData ? (
               <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/30 via-slate-900 to-indigo-950/40 border border-blue-500/40 shadow-md space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -890,7 +890,7 @@ export default function AdminLiveMeetingPage() {
               <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-slate-400 text-xs flex items-center gap-2.5">
                 <Shield className="w-4 h-4 text-slate-500" />
                 <span>
-                  Attendance code access is restricted to designated meeting administrators (Glory and Comfort).
+                  Attendance code access is restricted to designated meeting administrators (Glory, Comfort, and Paseda).
                 </span>
               </div>
             ) : null}

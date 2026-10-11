@@ -54,7 +54,7 @@ const ADMIN_ASSIGNMENTS = [
   { email: 'engreseglory@gmail.com', name: 'Eseosa Glory', roleKey: SYSTEM_ROLE.SUPER_ADMIN },
   { email: 'aanuoyeniran@gmail.com', name: 'Aanu', roleKey: SYSTEM_ROLE.WARDROBE_MANAGER },
   { email: 'olarenwajuvictoria@gmail.com', name: 'Victoria', roleKey: SYSTEM_ROLE.WARDROBE_MANAGER },
-  { email: 'fpaseda@yahoo.com', name: 'Passed', roleKey: SYSTEM_ROLE.EVENT_MANAGER },
+  { email: 'folashadeogunlade86@gmail.com', name: 'Passed', roleKey: SYSTEM_ROLE.EVENT_MANAGER },
   { email: 'comfort.osariroya@gmail.com', name: 'Confort', roleKey: SYSTEM_ROLE.EVENT_MANAGER },
   { email: 'nicoleokafor0@gmail.com', name: 'Nicole', roleKey: SYSTEM_ROLE.APPROVAL_MANAGER },
   { email: 'dotunakingbesote@gmail.com', name: 'Dotun', roleKey: SYSTEM_ROLE.APPROVAL_MANAGER },
