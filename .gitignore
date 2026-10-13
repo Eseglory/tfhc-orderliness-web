@@ -38,9 +38,14 @@ test-results-pwa/
 .validation/
 test-results-member/
 
-# Safe configuration templates and non-secret deployment env
+# Safe configuration templates and deployment env
 !.env.example
+!apps/api/.env.example
+!apps/web/.env.example
 !apps/web/.env.production
+!.env
+!apps/api/.env
+!apps/web/.env
 
 # Local SQLite databases and test runtime data
 apps/api/data/

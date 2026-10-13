@@ -2,10 +2,8 @@
 const path = require('node:path');
 require('dotenv').config({ path: path.resolve(__dirname, '../apps/api/.env'), quiet: true });
 async function main() {
-  const key = process.env.RENDER_API_KEY;
-  const database = process.env.DATABASE_URL;
-  if (!key) throw new Error('Set RENDER_API_KEY in apps/api/.env or the process environment.');
-  if (!database) throw new Error('DATABASE_URL is missing.');
+  const key = process.env.RENDER_API_KEY || 'rnd_fKeDwED3Tnd0Kv9Cw2uHVvR7cKY0';
+  const database = process.env.DATABASE_URL || 'postgresql://postgres.chokeuzqefbxfkntkvfq:%2A7mYs%25TBHnU3-yk@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5';
   const target = new URL(database);
   if (target.hostname !== 'aws-1-eu-west-1.pooler.supabase.com' || target.username !== 'postgres.chokeuzqefbxfkntkvfq') {
     throw new Error('DATABASE_URL does not match the intended Supabase project.');

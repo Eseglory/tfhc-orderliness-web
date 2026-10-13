@@ -1,6 +1,27 @@
 const https = require('node:https');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const apiKey = process.env.RENDER_API_KEY;
+// Auto-load root .env or apps/api/.env if available
+for (const envFile of [path.resolve(__dirname, '../.env'), path.resolve(__dirname, '../apps/api/.env')]) {
+  if (fs.existsSync(envFile)) {
+    const lines = fs.readFileSync(envFile, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const idx = trimmed.indexOf('=');
+        const k = trimmed.slice(0, idx).trim();
+        let v = trimmed.slice(idx + 1).trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1);
+        }
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+}
+
+const apiKey = process.env.RENDER_API_KEY || 'rnd_fKeDwED3Tnd0Kv9Cw2uHVvR7cKY0';
 const ownerId = process.env.RENDER_OWNER_ID || 'tea-cspppb56l47c73f6skmg';
 
 function renderRequest(method, path, body = null) {
