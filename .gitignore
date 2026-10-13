@@ -38,10 +38,7 @@ test-results-pwa/
 .validation/
 test-results-member/
 
-# Safe configuration templates and deployment env
-!.env.example
-!apps/api/.env.example
-!apps/web/.env.example
+# Production deployment environments
 !apps/web/.env.production
 !.env
 !apps/api/.env
