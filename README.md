@@ -71,29 +71,39 @@ yarn dev:web   # Runs Next.js Web App on http://localhost:3000
 
 ---
 
-## ☁️ Deployment (Render)
+## ☁️ Deployment
 
-`render.yaml` at the repo root defines a Blueprint: a managed PostgreSQL
-database plus two Docker-runtime web services (`tfhc-orderliness-api`,
-`tfhc-orderliness-web`). To deploy:
+### 1. Vercel (Frontend Next.js Web App)
 
-1. In the Render dashboard, create a new Blueprint from this repository.
-2. After the first deploy, note the actual `*.onrender.com` URL Render
-   assigned each service. If either differs from the `tfhc-orderliness-api` /
-   `tfhc-orderliness-web` names predicted in `render.yaml` (e.g. due to a name
-   collision), update `CORS_ORIGIN` on the API service and
-   `NEXT_PUBLIC_API_URL` (both the env var and the Docker build arg) on the
-   web service, then redeploy the web service so the new value is baked into
-   its client bundle.
-3. Set `GOOGLE_OAUTH_CLIENT_IDS` on the API service, and
-   `NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID` on the web service (both `sync: false`
-   in the blueprint, so both need entering manually in the Render dashboard —
-   not something to commit), to the same Web OAuth 2.0 client ID. See
-   [docs/GOOGLE_OAUTH_CLIENT_SETUP.md](docs/GOOGLE_OAUTH_CLIENT_SETUP.md) —
-   without this, admin login still works but members have no way to sign in.
+The repository includes `vercel.json` and `.vercel/project.json` linking directly to the `tfhc-orderliness-web` project:
+- Build command: `yarn build:shared && yarn build:web`
+- Output directory: `apps/web/.next`
+- Pre-configured public environment variables for API communication and Google OAuth.
 
-The web service's `HEALTHCHECK`/`healthCheckPath` and the API's `/health`
-endpoint are what both Docker and Render use to confirm each service booted.
+To deploy to Vercel from any machine:
+```bash
+# Using project script
+yarn deploy:vercel
+
+# Or directly with Vercel CLI
+npx vercel --prod
+```
+
+### 2. Render (Backend NestJS API & Blueprint)
+
+`render.yaml` at the repo root defines a Blueprint with Docker-runtime web services (`tfhc-orderliness-api`, `tfhc-orderliness-web`):
+
+1. **Automatic / CLI Deployment:**
+   ```bash
+   yarn deploy:render
+   ```
+   Uses `scripts/deploy-to-render.cjs` and `RENDER_API_KEY` to trigger builds for both services.
+
+2. **Render Dashboard Blueprint:**
+   - In the Render dashboard, create a new Blueprint from this repository.
+   - Configure the secret environment variables (`DATABASE_URL`, `JWT_SECRET`, `SMTP_PASSWORD`, etc.).
+   - The API service runs automatic schema migrations via `apps/api/scripts/start.cjs` upon boot.
+   - The web service's `HEALTHCHECK`/`healthCheckPath` (`/api/health`) and the API's `/health` endpoint are used by Render to confirm zero-downtime service health.
 
 ---
 

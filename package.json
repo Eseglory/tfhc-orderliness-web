@@ -19,7 +19,9 @@
     "db:seed": "yarn workspace @tfhc/api prisma:seed",
     "test:e2e": "playwright test",
     "setup:admin": "node scripts/bootstrap-admin.cjs",
-    "setup:google": "node scripts/configure-web-oauth.cjs"
+    "setup:google": "node scripts/configure-web-oauth.cjs",
+    "deploy:render": "node scripts/deploy-to-render.cjs",
+    "deploy:vercel": "vercel --prod"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

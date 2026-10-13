@@ -28,7 +28,8 @@ test-results/
 
 # Isolated Next.js build directories used by verification runs
 .next-*/
-.vercel
+.vercel/*
+!.vercel/project.json
 
 # Isolated PWA validation output
 test-results-pwa/
@@ -37,8 +38,9 @@ test-results-pwa/
 .validation/
 test-results-member/
 
-# Safe configuration templates contain no live credentials.
+# Safe configuration templates and non-secret deployment env
 !.env.example
+!apps/web/.env.production
 
 # Local SQLite databases and test runtime data
 apps/api/data/

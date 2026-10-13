@@ -12,6 +12,7 @@ node_modules
 **/dist
 **/.env
 **/.env.*
+!apps/web/.env.production
 **/*.log
 **/*.tsbuildinfo
 playwright-report
