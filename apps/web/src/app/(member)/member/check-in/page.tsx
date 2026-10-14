@@ -252,20 +252,20 @@ export default function CheckInPage() {
   return (
     <div className="bg-background text-on-background min-h-screen pb-28">
       {/* Top App Bar */}
-      <header className="flex justify-between items-center w-full px-4 h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10">
-        <div className="flex items-center gap-3">
+      <header className="flex justify-between items-center w-full px-3 sm:px-4 h-16 bg-background sticky top-0 z-40 border-b border-outline-variant/10 gap-2">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={() => router.back()}
-            className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
+            className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-full bg-surface-container flex items-center justify-center transition-all duration-200 active:scale-95 hover:opacity-80"
             aria-label="Go back"
           >
-            <span className="material-symbols-outlined text-on-surface-variant">arrow_back</span>
+            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">arrow_back</span>
           </button>
-          <h1 className="font-headline-sm text-base sm:text-lg font-bold text-primary">
+          <h1 className="font-headline-sm text-sm sm:text-lg font-bold text-primary truncate">
             {isOnlineService ? 'Online Meeting Attendance' : 'GPS Attendance & Clock-In'}
           </h1>
         </div>
-        <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
           <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
         </div>
       </header>
@@ -362,13 +362,13 @@ export default function CheckInPage() {
                 )}
 
                 {!isOnlineService && distance !== null && (
-                  <div className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                  <div className={`p-3 rounded-xl border text-xs font-bold flex flex-wrap items-center justify-between gap-1.5 ${
                     meeting.geofenceRadiusMeters >= 50000 || distance <= meeting.geofenceRadiusMeters
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
                       : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
                   }`}>
-                    <span>Distance: {distance}m from {meeting.locationName || 'venue'}</span>
-                    <span>Accuracy: ±{Math.round(location!.accuracy)}m</span>
+                    <span className="truncate">Distance: {distance}m from {meeting.locationName || 'venue'}</span>
+                    <span className="shrink-0">Accuracy: ±{Math.round(location!.accuracy)}m</span>
                   </div>
                 )}
 
