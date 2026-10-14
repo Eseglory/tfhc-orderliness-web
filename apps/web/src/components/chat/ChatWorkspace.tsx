@@ -614,7 +614,7 @@ export function ChatWorkspace({
 
   return (
     <div
-      className="flex w-full h-full min-h-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
+      className="flex w-full max-w-full h-full min-h-0 min-w-0 flex-1 overflow-hidden border-x border-outline-variant/20 bg-surface-container-low"
       style={bottomInset !== '0rem' ? { height: `calc(100dvh - 4rem - ${bottomInset})` } : undefined}
     >
       {forwarding && (
@@ -951,7 +951,7 @@ export function ChatWorkspace({
       </aside>
 
       {/* Main Conversation Thread */}
-      <section className={`flex flex-1 flex-col ${mobileThread ? 'flex' : 'hidden sm:flex'}`}>
+      <section className={`flex flex-1 flex-col min-w-0 max-w-full overflow-hidden ${mobileThread ? 'flex' : 'hidden sm:flex'}`}>
         {!activeRoom ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-on-surface-variant p-6 text-center">
             <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center text-primary">
@@ -965,10 +965,10 @@ export function ChatWorkspace({
         ) : (
           <>
             {/* Thread Header (WhatsApp Style) */}
-            <header className="flex items-center gap-3 border-b border-outline-variant/20 bg-surface-container-lowest px-4 py-2.5 shrink-0">
+            <header className="flex items-center gap-1.5 sm:gap-3 border-b border-outline-variant/20 bg-surface-container-lowest px-2.5 sm:px-4 py-2 sm:py-2.5 shrink-0 w-full max-w-full min-w-0 overflow-hidden">
               <button
                 onClick={() => setMobileThread(false)}
-                className="rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container sm:hidden"
+                className="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container sm:hidden shrink-0"
                 aria-label="Back"
               >
                 <span className="material-symbols-outlined text-[20px]">arrow_back</span>
@@ -977,33 +977,33 @@ export function ChatWorkspace({
               <button
                 type="button"
                 onClick={() => setShowRoomInfo((v) => !v)}
-                className="flex items-center gap-3 min-w-0 flex-1 text-left group hover:opacity-90 transition-opacity"
+                className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 text-left group hover:opacity-90 transition-opacity overflow-hidden"
               >
                 <Avatar
                   name={activeRoom.name}
                   photoUrl={activeRoom.type === 'DIRECT' ? activeRoom.direct?.photoUrl : activeRoom.imageUrl}
                   icon={activeRoom.type === 'DIRECT' ? undefined : roomIcon(activeRoom)}
-                  size={38}
+                  size={36}
                   online={isDirectOnline}
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="truncate text-xs sm:text-sm font-bold text-on-surface group-hover:text-primary transition-colors">
                       {activeRoom.name}
                     </p>
                     {activeRoom.type !== 'DIRECT' && (
-                      <span className="hidden xs:inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
-                        <span className="material-symbols-outlined text-[12px]">group</span>
+                      <span className="hidden xs:inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.2 text-[9px] font-bold text-primary shrink-0">
+                        <span className="material-symbols-outlined text-[11px]">group</span>
                         <span>{activeRoom.memberCount}</span>
                       </span>
                     )}
                   </div>
                   {typingNames.length > 0 ? (
-                    <p className="truncate text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
+                    <p className="truncate text-[11px] sm:text-xs font-bold text-emerald-500 animate-pulse flex items-center gap-1">
                       <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is typing…' : 'are typing…'}</span>
                     </p>
                   ) : activeRoom.type === 'DIRECT' ? (
-                    <p className={`truncate text-xs flex items-center gap-1 ${isDirectOnline ? 'font-bold text-emerald-500' : 'text-on-surface-variant'}`}>
+                    <p className={`truncate text-[11px] sm:text-xs flex items-center gap-1 ${isDirectOnline ? 'font-bold text-emerald-500' : 'text-on-surface-variant'}`}>
                       {isDirectOnline ? (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
@@ -1014,16 +1014,16 @@ export function ChatWorkspace({
                       )}
                     </p>
                   ) : (
-                    <p className="truncate text-xs text-on-surface-variant flex items-center gap-1.5">
+                    <p className="truncate text-[11px] sm:text-xs text-on-surface-variant flex items-center gap-1">
                       <span>{activeRoom.memberCount} members</span>
-                      <span className="text-primary font-bold hover:underline cursor-pointer">· View members list</span>
+                      <span className="text-primary font-bold hover:underline cursor-pointer hidden xs:inline">· View members list</span>
                     </p>
                   )}
                 </div>
               </button>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
                 {/* Voice & Video Call Buttons */}
                 <button
                   type="button"
@@ -1046,11 +1046,11 @@ export function ChatWorkspace({
                       })
                     );
                   }}
-                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer shrink-0"
                   title="Voice Call"
                   aria-label="Voice Call"
                 >
-                  <span className="material-symbols-outlined text-[20px]">call</span>
+                  <span className="material-symbols-outlined text-[18px] sm:text-[20px]">call</span>
                 </button>
 
                 <button
@@ -1074,30 +1074,30 @@ export function ChatWorkspace({
                       })
                     );
                   }}
-                  className="p-2 rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 rounded-lg sm:rounded-xl text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors cursor-pointer shrink-0"
                   title="Video Call"
                   aria-label="Video Call"
                 >
-                  <span className="material-symbols-outlined text-[20px]">videocam</span>
+                  <span className="material-symbols-outlined text-[18px] sm:text-[20px]">videocam</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowInChatSearch((v) => !v)}
-                  className={`p-2 rounded-xl transition-colors ${
+                  className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-colors shrink-0 ${
                     showInChatSearch
                       ? 'bg-primary/10 text-primary'
                       : 'text-on-surface-variant hover:bg-surface-container'
                   }`}
                   title="Search in conversation"
                 >
-                  <span className="material-symbols-outlined text-[20px]">search</span>
+                  <span className="material-symbols-outlined text-[18px] sm:text-[20px]">search</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowRoomInfo((v) => !v)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-all ${
+                  className={`flex items-center gap-1 sm:gap-1.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg sm:rounded-xl transition-all shrink-0 ${
                     showRoomInfo
                       ? 'bg-primary text-on-primary font-bold shadow-xs'
                       : 'bg-surface-container-low text-on-surface hover:bg-surface-container text-xs font-semibold border border-outline-variant/30'
@@ -1105,7 +1105,7 @@ export function ChatWorkspace({
                   title={activeRoom.type === 'DIRECT' ? 'Direct conversation info' : 'View group members'}
                   aria-label="View group members"
                 >
-                  <span className="material-symbols-outlined text-[18px]">
+                  <span className="material-symbols-outlined text-[17px] sm:text-[18px]">
                     {activeRoom.type === 'DIRECT' ? 'info' : 'groups'}
                   </span>
                   {activeRoom.type !== 'DIRECT' && (
@@ -1116,11 +1116,11 @@ export function ChatWorkspace({
                 {activeRoom.type === 'CUSTOM' && (
                   <button
                     onClick={() => setShowManage(true)}
-                    className="rounded-xl p-2 text-on-surface-variant hover:bg-surface-container"
+                    className="rounded-lg sm:rounded-xl p-1.5 sm:p-2 text-on-surface-variant hover:bg-surface-container shrink-0"
                     aria-label="Room settings"
                     title="Manage Members"
                   >
-                    <span className="material-symbols-outlined text-[20px]">
+                    <span className="material-symbols-outlined text-[18px] sm:text-[20px]">
                       {canManageRoom ? 'manage_accounts' : 'person_add'}
                     </span>
                   </button>
@@ -1161,12 +1161,12 @@ export function ChatWorkspace({
             )}
 
             {/* Message Stream Area */}
-            <div className="relative flex-1 flex overflow-hidden">
+            <div className="relative flex-1 flex overflow-hidden min-w-0 max-w-full">
               <div
                 ref={scrollRef}
                 role="log"
                 aria-label="Conversation messages"
-                className="flex-1 space-y-1 overflow-y-auto bg-surface-container-low px-4 py-4"
+                className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden bg-surface-container-low px-2.5 sm:px-4 py-4 min-w-0 max-w-full"
               >
                 {nextCursor && (
                   <div className="flex justify-center py-2">
@@ -1222,7 +1222,7 @@ export function ChatWorkspace({
                         if (m.type === 'SYSTEM') {
                           if (m.attachmentMeta?.kind === 'CALL') {
                             return (
-                              <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5">
+                              <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5 w-full max-w-full min-w-0">
                                 <MessageBubble
                                   message={m}
                                   showSender={false}
@@ -1258,7 +1258,7 @@ export function ChatWorkspace({
                         const showSender =
                           !prev || prev.type === 'SYSTEM' || prev.sender?.memberId !== m.sender?.memberId || prev.mine !== m.mine;
                         return (
-                          <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5">
+                          <div key={m.id} id={`chat-message-${m.id}`} className="py-0.5 w-full max-w-full min-w-0">
                             <MessageBubble
                               message={m}
                               showSender={showSender}

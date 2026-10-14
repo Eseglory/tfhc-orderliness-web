@@ -251,7 +251,7 @@ export function WhatsAppEmojiPicker({
   }, [search]);
 
   return (
-    <div className="w-80 sm:w-96 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-2xl backdrop-blur-md overflow-hidden flex flex-col h-80 z-30 animate-in fade-in zoom-in-95 duration-150">
+    <div className="w-[calc(100vw-1.5rem)] max-w-xs sm:max-w-sm sm:w-96 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest shadow-2xl backdrop-blur-md overflow-hidden flex flex-col h-80 z-30 animate-in fade-in zoom-in-95 duration-150">
       {/* Header with Search & Close */}
       <div className="p-2.5 border-b border-outline-variant/20 bg-surface-container-low flex items-center gap-2">
         <div className="relative flex-1">

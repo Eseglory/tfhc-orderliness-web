@@ -3,10 +3,10 @@ import { ServiceReminderModal } from '../../components/ServiceReminderModal';
 
 export default function MemberLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background text-on-background flex flex-col antialiased">
+    <div className="min-h-screen bg-background text-on-background flex flex-col antialiased w-full max-w-full overflow-x-hidden">
       <ActivenessPopups />
       <ServiceReminderModal />
-      <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col">
+      <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col min-w-0">
         {children}
       </div>
     </div>

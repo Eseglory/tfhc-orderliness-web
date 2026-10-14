@@ -453,7 +453,7 @@ export function Composer({
   const sizePercentage = Math.min(100, Math.round((recordedBytes / MAX_ATTACHMENT_BYTES) * 100));
 
   return (
-    <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest p-2.5 sm:px-4 sm:py-3 transition-colors">
+    <div className="relative border-t border-outline-variant/20 bg-surface-container-lowest p-2 sm:px-4 sm:py-3 transition-colors w-full max-w-full min-w-0 overflow-hidden">
       {/* Hidden File Inputs */}
       <input
         ref={imageInputRef}
@@ -479,7 +479,7 @@ export function Composer({
 
       {/* Categorized WhatsApp Emoji Picker */}
       {showEmojis && (
-        <div ref={emojiRef} className="absolute bottom-16 left-2 sm:left-4 z-30">
+        <div ref={emojiRef} className="absolute bottom-16 left-1 sm:left-4 z-30 max-w-[calc(100vw-1rem)]">
           <WhatsAppEmojiPicker
             onSelect={insertEmoji}
             onClose={() => setShowEmojis(false)}
@@ -491,7 +491,7 @@ export function Composer({
       {showAttachMenu && (
         <div
           ref={attachRef}
-          className="absolute bottom-16 left-12 sm:left-14 z-30 w-52 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-2 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 space-y-1"
+          className="absolute bottom-16 left-2 sm:left-14 z-30 w-52 max-w-[calc(100vw-1rem)] rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-2 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 space-y-1"
         >
           <button
             type="button"
@@ -728,12 +728,12 @@ export function Composer({
         </div>
       ) : (
         /* Standard WhatsApp Input Bar */
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-1.5 sm:gap-2 w-full max-w-full min-w-0">
           {/* Emoji Trigger */}
           <button
             type="button"
             onClick={() => setShowEmojis((v) => !v)}
-            className={`rounded-full p-2.5 transition-colors shrink-0 ${
+            className={`rounded-full p-2 sm:p-2.5 transition-colors shrink-0 ${
               showEmojis
                 ? 'bg-primary/15 text-primary'
                 : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
@@ -741,14 +741,14 @@ export function Composer({
             aria-label="Insert emoji"
             title="Emoji & Reactions"
           >
-            <span className="material-symbols-outlined text-[24px]">sentiment_satisfied</span>
+            <span className="material-symbols-outlined text-[22px] sm:text-[24px]">sentiment_satisfied</span>
           </button>
 
           {/* Attachment Paperclip Menu Trigger */}
           <button
             type="button"
             onClick={() => setShowAttachMenu((v) => !v)}
-            className={`rounded-full p-2.5 transition-colors shrink-0 ${
+            className={`rounded-full p-2 sm:p-2.5 transition-colors shrink-0 ${
               showAttachMenu
                 ? 'bg-primary/15 text-primary'
                 : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
@@ -756,7 +756,7 @@ export function Composer({
             aria-label="Attach file"
             title="Attach image, document or audio"
           >
-            <span className="material-symbols-outlined text-[24px]">attach_file</span>
+            <span className="material-symbols-outlined text-[22px] sm:text-[24px]">attach_file</span>
           </button>
 
           {/* Message Text Input Area */}
@@ -801,7 +801,7 @@ export function Composer({
               }}
               onBlur={() => emitTyping(false)}
               placeholder={editing ? 'Edit message…' : 'Type a message…'}
-              className="w-full max-h-36 resize-none bg-transparent px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
+              className="w-full max-h-36 resize-none bg-transparent px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
             />
           </div>
 
@@ -809,22 +809,22 @@ export function Composer({
           {text.trim() || editing ? (
             <button
               onClick={submit}
-              className="rounded-full bg-primary p-3 text-on-primary shadow-md hover:bg-primary/90 active:scale-95 transition-all shrink-0 flex items-center justify-center"
+              className="rounded-full bg-primary p-2.5 sm:p-3 text-on-primary shadow-md hover:bg-primary/90 active:scale-95 transition-all shrink-0 flex items-center justify-center cursor-pointer"
               aria-label={editing ? 'Save edit' : 'Send message'}
               title="Send (Enter)"
             >
-              <span className="material-symbols-outlined text-[20px]">
+              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">
                 {editing ? 'check' : 'send'}
               </span>
             </button>
           ) : (
             <button
               onClick={startRecording}
-              className="rounded-full bg-surface-container p-3 text-on-surface-variant hover:bg-primary hover:text-on-primary active:scale-95 transition-all shrink-0 flex items-center justify-center"
+              className="rounded-full bg-surface-container p-2.5 sm:p-3 text-on-surface-variant hover:bg-primary hover:text-on-primary active:scale-95 transition-all shrink-0 flex items-center justify-center cursor-pointer"
               aria-label="Record voice note"
               title="Click to record voice note (Opus <= 2 MB)"
             >
-              <span className="material-symbols-outlined text-[20px]">mic</span>
+              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">mic</span>
             </button>
           )}
         </div>

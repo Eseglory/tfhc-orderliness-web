@@ -29,6 +29,11 @@
   -webkit-font-smoothing: antialiased;
 }
 
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
 /* ==========================================================================
    Google Stitch Custom CSS Styles
    ========================================================================== */

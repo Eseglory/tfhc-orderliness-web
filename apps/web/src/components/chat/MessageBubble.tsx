@@ -169,7 +169,7 @@ function VoiceNotePlayer({ url, isMine }: { url: string; isMine?: boolean }) {
   };
 
   return (
-    <div className="flex items-center gap-3 py-1 px-1 min-w-[210px] max-w-[280px]">
+    <div className="flex items-center gap-2.5 sm:gap-3 py-1 px-1 min-w-[170px] max-w-full sm:max-w-[280px]">
       <audio
         ref={audioRef}
         src={mediaSrc.startsWith('/chat/messages/') ? undefined : mediaSrc}
@@ -287,7 +287,7 @@ function WhatsAppCallCard({
 
   return (
     <div
-      className={`relative flex items-center justify-between gap-3 p-3 rounded-2xl min-w-[240px] max-w-[320px] transition-all border shadow-sm ${
+      className={`relative flex items-center justify-between gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-2xl min-w-[190px] max-w-full sm:max-w-[320px] transition-all border shadow-sm ${
         isRedAlert
           ? 'bg-rose-500/10 border-rose-500/30 text-on-surface dark:bg-rose-950/25'
           : mine
@@ -392,6 +392,23 @@ export function MessageBubble({
   const [menu, setMenu] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [copied, setCopied] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      if (bubbleRef.current && !bubbleRef.current.contains(e.target as Node)) {
+        setMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [menu]);
+
   const reactions = message.reactions || {};
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioSpeed, setAudioSpeed] = useState<1 | 1.5 | 2>(1);
@@ -474,7 +491,10 @@ export function MessageBubble({
       )}
 
       <div
-        className={`group relative flex gap-2 mb-1 ${mine ? 'flex-row-reverse' : 'flex-row'}`}
+        ref={bubbleRef}
+        className={`group relative flex gap-2 mb-1.5 w-full max-w-full min-w-0 ${
+          mine ? 'justify-end' : 'justify-start'
+        }`}
         onMouseLeave={() => setMenu(false)}
       >
         {!mine && (
@@ -485,7 +505,7 @@ export function MessageBubble({
           </div>
         )}
 
-        <div className={`flex max-w-[82%] sm:max-w-[70%] flex-col ${mine ? 'items-end' : 'items-start'}`}>
+        <div className={`flex max-w-[85%] sm:max-w-[75%] flex-col min-w-0 relative ${mine ? 'items-end' : 'items-start'}`}>
           {showSender && !mine && (
             <span className="mb-1 px-1 text-xs font-bold text-primary dark:text-orange-400">
               {message.sender?.name}
@@ -589,7 +609,7 @@ export function MessageBubble({
 
             {/* Time and WhatsApp Double Checkmarks */}
             <div
-              className={`mt-1 flex items-center gap-1 text-[10px] ${
+              className={`mt-1 flex items-center gap-1 text-[10px] select-none ${
                 mine ? 'text-white/80 justify-end' : 'text-on-surface-variant/80'
               }`}
             >
@@ -612,6 +632,22 @@ export function MessageBubble({
                   {message.readBy || message.deliveredTo ? 'done_all' : 'done'}
                 </span>
               ) : null}
+
+              {/* Mobile options dropdown trigger */}
+              {!deleted && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenu((v) => !v);
+                  }}
+                  className="sm:hidden ml-1 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 opacity-70 hover:opacity-100 transition-opacity inline-flex items-center justify-center cursor-pointer"
+                  aria-label="Message options"
+                  title="Message options"
+                >
+                  <span className="material-symbols-outlined text-[14px] leading-none">expand_more</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -632,14 +668,114 @@ export function MessageBubble({
                 ))}
             </div>
           )}
+
+          {/* Dropdown Menu (Unified for mobile & desktop, anchored to bubble container) */}
+          {menu && (
+            <div
+              className={`absolute top-full mt-1 z-30 w-48 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 text-xs shadow-xl animate-in fade-in zoom-in-95 duration-100 ${
+                mine ? 'right-0' : 'left-0'
+              }`}
+            >
+              {/* Quick Emoji Reaction row inside menu (instant access on mobile touch!) */}
+              <div className="flex items-center justify-between gap-0.5 px-1 py-1 mb-1 border-b border-outline-variant/20 bg-surface-container-low/60 rounded-xl">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      handleToggleReaction(emoji);
+                      setMenu(false);
+                    }}
+                    className="p-1 rounded-full text-base hover:scale-125 active:scale-95 transition-transform cursor-pointer"
+                    title={`React ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  onReply(message);
+                  setMenu(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">reply</span>
+                <span>Reply</span>
+              </button>
+
+              {message.body && (
+                <button
+                  onClick={handleCopy}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                  <span>{copied ? 'Copied!' : 'Copy text'}</span>
+                </button>
+              )}
+
+              {mine && message.type === 'TEXT' && (
+                <button
+                  onClick={() => {
+                    onEdit(message);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit</span>
+                  <span>Edit</span>
+                </button>
+              )}
+
+              {onForward && (
+                <button
+                  onClick={() => {
+                    onForward(message);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">forward</span>
+                  <span>Forward</span>
+                </button>
+              )}
+
+              {onHide && (
+                <button
+                  onClick={() => {
+                    onHide(message);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">visibility_off</span>
+                  <span>Delete for me</span>
+                </button>
+              )}
+
+              {(mine || canModerate) && (
+                <button
+                  onClick={() => {
+                    onDelete(message);
+                    setMenu(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  <span>Delete for everyone</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Quick Hover Action Bar (WhatsApp Style Reaction Pill + More Menu) */}
+        {/* Quick Hover Action Bar on Desktop (WhatsApp Style Floating Reaction Pill + More Menu) */}
         {!deleted && (
           <div
-            className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity self-center ${
-              mine ? 'flex-row-reverse' : 'flex-row'
-            }`}
+            className={`absolute -top-3.5 z-20 ${
+              mine ? 'right-2' : 'left-10'
+            } hidden md:group-hover:flex items-center gap-1 transition-opacity animate-in fade-in zoom-in-95 duration-100`}
           >
             {/* Quick Emoji Reaction Pill */}
             <div className="flex items-center gap-0.5 p-1 rounded-full bg-surface-container-lowest border border-outline-variant/30 shadow-md">
@@ -648,7 +784,7 @@ export function MessageBubble({
                   key={emoji}
                   type="button"
                   onClick={() => handleToggleReaction(emoji)}
-                  className="p-1 rounded-full text-sm hover:scale-125 transition-transform"
+                  className="p-1 rounded-full text-sm hover:scale-125 transition-transform cursor-pointer"
                   title={`React ${emoji}`}
                 >
                   {emoji}
@@ -659,69 +795,13 @@ export function MessageBubble({
             {/* More Menu Trigger */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setMenu((v) => !v)}
-                className="rounded-full p-1.5 text-on-surface-variant bg-surface-container-lowest hover:bg-surface-container border border-outline-variant/30 shadow-xs transition-colors"
+                className="rounded-full p-1.5 text-on-surface-variant bg-surface-container-lowest hover:bg-surface-container border border-outline-variant/30 shadow-xs transition-colors cursor-pointer"
                 aria-label="Message options"
               >
                 <span className="material-symbols-outlined text-[18px]">more_vert</span>
               </button>
-
-              {menu && (
-                <div
-                  className={`absolute top-8 z-30 w-40 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-1.5 text-xs shadow-xl animate-in fade-in zoom-in-95 duration-100 ${
-                    mine ? 'right-0' : 'left-0'
-                  }`}
-                >
-                  <button
-                    onClick={() => {
-                      onReply(message);
-                      setMenu(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[16px] text-primary">reply</span>
-                    <span>Reply</span>
-                  </button>
-
-                  {message.body && (
-                    <button
-                      onClick={handleCopy}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">content_copy</span>
-                      <span>{copied ? 'Copied!' : 'Copy text'}</span>
-                    </button>
-                  )}
-
-                  {mine && message.type === 'TEXT' && (
-                    <button
-                      onClick={() => {
-                        onEdit(message);
-                        setMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-on-surface hover:bg-surface-container transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                      <span>Edit</span>
-                    </button>
-                  )}
-
-                  {onForward && <button onClick={() => { onForward(message); setMenu(false); }} className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2">Forward</button>}
-                  {onHide && <button onClick={() => { onHide(message); setMenu(false); }} className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2">Delete for me</button>}
-                  {(mine || canModerate) && (
-                    <button
-                      onClick={() => {
-                        onDelete(message);
-                        setMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                      <span>Delete for everyone</span>
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         )}

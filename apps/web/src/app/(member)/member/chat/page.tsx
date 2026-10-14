@@ -11,7 +11,7 @@ function MemberChat() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background w-full max-w-full min-w-0 overflow-x-hidden">
           {/* BottomNav (h-20) is fixed over member routes — keep the composer clear of it. */}
           <ChatWorkspace deepLinkRoomId={room} bottomInset="5rem" />
         </div>

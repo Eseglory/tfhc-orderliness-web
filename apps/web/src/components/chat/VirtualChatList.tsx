@@ -44,7 +44,7 @@ export function VirtualChatList<T extends { id: string }>({ items, scrollRef, ch
   // Small conversations keep native layout; long conversations mount a bounded window.
   const first = items.length <= 60 ? 0 : start;
   const last = items.length <= 60 ? items.length : Math.min(items.length, Math.max(first + 1, end));
-  return <div ref={container} style={{ position: 'relative', paddingTop: offsets[first], paddingBottom: offsets[items.length] - offsets[last] }}>
+  return <div ref={container} className="w-full max-w-full min-w-0" style={{ position: 'relative', paddingTop: offsets[first], paddingBottom: offsets[items.length] - offsets[last] }}>
     {items.slice(first, last).map((item, index) => <MeasuredRow key={item.id} id={item.id} onMeasure={measure}>{children(item, first + index)}</MeasuredRow>)}
   </div>;
 }
@@ -59,5 +59,5 @@ function MeasuredRow({ id, onMeasure, children }: { id: string; onMeasure: (id: 
     onMeasure(id, element.getBoundingClientRect().height);
     return () => observer.disconnect();
   }, [id, onMeasure]);
-  return <div ref={ref} style={{ display: 'flow-root' }}>{children}</div>;
+  return <div ref={ref} className="w-full max-w-full min-w-0" style={{ display: 'flow-root' }}>{children}</div>;
 }
