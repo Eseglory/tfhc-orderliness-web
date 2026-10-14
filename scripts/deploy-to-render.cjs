@@ -80,11 +80,20 @@ async function main() {
     return;
   }
 
+  let commitId;
+  try {
+    commitId = require('node:child_process').execSync('git rev-parse HEAD').toString().trim();
+  } catch {
+    commitId = process.env.COMMIT_ID || process.env.RENDER_GIT_COMMIT;
+  }
+
   console.log(`Found ${tfhcServices.length} TFHC service(s) on Render.`);
   for (const s of tfhcServices) {
     console.log(`📡 Triggering deploy for ${s.name} (${s.id})...`);
     try {
-      const deploy = await renderRequest('POST', `/services/${s.id}/deploys`, { clearCache: 'do_not_clear' });
+      const payload = { clearCache: 'do_not_clear' };
+      if (commitId) payload.commitId = commitId;
+      const deploy = await renderRequest('POST', `/services/${s.id}/deploys`, payload);
       console.log(`✓ Deploy initiated for ${s.name}: Deploy ID ${deploy.id || 'ok'}`);
     } catch (err) {
       console.error(`✗ Failed to trigger deploy for ${s.name}:`, err.message);
