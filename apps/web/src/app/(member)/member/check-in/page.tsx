@@ -403,8 +403,11 @@ export default function CheckInPage() {
                   </div>
                 ) : isOnlineService ? (
                   (() => {
-                    const onlineValidFrom = new Date(new Date(meeting.startTime).getTime() - 10 * 60000);
-                    const onlineValidUntil = new Date(new Date(meeting.startTime).getTime() + 10 * 60000);
+                    const onlineValidFrom = new Date(meeting.startTime);
+                    const rawClose = (meeting as any).attendanceCloseTime || meeting.endTime;
+                    const onlineValidUntil = rawClose
+                      ? new Date(rawClose)
+                      : new Date(new Date(meeting.startTime).getTime() + 60 * 60000);
                     const now = new Date();
                     const isBeforeOnlineWindow = now < onlineValidFrom;
                     const isAfterOnlineWindow = now > onlineValidUntil;
@@ -419,7 +422,7 @@ export default function CheckInPage() {
                               <span>Attendance Not Yet Available</span>
                             </p>
                             <p>
-                              Attendance opens 10 minutes before the meeting starts ({onlineValidFrom.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please try again later.
+                              Attendance opens at scheduled meeting start time ({onlineValidFrom.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please try again later.
                             </p>
                           </div>
                           {meetUrl && (
