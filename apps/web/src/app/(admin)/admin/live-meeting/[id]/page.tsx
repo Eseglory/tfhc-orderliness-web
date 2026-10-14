@@ -823,13 +823,32 @@ export default function AdminLiveMeetingPage() {
 
             {/* Attendance Code Card - Visible only to authorized dashboards (Glory, Comfort & Paseda) */}
             {can('attendance.online_code') && adminOnlineCodeData ? (
-              <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/30 via-slate-900 to-indigo-950/40 border border-blue-500/40 shadow-md space-y-4">
+              <div className={`p-5 rounded-2xl border shadow-md space-y-4 ${
+                adminOnlineCodeData.status === 'ACTIVE'
+                  ? 'bg-gradient-to-r from-blue-900/30 via-slate-900 to-indigo-950/40 border-blue-500/40'
+                  : 'bg-slate-900/90 border-rose-500/30'
+              }`}>
+                {adminOnlineCodeData.status !== 'ACTIVE' && (
+                  <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>
+                      {meeting?.status === 'CLOSED'
+                        ? 'This session is CLOSED. The attendance code below is expired and cannot be used.'
+                        : 'The attendance window for this session is not currently active.'}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <span className="text-xs font-black tracking-wider text-blue-300 uppercase block">
-                      Attendance Code
+                      Attendance Code {adminOnlineCodeData.status !== 'ACTIVE' ? '(EXPIRED)' : ''}
                     </span>
-                    <div className="inline-block py-2.5 px-5 rounded-2xl bg-blue-950/70 border-2 border-blue-400/60 font-mono text-3xl sm:text-4xl font-black text-white tracking-[0.3em] shadow-inner">
+                    <div className={`inline-block py-2.5 px-5 rounded-2xl border-2 font-mono text-3xl sm:text-4xl font-black tracking-[0.3em] shadow-inner ${
+                      adminOnlineCodeData.status === 'ACTIVE'
+                        ? 'bg-blue-950/70 border-blue-400/60 text-white'
+                        : 'bg-slate-950/80 border-slate-700 text-slate-400 line-through'
+                    }`}>
                       {adminOnlineCodeData.attendanceCode}
                     </div>
                   </div>
@@ -871,19 +890,23 @@ export default function AdminLiveMeetingPage() {
 
                 <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800">
                   <p className="text-xs text-slate-400">
-                    Share this 6-digit code with meeting participants during the online gathering to verify attendance.
+                    {adminOnlineCodeData.status === 'ACTIVE'
+                      ? 'Share this 6-digit code with meeting participants during the online gathering to verify attendance.'
+                      : 'Ensure you are viewing the current live session before sharing the attendance code.'}
                   </p>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(adminOnlineCodeData.attendanceCode);
-                      setCopiedCode(true);
-                      setTimeout(() => setCopiedCode(false), 2000);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-900 hover:bg-slate-200 shadow-sm transition-all"
-                  >
-                    {copiedCode ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedCode ? 'COPIED TO CLIPBOARD!' : 'COPY CODE'}</span>
-                  </button>
+                  {adminOnlineCodeData.status === 'ACTIVE' ? (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(adminOnlineCodeData.attendanceCode);
+                        setCopiedCode(true);
+                        setTimeout(() => setCopiedCode(false), 2000);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-900 hover:bg-slate-200 shadow-sm transition-all"
+                    >
+                      {copiedCode ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                      <span>{copiedCode ? 'COPIED TO CLIPBOARD!' : 'COPY CODE'}</span>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : !can('attendance.online_code') ? (

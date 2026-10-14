@@ -374,8 +374,8 @@ export default function MeetingDetailPage() {
                 {attendanceRecord.method === 'ONLINE_CODE' && ' · Submitted valid attendance code'}
               </p>
             </section>
-          ) : currentTime < new Date(meetingStartTime.getTime() - 10 * 60000) ? (
-            /* 2. Before 10-minute window */
+          ) : currentTime < meetingStartTime ? (
+            /* 2. Before meeting start */
             <section className="rounded-2xl border border-blue-200/80 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-950/30 p-5 shadow-xs space-y-2">
               <div className="flex items-center gap-2 text-blue-900 dark:text-blue-200">
                 <span className="material-symbols-outlined text-xl text-blue-600 dark:text-blue-400">lock_clock</span>
@@ -384,16 +384,14 @@ export default function MeetingDetailPage() {
                 </h4>
               </div>
               <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed font-medium">
-                Attendance opens 10 minutes before the meeting starts (
-                {new Date(meetingStartTime.getTime() - 10 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                ). Please try again later.
+                Attendance opens at {meetingStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (meeting start). Please enter the code once the meeting begins.
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 The 6-digit attendance code will be shared by the meeting host during the live session.
               </p>
             </section>
-          ) : currentTime <= new Date(meetingStartTime.getTime() + 10 * 60000) ? (
-            /* 3. Within 10-minute window */
+          ) : currentTime <= closeTimeDate ? (
+            /* 3. Within meeting window (open from meeting start until close/end time) */
             <section className="rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-primary/5 via-blue-50/30 to-purple-50/20 dark:from-primary/10 dark:to-slate-900 p-5 shadow-md space-y-3.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
@@ -406,7 +404,7 @@ export default function MeetingDetailPage() {
                   </span>
                 </div>
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                  Valid until {new Date(meetingStartTime.getTime() + 10 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  Valid until {closeTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
 
@@ -428,7 +426,7 @@ export default function MeetingDetailPage() {
               </button>
             </section>
           ) : (
-            /* 4. After 10-minute window closed */
+            /* 4. After meeting window closed */
             <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-5 shadow-xs space-y-2">
               <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
                 <span className="material-symbols-outlined text-xl text-slate-500">event_busy</span>

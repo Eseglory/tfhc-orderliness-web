@@ -184,15 +184,15 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
       geofenceRadiusMeters: 100000,
       startTime: scheduledStartUtc, // 19:00:00 UTC (20:00 WAT)
       expectedArrivalTime: scheduledStartUtc,
-      attendanceOpenTime: new Date(scheduledStartUtc.getTime() - 10 * 60000), // 19:50 WAT
-      attendanceCloseTime: new Date(scheduledStartUtc.getTime() + 10 * 60000), // 20:10 WAT
+      attendanceOpenTime: scheduledStartUtc, // 20:00 WAT
+      attendanceCloseTime: new Date(scheduledStartUtc.getTime() + 60 * 60000), // 21:00 WAT
       gracePeriodMinutes: 10,
       pointWeight: 1.0,
       visibility: 'PUBLIC',
       audiences: [{ scope: 'ALL_MEMBERS' }],
       category: { pointWeight: 1.0 },
       attendanceCode: '739421',
-      attendanceCodeExpiresAt: new Date(scheduledStartUtc.getTime() + 10 * 60000),
+      attendanceCodeExpiresAt: new Date(scheduledStartUtc.getTime() + 60 * 60000),
     };
 
     service = new AttendanceService(mockPrisma, mockCache, mockAudit);
@@ -308,11 +308,11 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
   // Member submits Wednesday code at 19:49 WAT when meeting starts at 20:00 WAT (11 min before).
   // Expected: Rejected, attendance window has not opened.
   // =========================================================================
-  describe('Security Test 5: Submitting before 10-minute window (19:49 WAT) is rejected', () => {
+  describe('Security Test 5: Submitting before start (19:59 WAT) is rejected', () => {
     it('rejects code submission before valid window opens', async () => {
-      // 19:49:00 WAT = 18:49:00 UTC (11 minutes before 20:00 WAT start)
+      // 19:59:00 WAT = 18:59:00 UTC (1 minute before 20:00 WAT start)
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-09-30T18:49:00.000Z'));
+      jest.setSystemTime(new Date('2026-09-30T18:59:00.000Z'));
 
       await expect(
         service.submitAttendanceCode({
@@ -320,7 +320,7 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
           meetingId: mockMeeting.id,
           code: '739421',
         }),
-      ).rejects.toThrow('Attendance Not Yet Available. Attendance opens 10 minutes before the scheduled meeting start.');
+      ).rejects.toThrow('Attendance Not Yet Available. Attendance opens at scheduled meeting start.');
 
       expect(mockAttendanceRecords.length).toBe(0);
     });
@@ -356,11 +356,11 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
   // Member submits correct code at 20:11 WAT when meeting starts at 20:00 WAT (11 min after).
   // Expected: Rejected, attendance window closed.
   // =========================================================================
-  describe('Security Test 7: Submitting after window (20:11 WAT) is rejected as closed', () => {
-    it('rejects code submission after 10 minutes past start', async () => {
-      // 20:11:00 WAT = 19:11:00 UTC (11 minutes after 20:00 WAT start)
+  describe('Security Test 7: Submitting after window (21:01 WAT) is rejected as closed', () => {
+    it('rejects code submission after meeting window closed', async () => {
+      // 21:01:00 WAT = 20:01:00 UTC (1 minute after 21:00 WAT close)
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-09-30T19:11:00.000Z'));
+      jest.setSystemTime(new Date('2026-09-30T20:01:00.000Z'));
 
       await expect(
         service.submitAttendanceCode({
@@ -497,8 +497,8 @@ describe('Online Meeting Secure Attendance Suite — 10 Security Scenarios', () 
       const adminData = await service.getAttendanceCodeForAdmin('admin-glory', mockMeeting.id);
       expect(adminData.attendanceCode).toBe('739421');
       expect(adminData.status).toBe('ACTIVE');
-      expect(adminData.validFrom).toEqual(new Date('2026-09-30T18:50:00.000Z'));
-      expect(adminData.validUntil).toEqual(new Date('2026-09-30T19:10:00.000Z'));
+      expect(adminData.validFrom).toEqual(new Date('2026-09-30T19:00:00.000Z'));
+      expect(adminData.validUntil).toEqual(new Date('2026-09-30T20:00:00.000Z'));
     });
   });
 
