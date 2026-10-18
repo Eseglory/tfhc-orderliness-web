@@ -9,6 +9,8 @@ data/storage-backups
 .validation
 apps/api/data
 apps/api/test-data
+apps/api/generated
+apps/api/prisma/schema.sqlite.prisma
 **/*.db
 **/*.db-wal
 **/*.db-shm

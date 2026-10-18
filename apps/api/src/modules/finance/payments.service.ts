@@ -112,7 +112,8 @@ export class PaymentsService {
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status !== 'PENDING') throw new BadRequestException('Only pending payments can be confirmed');
     await this.prisma.$transaction(async (tx) => {
-      await tx.payment.update({ where: { id }, data: { status: 'CONFIRMED', confirmedByUserId: userId, confirmedAt: new Date(), rejectionReason: null } });
+      const changed = await tx.payment.updateMany({ where: { id, status: 'PENDING' }, data: { status: 'CONFIRMED', confirmedByUserId: userId, confirmedAt: new Date(), rejectionReason: null } });
+      if (changed.count !== 1) throw new BadRequestException('Payment changed while it was being confirmed; refresh and retry');
       if (payment.duesAssignmentId) await this.dues.applyPaymentDelta(payment.duesAssignmentId, payment.amount, tx);
     });
     await this.audit.record({ actorUserId: userId, action: 'PAYMENT_CONFIRMED', entity: 'Payment', entityId: id });
@@ -125,7 +126,8 @@ export class PaymentsService {
     if (!['PENDING', 'CONFIRMED'].includes(payment.status)) throw new BadRequestException('This payment cannot be rejected');
     if (!reason?.trim()) throw new BadRequestException('A reason is required');
     await this.prisma.$transaction(async (tx) => {
-      await tx.payment.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: reason.trim().slice(0, 500) } });
+      const changed = await tx.payment.updateMany({ where: { id, status: payment.status }, data: { status: 'REJECTED', rejectionReason: reason.trim().slice(0, 500) } });
+      if (changed.count !== 1) throw new BadRequestException('Payment changed while it was being rejected; refresh and retry');
       if (payment.status === 'CONFIRMED' && payment.duesAssignmentId) {
         await this.dues.applyPaymentDelta(payment.duesAssignmentId, -payment.amount, tx);
       }

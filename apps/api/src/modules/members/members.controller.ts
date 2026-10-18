@@ -1,4 +1,5 @@
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SqliteRequestInterceptor } from '../../database-sync/sqlite-request.interceptor';
 import { CreateMemberDto, UpdateMemberDto, GoogleAccessDto } from './member.dto';
 import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ForbiddenException, Delete, UseInterceptors, UploadedFile, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
@@ -122,7 +123,7 @@ export class MembersController {
   }
 
   @Post('me/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }), SqliteRequestInterceptor)
   async uploadMyPhoto(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.membersService.updatePhoto(memberId, file);
@@ -135,7 +136,7 @@ export class MembersController {
   }
 
   @Post('me/banner')
-  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }), SqliteRequestInterceptor)
   async uploadMyBanner(@CurrentUser('memberId') memberId: string | undefined, @UploadedFile() file: { buffer: Buffer; size: number }) {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     return this.membersService.updateBanner(memberId, file);
@@ -156,7 +157,7 @@ export class MembersController {
   @Roles(Role.ADMIN, Role.LEADER)
   @RequirePermissions('members.update')
   @Post(':id/photo')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }), SqliteRequestInterceptor)
   async uploadPhoto(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updatePhoto(id, file);
@@ -170,7 +171,10 @@ export class MembersController {
       throw new NotFoundException('Photo not found');
     }
     res.setHeader('Content-Type', photo.contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800, immutable');
+    // The web app and API are hosted on different origins. Override Helmet's
+    // same-origin resource policy for this already-public image endpoint only.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'public, no-cache');
     res.send(photo.buffer);
   }
 
@@ -185,7 +189,7 @@ export class MembersController {
   @Roles(Role.ADMIN, Role.LEADER)
   @RequirePermissions('members.update')
   @Post(':id/banner')
-  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }))
+  @UseInterceptors(FileInterceptor('banner', { limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 } }), SqliteRequestInterceptor)
   async uploadBanner(@Param('id') id: string, @UploadedFile() file: { buffer: Buffer; size: number }) {
     await this.membersService.findOne(id);
     return this.membersService.updateBanner(id, file);

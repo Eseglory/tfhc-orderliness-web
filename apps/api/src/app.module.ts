@@ -4,6 +4,7 @@ import { PushModule } from './modules/push/push.module';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ResponseSecretsInterceptor } from './common/interceptors/response-secrets.interceptor';
 import { Module } from '@nestjs/common';
+import { RedisModule } from './common/redis/redis.module';
 import { CacheModule } from './common/cache/cache.module';
 import { RbacModule } from './common/rbac/rbac.module';
 import { AccessRolesModule } from './modules/access-roles/access-roles.module';
@@ -32,6 +33,11 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
 import { AbsenceProcessingModule } from './jobs/absence-processing.module';
 import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
+import { DailySyncJob, OPERATIONAL_SYNC_RUNNER } from './database-sync/daily-sync.job';
+import { PrismaService } from './prisma/prisma.service';
+import { SyncRunner } from './database-sync/sync-runner';
+import { PostgresDestination } from './database-sync/postgres-destination';
+import { SqliteRequestInterceptor } from './database-sync/sqlite-request.interceptor';
 
 import { ServicesModule } from './modules/services/services.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
@@ -53,6 +59,7 @@ import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
     // across far more requests per minute than any real user would issue.
     ThrottlerModule.forRoot([{ ttl: 60000, limit: process.env.NODE_ENV !== 'production' && process.env.DISABLE_RATE_LIMIT === 'true' ? 100000 : 300 }]),
     PrismaModule,
+    RedisModule,
     CacheModule,
     RbacModule,
     ApprovalsModule,
@@ -85,7 +92,18 @@ import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
   ],
   controllers: [AppController],
   providers: [
+    { provide: OPERATIONAL_SYNC_RUNNER, inject: [PrismaService], useFactory: (prisma: PrismaService) => {
+      if (!prisma.operationalAdapter || !prisma.centralClient) return null;
+      let destination: PostgresDestination;
+      return new SyncRunner(prisma.operationalAdapter.journal, { apply: async operation => {
+        await prisma.operationalAdapter.protectWrites?.();
+        destination ||= new PostgresDestination(prisma.centralClient, prisma.operationalAdapter.sourceId);
+        return destination.apply(operation);
+      } });
+    } },
+    DailySyncJob,
     WeeklyAvailabilityJob,
+    { provide: APP_INTERCEPTOR, useClass: SqliteRequestInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseSecretsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],

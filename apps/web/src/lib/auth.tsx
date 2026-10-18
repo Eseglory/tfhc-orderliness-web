@@ -34,6 +34,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
+    const updatePhoto = (event: Event) => {
+      const photoUrl = (event as CustomEvent<{ photoUrl: string | null }>).detail.photoUrl;
+      setUser(current => {
+        if (!current) return current;
+        const updated = { ...current, profilePhotoUrl: photoUrl, photoUrl };
+        saveAuthUser(updated, Boolean(localStorage.getItem('tfhc_token')));
+        return updated;
+      });
+    };
+    window.addEventListener('tfhc:profile-photo', updatePhoto);
+    return () => window.removeEventListener('tfhc:profile-photo', updatePhoto);
+  }, []);
+
+  useEffect(() => {
     const changed = (event: Event) => {
       if (event.type === 'storage' && (event as StorageEvent).key !== 'tfhc_token') return;
       setUser(null); setNonce(value => value + 1);

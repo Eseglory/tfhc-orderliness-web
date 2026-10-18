@@ -1,4 +1,5 @@
 import { MembersService } from '../src/modules/members/members.service';
+const sharp: typeof import('sharp').default = require('sharp');
 
 describe('Member profile details', () => {
   const update = jest.fn().mockResolvedValue({});
@@ -25,5 +26,16 @@ describe('Member profile details', () => {
   it.each([{ birthday: '02-30' }, { birthday: '13-01' }, { dateOfBirth: '2001-02-29' }, { firstName: ' ' }])('rejects invalid details %j', async dto => {
     await expect(service.updateSelfProfile('member', dto)).rejects.toThrow();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('invalidates member lists and leaderboards after photo upload and removal', async () => {
+    const photos = new MembersService({ member: { update } } as any, mockCache, {} as any);
+    const buffer = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } }).png().toBuffer();
+    const result = await photos.updatePhoto('member', { buffer, size: buffer.length });
+    expect(result.profilePhotoUrl).toMatch(/^data:image\/webp;base64,/);
+    expect(mockCache.invalidateTags).toHaveBeenCalledWith(['members', 'leaderboard', 'dashboard']);
+    mockCache.invalidateTags.mockClear();
+    await photos.removePhoto('member');
+    expect(mockCache.invalidateTags).toHaveBeenCalledWith(['members', 'leaderboard', 'dashboard']);
   });
 });

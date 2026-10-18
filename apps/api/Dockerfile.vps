@@ -1,0 +1,27 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+RUN corepack enable && corepack prepare yarn@4.5.3 --activate
+COPY package.json yarn.lock .yarnrc.yml ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+RUN apk add --no-cache openssl && yarn workspaces focus @tfhc/api --production
+COPY packages/shared ./packages/shared
+COPY apps/api ./apps/api
+RUN yarn workspace @tfhc/api prisma:generate
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production PORT=4000
+RUN apk add --no-cache openssl
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/packages/shared ./packages/shared
+COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=node:node /app/apps/api/generated ./apps/api/generated
+COPY --from=build --chown=node:node /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/package.json
+USER node
+EXPOSE 4000
+# Schema/bootstrap work is an explicit offline operation, never an automatic
+# production migration triggered by this VPS image starting.
+CMD ["node", "apps/api/dist/src/main.js"]

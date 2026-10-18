@@ -1,4 +1,5 @@
 import { VenueSessionGuard } from '../components/VenueSessionGuard';
+import { SundayAutoCheckIn } from '../components/SundayAutoCheckIn';
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
@@ -10,6 +11,7 @@ import { ThemeProvider } from '../lib/theme';
 import { ToastProvider } from '../components/ui';
 import { AuthProvider } from '../lib/auth';
 import { GlobalCallManager } from '../components/chat/GlobalCallManager';
+import { ReduxProvider } from '../store/provider';
 
 const inter = localFont({
   src: '../../public/fonts/inter-latin.woff2',
@@ -86,18 +88,21 @@ export default function RootLayout({
         className="antialiased selection:bg-secondary-container selection:text-on-secondary-container bg-background text-on-background font-body-md min-h-screen"
         suppressHydrationWarning
       >
-        <ThemeProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <OfflineBanner />
-              <PwaManager />
-              <VenueSessionGuard />
-              <GlobalCallManager />
-              <AuthGate>{children}</AuthGate>
-              <BottomNav />
-            </ToastProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <ReduxProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <OfflineBanner />
+                <PwaManager />
+                <VenueSessionGuard />
+                <SundayAutoCheckIn />
+                <GlobalCallManager />
+                <AuthGate>{children}</AuthGate>
+                <BottomNav />
+              </ToastProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </ReduxProvider>
       </body>
     </html>
   );

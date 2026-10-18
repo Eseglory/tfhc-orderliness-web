@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../../../../../components/ProfileImage';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -310,7 +311,7 @@ export default function MemberCRMProfilePage() {
             <div className="flex items-start gap-4 sm:gap-5">
               <div className="relative shrink-0">
                 {photoUrl ? (
-                  <img
+                  <ProfileImage
                     src={photoUrl}
                     alt={fullName}
                     className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-lg shadow-indigo-900/20 border-2 border-white dark:border-slate-800 shrink-0"

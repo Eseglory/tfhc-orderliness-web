@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError, fetchApi, getAuthToken, removeAuthToken } from '../lib/api';
 import { LogoIcon } from '../components/LogoIcon';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 export default function RootPage() {
   const router = useRouter();
@@ -25,15 +26,17 @@ export default function RootPage() {
     }
   }, [router, attempt]);
 
+  if (!error) return <LoadingScreen message="Loading application…" />;
+
   return (
     <div className="min-h-screen bg-background text-on-background flex flex-col items-center justify-center font-body-md">
       <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4 p-2 shadow-sm border border-outline-variant/20">
         <LogoIcon alt="TFHC Logo" className="w-full h-full object-contain" />
       </div>
-      <p className="font-label-md text-label-md text-on-surface-variant animate-pulse">
-        {error ? 'Unable to connect to your account.' : 'Loading TFHC Orderliness Tracker...'}
+      <p role="alert" className="font-label-md text-label-md text-on-surface-variant">
+        Unable to connect to your account.
       </p>
-      {error && <button onClick={() => setAttempt(value => value + 1)}>Retry connection</button>}
+      <button className="mt-4 rounded-xl bg-primary px-5 py-3 font-semibold text-on-primary" onClick={() => setAttempt(value => value + 1)}>Retry connection</button>
     </div>
   );
 }

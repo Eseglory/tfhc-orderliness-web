@@ -13,6 +13,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { SqliteRequestInterceptor } from '../../database-sync/sqlite-request.interceptor';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
@@ -181,6 +182,7 @@ export class WardrobeAdminController {
     FileInterceptor('image', {
       limits: { fileSize: 2 * 1024 * 1024 + 1, files: 1, fields: 0 },
     }),
+    SqliteRequestInterceptor,
   )
   async uploadImage(
     @UploadedFile() file: { buffer: Buffer; size: number },

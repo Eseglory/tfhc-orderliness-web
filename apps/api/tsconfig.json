@@ -16,12 +16,8 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
-    "noFallthroughCasesInSwitch": false,
-    "paths": {
-      "@tfhc/shared": [
-        "../../packages/shared/src/index.ts"
-      ]
-    }
+    "moduleResolution": "node",
+    "noFallthroughCasesInSwitch": false
   },
   "exclude": [
     "node_modules",

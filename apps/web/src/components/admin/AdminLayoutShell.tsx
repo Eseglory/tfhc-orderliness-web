@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../ProfileImage';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
@@ -475,7 +476,7 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
               className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               {user?.profilePhotoUrl || user?.photoUrl ? (
-                <img
+                <ProfileImage
                   src={user.profilePhotoUrl || user.photoUrl!}
                   alt={user.firstName || 'Administrator'}
                   className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500/30"

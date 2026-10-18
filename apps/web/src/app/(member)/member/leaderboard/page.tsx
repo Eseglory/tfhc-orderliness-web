@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../../../../components/ProfileImage';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -70,7 +71,7 @@ export default function MemberLeaderboardPage() {
             <div className="relative mb-2">
               <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#C0C0C0] shadow-md z-10 relative bg-surface-container flex items-center justify-center font-bold text-sm text-primary">
                 {top2.profilePhotoUrl ? (
-                  <img src={top2.profilePhotoUrl} alt={`${top2.memberName} avatar`} className="w-full h-full object-cover" />
+                  <ProfileImage src={top2.profilePhotoUrl} alt={`${top2.memberName} avatar`} className="w-full h-full object-cover" />
                 ) : top2.memberName && top2.memberName !== '—' ? (
                   <span>{top2.firstName?.[0] || ''}{top2.lastName?.[0] || ''}</span>
                 ) : (
@@ -92,7 +93,7 @@ export default function MemberLeaderboardPage() {
               <span className="material-symbols-outlined text-[#FFD700] absolute -top-6 left-1/2 -translate-x-1/2 text-3xl drop-shadow-md z-20">crown</span>
               <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FFD700] shadow-lg z-10 relative bg-surface-container flex items-center justify-center font-black text-base text-primary">
                 {top1.profilePhotoUrl ? (
-                  <img src={top1.profilePhotoUrl} alt={`${top1.memberName} avatar`} className="w-full h-full object-cover" />
+                  <ProfileImage src={top1.profilePhotoUrl} alt={`${top1.memberName} avatar`} className="w-full h-full object-cover" />
                 ) : top1.memberName && top1.memberName !== '—' ? (
                   <span>{top1.firstName?.[0] || ''}{top1.lastName?.[0] || ''}</span>
                 ) : (
@@ -113,7 +114,7 @@ export default function MemberLeaderboardPage() {
             <div className="relative mb-2">
               <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-[#CD7F32] shadow-md z-10 relative bg-surface-container flex items-center justify-center font-bold text-sm text-primary">
                 {top3.profilePhotoUrl ? (
-                  <img src={top3.profilePhotoUrl} alt={`${top3.memberName} avatar`} className="w-full h-full object-cover" />
+                  <ProfileImage src={top3.profilePhotoUrl} alt={`${top3.memberName} avatar`} className="w-full h-full object-cover" />
                 ) : top3.memberName && top3.memberName !== '—' ? (
                   <span>{top3.firstName?.[0] || ''}{top3.lastName?.[0] || ''}</span>
                 ) : (
@@ -149,7 +150,7 @@ export default function MemberLeaderboardPage() {
                   </div>
                   <div className="flex-1 pl-2 flex items-center gap-2">
                     {item.profilePhotoUrl ? (
-                      <img
+                      <ProfileImage
                         src={item.profilePhotoUrl}
                         alt={`${item.memberName} avatar`}
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0"

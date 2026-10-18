@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../../../components/ProfileImage';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -172,7 +173,7 @@ export default function MemberDashboard() {
         <div className="flex items-center gap-3">
           <Link href="/member/profile" aria-label="My profile" className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-[#f2320c]/20 bg-slate-100 dark:bg-slate-800 p-0.5 shadow-xs transition-transform active:scale-95">
             {perf?.member?.profilePhotoUrl
-              ? <img src={perf.member.profilePhotoUrl} alt="Profile" className="h-full w-full rounded-full object-cover" />
+              ? <ProfileImage src={perf.member.profilePhotoUrl} alt="Profile" className="h-full w-full rounded-full object-cover" />
               : <LogoIcon alt="Profile" className="h-full w-full object-contain p-1" />}
             <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
           </Link>

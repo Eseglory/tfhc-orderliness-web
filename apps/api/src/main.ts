@@ -56,6 +56,7 @@ async function bootstrap() {
       'Content-Type',
       'Accept',
       'Authorization',
+      'Idempotency-Key',
       'X-Requested-With',
       'x-webhook-signature',
       'x-hub-signature-256',

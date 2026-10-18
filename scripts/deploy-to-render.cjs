@@ -21,7 +21,7 @@ for (const envFile of [path.resolve(__dirname, '../.env'), path.resolve(__dirnam
   }
 }
 
-const apiKey = process.env.RENDER_API_KEY || 'rnd_fKeDwED3Tnd0Kv9Cw2uHVvR7cKY0';
+const apiKey = process.env.RENDER_API_KEY;
 const ownerId = process.env.RENDER_OWNER_ID || 'tea-cspppb56l47c73f6skmg';
 
 function renderRequest(method, path, body = null) {

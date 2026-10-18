@@ -1,0 +1,43 @@
+name: tfhc-staging
+services:
+  api:
+    image: tfhc-api:staging-candidate
+    container_name: tfhc-staging-api
+    restart: "no"
+    # Staging is reachable only through an SSH tunnel; it cannot replace
+    # UtilityHub or the existing TFHC production API by accident.
+    ports:
+      - "127.0.0.1:14000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      OPERATIONAL_DATABASE: sqlite
+      SQLITE_DATABASE_PATH: /var/data/operational.db
+      CHAT_SHARED_DB_PATH: /var/data/chat-cache.db
+      SQLITE_DURABILITY: local
+      JWT_SECRET: synthetic-staging-only-not-for-production
+      DISABLE_SCHEDULED_JOBS: "true"
+      DISABLE_RATE_LIMIT: "false"
+      TFHC_TIMEZONE: Africa/Lagos
+      NODE_OPTIONS: --max-old-space-size=192
+    volumes:
+      - ./data:/var/data
+    mem_limit: 320m
+    memswap_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s

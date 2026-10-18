@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../../../../components/ProfileImage';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
@@ -588,7 +589,7 @@ export default function AdminMembersPage() {
                                   className="group flex items-center gap-3 hover:opacity-90 transition-opacity"
                                 >
                                   {m.profilePhotoUrl ? (
-                                    <img
+                                    <ProfileImage
                                       src={m.profilePhotoUrl}
                                       alt={`${m.firstName} avatar`}
                                       className="w-9 h-9 rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
@@ -749,7 +750,7 @@ export default function AdminMembersPage() {
                       <div className="space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           {m.profilePhotoUrl ? (
-                            <img
+                            <ProfileImage
                               src={m.profilePhotoUrl}
                               alt={`${m.firstName} avatar`}
                               className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20"
@@ -843,7 +844,7 @@ export default function AdminMembersPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
                           {m.profilePhotoUrl ? (
-                            <img
+                            <ProfileImage
                               src={m.profilePhotoUrl}
                               alt={`${m.firstName} avatar`}
                               className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-500/20"

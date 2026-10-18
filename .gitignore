@@ -40,9 +40,9 @@ test-results-member/
 
 # Production deployment environments
 !apps/web/.env.production
-!.env
-!apps/api/.env
-!apps/web/.env
+!.env.example
+!apps/api/.env.example
+!apps/web/.env.example
 
 # Local SQLite databases and test runtime data
 apps/api/data/
@@ -51,3 +51,5 @@ apps/api/test-data/
 *.db-wal
 *.db-shm
 data/storage-backups/
+apps/api/generated/
+apps/api/prisma/schema.sqlite.prisma

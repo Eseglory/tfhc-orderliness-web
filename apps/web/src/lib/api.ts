@@ -1,3 +1,5 @@
+import { mutationRetry } from './mutation-retry';
+
 export const getApiBaseUrl = (): string => {
   if (typeof window !== 'undefined') {
     if ((window as any).__NEXT_PUBLIC_API_URL__) {
@@ -53,6 +55,10 @@ export async function fetchApi<T = any>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const retry = await mutationRetry(tokenSubject(token) || 'anonymous', `${getApiBaseUrl()}${endpoint}`,
+    (options.method || 'GET').toUpperCase(), options.body);
+  if (retry && !Object.keys(headers).some(key => key.toLowerCase() === 'idempotency-key')) headers['Idempotency-Key'] = retry.key;
+
   const timeoutSignal = typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(40000) : undefined;
   const signal = options.signal || timeoutSignal;
 
@@ -72,6 +78,7 @@ export async function fetchApi<T = any>(
   }
 
   if (!response.ok) {
+    if (response.status >= 400 && response.status < 500 && response.status !== 408) retry?.complete();
     let errorMessage = 'An error occurred';
     try {
       const errorData = await response.json();
@@ -93,8 +100,9 @@ export async function fetchApi<T = any>(
     throw new ApiError(Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage, response.status);
   }
 
-  if (response.status === 204) return undefined as T;
+  if (response.status === 204) { retry?.complete(); return undefined as T; }
   const body = await response.text();
+  retry?.complete();
   if (!body) return undefined as T;
   try {
     return JSON.parse(body) as T;

@@ -143,11 +143,13 @@ export class MembersService {
     // Persist the normalized thumbnail with the profile so it survives deploys.
     const profilePhotoUrl = `data:image/webp;base64,${output.toString('base64')}`;
     await this.prisma.member.update({ where: { id }, data: { profilePhotoUrl } });
+    this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
     return { profilePhotoUrl };
   }
 
   async removePhoto(id: string) {
     await this.prisma.member.update({ where: { id }, data: { profilePhotoUrl: null } });
+    this.cache.invalidateTags(['members', 'leaderboard', 'dashboard']);
     return { profilePhotoUrl: null };
   }
 

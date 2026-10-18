@@ -300,7 +300,8 @@ export class ServiceReminderService {
       }
     }
     // Background deliver for any batched subscriptions
-    void this.pushService?.deliver();
+    const deliver = () => { void this.pushService?.deliver(); };
+    if (this.prisma.afterCommit) this.prisma.afterCommit(deliver); else deliver();
     this.logger.log(`ServiceReminderProcessed meeting=${meetingId} window=${window} notifications=${result.inAppCreated} emails=${result.emailSent} push=${result.pushSent}`);
     return result;
   }

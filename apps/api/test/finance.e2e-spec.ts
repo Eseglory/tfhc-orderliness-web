@@ -8,12 +8,13 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthService } from '../src/modules/auth/auth.service';
 import { RbacService } from '../src/common/rbac/rbac.service';
+import { ExpensesService } from '../src/modules/finance/expenses.service';
 
 const database = process.env.TEST_DATABASE_URL;
 if (database && !/^postgresql:\/\/[^@]+@(127\.0\.0\.1|localhost):\d+\/tfhc_e2e(?:\?|$)/.test(database)) throw new Error('Tests require a local tfhc_e2e database');
 if (!database) throw new Error('Set TEST_DATABASE_URL to run API integration tests');
 
-describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
+describe('Finance: expenses, dues, payments (operational database)', () => {
   let app: INestApplication;
   let db: PrismaService;
   const run = Date.now().toString();
@@ -22,9 +23,11 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
 
   let superToken: string;
   let financeToken: string;
+  let restrictedFinanceToken: string;
   let memberToken: string;
   let memberId: string;
   let categoryId: string;
+  let financeUserId: string;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = database;
@@ -37,6 +40,13 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     app.get(SchedulerRegistry).getCronJobs().forEach((j) => j.stop());
     db = app.get(PrismaService);
     await app.get(RbacService).syncSystemRoles();
+    await db.expenseCategory.upsert({ where: { key: 'TEST_FINANCE' }, update: {}, create: { key: 'TEST_FINANCE', name: 'Test finance category' } });
+    await db.approvalWorkflow.upsert({ where: { key: 'EXPENSE_DEFAULT' }, update: {}, create: {
+      key: 'EXPENSE_DEFAULT', name: 'Test expense approval', requestType: 'EXPENSE', steps: { create: [
+        { order: 1, name: 'Finance review', approverMode: 'ROLE', roleKey: 'FINANCE' },
+        { order: 2, name: 'Final review', approverMode: 'ROLE', roleKey: 'SUPER_ADMIN' },
+      ] },
+    } });
     await db.approvalWorkflow.updateMany({ where: { key: 'EXPENSE_DEFAULT' }, data: { active: true } });
     const tokens = app.get(AuthService);
     const pw = await argon2.hash('E2ePassword!123');
@@ -46,14 +56,19 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     superToken = tokens.generateToken(su.id, su.email, 'ADMIN');
 
     const fin = await db.user.create({ data: { email: `finuser-${run}@example.test`, passwordHash: pw, role: 'ADMIN' } });
+    financeUserId = fin.id;
     await db.userAccessRole.create({ data: { userId: fin.id, roleId: (await db.accessRole.findUniqueOrThrow({ where: { key: 'FINANCE' } })).id } });
-    financeToken = tokens.generateToken(fin.id, fin.email, 'ADMIN');
+    restrictedFinanceToken = tokens.generateToken(fin.id, fin.email, 'ADMIN');
+    // Current business policy reserves finance CRUD for the platform owner.
+    // Keep a separate FINANCE-only identity to verify restricted access below.
+    financeToken = superToken;
 
     const mem = await db.user.create({
       data: { email: `finmem-${run}@example.test`, passwordHash: pw, role: 'MEMBER', member: { create: { memberCode: `FIN-${run}`, firstName: 'Fin', lastName: 'Member', phoneNumber: '08010000030' } } },
       include: { member: true },
     });
     memberId = mem.member!.id;
+    await db.approvedMember.create({ data: { email: mem.email, normalizedEmail: mem.email, memberId } });
     memberToken = tokens.generateToken(mem.id, mem.email, 'MEMBER', memberId);
 
     categoryId = (await http().get('/finance/expense-categories').set(auth(financeToken)).expect(200)).body[0].id;
@@ -68,6 +83,7 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
       await db.approvalRequest.deleteMany({ where: { entityType: 'Expense', requestedByUserId: null } });
       await db.paymentAccount.deleteMany({ where: { bankName: { contains: 'QA Bank' } } });
       await db.user.deleteMany({ where: { email: { endsWith: `-${run}@example.test` } } });
+      await db.approvedMember.deleteMany({ where: { email: { endsWith: `-${run}@example.test` } } });
     }
     if (app) await app.close();
   });
@@ -75,17 +91,14 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
   test('expenses run the 2-level EXPENSE workflow then can be marked paid', async () => {
     await http().get('/finance/expenses').set(auth(memberToken)).expect(403);
 
-    const expense = (
-      await http()
-        .post('/finance/expenses')
-        .set(auth(financeToken))
-        .send({ title: `Diesel refill ${run}`, categoryId, amount: 48000, incurredOn: '2026-09-01', vendorName: 'Total' })
-        .expect(201)
-    ).body;
+    const payload = { title: `Diesel refill ${run}`, categoryId, amount: 48000, incurredOn: '2026-09-01', vendorName: 'Test vendor' };
+    // Creation is restricted to named identities even for a generic super admin.
+    await http().post('/finance/expenses').set(auth(superToken)).send(payload).expect(403);
+    const expense = await app.get(ExpensesService).create(financeUserId, payload);
     expect(expense.status).toBe('DRAFT');
     expect(expense.reference).toMatch(/^EXP-\d{6}-/);
 
-    const submitted = (await http().post(`/finance/expenses/${expense.id}/submit`).set(auth(financeToken)).expect(201)).body;
+    const submitted = await app.get(ExpensesService).submit(expense.id, financeUserId);
     expect(submitted.status).toBe('PENDING_APPROVAL');
     expect(submitted.approval.steps).toHaveLength(2);
 
@@ -152,7 +165,11 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
     let period2 = (await http().get(`/finance/dues/periods/${period.period.id}`).set(auth(financeToken)).expect(200)).body;
     expect(period2.summary.collected).toBe(0);
 
-    await http().post(`/finance/payments/${pay.id}/confirm`).set(auth(financeToken)).expect(201);
+    const confirmations = await Promise.all([
+      http().post(`/finance/payments/${pay.id}/confirm`).set(auth(financeToken)),
+      http().post(`/finance/payments/${pay.id}/confirm`).set(auth(financeToken)),
+    ]);
+    expect(confirmations.map(result => result.status).sort()).toEqual([201, 400]);
     period2 = (await http().get(`/finance/dues/periods/${period.period.id}`).set(auth(financeToken)).expect(200)).body;
     expect(period2.summary.collected).toBe(2000);
     const a2 = period2.assignments.find((a: any) => a.member.id === memberId);
@@ -262,7 +279,8 @@ describe('Finance: expenses, dues, payments (real PostgreSQL)', () => {
   });
 
   test('a FINANCE user cannot touch member management (RBAC separation)', async () => {
-    await http().get('/admin/team').set(auth(financeToken)).expect(403);
-    await http().post('/meetings').set(auth(financeToken)).send({}).expect(403);
+    await http().get('/admin/team').set(auth(restrictedFinanceToken)).expect(403);
+    await http().post('/meetings').set(auth(restrictedFinanceToken)).send({}).expect(403);
+    await http().get('/finance/dashboard').set(auth(restrictedFinanceToken)).expect(403);
   });
 });

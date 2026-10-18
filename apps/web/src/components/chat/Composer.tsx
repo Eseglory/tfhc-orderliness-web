@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../ProfileImage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMessage } from '../../lib/chat';
 import { useToast } from '../ui';
@@ -636,7 +637,7 @@ export function Composer({
                   <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center font-bold text-xs overflow-hidden shrink-0">
                     {item.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <ProfileImage
                         src={item.photoUrl}
                         alt={item.name}
                         className="w-full h-full object-cover"

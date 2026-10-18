@@ -46,6 +46,60 @@ export class AttendanceService {
     private audit: AuditService,
   ) {}
 
+  async getSundayAutoCheckIn(memberId: string) {
+    if (!memberId) throw new ForbiddenException('A member profile is required');
+    const now = new Date();
+    // Nigeria is UTC+1 year-round. Never use the server's local calendar day.
+    const local = new Date(now.getTime() + 3600000);
+    if (local.getUTCDay() !== 0) return { enabled: false, meetings: [] };
+    const start = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 3600000);
+    const end = new Date(start.getTime() + 86400000);
+    const meetings = await this.prisma.meeting.findMany({
+      where: {
+        startTime: { gte: start, lt: end },
+        category: { name: 'Sunday Service' },
+        isOnline: false,
+        geofenceRadiusMeters: { gt: 0, lt: 50000 },
+      },
+      include: { audiences: true },
+      orderBy: { startTime: 'asc' },
+    });
+    const physical = meetings.filter(m => !/virtual|online/i.test(m.locationName || '') && !m.address?.startsWith('http'));
+    const records = await this.prisma.attendanceRecord.findMany({
+      where: { memberId, meetingId: { in: physical.map(m => m.id) } },
+    });
+    const seed = physical.find(m => records.some(r => r.meetingId === m.id &&
+      r.attendanceType === AttendanceType.PHYSICAL && r.method === AttendanceMethod.SYSTEM_GEO &&
+      r.actualArrivalTime && r.actualArrivalTime >= start && r.actualArrivalTime < end));
+    if (!seed) return { enabled: false, meetings: [] };
+    const member = await this.prisma.member.findUnique({ where: { id: memberId } });
+    if (!member || member.status !== 'ACTIVE') return { enabled: false, meetings: [] };
+    return {
+      enabled: true,
+      meetings: physical.filter(m => m.startTime > seed.startTime && m.status === 'ACTIVE' &&
+        m.attendanceOpenTime <= now && m.attendanceCloseTime >= now &&
+        !records.some(r => r.meetingId === m.id) &&
+        canViewEvent(m.visibility, m.audiences, { memberId, subTeamId: member.subTeamId, roleInUnit: member.roleInUnit }))
+        .map(m => ({ id: m.id, title: m.title })),
+    };
+  }
+
+  async sundayAutoCheckIn(dto: {
+    memberId: string; meetingId: string; latitude: number; longitude: number;
+    gpsAccuracy: number; locationTimestamp: number; deviceInfo?: string;
+  }) {
+    const age = Date.now() - dto.locationTimestamp;
+    if (!Number.isFinite(dto.locationTimestamp) || age < -5000 || age > 60000 ||
+      !Number.isFinite(dto.gpsAccuracy) || dto.gpsAccuracy < 0 || dto.gpsAccuracy > 100) {
+      throw new BadRequestException('A fresh, accurate location is required for automatic check-in');
+    }
+    const eligible = await this.getSundayAutoCheckIn(dto.memberId);
+    if (!eligible.meetings.some(m => m.id === dto.meetingId)) {
+      throw new BadRequestException('This service is not eligible for Sunday automatic check-in');
+    }
+    return this.checkInMember(dto);
+  }
+
   async checkInMember(dto: {
     memberId: string;
     meetingId: string;

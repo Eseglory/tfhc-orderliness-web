@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { isDeepStrictEqual } from 'node:util';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -154,29 +154,16 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
   }
 
   /**
-   * 12:00 PM (Noon) Reconciliation Job.
-   * Runs at 12:00 PM every day (Africa/Lagos timezone).
+   * Twice-daily reconciliation, at 03:00 and 15:00 Africa/Lagos.
+   * Immediate PostgreSQL durability remains until ALL chat dependencies are local.
    */
-  @Cron('0 12 * * *', {
-    timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
+  @Cron('0 3,15 * * *', {
+    timeZone: 'Africa/Lagos',
     disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true',
   })
-  async handleNoonReconciliation() {
-    this.logger.log('[Noon Reconciliation] Initiating 12:00 PM scheduled chat synchronization & audit...');
-    await this.reconcileWithPrimaryDatabase('noon-cron');
-  }
-
-  /**
-   * 12:00 AM (Midnight) Full Reconciliation Job.
-   * Runs at 00:00 every night (Africa/Lagos timezone).
-   */
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
-    timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
-    disabled: process.env.DISABLE_SCHEDULED_JOBS === 'true',
-  })
-  async handleMidnightMigration() {
-    this.logger.log('[Midnight Full Reconciliation] Initiating 12:00 AM full chat buffer audit & migration...');
-    await this.reconcileWithPrimaryDatabase('midnight-cron');
+  async handleDailyReconciliation() {
+    this.logger.log('ChatSyncDaily started');
+    await this.reconcileWithPrimaryDatabase('daily-cron');
   }
 
   /**
@@ -191,7 +178,7 @@ export class ChatMigrationJob implements OnApplicationBootstrap {
 
     // 2. Seed any missing records from Postgres into SQLite (e.g. from direct DB updates)
     let imported: { totalDiscovered: number; inserted: number; skipped: number };
-    try { imported = await this.seedFromPrimaryDatabase(trigger === 'manual' || trigger === 'midnight-cron'); }
+    try { imported = await this.seedFromPrimaryDatabase(trigger === 'manual'); }
     catch (error) {
       this.bufferRepo.setSyncSummary({ ...migrationResult, status: 'PARTIAL', importFailed: true,
         completedAt: new Date().toISOString(), durationMs: Date.now() - reconciliationStarted });

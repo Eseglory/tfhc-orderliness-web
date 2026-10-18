@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL, fetchApi, getAuthToken } from './api';
+import { sharedChatRead } from './chat-requests';
+import { chatEndpoint } from './chat-endpoint';
 
 export interface ChatSender {
   memberId: string;
@@ -71,7 +73,7 @@ export interface RoomMember {
 export const chatApi = {
   forward: (id: string, roomId: string, clientId: string) => fetchApi<ChatMessage>(`/chat/messages/${id}/forward`, { method: 'POST', body: JSON.stringify({ roomId, clientId }) }),
   changes: (id: string, cursor: string) => fetchApi<{ messages: ChatMessage[]; receipts: { memberId: string; lastReadAt: string | null; lastDeliveredAt: string | null }[]; removedIds: string[]; nextSyncCursor: string; hasMore: boolean }>(`/chat/rooms/${id}/changes?cursor=${encodeURIComponent(cursor)}`),
-  rooms: () => fetchApi<ChatRoom[]>('/chat/rooms?compactMedia=true'),
+  rooms: () => sharedChatRead<ChatRoom[]>('/chat/rooms?compactMedia=true'),
   room: (id: string) => fetchApi<ChatRoom>(`/chat/rooms/${id}`),
   messages: (id: string, cursor?: string, limit = 30, search?: string) =>
     fetchApi<{ messages: ChatMessage[]; nextCursor: string | null; hasMore: boolean; syncCursor?: string }>(
@@ -92,9 +94,9 @@ export const chatApi = {
     fetchApi<ChatMessage>(`/chat/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
   remove: (messageId: string) => fetchApi<ChatMessage>(`/chat/messages/${messageId}`, { method: 'DELETE' }),
   direct: (memberId: string) => fetchApi<ChatRoom>(`/chat/direct/${memberId}`, { method: 'POST' }),
-  contacts: () => fetchApi<ChatContact[]>('/chat/contacts'),
+  contacts: () => sharedChatRead<ChatContact[]>('/chat/contacts'),
   roomMembers: (id: string) => fetchApi<RoomMember[]>(`/chat/rooms/${id}/members`),
-  unread: () => fetchApi<{ total: number; rooms: { roomId: string; unreadCount: number }[] }>('/chat/unread'),
+  unread: () => sharedChatRead<{ total: number; rooms: { roomId: string; unreadCount: number }[] }>('/chat/unread'),
   createRoom: (body: { name: string; description?: string; memberIds?: string[] }) =>
     fetchApi<ChatRoom>('/chat/rooms', { method: 'POST', body: JSON.stringify(body) }),
   updateRoom: (id: string, body: Record<string, unknown>) =>
@@ -140,7 +142,9 @@ export function useChatSocket(events: ChatSocketEvents) {
     if (!token) return;
 
     const firstSocket = !sharedSocket;
-    const socket = sharedSocket || (sharedSocket = io(`${API_BASE_URL}/chat`, {
+    const endpoint = chatEndpoint(API_BASE_URL);
+    const socket = sharedSocket || (sharedSocket = io(endpoint.namespace, {
+      path: endpoint.path,
       transports: ['websocket', 'polling'],
       auth: (callback) => callback({ token: getAuthToken() }),
       tryAllTransports: true,

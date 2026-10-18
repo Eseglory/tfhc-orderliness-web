@@ -93,6 +93,12 @@ export default function CheckInPage() {
     };
   }, [load]);
 
+  useEffect(() => {
+    const refresh = () => { if (meetingId) void checkAttendanceStatus(meetingId); };
+    window.addEventListener('attendance-updated', refresh);
+    return () => window.removeEventListener('attendance-updated', refresh);
+  }, [meetingId, checkAttendanceStatus]);
+
   const handleMeetingChange = (newId: string) => {
     setMeetingId(newId);
     setLocation(null);
@@ -140,6 +146,7 @@ export default function CheckInPage() {
         radius: meeting.geofenceRadiusMeters,
         checkedAt: Date.now(),
       }));
+      window.dispatchEvent(new Event('attendance-manual-check-in'));
       if (mounted.current) {
         setResult(record);
         setIsClockedIn(true);

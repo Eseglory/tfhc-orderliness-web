@@ -21,6 +21,7 @@
     "setup:admin": "node scripts/bootstrap-admin.cjs",
     "setup:google": "node scripts/configure-web-oauth.cjs",
     "deploy:render": "node scripts/deploy-to-render.cjs",
+    "deploy:vps": "node scripts/deploy-to-vps.cjs",
     "deploy:vercel": "vercel --prod"
   },
   "devDependencies": {

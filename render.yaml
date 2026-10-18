@@ -1,56 +1,20 @@
 services:
-  # NestJS API — Prisma/PostgreSQL backend consumed by the web PWA.
+  # Compatibility address only. The production writer runs on the VPS.
+  # Never restore DATABASE_URL here while SQLite has pending operations.
   - type: web
     name: tfhc-orderliness-api
     branch: main
     runtime: docker
-    dockerfilePath: ./apps/api/Dockerfile
+    dockerfilePath: ./deploy/vps/Dockerfile.proxy
     dockerContext: .
     plan: free
+    autoDeployTrigger: off
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: '4000'
-      # Set the Supabase pooled connection URL in the Render dashboard.
-      # Keep the password in Render's secret environment settings.
-      - key: DATABASE_URL
-        sync: false
-      - key: SMTP_HOST
-        value: mail.eglobalicthub.com
-      - key: SMTP_PORT
-        value: '465'
-      - key: SMTP_SECURE
-        value: 'true'
-      - key: SMTP_USER
-        value: tfhc-orderliness@eglobalicthub.com
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: SMTP_FROM
-        value: 'TFHC Orderliness <tfhc-orderliness@eglobalicthub.com>'
-      - key: JWT_SECRET
-        generateValue: true
-      - key: TFHC_TIMEZONE
-        value: Africa/Lagos
-      - key: GOOGLE_OAUTH_CLIENT_IDS
-        sync: false
-      - key: VAPID_PUBLIC_KEY
-        sync: false
-      - key: VAPID_PRIVATE_KEY
-        sync: false
-      - key: VAPID_SUBJECT
-        value: mailto:tfhc-orderliness@eglobalicthub.com
-      - key: APP_WEB_URL
-        value: https://tfhc-orderliness-web.vercel.app
-      - key: CHURCH_LOGO_URL
-        value: https://tfhc-orderliness-web.vercel.app/logo-email.png
-      - key: ADMIN_PHOTO_URL
-        value: https://tfhc-orderliness-web.vercel.app/ese-glory.jpg
-      # Update after first deploy if Render assigns a different subdomain
-      # than the `name:` above (e.g. on a name collision).
-      - key: CORS_ORIGIN
-        value: https://tfhc-orderliness-web.onrender.com,https://tfhc-orderliness-web.vercel.app
 
   # Next.js mobile-first PWA — installable frontend for members and admins.
   - type: web

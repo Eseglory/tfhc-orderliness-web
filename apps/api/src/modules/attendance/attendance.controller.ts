@@ -35,6 +35,21 @@ export class AttendanceController {
     });
   }
 
+  @Get('sunday-auto-check-in')
+  sundayAutoStatus(@CurrentUser('memberId') memberId: string) {
+    return this.attendanceService.getSundayAutoCheckIn(memberId);
+  }
+
+  @Post('sunday-auto-check-in')
+  sundayAutoCheckIn(@CurrentUser('memberId') memberId: string, @Body() body: any) {
+    return this.attendanceService.sundayAutoCheckIn({
+      memberId, meetingId: body?.meetingId,
+      latitude: body?.latitude, longitude: body?.longitude,
+      gpsAccuracy: body?.gpsAccuracy, locationTimestamp: body?.locationTimestamp,
+      deviceInfo: typeof body?.deviceInfo === 'string' ? body.deviceInfo.slice(0, 500) : undefined,
+    });
+  }
+
   @Post('clock-out')
   async clockOut(
     @CurrentUser('memberId') memberId: string,

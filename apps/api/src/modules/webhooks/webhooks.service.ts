@@ -92,6 +92,7 @@ export class WebhooksService {
     });
     this.logger.log(`WebhookProcessed eventId=${event.eventId} duplicate=${!created}`);
     if (created) {
+      const notify = () => {
       this.gateway.notifyMember(member.id);
       void this.pushService.sendDirectPush(
         { userId: member.userId, memberId: member.id },
@@ -102,6 +103,8 @@ export class WebhooksService {
         }
       );
       void this.pushService.deliver();
+      };
+      if (this.prisma.afterCommit) this.prisma.afterCommit(notify); else notify();
     }
     return { received: true, event: event.event, status: created ? 'PROCESSED' : 'ALREADY_PROCESSED', duplicate: !created, timestamp: new Date().toISOString() };
   }

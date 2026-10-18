@@ -14,7 +14,7 @@ import { PushModule } from '../push/push.module';
 /**
  * Real-time in-app chat: system rooms (General, Executives), custom rooms and
  * 1:1 direct messages, delivered over a Socket.IO gateway with high-speed
- * local SQLite buffering, WAL persistence, midnight migration, and REST fallbacks.
+ * local SQLite buffering, WAL persistence, daily reconciliation, and REST fallbacks.
  */
 @Module({
   imports: [AuthModule, PushModule],

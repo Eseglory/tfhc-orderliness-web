@@ -14,6 +14,30 @@ const inMemoryCursors = new Map<string, string>();
 
 // Never render a previous account's private conversations on a shared device.
 let currentOwner = '';
+const pendingWrites = new Map<string, () => void>();
+let writeTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function flushChatCache(): void {
+  owner(); // Discard pending writes if the account has changed or signed out.
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = undefined;
+  const writes = [...pendingWrites.values()];
+  pendingWrites.clear();
+  for (const write of writes) write();
+}
+
+function scheduleWrite(key: string, write: () => void): void {
+  pendingWrites.set(key, write);
+  if (!writeTimer) writeTimer = setTimeout(flushChatCache, 250);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', flushChatCache);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushChatCache();
+  });
+}
+
 function owner(): string {
   let next = '';
   try {
@@ -21,6 +45,7 @@ function owner(): string {
     if (token) next = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || '';
   } catch { /* A missing session cannot read private caches. */ }
   if (next !== currentOwner) {
+    pendingWrites.clear();
     inMemoryRooms = null;
     inMemoryMessages.clear();
     inMemoryCursors.clear();
@@ -49,7 +74,7 @@ export function mergeChatMessages(existing: ChatMessage[], incoming: ChatMessage
 export function getLocalCachedRooms(): ChatRoom[] {
   const account = owner();
   if (!account) return [];
-  if (inMemoryRooms && inMemoryRooms.length > 0) {
+  if (inMemoryRooms) {
     return inMemoryRooms;
   }
   if (typeof window === 'undefined') return [];
@@ -75,11 +100,10 @@ export function saveLocalCachedRooms(rooms: ChatRoom[]): void {
   if (!account) return;
   inMemoryRooms = rooms;
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(ROOMS_CACHE_KEY + account, JSON.stringify(rooms));
-  } catch {
-    // Ignore quota errors
-  }
+  scheduleWrite(ROOMS_CACHE_KEY + account, () => {
+    try { localStorage.setItem(ROOMS_CACHE_KEY + account, JSON.stringify(rooms)); }
+    catch { /* The in-memory cache still works when storage is full. */ }
+  });
 }
 
 /**
@@ -117,9 +141,11 @@ export function saveLocalCachedMessages(roomId: string, messages: ChatMessage[],
   if (!roomId) return;
   if (syncCursor !== undefined) inMemoryCursors.set(roomId, syncCursor);
   const trimmed = messages.slice(-MAX_CACHED_MESSAGES_PER_ROOM);
-  const serialize = (items: ChatMessage[]) => JSON.stringify({ messages: items, syncCursor: inMemoryCursors.get(roomId) });
+  const cursor = inMemoryCursors.get(roomId);
+  const serialize = (items: ChatMessage[]) => JSON.stringify({ messages: items, syncCursor: cursor });
   inMemoryMessages.set(roomId, trimmed);
   if (typeof window === 'undefined') return;
+  scheduleWrite(MSGS_CACHE_PREFIX + account + '_' + roomId, () => {
   try {
     localStorage.setItem(MSGS_CACHE_PREFIX + account + '_' + roomId, serialize(trimmed));
   } catch {
@@ -137,6 +163,7 @@ export function saveLocalCachedMessages(roomId: string, messages: ChatMessage[],
       // Ignore
     }
   }
+  });
 }
 
 /**

@@ -18,6 +18,7 @@ import { RbacService } from '../../common/rbac/rbac.service';
 import { ChatService, CHAT_NOTIFICATIONS_COMMITTED } from './chat.service';
 import { ChatViewer } from './chat.util';
 import { PushService } from '../push/push.service';
+import { RedisService } from '../../common/redis/redis.service';
 
 const corsOrigins = (process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).filter(Boolean)) ?? [];
 
@@ -27,6 +28,8 @@ const corsOrigins = (process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()).fi
 })
 export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
+  private readonly instanceId = randomUUID();
+  private redisUnsubscribe?: () => void;
 
   @WebSocketServer()
   server!: Server;
@@ -65,6 +68,63 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         .then(() => this.pushService?.deliver())
         .catch(error => this.logger.warn(`ChatPushRetryPending: ${error.message}`));
     });
+    void this.initRedisPubSub();
+  }
+
+  private async initRedisPubSub() {
+    try {
+      this.redisUnsubscribe = await this.redis.subscribe('tfhc:events:chat', (event) => {
+        if (!event || event.instanceId === this.instanceId) return;
+        this.handleRemoteChatEvent(event);
+      });
+      this.logger.log(`[ChatGateway] Subscribed to distributed chat channel tfhc:events:chat (instanceId=${this.instanceId})`);
+    } catch (err) {
+      this.logger.warn(`[ChatGateway] Redis pub/sub initialization fallback: ${(err as Error).message}`);
+    }
+  }
+
+  private handleRemoteChatEvent(event: any) {
+    if (!this.io || !event) return;
+    try {
+      switch (event.type) {
+        case 'message:new': {
+          const { message, recipientIds, roomId } = event;
+          for (const memberId of recipientIds || []) {
+            if (this.online.has(memberId)) {
+              const isMine = message.sender?.memberId === memberId;
+              this.io.to(`member:${memberId}`).emit('message:new', { ...message, mine: isMine });
+              for (const sid of this.online.get(memberId) ?? []) {
+                const s = this.liveSockets.get(sid);
+                if (s) void s.join(`room:${roomId}`);
+              }
+            }
+          }
+          break;
+        }
+        case 'message:read': {
+          const { roomId, memberId, lastReadAt } = event;
+          this.io.to(`room:${roomId}`).emit('message:read', { roomId, memberId, lastReadAt });
+          break;
+        }
+        case 'message:delivered': {
+          const { roomId, receipt } = event;
+          this.io.to(`room:${roomId}`).emit('message:delivered', receipt);
+          break;
+        }
+        case 'message:typing': {
+          const { roomId, payload } = event;
+          this.io.to(`room:${roomId}`).emit('message:typing', payload);
+          break;
+        }
+        case 'presence:update': {
+          const { memberId, online } = event;
+          this.io.emit('presence:update', { memberId, online });
+          break;
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`[ChatGateway] Error handling remote chat event: ${(err as Error).message}`);
+    }
   }
 
   /** socketId -> Socket map, tolerating both the Server and Namespace shapes. */
@@ -80,6 +140,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly prisma: PrismaService,
     private readonly rbac: RbacService,
     private readonly chat: ChatService,
+    private readonly redis: RedisService,
     @Optional() private readonly pushService?: PushService,
   ) {}
 
@@ -103,8 +164,15 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       roomIds.forEach((id) => socket.join(`room:${id}`));
 
       this.addOnline(viewer.memberId, socket.id);
+      void this.redis.sAdd('tfhc:presence:online', viewer.memberId);
       socket.emit('ready', { memberId: viewer.memberId, rooms: roomIds, online: this.onlineMemberIds() });
       socket.broadcast.emit('presence:update', { memberId: viewer.memberId, online: true });
+      void this.redis.publish('tfhc:events:chat', {
+        type: 'presence:update',
+        instanceId: this.instanceId,
+        memberId: viewer.memberId,
+        online: true,
+      });
     } catch (error) {
       this.logger.warn(`Rejected chat socket: ${(error as Error).message}`);
       socket.disconnect(true);
@@ -132,7 +200,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
     const stillOnline = this.removeOnline(viewer.memberId, socket.id);
     if (!stillOnline) {
+      void this.redis.sRem('tfhc:presence:online', viewer.memberId);
       socket.broadcast.emit('presence:update', { memberId: viewer.memberId, online: false });
+      void this.redis.publish('tfhc:events:chat', {
+        type: 'presence:update',
+        instanceId: this.instanceId,
+        memberId: viewer.memberId,
+        online: false,
+      });
     }
   }
 
@@ -256,11 +331,19 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       this.typingTimers.set(timerKey, timer);
     }
 
-    await this.emitRoomEvent(data.roomId, 'message:typing', {
+    const typingPayload = {
       roomId: data.roomId,
       memberId: viewer.memberId,
       name: [viewer.firstName, viewer.lastName].filter(Boolean).join(' ').trim(),
       typing: isTyping,
+    };
+
+    await this.emitRoomEvent(data.roomId, 'message:typing', typingPayload);
+    void this.redis.publish('tfhc:events:chat', {
+      type: 'message:typing',
+      instanceId: this.instanceId,
+      roomId: data.roomId,
+      payload: typingPayload,
     });
   }
 
@@ -271,6 +354,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     try {
       const res = await this.chat.markRead(data.roomId, viewer, { messageId: data.messageId });
       await this.emitRoomEvent(data.roomId, 'message:read', {
+        roomId: data.roomId,
+        memberId: viewer.memberId,
+        lastReadAt: res.lastReadAt,
+      });
+      void this.redis.publish('tfhc:events:chat', {
+        type: 'message:read',
+        instanceId: this.instanceId,
         roomId: data.roomId,
         memberId: viewer.memberId,
         lastReadAt: res.lastReadAt,
@@ -289,13 +379,21 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     try {
       const receipt = await this.chat.markDelivered(data.roomId, viewer, data.messageId);
       await this.emitRoomEvent(data.roomId, 'message:delivered', receipt);
+      void this.redis.publish('tfhc:events:chat', {
+        type: 'message:delivered',
+        instanceId: this.instanceId,
+        roomId: data.roomId,
+        receipt,
+      });
       return { ok: true };
     } catch { return { ok: false }; }
   }
 
   @SubscribeMessage('presence:list')
-  onPresence() {
-    return { online: this.onlineMemberIds() };
+  async onPresence() {
+    const redisOnline = await this.redis.sMembers('tfhc:presence:online');
+    const online = Array.from(new Set([...this.onlineMemberIds(), ...redisOnline]));
+    return { online };
   }
 
   // -------------------------------------------------------------------------
@@ -490,6 +588,12 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   // -------------------------------------------------------------------------
 
   async fanOut(roomId: string, message: unknown, createNotifications = true) {
+    if (this.prisma.operationalAdapter?.transactionActive) {
+      this.prisma.afterCommit(() => {
+        void this.fanOut(roomId, message, createNotifications).catch(() => this.logger.warn('Chat broadcast pending after commit'));
+      });
+      return;
+    }
     const started = Date.now();
     if (!this.io) return;
     this.chat.cacheRealtimeMessage?.(message);
@@ -527,6 +631,16 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (createNotifications && notifications.length && !(message as { [CHAT_NOTIFICATIONS_COMMITTED]?: boolean })[CHAT_NOTIFICATIONS_COMMITTED]) {
       void this.processNotificationsBackground(room, dto, notifications, recipientIds);
     }
+
+    // Publish to Redis for cluster-wide cross-instance delivery
+    void this.redis.publish('tfhc:events:chat', {
+      type: 'message:new',
+      instanceId: this.instanceId,
+      roomId,
+      message,
+      recipientIds,
+    });
+
     this.logger.debug(`ChatFanOutFast message=${dto.id} recipients=${recipientIds.length} durationMs=${Date.now() - started}`);
   }
 

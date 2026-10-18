@@ -1,4 +1,5 @@
 'use client';
+import { ProfileImage } from '../../../../components/ProfileImage';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
@@ -191,7 +192,7 @@ export default function AdminLeaderboardPage() {
               </div>
               <div className="flex items-center gap-3">
                 {topThree[1].profilePhotoUrl ? (
-                  <img
+                  <ProfileImage
                     src={topThree[1].profilePhotoUrl}
                     alt={`${topThree[1].firstName} avatar`}
                     className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-200 dark:ring-slate-700 shrink-0"
@@ -230,7 +231,7 @@ export default function AdminLeaderboardPage() {
               </div>
               <div className="flex items-center gap-3.5">
                 {topThree[0].profilePhotoUrl ? (
-                  <img
+                  <ProfileImage
                     src={topThree[0].profilePhotoUrl}
                     alt={`${topThree[0].firstName} avatar`}
                     className="w-14 h-14 rounded-2xl object-cover ring-2 ring-amber-400/80 shadow-md shrink-0"
@@ -269,7 +270,7 @@ export default function AdminLeaderboardPage() {
               </div>
               <div className="flex items-center gap-3">
                 {topThree[2].profilePhotoUrl ? (
-                  <img
+                  <ProfileImage
                     src={topThree[2].profilePhotoUrl}
                     alt={`${topThree[2].firstName} avatar`}
                     className="w-12 h-12 rounded-xl object-cover ring-2 ring-amber-700/30 shrink-0"
@@ -464,7 +465,7 @@ export default function AdminLeaderboardPage() {
                           className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center gap-2.5 group"
                         >
                           {item.profilePhotoUrl ? (
-                            <img
+                            <ProfileImage
                               src={item.profilePhotoUrl}
                               alt={`${item.firstName} avatar`}
                               className="w-8 h-8 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"

@@ -28,6 +28,21 @@ import { Composer } from './Composer';
 import { ContactPickerModal, ManageMembersModal, NewRoomModal } from './ChatModals';
 import { soundFx } from '../../lib/sound-fx';
 import { chatTiming } from '../../lib/chat-performance';
+import { useAppDispatch } from '../../store';
+import {
+  setRooms as setReduxRooms,
+  setActiveRoomId as setReduxActiveRoomId,
+  setMessages as setReduxMessages,
+  prependMessages as prependReduxMessages,
+  incomingMessage as incomingReduxMessage,
+  updateReceiptDelivered as updateReduxReceiptDelivered,
+  updateReceiptRead as updateReduxReceiptRead,
+  setTyping as setReduxTyping,
+  setPresence as setReduxPresence,
+  setBulkPresence as setReduxBulkPresence,
+  appendOptimisticMessage as appendReduxOptimisticMessage,
+  reconcileMessage as reconcileReduxMessage,
+} from '../../store/chatSlice';
 
 const ROOM_ICON: Record<string, string> = {
   GENERAL: 'forum',
@@ -52,6 +67,7 @@ export function ChatWorkspace({
 }) {
   const { user, can } = useAuth();
   const { notify } = useToast();
+  const dispatch = useAppDispatch();
   const isSuperOwner = user?.email?.toLowerCase() === 'engreseglory@gmail.com';
   const canManage = isSuperOwner;
   const canModerate = isSuperOwner || can('messages.moderate');
@@ -105,6 +121,7 @@ export function ChatWorkspace({
       if (chatAccount() !== account) return;
       setRooms(freshRooms);
       saveLocalCachedRooms(freshRooms);
+      dispatch(setReduxRooms(freshRooms));
     } catch (e) {
       if (roomsRef.current.length === 0) {
         notify(e instanceof Error ? e.message : 'Could not load conversations.', 'error');
@@ -113,7 +130,7 @@ export function ChatWorkspace({
     })().finally(() => { roomsRequest.current = null; });
     roomsRequest.current = request;
     return request;
-  }, [notify]);
+  }, [dispatch, notify]);
 
   useEffect(() => {
     void loadRooms();
@@ -172,6 +189,7 @@ export function ChatWorkspace({
       const account = chatAccount();
       activeIdRef.current = roomId;
       setActiveId(roomId);
+      dispatch(setReduxActiveRoomId(roomId));
       setMobileThread(true);
       setReplyTo(null);
       setEditing(null);
@@ -186,6 +204,7 @@ export function ChatWorkspace({
       const previousCursor = getLocalSyncCursor(roomId);
       if (cached.length > 0) {
         setMessages(cached);
+        dispatch(setReduxMessages({ roomId, messages: cached, nextCursor: null }));
         requestAnimationFrame(() => chatTiming('conversation.cachedPaint', started));
         setLoadingRoom(false);
         scrollToBottom();
@@ -199,11 +218,10 @@ export function ChatWorkspace({
         const page = await chatApi.messages(roomId);
         chatTiming('conversation.serverPage', started);
         if (chatAccount() !== account || activeIdRef.current !== roomId) return;
-        setMessages((prev) => {
-          const combined = mergeChatMessages(previousCursor ? prev : prev.filter(m => m.pending || m.failed), page.messages);
-          saveLocalCachedMessages(roomId, combined, previousCursor || page.syncCursor);
-          return combined;
-        });
+        const combined = mergeChatMessages(previousCursor ? cached : cached.filter(m => m.pending || m.failed), page.messages);
+        setMessages(combined);
+        dispatch(setReduxMessages({ roomId, messages: combined, nextCursor: page.nextCursor }));
+        saveLocalCachedMessages(roomId, combined, previousCursor || page.syncCursor);
         if (previousCursor || page.syncCursor) syncCursors.current.set(roomId, previousCursor || page.syncCursor!);
         setNextCursor(page.nextCursor);
         if (page.messages.length) markRoomRead(roomId, page.messages[page.messages.length - 1].id);
@@ -219,7 +237,7 @@ export function ChatWorkspace({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markRoomRead, notify, scrollToBottom, synchronizeRoom],
+    [dispatch, markRoomRead, notify, scrollToBottom, synchronizeRoom],
   );
 
   const loadRoomMembers = useCallback(async (roomId: string) => {
@@ -250,6 +268,7 @@ export function ChatWorkspace({
       const page = await chatApi.messages(activeId, nextCursor);
       if (activeIdRef.current !== roomId) return;
       setMessages((prev) => mergeChatMessages(prev, page.messages));
+      dispatch(prependReduxMessages({ roomId, messages: page.messages, nextCursor: page.nextCursor }));
       setNextCursor(page.nextCursor);
       requestAnimationFrame(() => {
         const el = scrollRef.current;
@@ -265,6 +284,7 @@ export function ChatWorkspace({
   const socket = useChatSocket({
     onReady: ({ online: list }) => {
       void loadRooms();
+      dispatch(setReduxBulkPresence(Object.fromEntries((list || []).map((id) => [id, { online: true }]))));
       // Refresh room list unread & latest messages when socket reconnects
       if (!activeIdRef.current) return;
       const current = activeIdRef.current;
@@ -284,8 +304,14 @@ export function ChatWorkspace({
         setNextCursor(page.nextCursor);
       }).catch(() => undefined);
     },
+    onPresence: (e) => {
+      dispatch(setReduxPresence(e));
+    },
     onMessage: (m) => {
-      appendLocalCachedMessage(m.roomId, m);
+      dispatch(incomingReduxMessage(m));
+      // The active timeline writes its merged snapshot below; avoid merging and
+      // serializing the same incoming message twice.
+      if (m.roomId !== activeIdRef.current) appendLocalCachedMessage(m.roomId, m);
       // Audio notifications for messages
       if (!m.mine && m.sender?.memberId !== user?.memberId) {
         soundFx.unlockAudioContext();
@@ -325,10 +351,12 @@ export function ChatWorkspace({
       });
     },
     onRead: e => {
+      dispatch(updateReduxReceiptRead(e));
       if (e.memberId === user?.memberId) return;
       setMessages(previous => previous.map(m => m.mine && m.roomId === e.roomId && m.createdAt <= e.lastReadAt ? { ...m, readBy: Math.max(1, m.readBy || 0) } : m));
     },
     onDelivered: e => {
+      dispatch(updateReduxReceiptDelivered({ roomId: e.roomId, messageId: '', memberId: e.memberId, lastDeliveredAt: e.lastDeliveredAt }));
       if (e.memberId === user?.memberId) return;
       setMessages(previous => previous.map(m => m.mine && m.roomId === e.roomId && m.createdAt <= e.lastDeliveredAt ? { ...m, deliveredTo: Math.max(1, m.deliveredTo || 0) } : m));
     },
@@ -350,6 +378,7 @@ export function ChatWorkspace({
       });
     },
     onTyping: (e) => {
+      dispatch(setReduxTyping({ roomId: e.roomId, memberId: e.memberId, name: e.name, isTyping: e.typing }));
       // Update global room typing for sidebar
       setRoomTyping((prev) => ({ ...prev, [e.roomId]: e.typing }));
 
@@ -498,6 +527,7 @@ export function ChatWorkspace({
       saveLocalCachedMessages(roomId, next);
       return next;
     });
+    dispatch(appendReduxOptimisticMessage({ roomId, message: optimistic }));
 
     // 2. Immediately bump conversation in the sidebar
     setRooms((prev) => {
@@ -528,7 +558,10 @@ export function ChatWorkspace({
     void socket.sendMessage({ roomId, body: text, replyToId: replyId, clientId }).then(async saved => {
       chatTiming('send.serverAck', started);
       await acknowledgeChatMessage(clientId, account);
-      if (chatAccount() === account) mergeSaved(tempId, saved);
+      if (chatAccount() === account) {
+        mergeSaved(tempId, saved);
+        dispatch(reconcileReduxMessage({ roomId, clientId: tempId, confirmed: saved }));
+      }
     }).catch(() => {
       if (chatAccount() === account && activeIdRef.current === roomId) setMessages(prev => prev.map(m => m.id === tempId ? { ...m, pending: false, failed: true } : m));
       notify('Message saved on this device. Sending will retry automatically.', 'info');

@@ -8,7 +8,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ChatMessageType, ChatRoom, ChatRoomType, MemberStatus, Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
 import { isExecutiveRole, isDisciplinaryRole } from '../../common/event-visibility';
@@ -47,7 +47,8 @@ function displayName(m: { firstName: string; lastName: string; preferredName?: s
 export function compactPhotoUrl(memberId: string | null | undefined, photoUrl: string | null | undefined): string | null {
   if (!photoUrl) return null;
   if (photoUrl.startsWith('data:image') && memberId) {
-    return `/members/${memberId}/photo`;
+    const version = createHash('sha256').update(photoUrl).digest('hex').slice(0, 16);
+    return `/members/${memberId}/photo?v=${version}`;
   }
   return photoUrl;
 }
@@ -995,7 +996,7 @@ export class ChatService implements OnApplicationBootstrap {
     const dbDurationMs = Date.now() - dbStart;
 
     // Notifications remain outside the acknowledgement's critical path.
-    void this.persistMessageAndNotifyAsync(
+    const notifyAfterCommit = () => { void this.persistMessageAndNotifyAsync(
       messageId,
       roomId,
       memberId,
@@ -1006,7 +1007,9 @@ export class ChatService implements OnApplicationBootstrap {
       mentionedMemberIds,
       isAllMentioned,
       room,
-    ).catch(err => this.logger.warn(`ChatAsyncNotificationPending: ${err?.message}`));
+    ).catch(err => this.logger.warn(`ChatAsyncNotificationPending: ${err?.message}`)); };
+    if (this.prisma.afterCommit) this.prisma.afterCommit(notifyAfterCommit);
+    else notifyAfterCommit();
 
     // 3. Construct instant outgoing message DTO
     const senderDto: SenderRow = {
@@ -1323,7 +1326,7 @@ export class ChatService implements OnApplicationBootstrap {
     return members.map((m) => ({
       memberId: m.id,
       name: displayName(m),
-      photoUrl: m.profilePhotoUrl,
+      photoUrl: compactPhotoUrl(m.id, m.profilePhotoUrl),
       roleInUnit: m.roleInUnit,
       subTeam: m.subTeam?.name ?? null,
     }));
@@ -1440,7 +1443,7 @@ export class ChatService implements OnApplicationBootstrap {
       return members.map((m) => ({
         memberId: m.id,
         name: displayName(m),
-        photoUrl: m.profilePhotoUrl,
+        photoUrl: compactPhotoUrl(m.id, m.profilePhotoUrl),
         role: m.user?.role || 'MEMBER',
         roleInUnit: m.roleInUnit,
         subTeam: m.subTeam?.name || null,
@@ -1464,7 +1467,7 @@ export class ChatService implements OnApplicationBootstrap {
     return rows.map((r) => ({
       memberId: r.member.id,
       name: displayName(r.member),
-      photoUrl: r.member.profilePhotoUrl,
+      photoUrl: compactPhotoUrl(r.member.id, r.member.profilePhotoUrl),
       role: r.role,
       roleInUnit: r.member.roleInUnit,
       subTeam: r.member.subTeam?.name || null,
@@ -1552,10 +1555,13 @@ export class ChatService implements OnApplicationBootstrap {
       ...this.bufferRepo.getStats(),
       lastPrimaryImport: this.bufferRepo.getSyncCheckpoint(),
       lastRun: this.bufferRepo.getSyncSummary(),
-      schedule: '00:00 and 12:00',
-      timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
-      authority: 'PostgreSQL',
-      acknowledgement: 'PostgreSQL commit and durable notification work before success',
+      schedule: '03:00 and 15:00 daily',
+      timeZone: 'Africa/Lagos',
+      sqlitePrimaryReady: false,
+      authority: this.prisma.operationalAdapter ? 'SQLite' : 'PostgreSQL',
+      acknowledgement: this.prisma.operationalAdapter
+        ? 'SQLite commit, configured recovery protection, and durable notification work before success'
+        : 'PostgreSQL commit and durable notification work before success',
     };
   }
 
