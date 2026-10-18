@@ -158,6 +158,12 @@ export function isEseosaGlory(user?: CurrentUser | null): boolean {
   return user?.email?.toLowerCase() === AUTHORIZED_PERSONS.ESEOSA_GLORY;
 }
 
+export function isClassOwner(user?: CurrentUser | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin || user.permissions?.includes('*')) return true;
+  return isEseosaGlory(user);
+}
+
 export function isDaniel(user?: CurrentUser | null): boolean {
   return user?.email?.toLowerCase() === AUTHORIZED_PERSONS.DANIEL_OGUAMANAM;
 }

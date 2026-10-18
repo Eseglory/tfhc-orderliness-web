@@ -142,6 +142,7 @@ const NAVIGATION_TREE: NavParent[] = [
     anyOf: ['dues.read', 'payments.read', 'expenses.read', 'welfare.read'],
     children: [
       { href: '/admin/finance', label: 'Overview', icon: DollarSign, anyOf: ['dues.read', 'payments.read'] },
+      { href: '/admin/finance/reports', label: 'Financial Reports', icon: BarChart3, anyOf: ['dues.read', 'payments.read'] },
       { href: '/admin/welfare', label: 'Welfare Fund', icon: HeartHandshake, anyOf: ['welfare.read', 'welfare.create'] },
       { href: '/admin/finance/dues', label: 'Dues', icon: Calendar, anyOf: ['dues.read'] },
       { href: '/admin/finance/payments', label: 'Payments', icon: CheckSquare, anyOf: ['payments.read'] },
@@ -282,6 +283,9 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
         if (parent.key === 'finance' && isLovethUser && !isEseosa) {
           visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
         }
+        if (parent.key === 'finance' && !isEseosa) {
+          visibleChildren = visibleChildren.filter((c) => c.href !== '/admin/finance/reports');
+        }
         if (parent.key === 'administration' && !isEseosa) {
           return false;
         }
@@ -295,6 +299,9 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
       let visibleChildren = parent.children.filter((c) => !c.anyOf || canAny(...c.anyOf));
       if (parent.key === 'finance' && isLovethUser && !isEseosa) {
         visibleChildren = visibleChildren.filter((c) => c.href === '/admin/finance/expenses');
+      }
+      if (parent.key === 'finance' && !isEseosa) {
+        visibleChildren = visibleChildren.filter((c) => c.href !== '/admin/finance/reports');
       }
       visibleChildren = visibleChildren.filter((c) => c.href !== '/admin/settings' || isEseosa);
       return {

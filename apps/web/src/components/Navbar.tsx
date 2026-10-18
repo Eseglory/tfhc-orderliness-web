@@ -52,6 +52,7 @@ const ADMIN_NAV: NavItem[] = [
     anyOf: ['expenses.read', 'dues.read', 'payments.read'],
     children: [
       { href: '/admin/finance', label: 'Dashboard', icon: 'monitoring' },
+      { href: '/admin/finance/reports', label: 'Financial Reports', icon: 'description', anyOf: ['payments.read', 'expenses.read'] },
       { href: '/admin/finance/dues', label: 'Monthly Dues', icon: 'calendar_month', anyOf: ['dues.read'] },
       { href: '/admin/finance/payments', label: 'Payments', icon: 'receipt_long', anyOf: ['payments.read'] },
       { href: '/admin/finance/expenses', label: 'Expenses', icon: 'shopping_cart', anyOf: ['expenses.read'] },

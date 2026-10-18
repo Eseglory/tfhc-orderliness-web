@@ -32,6 +32,7 @@ const ROUTE_MAP: Record<string, RouteHierarchy> = {
   '/admin/absence-requests': { path: '/admin/absence-requests', label: 'Absence Requests', parent: { label: 'Tracking & Approvals', href: '/admin/approvals' } },
   '/admin/follow-up': { path: '/admin/follow-up', label: 'Follow-Up & Flags', parent: { label: 'Tracking & Approvals' } },
   '/admin/finance': { path: '/admin/finance', label: 'Finance Overview', parent: { label: 'Finance' } },
+  '/admin/finance/reports': { path: '/admin/finance/reports', label: 'Financial Reports', parent: { label: 'Finance', href: '/admin/finance' } },
   '/admin/finance/dues': { path: '/admin/finance/dues', label: 'Monthly Dues', parent: { label: 'Finance', href: '/admin/finance' } },
   '/admin/finance/payments': { path: '/admin/finance/payments', label: 'Payments & Receipts', parent: { label: 'Finance', href: '/admin/finance' } },
   '/admin/finance/expenses': { path: '/admin/finance/expenses', label: 'Expenses & Budget', parent: { label: 'Finance', href: '/admin/finance' } },

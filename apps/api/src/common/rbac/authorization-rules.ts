@@ -67,6 +67,23 @@ export function assertFinanceCrudAuthority(user: { email?: string | null; isSupe
 }
 
 /**
+ * Enforce that only the designated Class / Platform Owner (Eseosa Glory) can access financial reporting.
+ */
+export function isClassOwner(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin) return true;
+  return isEseosaGlory(user.email);
+}
+
+export function assertClassOwnerAuthority(user: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] }) {
+  if (!isClassOwner(user)) {
+    throw new ForbiddenException(
+      'Financial reporting authority is restricted exclusively to the designated Class Owner (Eseosa Glory).'
+    );
+  }
+}
+
+/**
  * Enforce that only Eseosa Glory (Platform Owner) has full access to System Settings.
  */
 export function isSettingsAuthorized(user?: { email?: string | null; isSuperAdmin?: boolean; permissions?: string[] } | null): boolean {
