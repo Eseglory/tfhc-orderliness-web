@@ -1,0 +1,393 @@
+Total tables in operational.db: 65
+[
+  {
+    "table": "_sync_changes",
+    "total": 63962,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "_sync_context",
+    "total": 1,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "_sync_meta",
+    "total": 1,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "_sync_operations",
+    "total": 63870,
+    "recent": 63865,
+    "has_pk": false
+  },
+  {
+    "table": "absence_excuses",
+    "total": 5,
+    "recent": 1,
+    "has_pk": true
+  },
+  {
+    "table": "access_role_permissions",
+    "total": 244,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "access_roles",
+    "total": 10,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "appointments",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "approval_actions",
+    "total": 2,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "approval_requests",
+    "total": 5,
+    "recent": 1,
+    "has_pk": true
+  },
+  {
+    "table": "approval_steps",
+    "total": 14,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "approval_workflows",
+    "total": 13,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "approved_members",
+    "total": 30,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "attendance_records",
+    "total": 179,
+    "recent": 10,
+    "has_pk": true
+  },
+  {
+    "table": "audit_logs",
+    "total": 543,
+    "recent": 8,
+    "has_pk": true
+  },
+  {
+    "table": "chat_message_hidden",
+    "total": 0,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "chat_message_reactions",
+    "total": 12,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "chat_messages",
+    "total": 88,
+    "recent": 5,
+    "has_pk": true
+  },
+  {
+    "table": "chat_room_members",
+    "total": 50,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "chat_rooms",
+    "total": 10,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "communication_deliveries",
+    "total": 1419,
+    "recent": 63,
+    "has_pk": true
+  },
+  {
+    "table": "correction_requests",
+    "total": 2,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "dues_periods",
+    "total": 13,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "event_audiences",
+    "total": 10,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "event_invitations",
+    "total": 292,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "event_responses",
+    "total": 10,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "event_types",
+    "total": 11,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "expense_categories",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "expenses",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "external_calendar_event_mappings",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "follow_up_flags",
+    "total": 34,
+    "recent": 2,
+    "has_pk": true
+  },
+  {
+    "table": "google_calendar_integrations",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "meeting_agenda_items",
+    "total": 6,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "meeting_categories",
+    "total": 16,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "meeting_summaries",
+    "total": 26,
+    "recent": 2,
+    "has_pk": true
+  },
+  {
+    "table": "meetings",
+    "total": 63,
+    "recent": 1,
+    "has_pk": true
+  },
+  {
+    "table": "member_celebration_dates",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "member_dues_assignments",
+    "total": 312,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "member_messages",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "member_notifications",
+    "total": 1147,
+    "recent": 36,
+    "has_pk": true
+  },
+  {
+    "table": "member_service_commitments",
+    "total": 128,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "members",
+    "total": 30,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "organization_services",
+    "total": 5,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "payment_accounts",
+    "total": 2,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "payments",
+    "total": 260,
+    "recent": 8,
+    "has_pk": true
+  },
+  {
+    "table": "push_subscriptions",
+    "total": 15,
+    "recent": 5,
+    "has_pk": true
+  },
+  {
+    "table": "pwa_device_sessions",
+    "total": 23,
+    "recent": 4,
+    "has_pk": true
+  },
+  {
+    "table": "resumable_uploads",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "service_headcounts",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "service_schedule_exceptions",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "service_schedules",
+    "total": 9,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "sub_teams",
+    "total": 7,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "system_settings",
+    "total": 1,
+    "recent": 0,
+    "has_pk": false
+  },
+  {
+    "table": "user_access_roles",
+    "total": 12,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "users",
+    "total": 29,
+    "recent": 1,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_categories",
+    "total": 25,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_colors",
+    "total": 24,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_item_variants",
+    "total": 45,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_items",
+    "total": 44,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_outfit_items",
+    "total": 56,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_outfits",
+    "total": 18,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "wardrobe_schedules",
+    "total": 17,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "weekly_availability_cycles",
+    "total": 5,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "weekly_availability_responses",
+    "total": 35,
+    "recent": 0,
+    "has_pk": true
+  },
+  {
+    "table": "welfare_requests",
+    "total": 0,
+    "recent": 0,
+    "has_pk": true
+  }
+]
