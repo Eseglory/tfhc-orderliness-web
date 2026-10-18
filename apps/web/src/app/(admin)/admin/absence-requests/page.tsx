@@ -31,7 +31,7 @@ export default function AbsenceRequestsPage() {
   const { notify } = useToast();
 
   const [kind, setKind] = useState<'absence' | 'correction'>('absence');
-  const [statusFilter, setStatusFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [requests, setRequests] = useState<any[]>([]);
   const [counts, setCounts] = useState<{ pending: number; approved: number }>({ pending: 0, approved: 0 });
   const [loading, setLoading] = useState(true);
@@ -50,12 +50,26 @@ export default function AbsenceRequestsPage() {
     setLoading(true);
     try {
       if (statusFilter === 'PENDING') {
-        const data = await fetchApi<any[]>(`${endpoint}/pending`);
+        const data = await fetchApi<any[]>(`${endpoint}/pending`).catch(() => []);
         setRequests(data || []);
         setCounts(prev => ({ ...prev, pending: (data || []).length }));
+      } else if (statusFilter === 'ALL') {
+        const [pendingData, historyData] = await Promise.all([
+          fetchApi<any[]>(`${endpoint}/pending`).catch(() => []),
+          fetchApi<any[]>(`${endpoint}/history`).catch(() => []),
+        ]);
+        const map = new Map<string, any>();
+        (pendingData || []).forEach(item => map.set(item.id, item));
+        (historyData || []).forEach(item => map.set(item.id, item));
+        const combined = Array.from(map.values()).sort((a, b) => {
+          if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+          if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setRequests(combined);
+        setCounts(prev => ({ ...prev, pending: (pendingData || []).length }));
       } else {
-        const statusQuery = statusFilter === 'ALL' ? '' : `status=${statusFilter}`;
-        const data = await fetchApi<any[]>(`${endpoint}/history${statusQuery ? `?${statusQuery}` : ''}`).catch(() => []);
+        const data = await fetchApi<any[]>(`${endpoint}/history?status=${statusFilter}`).catch(() => []);
         setRequests(data || []);
       }
       setError('');

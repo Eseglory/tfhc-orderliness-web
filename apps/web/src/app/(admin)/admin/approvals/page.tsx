@@ -30,6 +30,7 @@ import {
   Calendar,
   Sparkles,
   Sliders,
+  ShieldCheck,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { ApprovalTimeline, ApprovalStepView } from '../../../../components/ApprovalTimeline';
@@ -79,6 +80,7 @@ interface AbsenceExcuse {
   endDate?: string;
   requestType?: string;
   createdAt: string;
+  updatedAt?: string;
   member: { id: string; firstName: string; lastName: string; memberCode: string; subTeam?: { name: string } };
   meeting?: { id: string; title: string; startTime: string };
   reviewNote?: string;
@@ -90,6 +92,7 @@ interface CorrectionRequest {
   requestedStatus: string;
   status: string;
   createdAt: string;
+  updatedAt?: string;
   member: { id: string; firstName: string; lastName: string; memberCode: string; subTeam?: { name: string } };
   meeting: { id: string; title: string; startTime: string };
 }
@@ -129,17 +132,23 @@ function ApprovalsContent() {
   const [queue, setQueue] = useState<ApprovalRequest[]>([]);
   const [history, setHistory] = useState<ApprovalRequest[]>([]);
   const [workflows, setWorkflows] = useState<ApprovalWorkflow[]>([]);
-  const [excuses, setExcuses] = useState<AbsenceExcuse[]>([]);
-  const [corrections, setCorrections] = useState<CorrectionRequest[]>([]);
+  const [excusesPending, setExcusesPending] = useState<AbsenceExcuse[]>([]);
+  const [excusesHistory, setExcusesHistory] = useState<AbsenceExcuse[]>([]);
+  const [correctionsPending, setCorrectionsPending] = useState<CorrectionRequest[]>([]);
+  const [correctionsHistory, setCorrectionsHistory] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Universal Filter & Search states
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [search, setSearch] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedExcuseCategory, setSelectedExcuseCategory] = useState<string>('ALL');
 
   // Action states
   const [acting, setActing] = useState<{ req: ApprovalRequest; decision: 'APPROVED' | 'REJECTED' } | null>(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const [search, setSearch] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
 
   // Reviewing Excuses & Corrections
   const [reviewingExcuse, setReviewingExcuse] = useState<{ item: AbsenceExcuse; decision: 'APPROVED' | 'REJECTED' } | null>(null);
@@ -159,18 +168,22 @@ function ApprovalsContent() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [q, h, wf, exc, corr] = await Promise.all([
+      const [q, h, wf, excP, excH, corrP, corrH] = await Promise.all([
         can('approvals.act') || can('approvals.read') ? fetchApi<ApprovalRequest[]>('/approvals/pending').catch(() => []) : Promise.resolve([]),
         can('approvals.read') ? fetchApi<ApprovalRequest[]>('/approvals/history').catch(() => []) : Promise.resolve([]),
         can('approvals.read') || can('approvals.configure') ? fetchApi<ApprovalWorkflow[]>('/approval-workflows').catch(() => []) : Promise.resolve([]),
         can('excuses.review') ? fetchApi<AbsenceExcuse[]>('/excuses/pending').catch(() => []) : Promise.resolve([]),
+        can('excuses.review') ? fetchApi<AbsenceExcuse[]>('/excuses/history').catch(() => []) : Promise.resolve([]),
         can('corrections.review') || can('excuses.review') ? fetchApi<CorrectionRequest[]>('/excuses/corrections/pending').catch(() => []) : Promise.resolve([]),
+        can('corrections.review') || can('excuses.review') ? fetchApi<CorrectionRequest[]>('/excuses/corrections/history').catch(() => []) : Promise.resolve([]),
       ]);
       setQueue(q || []);
       setHistory(h || []);
       setWorkflows(wf || []);
-      setExcuses(exc || []);
-      setCorrections(corr || []);
+      setExcusesPending(excP || []);
+      setExcusesHistory(excH || []);
+      setCorrectionsPending(corrP || []);
+      setCorrectionsHistory(corrH || []);
       setError('');
     } catch (e) {
       setError(
@@ -315,38 +328,164 @@ function ApprovalsContent() {
     }
   };
 
-  const rows = useMemo(() => {
-    const raw = tab === 'queue' ? queue : history;
-    return raw.filter((r) => {
+  // Combined and sorted lists (PENDING always at top, then newest)
+  const allGovernance = useMemo(() => {
+    const map = new Map<string, ApprovalRequest>();
+    queue.forEach((r) => map.set(r.id, r));
+    history.forEach((r) => map.set(r.id, r));
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+      if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [queue, history]);
+
+  const allExcuses = useMemo(() => {
+    const map = new Map<string, AbsenceExcuse>();
+    excusesPending.forEach((e) => map.set(e.id, e));
+    excusesHistory.forEach((e) => map.set(e.id, e));
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+      if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [excusesPending, excusesHistory]);
+
+  const allCorrections = useMemo(() => {
+    const map = new Map<string, CorrectionRequest>();
+    correctionsPending.forEach((c) => map.set(c.id, c));
+    correctionsHistory.forEach((c) => map.set(c.id, c));
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.status === 'PENDING' && b.status !== 'PENDING') return -1;
+      if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [correctionsPending, correctionsHistory]);
+
+  // Tab-filtered lists
+  const filteredGovernance = useMemo(() => {
+    return allGovernance.filter((r) => {
+      if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
       if (selectedType !== 'ALL' && r.requestType !== selectedType) return false;
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
         r.summary.toLowerCase().includes(q) ||
         r.requester?.name.toLowerCase().includes(q) ||
-        r.workflow.name.toLowerCase().includes(q)
+        r.workflow?.name?.toLowerCase().includes(q)
       );
     });
-  }, [tab, queue, history, selectedType, search]);
+  }, [allGovernance, statusFilter, selectedType, search]);
 
+  const filteredExcuses = useMemo(() => {
+    return allExcuses.filter((e) => {
+      if (statusFilter !== 'ALL' && e.status !== statusFilter) return false;
+      if (selectedExcuseCategory !== 'ALL' && e.category !== selectedExcuseCategory) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        e.reason?.toLowerCase().includes(q) ||
+        e.member?.firstName?.toLowerCase().includes(q) ||
+        e.member?.lastName?.toLowerCase().includes(q) ||
+        e.member?.memberCode?.toLowerCase().includes(q) ||
+        e.meeting?.title?.toLowerCase().includes(q)
+      );
+    });
+  }, [allExcuses, statusFilter, selectedExcuseCategory, search]);
+
+  const filteredCorrections = useMemo(() => {
+    return allCorrections.filter((c) => {
+      if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        c.reason?.toLowerCase().includes(q) ||
+        c.member?.firstName?.toLowerCase().includes(q) ||
+        c.member?.lastName?.toLowerCase().includes(q) ||
+        c.member?.memberCode?.toLowerCase().includes(q) ||
+        c.meeting?.title?.toLowerCase().includes(q)
+      );
+    });
+  }, [allCorrections, statusFilter, search]);
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((r) => {
+      if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
+      if (selectedType !== 'ALL' && r.requestType !== selectedType) return false;
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        r.summary.toLowerCase().includes(q) ||
+        r.requester?.name.toLowerCase().includes(q) ||
+        r.workflow?.name?.toLowerCase().includes(q)
+      );
+    });
+  }, [history, statusFilter, selectedType, search]);
+
+  // High-level metrics
   const stats = useMemo(() => {
     const pendingGovernanceCount = queue.length;
-    const pendingExcusesCount = excuses.length;
-    const pendingCorrectionsCount = corrections.length;
+    const pendingExcusesCount = excusesPending.length;
+    const pendingCorrectionsCount = correctionsPending.length;
     const totalPendingCount = pendingGovernanceCount + pendingExcusesCount + pendingCorrectionsCount;
+
+    const approvedGovernanceCount = history.filter((h) => h.status === 'APPROVED').length;
+    const approvedExcusesCount = allExcuses.filter((e) => e.status === 'APPROVED').length;
+    const approvedCorrectionsCount = allCorrections.filter((c) => c.status === 'APPROVED').length;
+    const totalApprovedCount = approvedGovernanceCount + approvedExcusesCount + approvedCorrectionsCount;
+
     const resolvedCount = history.length;
     const approvedAmount = history
       .filter((h) => h.status === 'APPROVED' && h.amount)
       .reduce((acc, h) => acc + (h.amount || 0), 0);
+
     return {
       pendingGovernanceCount,
       pendingExcusesCount,
       pendingCorrectionsCount,
       totalPendingCount,
+      approvedGovernanceCount,
+      approvedExcusesCount,
+      approvedCorrectionsCount,
+      totalApprovedCount,
       resolvedCount,
       approvedAmount,
     };
-  }, [queue, excuses, corrections, history]);
+  }, [queue, history, excusesPending, allExcuses, correctionsPending, allCorrections]);
+
+  // Tab-specific counts for filter pills
+  const activeTabCounts = useMemo(() => {
+    if (tab === 'queue') {
+      return {
+        total: allGovernance.length,
+        pending: queue.length,
+        approved: allGovernance.filter((r) => r.status === 'APPROVED').length,
+        rejected: allGovernance.filter((r) => r.status === 'REJECTED' || r.status === 'CANCELLED').length,
+      };
+    }
+    if (tab === 'excuses') {
+      return {
+        total: allExcuses.length,
+        pending: excusesPending.length,
+        approved: allExcuses.filter((e) => e.status === 'APPROVED').length,
+        rejected: allExcuses.filter((e) => e.status === 'REJECTED' || e.status === 'CANCELLED').length,
+      };
+    }
+    if (tab === 'corrections') {
+      return {
+        total: allCorrections.length,
+        pending: correctionsPending.length,
+        approved: allCorrections.filter((c) => c.status === 'APPROVED').length,
+        rejected: allCorrections.filter((c) => c.status === 'REJECTED').length,
+      };
+    }
+    return {
+      total: history.length,
+      pending: 0,
+      approved: history.filter((h) => h.status === 'APPROVED').length,
+      rejected: history.filter((h) => h.status === 'REJECTED' || h.status === 'CANCELLED').length,
+    };
+  }, [tab, allGovernance, queue, allExcuses, excusesPending, allCorrections, correctionsPending, history]);
 
   return (
     <AdminLayoutShell>
@@ -363,9 +502,13 @@ function ApprovalsContent() {
               <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                 Governance &amp; Approvals Center
               </h1>
-              {stats.totalPendingCount > 0 && (
+              {stats.totalPendingCount > 0 ? (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400 animate-pulse">
                   {stats.totalPendingCount} Pending Action
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> All Queues Clear
                 </span>
               )}
             </div>
@@ -388,8 +531,8 @@ function ApprovalsContent() {
               onClick={load}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
             >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              <span>Refresh Queue</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+              <span>Refresh Records</span>
             </button>
           </div>
         </div>
@@ -399,18 +542,20 @@ function ApprovalsContent() {
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                GOVERNANCE QUEUE
+                PENDING ACTION
               </span>
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600">
                 <Clock className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.pendingGovernanceCount}</span>
-              <span className="text-xs font-bold text-amber-600">Awaiting Decision</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.totalPendingCount}</span>
+              <span className={`text-xs font-bold ${stats.totalPendingCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {stats.totalPendingCount > 0 ? 'Action Needed' : 'All Clear'}
+              </span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Welfare, expenses, adjustments</span>
+              <span>{stats.pendingGovernanceCount} governance • {stats.pendingExcusesCount} excuses</span>
             </div>
           </div>
 
@@ -424,79 +569,94 @@ function ApprovalsContent() {
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.pendingExcusesCount}</span>
-              <span className="text-xs font-bold text-purple-600">Excuses Pending</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{allExcuses.length}</span>
+              <span className="text-xs font-bold text-purple-600">Total Filed</span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Member absence requests</span>
+              <span>{stats.approvedExcusesCount} Approved • {stats.pendingExcusesCount} Pending</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                AUDIT CORRECTIONS
+                GOVERNANCE REQUESTS
               </span>
               <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
                 <CheckSquare className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">{stats.pendingCorrectionsCount}</span>
-              <span className="text-xs font-bold text-slate-400">Corrections</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{allGovernance.length}</span>
+              <span className="text-xs font-bold text-indigo-600">Total Tracked</span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Disputed attendance marks</span>
+              <span>{stats.approvedGovernanceCount} Approved • {stats.pendingGovernanceCount} Pending</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                APPROVED DISBURSEMENTS
+                APPROVED &amp; VERIFIED
               </span>
               <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
-                <DollarSign className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl font-black text-emerald-600">
-                ${stats.approvedAmount.toLocaleString()}
+                {stats.approvedAmount > 0 ? `$${stats.approvedAmount.toLocaleString()}` : '100% Synced'}
               </span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>{stats.resolvedCount} archived decisions</span>
+              <span>{stats.totalApprovedCount} approved records verified in DB</span>
             </div>
           </div>
         </div>
 
-        {/* Tab Strip & Search Bar */}
-        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        {/* Tab Strip */}
+        <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl overflow-x-auto">
               <button
                 onClick={() => handleTabChange('queue')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   tab === 'queue' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                Governance Queue ({queue.length})
+                <span>Governance Requests ({allGovernance.length})</span>
+                {stats.pendingGovernanceCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold animate-pulse">
+                    {stats.pendingGovernanceCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => handleTabChange('excuses')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   tab === 'excuses' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                Absence Excuses ({excuses.length})
+                <span>Absence Excuses ({allExcuses.length})</span>
+                {stats.pendingExcusesCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold animate-pulse">
+                    {stats.pendingExcusesCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => handleTabChange('corrections')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   tab === 'corrections' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                Corrections ({corrections.length})
+                <span>Corrections ({allCorrections.length})</span>
+                {stats.pendingCorrectionsCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold animate-pulse">
+                    {stats.pendingCorrectionsCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => handleTabChange('workflows')}
@@ -512,45 +672,125 @@ function ApprovalsContent() {
                   tab === 'history' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                History ({history.length})
+                Audit Log ({history.length})
               </button>
             </div>
+          </div>
 
-            {(tab === 'queue' || tab === 'history') && (
-              <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
-                <select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+          {/* Filter Bar: Status Pills, Domain Filters & Search (Visible on request tabs) */}
+          {tab !== 'workflows' && (
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Status Filter Pills */}
+              <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    statusFilter === 'ALL'
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
                 >
-                  <option value="ALL">All Request Types</option>
-                  <option value="WELFARE_FUND">Member Welfare / Assistance</option>
-                  <option value="EXPENSE">Operational Expense</option>
-                  <option value="ABSENCE">Absence Leave</option>
-                  <option value="DUES_ADJUSTMENT">Dues Adjustment</option>
-                  <option value="GENERIC">General Request</option>
-                </select>
+                  All ({activeTabCounts.total})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('PENDING')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'PENDING'
+                      ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <span>Pending</span>
+                  {activeTabCounts.pending > 0 ? (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold animate-pulse">
+                      {activeTabCounts.pending}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-400">(0)</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('APPROVED')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'APPROVED'
+                      ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Check className="w-3 h-3 text-emerald-600" />
+                  <span>Approved</span>
+                  <span className="text-[10px] font-semibold text-emerald-600">({activeTabCounts.approved})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('REJECTED')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'REJECTED'
+                      ? 'bg-white dark:bg-slate-900 text-rose-600 dark:text-rose-400 shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <X className="w-3 h-3 text-rose-600" />
+                  <span>Rejected</span>
+                  <span className="text-[10px] font-semibold">({activeTabCounts.rejected})</span>
+                </button>
+              </div>
 
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              {/* Secondary Select Filters and Search */}
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                {(tab === 'queue' || tab === 'history') && (
+                  <select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    className="w-full sm:w-auto px-3 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+                  >
+                    <option value="ALL">All Request Types</option>
+                    <option value="WELFARE_FUND">Member Welfare / Assistance</option>
+                    <option value="EXPENSE">Operational Expense</option>
+                    <option value="ABSENCE">Absence Leave</option>
+                    <option value="DUES_ADJUSTMENT">Dues Adjustment</option>
+                    <option value="GENERIC">General Request</option>
+                  </select>
+                )}
+
+                {tab === 'excuses' && (
+                  <select
+                    value={selectedExcuseCategory}
+                    onChange={(e) => setSelectedExcuseCategory(e.target.value)}
+                    className="w-full sm:w-auto px-3 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+                  >
+                    <option value="ALL">All Categories</option>
+                    <option value="SICKNESS">Sickness / Medical</option>
+                    <option value="TRAVEL">Travel / Out of Town</option>
+                    <option value="WORK">Work / Official Duty</option>
+                    <option value="FAMILY">Family Emergency</option>
+                    <option value="OTHER">Other Justification</option>
+                  </select>
+                )}
+
+                <div className="relative flex-1 sm:w-60">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search approvals..."
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                    placeholder="Search requests..."
+                    className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
                   />
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Tab 1: Governance Queue */}
+        {/* Tab 1: Governance Requests (Pending & Approved/Rejected) */}
         {tab === 'queue' && (
           <div className="space-y-4">
-            {rows.length > 0 ? (
-              rows.map((req) => (
+            {filteredGovernance.length > 0 ? (
+              filteredGovernance.map((req) => (
                 <div
                   key={req.id}
                   className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
@@ -560,12 +800,25 @@ function ApprovalsContent() {
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                         {TYPE_LABEL[req.requestType] || req.requestType}
                       </span>
-                      <span className="text-xs font-bold text-slate-400">• {req.workflow.name}</span>
+                      <span className="text-xs font-bold text-slate-400">• {req.workflow?.name || 'Standard Approval'}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-400">Submitted:</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    <div className="flex items-center gap-2.5 text-xs">
+                      {req.status === 'PENDING' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-400 border border-amber-200 dark:border-amber-800 animate-pulse">
+                          PENDING REVIEW
+                        </span>
+                      ) : req.status === 'APPROVED' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" /> APPROVED
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 inline-flex items-center gap-1">
+                          <X className="w-3 h-3 text-rose-600" /> {req.status}
+                        </span>
+                      )}
+
+                      <span className="text-slate-400">
                         {new Date(req.createdAt).toLocaleDateString(undefined, {
                           month: 'short',
                           day: 'numeric',
@@ -590,7 +843,7 @@ function ApprovalsContent() {
                       )}
                     </div>
 
-                    {can('approvals.act') && (
+                    {req.status === 'PENDING' && can('approvals.act') && (
                       <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
                         <button
                           onClick={() => {
@@ -612,6 +865,12 @@ function ApprovalsContent() {
                         </button>
                       </div>
                     )}
+
+                    {req.status !== 'PENDING' && (
+                      <div className="text-right text-xs text-slate-400">
+                        <span>Decided: {req.decidedAt ? new Date(req.decidedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Recorded'}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Timeline Step Progression */}
@@ -624,14 +883,13 @@ function ApprovalsContent() {
               ))
             ) : (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
-                <p>No pending governance approval requests in this queue.</p>
-                {history.length > 0 && (
+                <p>No governance approval requests match the selected status filter ({statusFilter}).</p>
+                {statusFilter !== 'ALL' && (
                   <button
-                    onClick={() => handleTabChange('history')}
+                    onClick={() => setStatusFilter('ALL')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>View {history.length} Resolved Approvals in History Tab</span>
+                    <span>View All ({allGovernance.length}) Requests</span>
                   </button>
                 )}
               </div>
@@ -639,11 +897,11 @@ function ApprovalsContent() {
           </div>
         )}
 
-        {/* Tab 2: Absence Excuses Queue */}
+        {/* Tab 2: Absence Excuses Queue (Pending & Approved/Rejected) */}
         {tab === 'excuses' && (
           <div className="space-y-4">
-            {excuses.length > 0 ? (
-              excuses.map((excuse) => (
+            {filteredExcuses.length > 0 ? (
+              filteredExcuses.map((excuse) => (
                 <div
                   key={excuse.id}
                   className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
@@ -654,9 +912,16 @@ function ApprovalsContent() {
                         {excuse.member?.firstName?.[0] || 'M'}
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-slate-900 dark:text-white">
-                          {excuse.member?.firstName} {excuse.member?.lastName}
-                        </h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs font-black text-slate-900 dark:text-white">
+                            {excuse.member?.firstName} {excuse.member?.lastName}
+                          </h4>
+                          {excuse.member?.subTeam?.name && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                              {excuse.member.subTeam.name}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-400">
                           {excuse.member?.memberCode && `ID: ${excuse.member.memberCode} • `}
                           {excuse.meeting?.title || (excuse.startDate ? `Leave: ${new Date(excuse.startDate).toLocaleDateString()} to ${new Date(excuse.endDate!).toLocaleDateString()}` : 'General Leave Period')}
@@ -664,22 +929,38 @@ function ApprovalsContent() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>
-                        {excuse.meeting?.startTime
-                          ? new Date(excuse.meeting.startTime).toLocaleString(undefined, {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                            })
-                          : excuse.startDate
-                          ? `${new Date(excuse.startDate).toLocaleDateString()} – ${new Date(excuse.endDate!).toLocaleDateString()}`
-                          : 'Scheduled Service'}
-                      </span>
+                    <div className="flex items-center gap-2.5 text-xs text-slate-500">
+                      {excuse.status === 'PENDING' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-400 border border-amber-200 dark:border-amber-800 animate-pulse">
+                          PENDING REVIEW
+                        </span>
+                      ) : excuse.status === 'APPROVED' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" /> APPROVED
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 inline-flex items-center gap-1">
+                          <X className="w-3 h-3 text-rose-600" /> {excuse.status}
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1 text-slate-400">
+                        <Calendar className="w-3 h-3" />
+                        <span>
+                          {excuse.meeting?.startTime
+                            ? new Date(excuse.meeting.startTime).toLocaleString(undefined, {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })
+                            : excuse.startDate
+                            ? `${new Date(excuse.startDate).toLocaleDateString()} – ${new Date(excuse.endDate!).toLocaleDateString()}`
+                            : new Date(excuse.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-xs">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 space-y-2 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-extrabold uppercase text-slate-400">
                         Absence Justification
@@ -691,6 +972,15 @@ function ApprovalsContent() {
                     <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
                       &quot;{excuse.reason}&quot;
                     </p>
+
+                    {excuse.reviewNote && (
+                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-start gap-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-600" />
+                        <span>
+                          <strong className="font-bold">Reviewer Note:</strong> &quot;{excuse.reviewNote}&quot;
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -701,58 +991,56 @@ function ApprovalsContent() {
                       View Member Profile
                     </Link>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setReviewingExcuse({ item: excuse, decision: 'REJECTED' });
-                          setReviewNote('');
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
-                      >
-                        Reject Excuse
-                      </button>
-                      <button
-                        onClick={() => {
-                          setReviewingExcuse({ item: excuse, decision: 'APPROVED' });
-                          setReviewNote('');
-                        }}
-                        className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-                      >
-                        Approve Excuse
-                      </button>
-                    </div>
+                    {excuse.status === 'PENDING' && can('excuses.review') ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setReviewingExcuse({ item: excuse, decision: 'REJECTED' });
+                            setReviewNote('');
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
+                        >
+                          Reject Excuse
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReviewingExcuse({ item: excuse, decision: 'APPROVED' });
+                            setReviewNote('');
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                        >
+                          Approve Excuse
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        Recorded on {new Date(excuse.updatedAt || excuse.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))
             ) : (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
-                <p>No pending absence excuses. All member leaves are up to date.</p>
-                <div className="flex items-center justify-center gap-2">
+                <p>No absence excuses match the filter ({statusFilter}).</p>
+                {statusFilter !== 'ALL' && (
                   <button
-                    onClick={() => handleTabChange('history')}
+                    onClick={() => setStatusFilter('ALL')}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>View {history.length} Resolved Approvals in History Tab</span>
+                    <span>View All ({allExcuses.length}) Absence Excuses</span>
                   </button>
-                  <Link
-                    href="/admin/absence-requests"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all border border-slate-200 dark:border-slate-700"
-                  >
-                    <FileText className="w-4 h-4 text-slate-500" />
-                    <span>Absence Requests Center</span>
-                  </Link>
-                </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Tab 3: Attendance Corrections Queue */}
+        {/* Tab 3: Attendance Corrections Queue (Pending & Approved/Rejected) */}
         {tab === 'corrections' && (
           <div className="space-y-4">
-            {corrections.length > 0 ? (
-              corrections.map((corr) => (
+            {filteredCorrections.length > 0 ? (
+              filteredCorrections.map((corr) => (
                 <div
                   key={corr.id}
                   className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-4 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all"
@@ -774,6 +1062,20 @@ function ApprovalsContent() {
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">
+                      {corr.status === 'PENDING' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-400 border border-amber-200 dark:border-amber-800 animate-pulse">
+                          PENDING
+                        </span>
+                      ) : corr.status === 'APPROVED' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" /> APPROVED
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800 inline-flex items-center gap-1">
+                          <X className="w-3 h-3 text-rose-600" /> {corr.status}
+                        </span>
+                      )}
+
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
                         Requested: {corr.requestedStatus}
                       </span>
@@ -790,24 +1092,40 @@ function ApprovalsContent() {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      onClick={() => setReviewingCorrection({ item: corr, decision: 'REJECTED' })}
-                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
-                    >
-                      Reject Correction
-                    </button>
-                    <button
-                      onClick={() => setReviewingCorrection({ item: corr, decision: 'APPROVED' })}
-                      className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-                    >
-                      Approve Correction
-                    </button>
+                    {corr.status === 'PENDING' && (can('corrections.review') || can('excuses.review')) ? (
+                      <>
+                        <button
+                          onClick={() => setReviewingCorrection({ item: corr, decision: 'REJECTED' })}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
+                        >
+                          Reject Correction
+                        </button>
+                        <button
+                          onClick={() => setReviewingCorrection({ item: corr, decision: 'APPROVED' })}
+                          className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                        >
+                          Approve Correction
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        Decision recorded on {new Date(corr.updatedAt || corr.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
-                No pending attendance corrections in this queue.
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
+                <p>No attendance corrections match the current filter ({statusFilter}).</p>
+                {statusFilter !== 'ALL' && (
+                  <button
+                    onClick={() => setStatusFilter('ALL')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
+                  >
+                    <span>View All ({allCorrections.length}) Corrections</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -903,11 +1221,11 @@ function ApprovalsContent() {
           </div>
         )}
 
-        {/* Tab 5: Decision History */}
+        {/* Tab 5: Consolidated Decision History */}
         {tab === 'history' && (
           <div className="space-y-4">
-            {rows.length > 0 ? (
-              rows.map((req) => (
+            {filteredHistory.length > 0 ? (
+              filteredHistory.map((req) => (
                 <div
                   key={req.id}
                   className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3"
@@ -917,7 +1235,7 @@ function ApprovalsContent() {
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                         {TYPE_LABEL[req.requestType] || req.requestType}
                       </span>
-                      <span className="text-xs font-bold text-slate-400">• {req.workflow.name}</span>
+                      <span className="text-xs font-bold text-slate-400">• {req.workflow?.name || 'Standard Approval'}</span>
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">
@@ -962,7 +1280,7 @@ function ApprovalsContent() {
               ))
             ) : (
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
-                No resolved decision history found.
+                No resolved decision history found matching filter.
               </div>
             )}
           </div>

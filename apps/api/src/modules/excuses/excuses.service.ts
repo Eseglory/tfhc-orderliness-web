@@ -602,4 +602,19 @@ export class ExcusesService implements OnModuleInit {
       orderBy: { createdAt: 'asc' },
     });
   }
+
+  async getCorrectionHistory(query?: { status?: string }) {
+    const where: any = {};
+    if (query?.status && query.status !== 'ALL') {
+      where.status = query.status as ExcuseStatus;
+    } else {
+      where.status = { not: ExcuseStatus.PENDING };
+    }
+    return this.prisma.correctionRequest.findMany({
+      where,
+      include: { member: { include: { subTeam: true } }, meeting: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+  }
 }

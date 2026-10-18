@@ -96,6 +96,12 @@ export class ExcusesController {
   }
 
   @RequirePermissions('corrections.review')
+  @Get('corrections/history')
+  getCorrectionHistory(@Query('status') status?: string) {
+    return this.excusesService.getCorrectionHistory({ status });
+  }
+
+  @RequirePermissions('corrections.review')
   @Put('corrections/:id/review')
   reviewCorrection(@Param('id') correctionId: string, @CurrentUser('userId') adminUserId: string, @Body() body: any) {
     return this.excusesService.reviewCorrection({
