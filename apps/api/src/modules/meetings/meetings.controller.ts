@@ -25,6 +25,32 @@ export class MeetingsController {
     return this.serviceReminderService.getActiveReminderForMember(memberId);
   }
 
+  @Get('member-reminders')
+  getMemberReminders(
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('memberId') memberId?: string,
+  ) {
+    return this.meetingsService.getMemberUpcomingReminders(userId, memberId);
+  }
+
+  @Get('reminder-preferences')
+  getReminderPreferences(@CurrentUser('userId') userId: string) {
+    return this.meetingsService.getMemberReminderPreferences(userId);
+  }
+
+  @Put('reminder-preferences')
+  saveReminderPreferences(
+    @CurrentUser('userId') userId: string,
+    @Body() body: {
+      remindersEnabled?: boolean;
+      alarmSoundEnabled?: boolean;
+      soundName?: string;
+      snoozeMinutes?: number;
+    },
+  ) {
+    return this.meetingsService.saveMemberReminderPreferences(userId, body);
+  }
+
   @RequirePermissions('events.read')
   @Get(':id/reminder-stats')
   getReminderStats(@Param('id') id: string) {

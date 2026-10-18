@@ -8,6 +8,7 @@ import { PushSettings } from '../../../../components/PushSettings';
 import { OfflineStorage } from '../../../../components/OfflineStorage';
 import { recordPwaMetric } from '../../../../lib/pwa/metrics';
 import { soundFx, SoundSettings } from '../../../../lib/sound-fx';
+import { MeetingReminderSettings } from '../../../../components/MeetingReminderSettings';
 
 type PermissionStateVal = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
@@ -644,6 +645,9 @@ export default function MemberSettingsPage() {
             </div>
           )}
         </section>
+
+        {/* SECTION: SMART MEETING REMINDERS & DEVICE ALARM */}
+        <MeetingReminderSettings />
 
         {/* SECTION 3: SOUND & COMMUNICATION ALERTS */}
         <section className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">

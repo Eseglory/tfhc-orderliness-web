@@ -129,7 +129,7 @@ export class PushService {
 
   async sendDirectPush(
     target: string | { userId?: string; memberId?: string },
-    payload: { title: string; body: string; url?: string }
+    payload: { title: string; body: string; url?: string; type?: string; meetingId?: string }
   ) {
     const vapidDetails = this.vapid();
     if (!vapidDetails) return { sent: 0, failed: 0 };
@@ -158,6 +158,8 @@ export class PushService {
       title: payload.title,
       body: payload.body,
       url: payload.url || '/member/notifications',
+      type: payload.type || 'NOTIFICATION',
+      meetingId: payload.meetingId,
     });
     for (const sub of subscriptions) {
       try {

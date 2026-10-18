@@ -214,7 +214,13 @@ export class ServiceReminderService {
         try {
           const pushRes = await this.pushService.sendDirectPush(
             { userId: member.userId, memberId: member.id },
-            { title, body, url: path }
+            {
+              title,
+              body,
+              url: path,
+              type: window === 'active' ? 'MEETING_ALARM' : 'SERVICE_REMINDER',
+              meetingId: meeting.id,
+            }
           );
           if (pushRes?.sent) result.pushSent += pushRes.sent;
         } catch (err) {

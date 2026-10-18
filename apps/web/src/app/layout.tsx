@@ -1,5 +1,7 @@
 import { VenueSessionGuard } from '../components/VenueSessionGuard';
 import { SundayAutoCheckIn } from '../components/SundayAutoCheckIn';
+import { MeetingAlarmManager } from '../components/MeetingAlarmManager';
+import { ReminderPermissionPrompt } from '../components/ReminderPermissionPrompt';
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
@@ -97,6 +99,8 @@ export default function RootLayout({
                 <VenueSessionGuard />
                 <SundayAutoCheckIn />
                 <GlobalCallManager />
+                <MeetingAlarmManager />
+                <ReminderPermissionPrompt />
                 <AuthGate>{children}</AuthGate>
                 <BottomNav />
               </ToastProvider>

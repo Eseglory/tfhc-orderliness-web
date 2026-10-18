@@ -1475,4 +1475,138 @@ export class MeetingsService {
     this.cache.invalidateTags(['calendar', 'meetings']);
     return { success: true, meetingId, meetingUrl: updated.meetingUrl, isOnline: updated.isOnline };
   }
+
+  /**
+   * Retrieves upcoming eligible meetings and services for smart client-side device alarm reminders.
+   */
+  async getMemberUpcomingReminders(userId: string, memberId?: string) {
+    let resolvedMemberId = memberId;
+    if (!resolvedMemberId && userId) {
+      const member = await this.prisma.member.findUnique({
+        where: { userId },
+        select: { id: true, subTeamId: true, roleInUnit: true, status: true },
+      });
+      if (member) resolvedMemberId = member.id;
+    }
+
+    const member = resolvedMemberId
+      ? await this.prisma.member.findUnique({
+          where: { id: resolvedMemberId },
+          select: { id: true, subTeamId: true, roleInUnit: true, status: true },
+        })
+      : null;
+
+    const now = new Date();
+    // Look back 1 hour (for ongoing active meetings) and forward 48 hours
+    const rangeStart = new Date(now.getTime() - 60 * 60 * 1000);
+    const rangeEnd = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    const meetings = await this.prisma.meeting.findMany({
+      where: {
+        status: { in: [MeetingStatus.SCHEDULED, MeetingStatus.ACTIVE] },
+        startTime: { gte: rangeStart, lte: rangeEnd },
+      },
+      include: {
+        audiences: true,
+        category: true,
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    const eligibleReminders = [];
+    for (const m of meetings) {
+      // 1. Eligibility check via canViewEvent
+      if (member) {
+        const canView = canViewEvent(m.visibility, m.audiences, {
+          memberId: member.id,
+          subTeamId: member.subTeamId,
+          roleInUnit: member.roleInUnit,
+          isStaff: false,
+        });
+        if (!canView) continue;
+
+        // 2. Has the member already attended/checked in?
+        const attended = await this.prisma.attendanceRecord.findFirst({
+          where: {
+            meetingId: m.id,
+            memberId: member.id,
+            status: { notIn: ['ABSENT', 'EXCUSED', 'EXEMPT'] },
+          },
+          select: { id: true, status: true },
+        });
+        if (attended) continue;
+      }
+
+      eligibleReminders.push({
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        startTime: m.startTime.toISOString(),
+        endTime: m.endTime ? m.endTime.toISOString() : null,
+        expectedArrivalTime: m.expectedArrivalTime.toISOString(),
+        attendanceOpenTime: m.attendanceOpenTime.toISOString(),
+        attendanceCloseTime: m.attendanceCloseTime.toISOString(),
+        locationName: m.locationName,
+        isOnline: m.isOnline || Boolean(m.meetingUrl || (m.address && m.address.startsWith('http'))),
+        meetingUrl: m.meetingUrl || (m.address && m.address.startsWith('http') ? m.address : null),
+        address: m.address,
+        status: m.status,
+      });
+    }
+
+    return eligibleReminders;
+  }
+
+  /**
+   * Retrieves persistent user meeting reminder and alarm preferences.
+   */
+  async getMemberReminderPreferences(userId: string) {
+    const key = `user_reminder_pref_${userId}`;
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key } });
+    const defaultPrefs = {
+      remindersEnabled: true,
+      alarmSoundEnabled: true,
+      soundName: 'chime',
+      snoozeMinutes: 5,
+    };
+    if (!setting) return defaultPrefs;
+    try {
+      return { ...defaultPrefs, ...JSON.parse(setting.value) };
+    } catch {
+      return defaultPrefs;
+    }
+  }
+
+  /**
+   * Persists user meeting reminder and alarm preferences across devices.
+   */
+  async saveMemberReminderPreferences(userId: string, prefs: {
+    remindersEnabled?: boolean;
+    alarmSoundEnabled?: boolean;
+    soundName?: string;
+    snoozeMinutes?: number;
+  }) {
+    const key = `user_reminder_pref_${userId}`;
+    const current = await this.getMemberReminderPreferences(userId);
+    const updated = {
+      remindersEnabled: prefs.remindersEnabled !== undefined ? Boolean(prefs.remindersEnabled) : current.remindersEnabled,
+      alarmSoundEnabled: prefs.alarmSoundEnabled !== undefined ? Boolean(prefs.alarmSoundEnabled) : current.alarmSoundEnabled,
+      soundName: ['chime', 'marimba', 'digital', 'wake'].includes(prefs.soundName || '') ? prefs.soundName : current.soundName,
+      snoozeMinutes: [3, 5, 10, 15].includes(Number(prefs.snoozeMinutes)) ? Number(prefs.snoozeMinutes) : current.snoozeMinutes,
+    };
+
+    await this.prisma.systemSetting.upsert({
+      where: { key },
+      create: {
+        key,
+        value: JSON.stringify(updated),
+        description: `Meeting reminder preferences for user ${userId}`,
+      },
+      update: {
+        value: JSON.stringify(updated),
+      },
+    });
+
+    return updated;
+  }
 }

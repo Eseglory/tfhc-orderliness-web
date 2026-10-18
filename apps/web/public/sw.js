@@ -1,6 +1,6 @@
 /* Public resources only. Bump VERSION whenever this policy or shell changes. */
 importScripts('/pwa-runtime.js');
-const VERSION = 'v14';
+const VERSION = 'v15';
 const PREFIX = 'tfhc-pwa-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const ASSETS = `${PREFIX}assets-${VERSION}`;
@@ -105,6 +105,8 @@ self.addEventListener('push', event => {
   let title = 'TFHC Tracker';
   let body = 'You have new activity. Open the app to view it.';
   let url = '/member/notifications';
+  let type = 'NOTIFICATION';
+  let meetingId = null;
 
   if (event.data) {
     try {
@@ -113,6 +115,8 @@ self.addEventListener('push', event => {
         if (payload.title) title = String(payload.title);
         if (payload.body) body = String(payload.body);
         if (payload.url) url = String(payload.url);
+        if (payload.type) type = String(payload.type);
+        if (payload.meetingId) meetingId = String(payload.meetingId);
       }
     } catch {
       try {
@@ -128,14 +132,29 @@ self.addEventListener('push', event => {
     try { self.navigator.setAppBadge().catch(() => {}); } catch {}
   }
 
+  const isAlarm = type === 'MEETING_ALARM';
+  const tag = isAlarm && meetingId ? `tfhc-alarm-${meetingId}` : 'tfhc-activity';
+
+  const notificationOptions = {
+    body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag,
+    data: { url, type, meetingId },
+    vibrate: isAlarm ? [500, 250, 500, 250, 500, 250, 500] : [200, 100, 200],
+    requireInteraction: isAlarm,
+    renotify: true,
+  };
+
+  if (isAlarm) {
+    notificationOptions.actions = [
+      { action: 'stop', title: '⏹ Stop Alarm' },
+      { action: 'snooze', title: '💤 Snooze 5m' },
+    ];
+  }
+
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      tag: 'tfhc-activity',
-      data: { url },
-    })
+    self.registration.showNotification(title, notificationOptions)
   );
 });
 
@@ -144,7 +163,26 @@ self.addEventListener('notificationclick', event => {
   if ('clearAppBadge' in self.navigator) {
     try { self.navigator.clearAppBadge().catch(() => {}); } catch {}
   }
+
+  const action = event.action;
+  const meetingId = event.notification.data?.meetingId;
   const url = event.notification.data?.url || '/member/notifications';
+
+  if (action === 'stop' || action === 'snooze') {
+    event.waitUntil(
+      (async () => {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        windows.forEach(client => {
+          client.postMessage({
+            type: action === 'stop' ? 'TFHC_STOP_ALARM' : 'TFHC_SNOOZE_ALARM',
+            meetingId,
+          });
+        });
+      })()
+    );
+    return;
+  }
+
   let target = new URL('/member/notifications', self.location.origin).href;
   try {
     const candidate = new URL(url, self.location.origin);
@@ -154,7 +192,10 @@ self.addEventListener('notificationclick', event => {
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const existing = windows.find(client => client.url === target);
-      if (existing) return existing.focus();
+      if (existing) {
+        existing.postMessage({ type: 'TFHC_OPEN_ALARM', meetingId });
+        return existing.focus();
+      }
       return self.clients.openWindow(target);
     })()
   );
