@@ -130,6 +130,18 @@ export default function LoginPage() {
         {error && (
           <div className="p-3 rounded-lg bg-error-container text-on-error-container font-body-md text-sm border border-error/20 text-center space-y-2">
             <p>{error}</p>
+            {error.toLowerCase().includes('google') && (
+              <p className="text-xs opacity-90 font-medium">Tip: Use the &quot;Sign in with Google&quot; button below to log in directly.</p>
+            )}
+            {error.toLowerCase().includes('recovery protection') && (
+              <button
+                type="button"
+                onClick={() => { setError(''); }}
+                className="mt-1 px-3 py-1 text-xs font-semibold rounded bg-primary text-on-primary hover:opacity-90 transition-opacity"
+              >
+                Dismiss &amp; Retry
+              </button>
+            )}
           </div>
         )}
 

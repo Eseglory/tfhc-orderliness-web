@@ -15,17 +15,25 @@ export const getApiBaseUrl = (): string => {
       return `${window.location.protocol}//${host}:${port}`;
     }
 
+    // Specific host mappings
+    if (host === 'tfhc.eglobalicthub.com') {
+      return 'https://tfhc.eglobalicthub.com';
+    }
+    if (host.includes('staging.utilityhub.ng')) {
+      return 'https://staging.utilityhub.ng/tfhc';
+    }
+
     // Remote browser host (Vercel, Render, custom domain):
     const configured = process.env.NEXT_PUBLIC_API_URL;
     if (configured && configured.startsWith('http') && !configured.includes('localhost') && !configured.includes('127.0.0.1')) {
       return configured;
     }
-    return 'https://tfhc-orderliness-api.onrender.com';
+    return 'https://tfhc.eglobalicthub.com';
   }
   if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes('localhost')) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  return process.env.NODE_ENV === 'production' ? 'https://tfhc-orderliness-api.onrender.com' : 'http://localhost:4000';
+  return process.env.NODE_ENV === 'production' ? 'https://tfhc.eglobalicthub.com' : 'http://localhost:4000';
 };
 
 export const API_BASE_URL = getApiBaseUrl();

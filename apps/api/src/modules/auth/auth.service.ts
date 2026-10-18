@@ -444,19 +444,6 @@ export class AuthService {
       }
     }
 
-    if (user.role === Role.MEMBER && !user.passwordAuthEnabled) {
-      if (user.googleSubject) {
-        throw new ForbiddenException({
-          code: 'PASSWORD_AUTH_DISABLED',
-          message: 'This account was registered with Google. Use Google sign-in or use "Forgot password?" to set a password.',
-        });
-      }
-      throw new ForbiddenException({
-        code: 'PASSWORD_AUTH_DISABLED',
-        message: 'Password login is not yet set up for this account. Please click "Create an account" below or use "Forgot password?".',
-      });
-    }
-
     if (Boolean(user.deactivatedAt) || (user.isActive === false && !user.inviteTokenHash && !user.invitedAt)) {
       throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
     }
@@ -466,6 +453,12 @@ export class AuthService {
       : false;
 
     if (!isPasswordValid) {
+      if (user.role === Role.MEMBER && !user.passwordAuthEnabled && user.googleSubject) {
+        throw new ForbiddenException({
+          code: 'PASSWORD_AUTH_DISABLED',
+          message: 'This account was registered with Google. Use Google sign-in or use "Forgot password?" to set a password.',
+        });
+      }
       throw new UnauthorizedException('Invalid email or password');
     }
 

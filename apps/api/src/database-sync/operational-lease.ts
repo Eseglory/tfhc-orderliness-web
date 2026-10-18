@@ -23,7 +23,11 @@ export class OperationalLease {
   async assertOwner(tx: any) {
     const changed = await tx.$executeRawUnsafe(`UPDATE public._sqlite_operational_authority SET expires_at=now()+interval '60 seconds'
       WHERE singleton=true AND source_id=$1 AND owner_id=$2 AND expires_at>now()`, this.sourceId, this.owner);
-    if (changed !== 1) throw new Error('SQLITE_AUTHORITY_LEASE_LOST');
+    if (changed !== 1) {
+      const renewed = await tx.$executeRawUnsafe(`UPDATE public._sqlite_operational_authority SET expires_at=now()+interval '60 seconds'
+        WHERE singleton=true AND source_id=$1 AND owner_id=$2`, this.sourceId, this.owner);
+      if (renewed !== 1) throw new Error('SQLITE_AUTHORITY_LEASE_LOST');
+    }
   }
   async release() {
     if (this.timer) clearInterval(this.timer);

@@ -31,8 +31,8 @@ services:
       - key: PORT
         value: '3000'
       - key: NEXT_PUBLIC_API_URL
-        value: https://tfhc-orderliness-api.onrender.com
+        value: https://tfhc.eglobalicthub.com
       - key: PWA_API_URL
-        value: https://tfhc-orderliness-api.onrender.com
+        value: https://tfhc.eglobalicthub.com
       - key: NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID
         sync: false
