@@ -7,10 +7,10 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/sw.js', headers: [
-        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+        { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0' },
         { key: 'Service-Worker-Allowed', value: '/' },
       ] },
-      { source: '/manifest.json', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
+      { source: '/manifest.json', headers: [{ key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' }] },
       {
         source: '/:path*',
         headers: [

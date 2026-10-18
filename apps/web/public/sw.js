@@ -1,6 +1,6 @@
 /* Public resources only. Bump VERSION whenever this policy or shell changes. */
 importScripts('/pwa-runtime.js');
-const VERSION = 'v15';
+const VERSION = 'v16';
 const PREFIX = 'tfhc-pwa-';
 const SHELL = `${PREFIX}shell-${VERSION}`;
 const ASSETS = `${PREFIX}assets-${VERSION}`;
@@ -12,7 +12,7 @@ const STATIC = [
 ];
 
 self.addEventListener('install', event => {
-  // An existing worker keeps control until the user chooses to update.
+  self.skipWaiting();
   event.waitUntil(caches.open(SHELL).then(cache => cache.addAll(STATIC)));
 });
 self.addEventListener('activate', event => {
@@ -22,10 +22,16 @@ self.addEventListener('activate', event => {
       key.startsWith('tfhc-tracker-cache-')
     ).map(key => caches.delete(key)));
     await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      client.postMessage({ type: 'SW_ACTIVATED', version: VERSION });
+    }
   })());
 });
 self.addEventListener('message', event => {
-  if (event.data?.type === 'ACTIVATE_UPDATE') event.waitUntil(self.skipWaiting());
+  if (event.data?.type === 'ACTIVATE_UPDATE' || event.data?.type === 'SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+  }
 });
 
 self.addEventListener('fetch', event => {

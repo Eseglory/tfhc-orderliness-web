@@ -189,6 +189,15 @@ export default function MeetingDetailPage() {
   });
 
   const isVirtual = isOnlineUnitMeeting(meeting);
+  const usesCodeCheckIn = Boolean(
+    isVirtual ||
+    meeting.isOnline ||
+    meeting.attendanceCode ||
+    meeting.locationName?.toLowerCase().includes('online') ||
+    meeting.locationName?.toLowerCase().includes('virtual') ||
+    (meeting.geofenceRadiusMeters && meeting.geofenceRadiusMeters >= 50000) ||
+    meeting.title?.toLowerCase().includes('hosting')
+  );
   const virtualMeetingUrl = isVirtual ? (meeting.meetingUrl || extractVirtualUrl(meeting) || 'https://meet.google.com/wkx-kgew-iqe') : null;
   const isWedMeeting = title.toLowerCase().includes('wednesday') && (Boolean(meeting.serviceScheduleId) || title.toLowerCase().includes('weekly'));
   const recurrenceRuleStr = isWedMeeting ? 'FREQ=WEEKLY;BYDAY=WE' : null;
@@ -346,8 +355,8 @@ export default function MeetingDetailPage() {
           </div>
         )}
 
-        {isVirtual ? (
-          /* Online Meeting Attendance Workflow */
+        {usesCodeCheckIn ? (
+          /* Code-Based / Online Meeting Attendance Workflow */
           attendanceRecord && ['PRESENT', 'EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE'].includes(attendanceRecord.status) ? (
             /* 1. Marked Present */
             <section className="rounded-2xl border-2 border-emerald-500/50 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-emerald-50/30 dark:from-emerald-950/50 dark:via-slate-900 dark:to-slate-900 p-5 shadow-xs space-y-2.5">
@@ -364,7 +373,7 @@ export default function MeetingDetailPage() {
               </div>
               <p className="text-sm font-bold text-slate-900 dark:text-white">{title}</p>
               <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
-                You are marked <strong>PRESENT</strong> for this online meeting.
+                You are marked <strong>PRESENT</strong> for this gathering.
               </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Attendance recorded at:{' '}
@@ -387,7 +396,7 @@ export default function MeetingDetailPage() {
                 Attendance opens at {meetingStartTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (meeting start). Please enter the code once the meeting begins.
               </p>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                The 6-digit attendance code will be shared by the meeting host during the live session.
+                The 6-digit attendance code will be shared by the meeting host during the session.
               </p>
             </section>
           ) : currentTime <= closeTimeDate ? (
@@ -410,10 +419,10 @@ export default function MeetingDetailPage() {
 
               <div className="space-y-1">
                 <h4 className="text-sm font-bold text-[#0b1c30] dark:text-white">
-                  Online Meeting Attendance
+                  Gathering Attendance (Attendance Code)
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                  You have not marked your attendance. Enter the 6-digit attendance code announced during the online session.
+                  You have not marked your attendance. Enter the 6-digit attendance code shared for this gathering. No geolocation required.
                 </p>
               </div>
 

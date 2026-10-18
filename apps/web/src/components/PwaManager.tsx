@@ -90,17 +90,33 @@ export function PwaManager() {
       setInstall(null);
       setIsStandalone(true);
     };
+    const reloadingRef = { current: false };
+    const onControllerChange = () => {
+      if (!reloadingRef.current) {
+        reloadingRef.current = true;
+        window.location.reload();
+      }
+    };
+
     const workerMessage = (event: MessageEvent) => {
       if (event.data?.type === 'SYNC_REQUEST') void flushQueue();
       if (event.data?.type === 'BACKGROUND_SYNC_COMPLETE') {
         refresh(); recordPwaMetric(event.data.pending ? 'sync_failure' : 'sync_success');
         if (!event.data.pending) window.dispatchEvent(new Event('tfhc:notifications-synced'));
       }
+      if (event.data?.type === 'SW_ACTIVATED') {
+        if (!reloadingRef.current) {
+          reloadingRef.current = true;
+          window.location.reload();
+        }
+      }
     };
     const inspect = () => {
       if (alive && registration) {
         if (registration.waiting) {
           setWaiting(registration.waiting);
+          // Proactively activate waiting service worker for seamless PWA updates
+          try { registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' }); } catch {}
         }
       }
     };
@@ -108,8 +124,11 @@ export function PwaManager() {
       const installing = registration?.installing;
       if (installing) {
         installing.addEventListener('statechange', () => {
-          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+          if (installing.state === 'installed') {
             inspect();
+            if (registration?.waiting) {
+              try { registration.waiting.postMessage({ type: 'ACTIVATE_UPDATE' }); } catch {}
+            }
           }
         });
       }
@@ -137,10 +156,13 @@ export function PwaManager() {
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', workerMessage);
+      navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
       void navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).then(value => {
         if (!alive) return;
         registration = value;
         inspect();
+        // Trigger active update check against server
+        void value.update().catch(() => undefined);
         recordPwaMetric('registration');
         registration.addEventListener('updatefound', updateFound);
       }).catch(() => {
@@ -152,7 +174,10 @@ export function PwaManager() {
       if (document.visibilityState === 'visible') {
         void flushQueue();
         refresh();
-        if (navigator.onLine) void registration?.update().catch(() => undefined);
+        if (navigator.onLine) {
+          void registration?.update().catch(() => undefined);
+          navigator.serviceWorker?.getRegistration().then(r => r?.update().catch(() => undefined)).catch(() => undefined);
+        }
       }
     }, 15000);
     return () => {
@@ -171,6 +196,7 @@ export function PwaManager() {
       window.removeEventListener('beforeinstallprompt', prompt);
       window.removeEventListener('appinstalled', installed);
       navigator.serviceWorker?.removeEventListener('message', workerMessage);
+      navigator.serviceWorker?.removeEventListener('controllerchange', onControllerChange);
       registration?.removeEventListener('updatefound', updateFound);
     };
   }, []);

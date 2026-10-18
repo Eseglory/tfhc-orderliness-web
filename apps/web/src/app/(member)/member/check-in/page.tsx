@@ -26,9 +26,11 @@ export default function CheckInPage() {
   const mounted = useRef(true);
   const meeting = meetings.find(m => m.id === meetingId);
   const isOnlineService = Boolean(meeting?.isOnline) ||
+    Boolean(meeting?.attendanceCode) ||
     meeting?.locationName?.toLowerCase().includes('online') ||
     meeting?.locationName?.toLowerCase().includes('google meet') ||
     meeting?.locationName?.toLowerCase().includes('virtual') ||
+    meeting?.title?.toLowerCase().includes('hosting') ||
     (meeting && meeting.geofenceRadiusMeters >= 50000);
   const isCommittedViaAvailability = Boolean(
     availabilityData?.submitted &&
