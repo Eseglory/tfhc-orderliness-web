@@ -448,7 +448,7 @@ export default function MeetingDetailPage() {
               </p>
             </section>
           )
-        ) : attendanceRecord ? (
+        ) : (attendanceRecord && ['PRESENT', 'EARLY', 'ON_TIME', 'GRACE_PERIOD', 'LATE', 'EXCUSED'].includes(attendanceRecord.status)) ? (
           /* Physical Gathering - Attendance Recorded */
           <section className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 p-5 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
@@ -483,6 +483,13 @@ export default function MeetingDetailPage() {
                 Closes at {closesTimeStr}
               </span>
             </div>
+
+            {attendanceRecord?.status === 'ABSENT' && (
+              <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200 font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-amber-600 text-lg">info</span>
+                <span>You were previously marked absent. Check in now while the window is active to update your attendance.</span>
+              </div>
+            )}
 
             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
               You are currently within the active attendance window for this gathering. Please verify your venue GPS to record check-in.

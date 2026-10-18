@@ -78,7 +78,7 @@ export class AttendanceService {
       enabled: true,
       meetings: physical.filter(m => m.startTime > seed.startTime && m.status === 'ACTIVE' &&
         m.attendanceOpenTime <= now && m.attendanceCloseTime >= now &&
-        !records.some(r => r.meetingId === m.id) &&
+        !records.some(r => r.meetingId === m.id && r.status !== AttendanceStatus.ABSENT) &&
         canViewEvent(m.visibility, m.audiences, { memberId, subTeamId: member.subTeamId, roleInUnit: member.roleInUnit }))
         .map(m => ({ id: m.id, title: m.title })),
     };
@@ -176,7 +176,7 @@ export class AttendanceService {
       throw new BadRequestException('Attendance check-in is outside the allowed time window');
     }
 
-    // 3. Check for Duplicate Check-in
+    // 3. Check for Duplicate Check-in (allows overwriting premature or unverified ABSENT records)
     const existingRecord = await this.prisma.attendanceRecord.findUnique({
       where: {
         memberId_meetingId: {
@@ -185,7 +185,7 @@ export class AttendanceService {
         },
       },
     });
-    if (existingRecord) {
+    if (existingRecord && existingRecord.status !== AttendanceStatus.ABSENT) {
       throw new ConflictException(
         'Attendance has already been recorded for this meeting'
       );
@@ -255,28 +255,49 @@ export class AttendanceService {
         meeting.title?.toLowerCase().includes('wednesday')
       ) && !meeting.locationName?.toLowerCase().includes('residence') && !meeting.title?.toLowerCase().includes('hosting');
 
-      return tx.attendanceRecord.create({
-      data: {
-        memberId: dto.memberId,
-        meetingId: dto.meetingId,
-        expectedArrivalTime: meeting.expectedArrivalTime,
-        actualArrivalTime: serverTimestamp,
-        joinedAt: serverTimestamp,
-        lastSeenAt: serverTimestamp,
-        status,
-        attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
-        gpsLat: isOnline ? null : dto.latitude,
-        gpsLong: isOnline ? null : dto.longitude,
-        gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
-        distanceFromVenue: isOnline ? null : distanceFromVenue,
-        method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
-        pointsEarned,
-        deviceInfo: dto.deviceInfo,
-      },
-      include: {
-        meeting: { include: { category: true } },
-        member: true,
-      },
+      return tx.attendanceRecord.upsert({
+        where: {
+          memberId_meetingId: {
+            memberId: dto.memberId,
+            meetingId: dto.meetingId,
+          },
+        },
+        update: {
+          expectedArrivalTime: meeting.expectedArrivalTime,
+          actualArrivalTime: serverTimestamp,
+          joinedAt: serverTimestamp,
+          lastSeenAt: serverTimestamp,
+          status,
+          attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+          gpsLat: isOnline ? null : dto.latitude,
+          gpsLong: isOnline ? null : dto.longitude,
+          gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
+          distanceFromVenue: isOnline ? null : distanceFromVenue,
+          method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
+          pointsEarned,
+          deviceInfo: dto.deviceInfo,
+        },
+        create: {
+          memberId: dto.memberId,
+          meetingId: dto.meetingId,
+          expectedArrivalTime: meeting.expectedArrivalTime,
+          actualArrivalTime: serverTimestamp,
+          joinedAt: serverTimestamp,
+          lastSeenAt: serverTimestamp,
+          status,
+          attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+          gpsLat: isOnline ? null : dto.latitude,
+          gpsLong: isOnline ? null : dto.longitude,
+          gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
+          distanceFromVenue: isOnline ? null : distanceFromVenue,
+          method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
+          pointsEarned,
+          deviceInfo: dto.deviceInfo,
+        },
+        include: {
+          meeting: { include: { category: true } },
+          member: true,
+        },
       });
     }).then((record) => {
       this.cache.invalidateTags(['attendance', 'leaderboard', 'analytics', 'dashboard', 'calendar']);

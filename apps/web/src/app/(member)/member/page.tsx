@@ -352,15 +352,15 @@ export default function MemberDashboard() {
                       <span className="material-symbols-outlined text-xs text-emerald-600">check_circle</span>
                       Clocked In
                     </span>
-                  ) : availabilityData?.submitted ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
-                      <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
-                      Confirmed for Service
-                    </span>
                   ) : activeMeeting ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                       Live Check-In Open
+                    </span>
+                  ) : availabilityData?.submitted ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
+                      <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
+                      Rostered for Service
                     </span>
                   ) : nextTodayService ? (
                     <span className="inline-flex items-center gap-1 rounded-md bg-red-50 text-[#f2320c] dark:bg-red-950/60 dark:text-red-400 px-2.5 py-0.5 text-xs font-bold">
@@ -393,14 +393,16 @@ export default function MemberDashboard() {
                     ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName || 'Main Sanctuary'}`
                     : 'Check the upcoming schedule below for the next service.'}
                 </p>
-                {availabilityData?.submitted && (activeMeeting || nextTodayService) && (
+                {availabilityData?.submitted && !hasClockedIn && (
                   <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                    You have submitted your availability for this week&apos;s service. No additional check-in is required.
+                    {activeMeeting
+                      ? 'You are scheduled for service. Please check in now to record your arrival.'
+                      : 'You have submitted your availability. Remember to check in when you arrive at church.'}
                   </p>
                 )}
               </div>
 
-              {!availabilityData?.submitted && closesLabel && (
+              {!hasClockedIn && closesLabel && (
                 <span className="rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2.5 py-1 text-xs font-bold text-amber-700 dark:text-amber-400 shrink-0">
                   {closesLabel}
                 </span>
@@ -411,14 +413,18 @@ export default function MemberDashboard() {
               href={
                 hasClockedIn
                   ? '/member/check-in'
+                  : activeMeeting
+                  ? `/member/check-in?meetingId=${activeMeeting.id}`
+                  : nextTodayService
+                  ? `/member/meetings/${nextTodayService.id}`
                   : availabilityData?.submitted
-                  ? (activeMeeting ? `/member/meetings/${activeMeeting.id}` : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/availability')
-                  : (activeMeeting ? '/member/check-in' : nextTodayService ? `/member/meetings/${nextTodayService.id}` : '/member/calendar')
+                  ? '/member/availability'
+                  : '/member/calendar'
               }
               className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 px-4 text-sm font-extrabold transition-all active:scale-[0.98] shadow-sm ${
                 hasClockedIn
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
-                  : !availabilityData?.submitted && activeMeeting
+                  : activeMeeting
                   ? 'bg-[#f2320c] hover:bg-[#d82a08] text-white shadow-red-600/25'
                   : 'bg-[#0b1c30] hover:bg-[#162a42] text-white shadow-slate-900/10'
               }`}
@@ -426,20 +432,22 @@ export default function MemberDashboard() {
               <span className="material-symbols-outlined text-lg">
                 {hasClockedIn
                   ? 'fact_check'
-                  : availabilityData?.submitted
-                  ? 'event_available'
                   : activeMeeting
                   ? 'location_on'
+                  : nextTodayService
+                  ? 'event_upcoming'
+                  : availabilityData?.submitted
+                  ? 'event_available'
                   : 'calendar_month'}
               </span>
               {hasClockedIn
                 ? 'Clocked In • View Attendance / Clock Out'
-                : availabilityData?.submitted
-                ? 'View Service Details'
                 : activeMeeting
                 ? 'Check In Now'
                 : nextTodayService
                 ? 'View Gathering Details'
+                : availabilityData?.submitted
+                ? 'View Availability'
                 : 'View Calendar & Events'}
             </Link>
           </div>
