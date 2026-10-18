@@ -17,14 +17,19 @@ self.addEventListener('install', event => {
 });
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    await Promise.all((await caches.keys()).filter(key =>
+    const keys = await caches.keys();
+    const isUpdate = keys.some(key =>
+      (key.startsWith(PREFIX) && key !== SHELL && key !== ASSETS) ||
+      key.startsWith('tfhc-tracker-cache-')
+    );
+    await Promise.all(keys.filter(key =>
       (key.startsWith(PREFIX) && key !== SHELL && key !== ASSETS) ||
       key.startsWith('tfhc-tracker-cache-')
     ).map(key => caches.delete(key)));
     await self.clients.claim();
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const client of windows) {
-      client.postMessage({ type: 'SW_ACTIVATED', version: VERSION });
+      client.postMessage({ type: 'SW_ACTIVATED', version: VERSION, isUpdate });
     }
   })());
 });

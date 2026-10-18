@@ -91,8 +91,9 @@ export function PwaManager() {
       setIsStandalone(true);
     };
     const reloadingRef = { current: false };
+    const hadControllerOnLoad = typeof navigator !== 'undefined' && Boolean(navigator.serviceWorker?.controller);
     const onControllerChange = () => {
-      if (!reloadingRef.current) {
+      if (hadControllerOnLoad && !reloadingRef.current) {
         reloadingRef.current = true;
         window.location.reload();
       }
@@ -105,7 +106,7 @@ export function PwaManager() {
         if (!event.data.pending) window.dispatchEvent(new Event('tfhc:notifications-synced'));
       }
       if (event.data?.type === 'SW_ACTIVATED') {
-        if (!reloadingRef.current) {
+        if ((hadControllerOnLoad || event.data?.isUpdate) && !reloadingRef.current) {
           reloadingRef.current = true;
           window.location.reload();
         }
