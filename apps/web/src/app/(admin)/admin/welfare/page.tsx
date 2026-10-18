@@ -33,7 +33,7 @@ import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell'
 import { ApprovalTimeline, ApprovalStepView } from '../../../../components/ApprovalTimeline';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { useAuth, isDaniel, isLoveth, isEseosaGlory, canCreateWelfare, canDisburseWelfare } from '../../../../lib/auth';
-import { Modal, useToast } from '../../../../components/ui';
+import { Modal, useToast, PageLoader } from '../../../../components/ui';
 
 interface WelfareRequestItem {
   id: string;
@@ -486,7 +486,17 @@ function WelfareAdminContent() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredRequests.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-8">
+                      <PageLoader
+                        message="Loading welfare queue…"
+                        description="Fetching approval tiers, documentation, and disbursement statuses"
+                        minHeight={180}
+                      />
+                    </td>
+                  </tr>
+                ) : filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-slate-400">
                       <HeartHandshake className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700 mb-2" />

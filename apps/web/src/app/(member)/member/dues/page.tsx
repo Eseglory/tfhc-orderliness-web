@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LogoIcon } from '../../../../components/LogoIcon';
 import { fetchApi } from '../../../../lib/api';
+import { PageLoader, CardSkeleton } from '../../../../components/ui';
 
 const naira = (n: number) => `₦${Math.round(n).toLocaleString()}`;
 
@@ -122,7 +123,14 @@ export default function MemberDuesPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-on-surface-variant">Loading…</p>
+          <div className="space-y-4">
+            <PageLoader
+              message="Loading your dues & statements…"
+              description="Connecting to unit finance records & active campaigns"
+              minHeight={220}
+            />
+            <CardSkeleton count={2} gridCols="grid-cols-1 sm:grid-cols-2" />
+          </div>
         ) : error ? (
           <p role="alert" className="text-sm text-error">{error}</p>
         ) : (

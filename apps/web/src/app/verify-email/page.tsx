@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fetchApi, saveAuthToken } from '../../lib/api';
 import { AuthShell, AuthError, AuthNotice } from '../../components/AuthShell';
+import { LoadingScreen } from '../../components/LoadingScreen';
 
 function VerifyEmail() {
   const router = useRouter();
@@ -50,7 +51,15 @@ function VerifyEmail() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<AuthShell title="Email verification"><p className="text-center text-on-surface-variant">Loading…</p></AuthShell>}>
+    <Suspense
+      fallback={
+        <LoadingScreen
+          message="Verifying your email token…"
+          subtext="The Father's House Church"
+          secondaryMessage="Validating cryptographic signature & activation"
+        />
+      }
+    >
       <VerifyEmail />
     </Suspense>
   );

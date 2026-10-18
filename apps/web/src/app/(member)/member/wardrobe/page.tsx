@@ -26,6 +26,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { fetchApi } from '@/lib/api';
+import { PageLoader, CardSkeleton } from '@/components/ui';
 
 interface Variant {
   id: string;
@@ -373,10 +374,21 @@ export default function MemberWardrobePage() {
       </header>
 
       <main className="flex w-full flex-1 flex-col gap-8 px-4 sm:px-8 py-6 max-w-6xl mx-auto">
-        {/* =========================================================================
-            FEATURED HERO: UPCOMING SERVICE DRESS CODE (WITH REAL CLOTHING PHOTO)
-        ========================================================================= */}
-        {nextSchedule && nextTheme && (
+        {loading ? (
+          <div className="space-y-6">
+            <PageLoader
+              message="Loading wardrobe & uniform roster…"
+              description="Retrieving official dress codes, themes, and grooming guides"
+              minHeight={280}
+            />
+            <CardSkeleton count={3} gridCols="grid-cols-1 md:grid-cols-3" />
+          </div>
+        ) : (
+          <>
+            {/* =========================================================================
+                FEATURED HERO: UPCOMING SERVICE DRESS CODE (WITH REAL CLOTHING PHOTO)
+            ========================================================================= */}
+            {nextSchedule && nextTheme && (
           <section className="relative group overflow-hidden rounded-[2.5rem] border-2 border-primary/30 bg-gradient-to-br shadow-2xl transition-all duration-300">
             {/* Background Layer with Motif */}
             <div className={`absolute inset-0 bg-gradient-to-br ${nextTheme.gradient}`} />
@@ -941,6 +953,8 @@ export default function MemberWardrobePage() {
               })}
             </div>
           </section>
+        )}
+          </>
         )}
       </main>
 

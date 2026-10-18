@@ -4,15 +4,18 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
+import { PageLoader, CardSkeleton } from '../../../../components/ui';
 
 export default function PerformanceAnalyticsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchApi('/scoring/my-performance')
       .then((data) => setProfile(data))
-      .catch((err) => console.error(err));
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
   const attRate = (profile?.attendanceRate ?? 0).toFixed(1);
@@ -35,8 +38,19 @@ export default function PerformanceAnalyticsPage() {
       </header>
 
       <main className="flex-1 px-edge-margin py-stack-md flex flex-col gap-section-gap w-full max-w-3xl mx-auto">
-        {/* Dual Ring Chart Section matching Stitch Screen 13 */}
-        <section className="bg-surface-container-lowest rounded-xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col items-center justify-center relative">
+        {loading && !profile ? (
+          <div className="space-y-4">
+            <PageLoader
+              message="Loading performance analytics…"
+              description="Computing composite score, attendance streak, and punctuality"
+              minHeight={240}
+            />
+            <CardSkeleton count={3} gridCols="grid-cols-1 sm:grid-cols-3" />
+          </div>
+        ) : (
+          <>
+            {/* Dual Ring Chart Section matching Stitch Screen 13 */}
+            <section className="bg-surface-container-lowest rounded-xl p-6 shadow-[0px_2px_8px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col items-center justify-center relative">
           <div className="relative w-48 h-48 flex items-center justify-center my-4">
             <svg className="w-full h-full score-ring" viewBox="0 0 100 100">
               <circle className="score-circle-bg" cx="50" cy="50" r="45"></circle>
@@ -136,6 +150,8 @@ export default function PerformanceAnalyticsPage() {
             <span className="material-symbols-outlined text-outline-variant text-sm">chevron_right</span>
           </Link>
         </section>
+          </>
+        )}
       </main>
     </div>
   );

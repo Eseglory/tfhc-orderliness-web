@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { LogoIcon } from '../../../../components/LogoIcon';
 import { ApprovalTimeline, ApprovalStepView } from '../../../../components/ApprovalTimeline';
 import { fetchApi } from '../../../../lib/api';
+import { PageLoader, ListSkeleton } from '../../../../components/ui';
 
 interface WelfareRequest {
   id: string;
@@ -286,7 +287,14 @@ export default function MemberWelfarePage() {
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-on-surface uppercase tracking-wider">My Submitted Requests</h2>
           {loading ? (
-            <p className="text-xs text-on-surface-variant">Loading requests…</p>
+            <div className="space-y-3">
+              <PageLoader
+                message="Loading welfare requests…"
+                description="Retrieving review stages and disbursement history"
+                minHeight={180}
+              />
+              <ListSkeleton count={3} />
+            </div>
           ) : error ? (
             <p role="alert" className="text-xs text-error">{error}</p>
           ) : rows.length === 0 ? (

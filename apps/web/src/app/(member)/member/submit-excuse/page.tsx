@@ -20,6 +20,7 @@ import {
   Check,
 } from 'lucide-react';
 import { fetchApi } from '../../../../lib/api';
+import { PageLoader, ListSkeleton } from '../../../../components/ui';
 
 export default function SubmitExcusePage() {
   const router = useRouter();
@@ -367,7 +368,16 @@ export default function SubmitExcusePage() {
             ))}
           </div>
 
-          {filteredRequests.length === 0 ? (
+          {loading ? (
+            <div className="space-y-3">
+              <PageLoader
+                message="Loading your absence requests…"
+                description="Checking leader approvals, notes, and leave history"
+                minHeight={180}
+              />
+              <ListSkeleton count={3} />
+            </div>
+          ) : filteredRequests.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-2xl border border-surface-container-low p-8 text-center text-xs text-slate-400">
               No absence requests found in this view.
             </div>

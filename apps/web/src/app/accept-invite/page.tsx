@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { LogoIcon } from '../../components/LogoIcon';
 import { fetchApi, saveAuthToken, saveAuthUser } from '../../lib/api';
 import { GoogleSignInButton } from '../../components/GoogleSignInButton';
+import { LoadingScreen } from '../../components/LoadingScreen';
 
 function AcceptInviteForm() {
   const router = useRouter();
@@ -181,7 +182,15 @@ function AcceptInviteForm() {
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<main className="p-8 text-sm text-on-surface-variant">Loading…</main>}>
+    <Suspense
+      fallback={
+        <LoadingScreen
+          message="Loading invitation…"
+          subtext="The Father's House Church"
+          secondaryMessage="Verifying invitation link & permissions"
+        />
+      }
+    >
       <AcceptInviteForm />
     </Suspense>
   );

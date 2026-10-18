@@ -53,3 +53,4 @@ apps/api/test-data/
 data/storage-backups/
 apps/api/generated/
 apps/api/prisma/schema.sqlite.prisma
+scratch/

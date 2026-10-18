@@ -35,14 +35,31 @@ export function Button({
   );
 }
 
-export function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
+export function Spinner({ className = 'h-5 w-5', variant = 'brand' }: { className?: string; variant?: 'brand' | 'neutral' }) {
   return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
+    <span className={`relative inline-flex items-center justify-center ${className}`} role="status" aria-label="Loading">
+      <svg className="animate-spin w-full h-full" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle
+          className="opacity-20 text-current"
+          cx="12"
+          cy="12"
+          r="9.5"
+          stroke="currentColor"
+          strokeWidth="3"
+        />
+        <path
+          className={variant === 'brand' ? 'text-[#f2320c]' : 'text-current'}
+          fill="currentColor"
+          d="M12 2.5a9.5 9.5 0 019.5 9.5h-3A6.5 6.5 0 0012 5.5V2.5z"
+        />
+      </svg>
+      <span className="sr-only">Loading</span>
+    </span>
   );
 }
+
+export { PageLoader, TableSkeleton, CardSkeleton, ListSkeleton } from './PageLoader';
+export type { PageLoaderProps } from './PageLoader';
 
 /* -------------------------------------------------------------------------- */
 /*  Form fields                                                                */

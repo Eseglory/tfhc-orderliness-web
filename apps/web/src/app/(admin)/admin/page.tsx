@@ -26,6 +26,7 @@ import { ActivityFeedPanel, ActivityItem } from '../../../components/admin/Activ
 import { PendingActionsPanel } from '../../../components/admin/PendingActionsPanel';
 import { fetchApi, API_BASE_URL, getAuthToken } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
+import { PageLoader, CardSkeleton } from '../../../components/ui';
 
 interface DashboardStats {
   totalActiveMembers: number;
@@ -253,8 +254,20 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* 4 KPI Summary Cards Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Main Dashboard Metrics & Visualizations */}
+        {loading && !stats ? (
+          <div className="space-y-6">
+            <CardSkeleton count={4} />
+            <PageLoader
+              message="Loading campus operations & analytics…"
+              description="Aggregating live member metrics, punctuality trajectories, and service attendance"
+              minHeight={260}
+            />
+          </div>
+        ) : (
+          <>
+            {/* 4 KPI Summary Cards Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* 1. Total Members */}
           <AdminKpiCard
             label="Total Members"
@@ -380,6 +393,8 @@ export default function AdminDashboardPage() {
             loading={loading}
           />
         </div>
+          </>
+        )}
       </div>
     </AdminLayoutShell>
   );

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fetchApi, saveAuthToken, saveAuthUser } from '../../lib/api';
 import { AuthShell, AuthError, AuthSubmit, authInputClass } from '../../components/AuthShell';
+import { LoadingScreen } from '../../components/LoadingScreen';
 
 const MIN_PASSWORD = 12;
 
@@ -75,7 +76,15 @@ function ResetPassword() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<AuthShell title="Choose a new password"><p className="text-center text-on-surface-variant">Loading…</p></AuthShell>}>
+    <Suspense
+      fallback={
+        <LoadingScreen
+          message="Loading password reset…"
+          subtext="The Father's House Church"
+          secondaryMessage="Validating password recovery request"
+        />
+      }
+    >
       <ResetPassword />
     </Suspense>
   );

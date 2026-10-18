@@ -44,6 +44,9 @@ import {
   Spinner,
   inputClass,
   useToast,
+  PageLoader,
+  CardSkeleton,
+  TableSkeleton,
 } from '../../../../../components/ui';
 import { fetchApi, ApiError } from '../../../../../lib/api';
 import { useAuth } from '../../../../../lib/auth';
@@ -344,6 +347,19 @@ export default function DuesPage() {
             )}
           </div>
         </div>
+
+        {/* Loading State Skeleton & Loader */}
+        {loading && !data ? (
+          <div className="space-y-4">
+            <CardSkeleton count={4} />
+            <PageLoader
+              message="Loading annual dues matrix…"
+              description="Calculating 12-month member records, payments, and compliance"
+              minHeight={260}
+            />
+            <TableSkeleton rows={8} cols={7} />
+          </div>
+        ) : null}
 
         {/* Top Executive KPI Cards */}
         {data?.summary && (

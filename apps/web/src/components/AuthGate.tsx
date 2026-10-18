@@ -42,12 +42,24 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!mounted) {
-    return <LoadingScreen message="Loading application…" />;
+    return (
+      <LoadingScreen
+        message="Loading application…"
+        subtext="The Father's House Church"
+        secondaryMessage="Preparing user interface"
+      />
+    );
   }
 
   const token = getAuthToken();
   if (!token) {
-    return <LoadingScreen message="Redirecting to sign in…" />;
+    return (
+      <LoadingScreen
+        message="Redirecting to sign in…"
+        subtext="The Father's House Church"
+        secondaryMessage="Protected session required"
+      />
+    );
   }
 
   if (error && !user) {
@@ -82,13 +94,25 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (loading && !user) {
-    return <LoadingScreen message="Loading your account…" />;
+    return (
+      <LoadingScreen
+        message="Loading your account…"
+        subtext="The Father's House Church"
+        secondaryMessage="Synchronizing member profile & credentials"
+      />
+    );
   }
 
   if (user && pathname.startsWith('/admin')) {
     const isAdminUser = ['ADMIN', 'LEADER'].includes(user.role) || user.isSuperAdmin;
     if (!isAdminUser) {
-      return <LoadingScreen message="Checking permissions…" />;
+      return (
+        <LoadingScreen
+          message="Checking permissions…"
+          subtext="The Father's House Church"
+          secondaryMessage="Validating administrative access"
+        />
+      );
     }
   }
 

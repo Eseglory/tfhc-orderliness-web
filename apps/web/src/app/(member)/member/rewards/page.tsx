@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
+import { PageLoader, CardSkeleton } from '../../../../components/ui';
 
 export default function RewardsPage() {
   const router = useRouter();
@@ -44,9 +45,13 @@ export default function RewardsPage() {
 
       <main className="flex-1 px-edge-margin py-stack-md flex flex-col gap-section-gap w-full max-w-3xl mx-auto">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
-            <p className="font-body-md">Loading milestones…</p>
+          <div className="space-y-4">
+            <PageLoader
+              message="Loading your milestones & rewards…"
+              description="Calculating punctuality streaks, points, and recognition tier"
+              minHeight={240}
+            />
+            <CardSkeleton count={3} gridCols="grid-cols-1 sm:grid-cols-3" />
           </div>
         ) : error ? (
           <div className="p-4 rounded-xl bg-error-container text-on-error-container text-center">

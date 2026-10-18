@@ -26,7 +26,15 @@ export default function RootPage() {
     }
   }, [router, attempt]);
 
-  if (!error) return <LoadingScreen message="Loading application…" />;
+  if (!error) {
+    return (
+      <LoadingScreen
+        message="Initializing Orderliness…"
+        subtext="The Father's House Church"
+        secondaryMessage="Verifying credentials & session security"
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-on-background flex flex-col items-center justify-center font-body-md">

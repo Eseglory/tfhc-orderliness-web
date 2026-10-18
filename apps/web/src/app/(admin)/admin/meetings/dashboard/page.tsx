@@ -11,5 +11,11 @@ export default function MeetingsDashboardRedirectPage() {
     router.replace('/admin/events?view=operations');
   }, [router]);
 
-  return <LoadingScreen message="Loading application…" />;
+  return (
+    <LoadingScreen
+      message="Redirecting to Operations Console…"
+      subtext="The Father's House Church"
+      secondaryMessage="Opening live event operations view"
+    />
+  );
 }

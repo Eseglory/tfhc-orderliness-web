@@ -38,7 +38,7 @@ import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell'
 import { ProfilePhoto } from '../../../../components/ProfilePhoto';
 import { fetchApi } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
-import { useToast } from '../../../../components/ui';
+import { useToast, PageLoader, TableSkeleton } from '../../../../components/ui';
 
 type MemberViewMode = 'table' | 'grid' | 'cards' | 'compact';
 
@@ -543,9 +543,13 @@ export default function AdminMembersPage() {
         {/* ========================================================================= */}
 
         {loading ? (
-          <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
-            <RefreshCw className="w-8 h-8 animate-spin text-indigo-600 mx-auto" />
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-400">Loading member registry…</p>
+          <div className="space-y-4">
+            <PageLoader
+              message="Loading member registry…"
+              description="Retrieving member profiles, credentials, and attendance status"
+              minHeight={220}
+            />
+            <TableSkeleton rows={6} cols={6} />
           </div>
         ) : paginatedMembers.length === 0 ? (
           <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">

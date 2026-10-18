@@ -6,6 +6,7 @@ export function AuthTransition({ action }: { action: 'in' | 'out' }) {
     <LoadingScreen
       message={action === 'in' ? 'Signing you in securely…' : 'Signing you out…'}
       subtext={action === 'in' ? 'Welcome to Orderliness' : 'See you at the next service'}
+      secondaryMessage={action === 'in' ? 'Establishing authorized session token' : 'Clearing local session & cache safely'}
     />
   );
 }

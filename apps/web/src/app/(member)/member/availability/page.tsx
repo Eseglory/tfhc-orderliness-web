@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
+import { PageLoader, CardSkeleton } from '../../../../components/ui';
 
 type AvailabilityMeeting = {
   id: string;
@@ -109,9 +110,13 @@ export default function MemberAvailabilityPage() {
 
       <main className="px-edge-margin pb-32 max-w-3xl mx-auto pt-stack-md">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span>
-            <p className="font-body-md text-body-md">Loading this week&apos;s schedule…</p>
+          <div className="space-y-4">
+            <PageLoader
+              message="Loading this week's schedule & poll…"
+              description="Connecting to availability cycle and service roster"
+              minHeight={220}
+            />
+            <CardSkeleton count={2} gridCols="grid-cols-1 sm:grid-cols-2" />
           </div>
         ) : !data ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">

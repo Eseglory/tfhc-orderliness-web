@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '../../../../lib/api';
 import { LogoIcon } from '../../../../components/LogoIcon';
+import { PageLoader, ListSkeleton } from '../../../../components/ui';
 
 export default function MyAttendancePage() {
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [selectedMonth, setSelectedMonth] = useState('All History');
 
@@ -23,8 +25,9 @@ export default function MyAttendancePage() {
 
   useEffect(() => {
     fetchApi('/attendance/my-history')
-      .then((data) => setHistory(data))
-      .catch((err) => console.error(err));
+      .then((data) => setHistory(data || []))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSubmitExcuse = async (e: React.FormEvent) => {
@@ -155,7 +158,16 @@ export default function MyAttendancePage() {
 
         {/* List Feed matching Stitch Screen 8 */}
         <section className="space-y-gutter">
-          {visibleHistory.length > 0 ? (
+          {loading ? (
+            <div className="space-y-3">
+              <PageLoader
+                message="Loading your attendance history…"
+                description="Retrieving service check-ins and punctuality scores"
+                minHeight={200}
+              />
+              <ListSkeleton count={4} />
+            </div>
+          ) : visibleHistory.length > 0 ? (
             visibleHistory.map((record) => {
               const status = record.status;
               const title = record.meeting?.title || 'Meeting';

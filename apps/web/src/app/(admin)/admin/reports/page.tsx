@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { AdminLayoutShell } from '@/components/admin/AdminLayoutShell';
 import { fetchApi, API_BASE_URL, getAuthToken } from '@/lib/api';
+import { PageLoader } from '@/components/ui';
 
 type TabType = 'COMBINED' | 'SERVICES' | 'MONTHLY' | 'PERSON';
 
@@ -1112,9 +1113,12 @@ export default function AdminReportsPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium">
                   {loading ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
-                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-indigo-500 mb-2" />
-                        Generating reporting matrix...
+                      <td colSpan={9} className="p-8">
+                        <PageLoader
+                          message="Generating reporting matrix…"
+                          description="Processing multi-service cross-tabulation and conversion analytics"
+                          minHeight={180}
+                        />
                       </td>
                     </tr>
                   ) : !reportData || reportData.records.length === 0 ? (
