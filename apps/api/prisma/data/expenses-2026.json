@@ -1,0 +1,163 @@
+{
+  "source": "Authoritative unit expenses sheet 2026 — recorded 2026-10-18",
+  "year": 2026,
+  "totalExpenses": 14,
+  "totalAmount": 259100,
+  "currency": "NGN",
+  "items": [
+    {
+      "reference": "EXP-202603-CAKE-33500",
+      "title": "Birthday Cake for March Celebrants",
+      "rawDescription": "Birthday Cake for march celebrant",
+      "amount": 33500,
+      "category": "Welfare & Celebrations",
+      "categoryKey": "WELFARE_CELEBRATION",
+      "incurredOn": "2026-03-20",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202604-HOST-10000",
+      "title": "April Unit Hosting",
+      "rawDescription": "April Hosting",
+      "amount": 10000,
+      "category": "Hospitality & Hosting",
+      "categoryKey": "HOSPITALITY_HOSTING",
+      "incurredOn": "2026-04-15",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202605-CAKE-20000",
+      "title": "Birthday Cake for May Celebrants",
+      "rawDescription": "Cake for May Celebrant",
+      "amount": 20000,
+      "category": "Welfare & Celebrations",
+      "categoryKey": "WELFARE_CELEBRATION",
+      "incurredOn": "2026-05-15",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202606-WATR-04000",
+      "title": "Water for the Team",
+      "rawDescription": "Water for the Team",
+      "amount": 4000,
+      "category": "Logistics & Team Refreshments",
+      "categoryKey": "LOGISTICS_REFRESHMENTS",
+      "incurredOn": "2026-06-05",
+      "status": "PAID",
+      "paymentMethod": "CASH"
+    },
+    {
+      "reference": "EXP-202606-FRUT-08600",
+      "title": "Team Refreshment and Fruit for Hosting",
+      "rawDescription": "Team Refreshment and Fruit for hosting",
+      "amount": 8600,
+      "category": "Hospitality & Hosting",
+      "categoryKey": "HOSPITALITY_HOSTING",
+      "incurredOn": "2026-06-15",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202606-TAGS-38500",
+      "title": "Identification Tags for the Unit",
+      "rawDescription": "Tag for the Unit",
+      "amount": 38500,
+      "category": "Operations & Unit Equipment",
+      "categoryKey": "OPERATIONS_EQUIPMENT",
+      "incurredOn": "2026-06-25",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202607-CONF-23300",
+      "title": "Conference Refreshment (Sunday Session 1)",
+      "rawDescription": "Conference Refreshment (Sunday)",
+      "amount": 23300,
+      "category": "Conferences & Special Events",
+      "categoryKey": "CONFERENCE_EVENTS",
+      "incurredOn": "2026-07-05",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202607-CONF-18000",
+      "title": "Conference Refreshment (Sunday Session 2)",
+      "rawDescription": "Conference Refreshment (Sunday)",
+      "amount": 18000,
+      "category": "Conferences & Special Events",
+      "categoryKey": "CONFERENCE_EVENTS",
+      "incurredOn": "2026-07-12",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202607-WEDD-25000",
+      "title": "Wedding Support - Inumidun Akalonu",
+      "rawDescription": "Inumidum Wedding",
+      "amount": 25000,
+      "category": "Welfare & Celebrations",
+      "categoryKey": "WELFARE_CELEBRATION",
+      "incurredOn": "2026-07-18",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202607-VIVH-05000",
+      "title": "House Hosting - Vivian Amadi",
+      "rawDescription": "Vivian House Hosting",
+      "amount": 5000,
+      "category": "Hospitality & Hosting",
+      "categoryKey": "HOSPITALITY_HOSTING",
+      "incurredOn": "2026-07-25",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202607-SOMT-05000",
+      "title": "Unit Hosting - Somto Otega (29th July 2026)",
+      "rawDescription": "Somto Hosting 29th JuLy 2026",
+      "amount": 5000,
+      "category": "Hospitality & Hosting",
+      "categoryKey": "HOSPITALITY_HOSTING",
+      "incurredOn": "2026-07-29",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202608-SARW-20000",
+      "title": "Wedding Support - Sarah Asaka",
+      "rawDescription": "Sarah Wedding",
+      "amount": 20000,
+      "category": "Welfare & Celebrations",
+      "categoryKey": "WELFARE_CELEBRATION",
+      "incurredOn": "2026-08-08",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202608-NAMN-20000",
+      "title": "Child Naming Support - Patience Aliagwu (18 August 2026)",
+      "rawDescription": "Patient Child Naming 18 August 2026",
+      "amount": 20000,
+      "category": "Welfare & Celebrations",
+      "categoryKey": "WELFARE_CELEBRATION",
+      "incurredOn": "2026-08-18",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    },
+    {
+      "reference": "EXP-202608-BLES-28200",
+      "title": "Unit Hosting - Anty Blessing",
+      "rawDescription": "Anty Blessing Hosting",
+      "amount": 28200,
+      "category": "Hospitality & Hosting",
+      "categoryKey": "HOSPITALITY_HOSTING",
+      "incurredOn": "2026-08-25",
+      "status": "PAID",
+      "paymentMethod": "BANK_TRANSFER"
+    }
+  ]
+}
