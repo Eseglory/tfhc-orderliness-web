@@ -31,7 +31,9 @@ export default function AbsenceRequestsPage() {
   const { notify } = useToast();
 
   const [kind, setKind] = useState<'absence' | 'correction'>('absence');
+  const [statusFilter, setStatusFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING');
   const [requests, setRequests] = useState<any[]>([]);
+  const [counts, setCounts] = useState<{ pending: number; approved: number }>({ pending: 0, approved: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -47,15 +49,34 @@ export default function AbsenceRequestsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchApi<any[]>(`${endpoint}/pending`);
-      setRequests(data || []);
+      if (statusFilter === 'PENDING') {
+        const data = await fetchApi<any[]>(`${endpoint}/pending`);
+        setRequests(data || []);
+        setCounts(prev => ({ ...prev, pending: (data || []).length }));
+      } else {
+        const statusQuery = statusFilter === 'ALL' ? '' : `status=${statusFilter}`;
+        const data = await fetchApi<any[]>(`${endpoint}/history${statusQuery ? `?${statusQuery}` : ''}`).catch(() => []);
+        setRequests(data || []);
+      }
       setError('');
     } catch (err: any) {
       setError(err.message || 'Could not load requests.');
     } finally {
       setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, statusFilter]);
+
+  // Background fetch counts
+  useEffect(() => {
+    if (kind === 'absence') {
+      fetchApi<any[]>('/excuses/history?status=APPROVED')
+        .then(res => setCounts(prev => ({ ...prev, approved: (res || []).length })))
+        .catch(() => {});
+      fetchApi<any[]>('/excuses/pending')
+        .then(res => setCounts(prev => ({ ...prev, pending: (res || []).length })))
+        .catch(() => {});
+    }
+  }, [kind, acting]);
 
   useEffect(() => {
     load();
@@ -153,39 +174,40 @@ export default function AbsenceRequestsPage() {
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                PENDING QUEUE
+                PENDING REVIEW
               </span>
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600">
                 <Clock className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">{requests.length}</span>
+              <span className="text-2xl font-black text-slate-900 dark:text-white">{counts.pending}</span>
               <span className="text-xs font-bold text-amber-600">
-                {kind === 'absence' ? 'Absence Excuses' : 'Attendance Corrections'}
+                {kind === 'absence' ? 'Absence Excuses' : 'Corrections'}
               </span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Requiring administrative review</span>
+              <span>Requiring administrative action</span>
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                AUDIT IMPACT
+                APPROVED &amp; RESOLVED
               </span>
-              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
-                <FileText className="w-4 h-4" />
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+                <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-xl font-black text-slate-900 dark:text-white capitalize">
-                {kind === 'absence' ? 'Exempts Penalty' : 'Updates Points'}
+              <span className="text-2xl font-black text-emerald-600">{counts.approved}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                Approved Records
               </span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
-              <span>Automatic point &amp; consistency score recalculation</span>
+              <span>Automatic point &amp; penalty exemption applied</span>
             </div>
           </div>
 
@@ -194,16 +216,72 @@ export default function AbsenceRequestsPage() {
               <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
                 GOVERNANCE SLA
               </span>
-              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" />
+              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
+                <ShieldCheck className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-xl font-black text-emerald-600">48h Target SLA</span>
+              <span className="text-xl font-black text-indigo-600">48h Target SLA</span>
             </div>
             <div className="mt-2 text-xs text-slate-500">
               <span>Instant member notification upon review</span>
             </div>
+          </div>
+        </div>
+
+        {/* Status Tabs Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/70 p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setStatusFilter('PENDING')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'PENDING'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <span>Pending</span>
+              {counts.pending > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                  {counts.pending}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setStatusFilter('APPROVED')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'APPROVED'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <span>Approved</span>
+              {counts.approved > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400">
+                  {counts.approved}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setStatusFilter('REJECTED')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'REJECTED'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              Rejected
+            </button>
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                statusFilter === 'ALL'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              All History
+            </button>
           </div>
         </div>
 
@@ -266,7 +344,7 @@ export default function AbsenceRequestsPage() {
         {/* Requests Feed */}
         <div className="space-y-4">
           {loading ? (
-            <div className="p-12 text-center text-xs text-slate-400">Loading pending requests...</div>
+            <div className="p-12 text-center text-xs text-slate-400">Loading {statusFilter.toLowerCase()} requests...</div>
           ) : filteredRequests.length > 0 ? (
             filteredRequests.map((request) => (
               <div
@@ -290,18 +368,36 @@ export default function AbsenceRequestsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>
-                      {request.meeting?.startTime
-                        ? new Date(request.meeting.startTime).toLocaleString(undefined, {
-                            dateStyle: 'medium',
-                            timeStyle: 'short',
-                          })
-                        : request.startDate
-                        ? `${new Date(request.startDate).toLocaleDateString()} – ${new Date(request.endDate).toLocaleDateString()}`
-                        : 'Scheduled Service'}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      <span>
+                        {request.meeting?.startTime
+                          ? new Date(request.meeting.startTime).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })
+                          : request.startDate
+                          ? `${new Date(request.startDate).toLocaleDateString()} – ${new Date(request.endDate).toLocaleDateString()}`
+                          : 'Scheduled Service'}
+                      </span>
+                    </div>
+
+                    {request.status && (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          request.status === 'APPROVED'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : request.status === 'REJECTED'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            : request.status === 'CANCELLED'
+                            ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400'
+                        }`}
+                      >
+                        {request.status}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -324,6 +420,12 @@ export default function AbsenceRequestsPage() {
                       Requested Status: {request.requestedStatus}
                     </span>
                   )}
+                  {request.reviewNote && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Leader Review Note:</span>
+                      <p className="text-slate-700 dark:text-slate-300 italic">{request.reviewNote}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -335,44 +437,71 @@ export default function AbsenceRequestsPage() {
                   </Link>
 
                   <div className="flex items-center gap-2">
-                    {isJacob(request.member) && (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        Assigned Approver: Daniel Oguamanam
+                    {request.status === 'APPROVED' ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Approved
                       </span>
-                    )}
-                    {canApproveAbsenceFor(user, request.member) ? (
-                      <>
-                        <button
-                          onClick={() => {
-                            setActing({ item: request, decision: 'REJECTED' });
-                            setReviewNote('');
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
-                        >
-                          Reject {kind === 'absence' ? 'Excuse' : 'Correction'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActing({ item: request, decision: 'APPROVED' });
-                            setReviewNote('');
-                          }}
-                          className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
-                        >
-                          Approve Request
-                        </button>
-                      </>
+                    ) : request.status === 'REJECTED' ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                        <XCircle className="w-3.5 h-3.5" />
+                        Rejected
+                      </span>
+                    ) : request.status === 'CANCELLED' ? (
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        Withdrawn
+                      </span>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">
-                        Only Daniel can approve/reject
-                      </span>
+                      <>
+                        {isJacob(request.member) && (
+                          <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                            Assigned Approver: Daniel Oguamanam
+                          </span>
+                        )}
+                        {canApproveAbsenceFor(user, request.member) ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                setActing({ item: request, decision: 'REJECTED' });
+                                setReviewNote('');
+                              }}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 dark:bg-rose-950 hover:bg-rose-100 dark:hover:bg-rose-900 border border-rose-200 dark:border-rose-800 transition-colors"
+                            >
+                              Reject {kind === 'absence' ? 'Excuse' : 'Correction'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActing({ item: request, decision: 'APPROVED' });
+                                setReviewNote('');
+                              }}
+                              className="px-4 py-1.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-colors"
+                            >
+                              Approve Request
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">
+                            Only Daniel can approve/reject
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
               </div>
             ))
           ) : (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
-              No pending requests in this queue.
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
+              <p>No {statusFilter.toLowerCase()} requests in this queue.</p>
+              {statusFilter === 'PENDING' && counts.approved > 0 && (
+                <button
+                  onClick={() => setStatusFilter('APPROVED')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>View {counts.approved} Approved Requests</span>
+                </button>
+              )}
             </div>
           )}
         </div>

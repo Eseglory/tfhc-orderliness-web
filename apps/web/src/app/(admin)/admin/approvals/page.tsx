@@ -623,8 +623,17 @@ function ApprovalsContent() {
                 </div>
               ))
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
-                No pending governance approval requests in this queue.
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
+                <p>No pending governance approval requests in this queue.</p>
+                {history.length > 0 && (
+                  <button
+                    onClick={() => handleTabChange('history')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>View {history.length} Resolved Approvals in History Tab</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -716,8 +725,24 @@ function ApprovalsContent() {
                 </div>
               ))
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs">
-                No pending absence excuses. All member leaves are up to date.
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-400 text-xs space-y-3">
+                <p>No pending absence excuses. All member leaves are up to date.</p>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleTabChange('history')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-all border border-indigo-200 dark:border-indigo-800"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>View {history.length} Resolved Approvals in History Tab</span>
+                  </button>
+                  <Link
+                    href="/admin/absence-requests"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-all border border-slate-200 dark:border-slate-700"
+                  >
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    <span>Absence Requests Center</span>
+                  </Link>
+                </div>
               </div>
             )}
           </div>
