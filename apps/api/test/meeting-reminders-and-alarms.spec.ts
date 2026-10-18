@@ -180,7 +180,7 @@ describe('Meeting Reminders & Device Alarm Specification', () => {
   describe('2. Persistent Reminder & Alarm Preferences', () => {
     it('returns sensible defaults when no preferences have been configured yet', async () => {
       const prefs = await meetingsService.getMemberReminderPreferences('user-fresh');
-      expect(prefs).toEqual({
+      expect(prefs).toMatchObject({
         remindersEnabled: true,
         alarmSoundEnabled: true,
         soundName: 'chime',

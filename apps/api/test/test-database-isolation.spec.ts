@@ -24,23 +24,21 @@ describe('Test Database Isolation Safeguards', () => {
     expect(isRemote).toBe(false);
   });
 
-  it('PrismaService must throw a fatal error if initialized with a Supabase or remote URL in test mode', async () => {
+  it('PrismaService must throw a fatal error if initialized with a Supabase or remote URL in test mode', () => {
     process.env.NODE_ENV = 'test';
     process.env.DATABASE_URL = 'postgresql://postgres.xxx:secret@aws-1-eu-west-1.pooler.supabase.com:5432/postgres';
 
-    const prismaService = new PrismaService();
-    await expect(prismaService.onModuleInit()).rejects.toThrow(
-      /CRITICAL DATABASE ISOLATION SAFEGUARD/
+    expect(() => new PrismaService()).toThrow(
+      /TEST_DATABASE_MUST_BE_ISOLATED_LOCAL_DATABASE/
     );
   });
 
-  it('PrismaService must throw a fatal error if DATABASE_URL is empty in test mode', async () => {
+  it('PrismaService must throw a fatal error if DATABASE_URL is empty in test mode', () => {
     process.env.NODE_ENV = 'test';
     process.env.DATABASE_URL = '';
 
-    const prismaService = new PrismaService();
-    await expect(prismaService.onModuleInit()).rejects.toThrow(
-      /CRITICAL DATABASE ISOLATION SAFEGUARD/
+    expect(() => new PrismaService()).toThrow(
+      /TEST_DATABASE_NOT_CONFIGURED/
     );
   });
 });

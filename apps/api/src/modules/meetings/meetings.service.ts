@@ -739,6 +739,8 @@ export class MeetingsService {
       throw new BadRequestException('Grace period must be a non-negative whole number of minutes');
     if (new Date(dto.attendanceOpenTime) > new Date(dto.startTime) || new Date(dto.startTime) > new Date(dto.attendanceCloseTime))
       throw new BadRequestException('Event times must satisfy attendance open ≤ start ≤ attendance close');
+    if (dto.endTime && new Date(dto.startTime) > new Date(dto.endTime))
+      throw new BadRequestException('Event start time must be before or equal to end time');
   }
 
   private async resolveAudiences(audiences: AudienceInput[] | undefined, visibility: 'PUBLIC' | 'RESTRICTED') {
@@ -1569,12 +1571,14 @@ export class MeetingsService {
       soundName: 'chime',
       snoozeMinutes: 5,
     };
-    if (!setting) return defaultPrefs;
-    try {
-      return { ...defaultPrefs, ...JSON.parse(setting.value) };
-    } catch {
-      return defaultPrefs;
-    }
+    const parsed = setting ? (() => { try { return JSON.parse(setting.value); } catch { return {}; } })() : {};
+    const prefs = { ...defaultPrefs, ...parsed };
+    return {
+      ...prefs,
+      meetingRemindersEnabled: prefs.remindersEnabled,
+      alarmSoundName: prefs.soundName,
+      snoozeDurationMinutes: prefs.snoozeMinutes,
+    };
   }
 
   /**
@@ -1582,17 +1586,24 @@ export class MeetingsService {
    */
   async saveMemberReminderPreferences(userId: string, prefs: {
     remindersEnabled?: boolean;
+    meetingRemindersEnabled?: boolean;
     alarmSoundEnabled?: boolean;
     soundName?: string;
+    alarmSoundName?: string;
     snoozeMinutes?: number;
+    snoozeDurationMinutes?: number;
   }) {
     const key = `user_reminder_pref_${userId}`;
     const current = await this.getMemberReminderPreferences(userId);
+    const sound = prefs.soundName ?? prefs.alarmSoundName;
+    const snooze = prefs.snoozeMinutes ?? prefs.snoozeDurationMinutes;
+    const reminders = prefs.remindersEnabled ?? prefs.meetingRemindersEnabled;
+
     const updated = {
-      remindersEnabled: prefs.remindersEnabled !== undefined ? Boolean(prefs.remindersEnabled) : current.remindersEnabled,
+      remindersEnabled: reminders !== undefined ? Boolean(reminders) : current.remindersEnabled,
       alarmSoundEnabled: prefs.alarmSoundEnabled !== undefined ? Boolean(prefs.alarmSoundEnabled) : current.alarmSoundEnabled,
-      soundName: ['chime', 'marimba', 'digital', 'wake'].includes(prefs.soundName || '') ? prefs.soundName : current.soundName,
-      snoozeMinutes: [3, 5, 10, 15].includes(Number(prefs.snoozeMinutes)) ? Number(prefs.snoozeMinutes) : current.snoozeMinutes,
+      soundName: ['chime', 'marimba', 'digital', 'wake'].includes(sound || '') ? sound! : current.soundName,
+      snoozeMinutes: [3, 5, 10, 15].includes(Number(snooze)) ? Number(snooze) : current.snoozeMinutes,
     };
 
     await this.prisma.systemSetting.upsert({
@@ -1607,6 +1618,11 @@ export class MeetingsService {
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      meetingRemindersEnabled: updated.remindersEnabled,
+      alarmSoundName: updated.soundName,
+      snoozeDurationMinutes: updated.snoozeMinutes,
+    };
   }
 }
