@@ -255,29 +255,45 @@ export class AttendanceService {
         meeting.title?.toLowerCase().includes('wednesday')
       ) && !meeting.locationName?.toLowerCase().includes('residence') && !meeting.title?.toLowerCase().includes('hosting');
 
-      return tx.attendanceRecord.upsert({
+      const existingRecord = await tx.attendanceRecord.findUnique({
         where: {
           memberId_meetingId: {
             memberId: dto.memberId,
             meetingId: dto.meetingId,
           },
         },
-        update: {
-          expectedArrivalTime: meeting.expectedArrivalTime,
-          actualArrivalTime: serverTimestamp,
-          joinedAt: serverTimestamp,
-          lastSeenAt: serverTimestamp,
-          status,
-          attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
-          gpsLat: isOnline ? null : dto.latitude,
-          gpsLong: isOnline ? null : dto.longitude,
-          gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
-          distanceFromVenue: isOnline ? null : distanceFromVenue,
-          method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
-          pointsEarned,
-          deviceInfo: dto.deviceInfo,
-        },
-        create: {
+      });
+
+      if (existingRecord) {
+        if (existingRecord.status !== 'ABSENT' || existingRecord.actualArrivalTime) {
+          throw new ConflictException('Attendance has already been recorded for this meeting');
+        }
+        return tx.attendanceRecord.update({
+          where: { id: existingRecord.id },
+          data: {
+            expectedArrivalTime: meeting.expectedArrivalTime,
+            actualArrivalTime: serverTimestamp,
+            joinedAt: serverTimestamp,
+            lastSeenAt: serverTimestamp,
+            status,
+            attendanceType: isOnline ? AttendanceType.ONLINE : AttendanceType.PHYSICAL,
+            gpsLat: isOnline ? null : dto.latitude,
+            gpsLong: isOnline ? null : dto.longitude,
+            gpsAccuracy: isOnline ? null : dto.gpsAccuracy,
+            distanceFromVenue: isOnline ? null : distanceFromVenue,
+            method: isOnline ? AttendanceMethod.ONLINE_CODE : AttendanceMethod.SYSTEM_GEO,
+            pointsEarned,
+            deviceInfo: dto.deviceInfo,
+          },
+          include: {
+            meeting: { include: { category: true } },
+            member: true,
+          },
+        });
+      }
+
+      return tx.attendanceRecord.create({
+        data: {
           memberId: dto.memberId,
           meetingId: dto.meetingId,
           expectedArrivalTime: meeting.expectedArrivalTime,
