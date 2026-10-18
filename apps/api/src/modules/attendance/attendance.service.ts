@@ -563,17 +563,14 @@ export class AttendanceService {
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
 
-    const allowsCode = Boolean(
+    const isOnline = Boolean(
       (meeting as any).isOnline ||
-      meeting.attendanceCode ||
+      (meeting.title?.toLowerCase().includes('hosting') && (meeting as any).isOnline !== false) ||
       meeting.locationName?.toLowerCase().includes('online') ||
-      meeting.locationName?.toLowerCase().includes('virtual') ||
-      meeting.address?.includes('meet.google.com') ||
-      meeting.geofenceRadiusMeters >= 50000 ||
-      meeting.title?.toLowerCase().includes('hosting')
+      meeting.address?.includes('meet.google.com')
     );
-    if (!allowsCode) {
-      throw new BadRequestException('Attendance codes are only used for online or code-based gatherings.');
+    if (!isOnline) {
+      throw new BadRequestException('Attendance codes are only used for online gatherings.');
     }
 
     // Auto-generate unique 6-digit code and ensure valid expiration window (persisted server-side)
@@ -675,17 +672,14 @@ export class AttendanceService {
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
 
-    const allowsCode = Boolean(
+    const isOnline = Boolean(
       (meeting as any).isOnline ||
-      meeting.attendanceCode ||
+      meeting.title?.toLowerCase().includes('hosting') ||
       meeting.locationName?.toLowerCase().includes('online') ||
-      meeting.locationName?.toLowerCase().includes('virtual') ||
-      meeting.address?.includes('meet.google.com') ||
-      meeting.geofenceRadiusMeters >= 50000 ||
-      meeting.title?.toLowerCase().includes('hosting')
+      meeting.address?.includes('meet.google.com')
     );
-    if (!allowsCode) {
-      throw new BadRequestException('Attendance code submission is only valid for online or code-based gatherings.');
+    if (!isOnline) {
+      throw new BadRequestException('Attendance code submission is only valid for online gatherings.');
     }
     if (meeting.status === 'CANCELLED') {
       throw new BadRequestException('This service has been cancelled.');

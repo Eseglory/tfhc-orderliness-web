@@ -190,7 +190,7 @@ describe('AuthService.changePassword', () => {
 
 describe('AuthService.loginUser member rules', () => {
   it('directs Google-only members to Google sign-in', async () => {
-    const prisma = { user: { findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: false, member: {} })) } };
+    const prisma = { user: { findUnique: jest.fn(async () => ({ id: 'u1', email: 'm@tfhc.org', role: 'MEMBER', passwordHash: 'HASH', passwordAuthEnabled: false, googleSubject: 'google-sub-123', member: {} })) } };
     await expect(makeService(prisma as any).loginUser({ email: 'm@tfhc.org', password: 'whatever12345' }))
       .rejects.toMatchObject({ response: { code: 'PASSWORD_AUTH_DISABLED' } });
   });

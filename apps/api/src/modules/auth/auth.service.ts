@@ -448,17 +448,18 @@ export class AuthService {
       throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
     }
 
+    if (user.role === Role.MEMBER && !user.passwordAuthEnabled && user.googleSubject) {
+      throw new ForbiddenException({
+        code: 'PASSWORD_AUTH_DISABLED',
+        message: 'This account was registered with Google. Use Google sign-in or use "Forgot password?" to set a password.',
+      });
+    }
+
     const isPasswordValid = user.passwordHash
       ? await argon2.verify(user.passwordHash, dto.password).catch(() => false)
       : false;
 
     if (!isPasswordValid) {
-      if (user.role === Role.MEMBER && !user.passwordAuthEnabled && user.googleSubject) {
-        throw new ForbiddenException({
-          code: 'PASSWORD_AUTH_DISABLED',
-          message: 'This account was registered with Google. Use Google sign-in or use "Forgot password?" to set a password.',
-        });
-      }
       throw new UnauthorizedException('Invalid email or password');
     }
 

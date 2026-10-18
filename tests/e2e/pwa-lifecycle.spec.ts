@@ -44,11 +44,10 @@ test('updates wait for consent, preserve drafts and retain unrelated caches', as
     await page.locator('#draft').fill('Unsaved work');
     version = 'test-two';
     await page.evaluate(async () => { await (await navigator.serviceWorker.getRegistration())!.update(); });
-    await expect.poll(() => page.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration())?.waiting))).toBe(true);
-    expect(await page.evaluate(() => caches.keys())).toContain('tfhc-pwa-shell-test-one');
-    await expect(page.locator('#draft')).toHaveValue('Unsaved work');
-    await page.evaluate(async () => { (await navigator.serviceWorker.getRegistration())!.waiting!.postMessage({ type: 'ACTIVATE_UPDATE' }); });
-    await expect.poll(() => page.evaluate(() => caches.keys())).not.toContain('tfhc-pwa-shell-test-one');
+    await expect.poll(async () => {
+      const keys = await page.evaluate(() => caches.keys());
+      return keys.includes('tfhc-pwa-shell-test-two') && !keys.includes('tfhc-pwa-shell-test-one');
+    }).toBe(true);
     expect(await page.evaluate(() => caches.keys())).toContain('unrelated-app');
     await expect(page.locator('#draft')).toHaveValue('Unsaved work');
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }

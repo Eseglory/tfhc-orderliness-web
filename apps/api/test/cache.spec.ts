@@ -9,7 +9,7 @@ test('a read started before invalidation cannot replace a newer result', async (
   expect(await cache.wrap('meetings', 60, async () => 'new meeting', ['meetings'])).toBe('new meeting');
   resolveOld('old meeting');
   await old;
-  expect(cache.get('meetings')).toBe('new meeting');
+  expect(await cache.get('meetings')).toBe('new meeting');
 });
 
 test('flush prevents pending requests from restoring private data', async () => {
@@ -20,5 +20,5 @@ test('flush prevents pending requests from restoring private data', async () => 
   cache.flush();
   resolve('old profile');
   await request;
-  expect(cache.get('profile')).toBeUndefined();
+  expect(await cache.get('profile')).toBeUndefined();
 });
