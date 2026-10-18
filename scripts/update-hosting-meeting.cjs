@@ -26,15 +26,18 @@ async function main() {
     data: {
       status: 'ACTIVE',
       scheduleCancelled: false,
-      isOnline: true,
+      isOnline: false,
+      meetingUrl: null,
+      locationName: "Sis Comfort's Residence",
+      address: "No. 2, Ogo-Oluwa Close, Okesuna Street, Akute / Ishashi Road, Ogun State.",
       attendanceCode: code,
       attendanceCodeExpiresAt: expiresAt,
       geofenceRadiusMeters: 50000,
       startTime: new Date('2026-10-18T12:00:00.000Z'), // 1:00 PM WAT
-      endTime: new Date('2026-10-18T19:00:00.000Z'),   // 8:00 PM WAT
+      endTime: new Date('2026-10-18T21:00:00.000Z'),   // 10:00 PM WAT
       attendanceOpenTime: new Date('2026-10-18T11:45:00.000Z'), // 12:45 PM WAT
-      attendanceCloseTime: new Date('2026-10-18T19:00:00.000Z'), // 8:00 PM WAT
-      notes: '[Attendance Code: 181026] No geolocation required. Use 6-digit code to check in.',
+      attendanceCloseTime: new Date('2026-10-18T21:00:00.000Z'), // 10:00 PM WAT
+      notes: '[Attendance Code: 181026] Physical meeting at Sis Comfort\'s Residence. No geolocation required. Use 6-digit code to check in.',
     },
     include: {
       supervisingMinister: true,

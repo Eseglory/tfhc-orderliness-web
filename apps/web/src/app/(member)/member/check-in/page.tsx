@@ -25,13 +25,16 @@ export default function CheckInPage() {
   const pending = useRef(false);
   const mounted = useRef(true);
   const meeting = meetings.find(m => m.id === meetingId);
-  const isOnlineService = Boolean(meeting?.isOnline) ||
-    Boolean(meeting?.attendanceCode) ||
-    meeting?.locationName?.toLowerCase().includes('online') ||
-    meeting?.locationName?.toLowerCase().includes('google meet') ||
-    meeting?.locationName?.toLowerCase().includes('virtual') ||
+  const isOnlineMeeting = Boolean(meeting?.isOnline) &&
+    !meeting?.locationName?.toLowerCase().includes('residence') &&
+    !meeting?.title?.toLowerCase().includes('hosting');
+
+  const allowsCodeCheckIn = Boolean(
+    meeting?.attendanceCode ||
+    isOnlineMeeting ||
     meeting?.title?.toLowerCase().includes('hosting') ||
-    (meeting && meeting.geofenceRadiusMeters >= 50000);
+    (meeting && meeting.geofenceRadiusMeters >= 50000)
+  );
   const isCommittedViaAvailability = Boolean(
     availabilityData?.submitted &&
       (availabilityData?.selectedMeetingIds?.includes(meetingId) || (!meetingId && availabilityData?.selectedMeetingIds?.length > 0))
@@ -120,8 +123,8 @@ export default function CheckInPage() {
     try {
       if (!navigator.onLine) throw new Error('You are offline. Connect to the internet, then try again.');
 
-      // If meeting is online, GPS check-in is not permitted
-      if (isOnlineService) {
+      // If meeting is strictly online, GPS check-in is not permitted
+      if (isOnlineMeeting) {
         setShowCodeInput(true);
         return;
       }
@@ -220,7 +223,7 @@ export default function CheckInPage() {
     try {
       if (!navigator.onLine) throw new Error('You are offline. Connect to the internet, then try again.');
 
-      if (isOnlineService || activeRecord?.attendanceType === 'ONLINE') {
+      if (isOnlineMeeting || activeRecord?.attendanceType === 'ONLINE') {
         const token = localStorage.getItem(`tfhc_online_session_${meeting.id}`) || undefined;
         await fetchApi('/attendance/online/check-out', {
           method: 'POST',
@@ -271,7 +274,7 @@ export default function CheckInPage() {
             <span className="material-symbols-outlined text-on-surface-variant text-[20px]">arrow_back</span>
           </button>
           <h1 className="font-headline-sm text-sm sm:text-lg font-bold text-primary truncate">
-            {isOnlineService ? 'Online Meeting Attendance' : 'GPS Attendance & Clock-In'}
+            {isOnlineMeeting ? 'Online Meeting Attendance' : allowsCodeCheckIn ? 'Venue Attendance & Check-In' : 'GPS Attendance & Clock-In'}
           </h1>
         </div>
         <div className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 rounded-full bg-surface-container flex items-center justify-center overflow-hidden border border-outline-variant p-1">
@@ -323,10 +326,15 @@ export default function CheckInPage() {
                   <h2 className="text-lg font-bold text-primary">{meeting.title}</h2>
                   <p className="text-sm font-semibold text-on-surface-variant flex items-center gap-1.5 mt-1">
                     <span className="material-symbols-outlined text-primary text-[18px]">
-                      {isOnlineService ? 'videocam' : 'church'}
+                      {isOnlineMeeting ? 'videocam' : 'location_on'}
                     </span>
-                    <span>{isOnlineService ? 'Online / Google Meet' : (meeting.locationName || "The Father's House Church, 90 Alagbole–Akute Road")}</span>
+                    <span>{isOnlineMeeting ? 'Online / Google Meet' : (meeting.locationName || "The Father's House Church, 90 Alagbole–Akute Road")}</span>
                   </p>
+                  {!isOnlineMeeting && meeting.address && (
+                    <p className="text-xs text-on-surface-variant/80 pl-6 mt-0.5">
+                      {meeting.address}
+                    </p>
+                  )}
                 </div>
 
                 {/* State B: Already Recorded Banner */}
@@ -342,7 +350,7 @@ export default function CheckInPage() {
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                       </span>
                       <span className="text-sm sm:text-base font-black tracking-wide uppercase text-emerald-700 dark:text-emerald-300">
-                        {isOnlineService ? 'YOU ARE MARKED PRESENT.' : 'YOU HAVE ALREADY CLOCKED IN.'}
+                        {isOnlineMeeting ? 'YOU ARE MARKED PRESENT.' : 'YOU HAVE ALREADY CLOCKED IN.'}
                       </span>
                     </div>
                     <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
@@ -353,7 +361,7 @@ export default function CheckInPage() {
                   </div>
                 )}
 
-                {isOnlineService ? (
+                {isOnlineMeeting ? (
                   <div className="p-3.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-900 dark:text-blue-200 space-y-1">
                     <p className="font-extrabold flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
                       <span className="material-symbols-outlined text-base">videocam</span>
@@ -363,6 +371,16 @@ export default function CheckInPage() {
                       No venue GPS verification required. Attendance is confirmed by submitting the 6-digit attendance code announced during the session.
                     </p>
                   </div>
+                ) : allowsCodeCheckIn ? (
+                  <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 text-xs text-emerald-950 dark:text-emerald-200 space-y-1">
+                    <p className="font-extrabold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                      <span className="material-symbols-outlined text-base">pin</span>
+                      <span>Physical Gathering · Attendance Code Active</span>
+                    </p>
+                    <p className="font-medium text-emerald-800 dark:text-emerald-300">
+                      Physical attendance code enabled. Attendees present at the venue can check in with the 6-digit code without GPS restrictions.
+                    </p>
+                  </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-surface-variant/40 border border-outline-variant/20 text-xs text-on-surface-variant space-y-1">
                     <p className="font-bold text-on-surface">📍 Location Rules</p>
@@ -370,7 +388,7 @@ export default function CheckInPage() {
                   </div>
                 )}
 
-                {!isOnlineService && distance !== null && (
+                {!isOnlineMeeting && !allowsCodeCheckIn && distance !== null && (
                   <div className={`p-3 rounded-xl border text-xs font-bold flex flex-wrap items-center justify-between gap-1.5 ${
                     meeting.geofenceRadiusMeters >= 50000 || distance <= meeting.geofenceRadiusMeters
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
@@ -388,14 +406,14 @@ export default function CheckInPage() {
                   </div>
                 ) : isClockedIn ? (
                   <div className="space-y-2">
-                    {isOnlineService ? (
+                    {isOnlineMeeting ? (
                       <div className="space-y-2">
                         <Link
                           href={`/member/meetings/${meeting.id}`}
                           className="inline-flex items-center justify-center gap-1.5 w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
                         >
                           <span className="material-symbols-outlined text-base">videocam</span>
-                          <span>View Gathering &amp; Google Meet</span>
+                          <span>View Gathering</span>
                         </Link>
                       </div>
                     ) : (
@@ -410,19 +428,19 @@ export default function CheckInPage() {
                       </button>
                     )}
                   </div>
-                ) : isOnlineService ? (
+                ) : allowsCodeCheckIn ? (
                   (() => {
-                    const onlineValidFrom = new Date(meeting.startTime);
+                    const validFrom = new Date(meeting.attendanceOpenTime || meeting.startTime);
                     const rawClose = (meeting as any).attendanceCloseTime || meeting.endTime;
-                    const onlineValidUntil = rawClose
+                    const validUntil = rawClose
                       ? new Date(rawClose)
                       : new Date(new Date(meeting.startTime).getTime() + 60 * 60000);
                     const now = new Date();
-                    const isBeforeOnlineWindow = now < onlineValidFrom;
-                    const isAfterOnlineWindow = now > onlineValidUntil;
-                    const meetUrl = meeting.meetingUrl || (meeting.address?.startsWith('http') ? meeting.address : null);
+                    const isBeforeWindow = now < validFrom;
+                    const isAfterWindow = now > validUntil;
+                    const meetUrl = isOnlineMeeting ? (meeting.meetingUrl || (meeting.address?.startsWith('http') ? meeting.address : null)) : null;
 
-                    if (isBeforeOnlineWindow) {
+                    if (isBeforeWindow) {
                       return (
                         <div className="space-y-3">
                           <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-200 space-y-1">
@@ -431,7 +449,7 @@ export default function CheckInPage() {
                               <span>Attendance Not Yet Available</span>
                             </p>
                             <p>
-                              Attendance opens at scheduled meeting start time ({onlineValidFrom.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please try again later.
+                              Attendance opens at {validFrom.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Please try again when the session starts.
                             </p>
                           </div>
                           {meetUrl && (
@@ -449,7 +467,7 @@ export default function CheckInPage() {
                       );
                     }
 
-                    if (isAfterOnlineWindow) {
+                    if (isAfterWindow) {
                       return (
                         <div className="space-y-3">
                           <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1">
@@ -480,13 +498,17 @@ export default function CheckInPage() {
                       <div className="space-y-3">
                         <form onSubmit={submitCode} className="p-4 rounded-2xl bg-surface-container border border-outline-variant/30 space-y-3">
                           <div className="flex items-center justify-between">
-                            <label className="block text-xs font-bold text-on-surface">Enter Attendance Code</label>
+                            <label className="block text-xs font-bold text-on-surface">
+                              {isOnlineMeeting ? 'Enter Attendance Code' : 'Enter 6-Digit Venue Code'}
+                            </label>
                             <span className="text-[11px] text-slate-500">
-                              Closes at {onlineValidUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              Closes at {validUntil.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
                           <p className="text-xs text-on-surface-variant font-medium">
-                            Enter the 6-digit attendance code announced during the online session.
+                            {isOnlineMeeting
+                              ? 'Enter the 6-digit attendance code announced during the online session.'
+                              : 'Enter the 6-digit attendance code provided to attendees present at the venue.'}
                           </p>
                           <input
                             type="text"
@@ -508,7 +530,19 @@ export default function CheckInPage() {
                           </button>
                         </form>
 
-                        {meetUrl && (
+                        {!isOnlineMeeting && (
+                          <button
+                            type="button"
+                            onClick={checkIn}
+                            disabled={busy || !meeting}
+                            className="w-full rounded-xl py-3 border border-outline-variant/30 hover:bg-surface-container text-on-surface text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-base">my_location</span>
+                            <span>{busy ? 'Verifying GPS Location…' : 'Or Clock In with GPS'}</span>
+                          </button>
+                        )}
+
+                        {isOnlineMeeting && meetUrl && (
                           <a
                             href={meetUrl}
                             target="_blank"

@@ -196,6 +196,7 @@ export class AttendanceService {
       meeting.geofenceRadiusMeters > 0 &&
       meeting.geofenceRadiusMeters < 50000 &&
       !meeting.attendanceCode &&
+      !meeting.title?.toLowerCase().includes('hosting') &&
       !meeting.locationName?.toLowerCase().includes('virtual') &&
       !meeting.locationName?.toLowerCase().includes('online');
 
@@ -246,13 +247,13 @@ export class AttendanceService {
       }
       const isOnline = Boolean(
         (meeting as any).isOnline ||
-        meeting.geofenceRadiusMeters >= 50000 ||
+        (meeting.geofenceRadiusMeters >= 50000 && !meeting.locationName?.toLowerCase().includes('residence') && !meeting.title?.toLowerCase().includes('hosting')) ||
         meeting.locationName?.toLowerCase().includes('virtual') ||
         meeting.locationName?.toLowerCase().includes('online') ||
         meeting.address?.startsWith('http') ||
         meeting.serviceScheduleId === 'wednesday-unit-meeting' ||
         meeting.title?.toLowerCase().includes('wednesday')
-      );
+      ) && !meeting.locationName?.toLowerCase().includes('residence') && !meeting.title?.toLowerCase().includes('hosting');
 
       return tx.attendanceRecord.create({
       data: {
@@ -563,13 +564,14 @@ export class AttendanceService {
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
 
-    const isOnline = Boolean(
+    const isCodeAllowed = Boolean(
       (meeting as any).isOnline ||
-      (meeting.title?.toLowerCase().includes('hosting') && (meeting as any).isOnline !== false) ||
+      meeting.title?.toLowerCase().includes('hosting') ||
       meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.locationName?.toLowerCase().includes('residence') ||
       meeting.address?.includes('meet.google.com')
     );
-    if (!isOnline) {
+    if (!isCodeAllowed) {
       throw new BadRequestException('Attendance codes are only used for online gatherings.');
     }
 
@@ -672,13 +674,14 @@ export class AttendanceService {
     });
     if (!meeting) throw new NotFoundException('Meeting not found');
 
-    const isOnline = Boolean(
+    const isCodeAllowed = Boolean(
       (meeting as any).isOnline ||
       meeting.title?.toLowerCase().includes('hosting') ||
       meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.locationName?.toLowerCase().includes('residence') ||
       meeting.address?.includes('meet.google.com')
     );
-    if (!isOnline) {
+    if (!isCodeAllowed) {
       throw new BadRequestException('Attendance code submission is only valid for online gatherings.');
     }
     if (meeting.status === 'CANCELLED') {
@@ -742,6 +745,14 @@ export class AttendanceService {
       throw new BadRequestException('This event is not open to you');
     }
 
+    // Determine attendance type (online vs physical)
+    const isOnlineMeeting = Boolean(
+      (meeting as any).isOnline ||
+      meeting.locationName?.toLowerCase().includes('online') ||
+      meeting.locationName?.toLowerCase().includes('virtual')
+    ) && !meeting.locationName?.toLowerCase().includes('residence') && !meeting.title?.toLowerCase().includes('hosting');
+    const recordAttendanceType = isOnlineMeeting ? AttendanceType.ONLINE : AttendanceType.PHYSICAL;
+
     // Idempotency: Check if member is already marked PRESENT
     const existing = await this.prisma.attendanceRecord.findUnique({
       where: { memberId_meetingId: { memberId: dto.memberId, meetingId: dto.meetingId } },
@@ -765,7 +776,7 @@ export class AttendanceService {
             joinedAt: existing.joinedAt || now,
             lastSeenAt: now,
             method: AttendanceMethod.ONLINE_CODE,
-            attendanceType: AttendanceType.ONLINE,
+            attendanceType: recordAttendanceType,
           },
           include: { meeting: { include: { category: true } }, member: true },
         });
@@ -802,7 +813,7 @@ export class AttendanceService {
         lastSeenAt: now,
         actualArrivalTime: now,
         joinedAt: now,
-        attendanceType: AttendanceType.ONLINE,
+        attendanceType: recordAttendanceType,
         method: AttendanceMethod.ONLINE_CODE,
         status: classifiedStatus,
         pointsEarned,
@@ -815,7 +826,7 @@ export class AttendanceService {
         joinedAt: now,
         lastSeenAt: now,
         status: classifiedStatus,
-        attendanceType: AttendanceType.ONLINE,
+        attendanceType: recordAttendanceType,
         method: AttendanceMethod.ONLINE_CODE,
         pointsEarned,
       },

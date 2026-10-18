@@ -46,9 +46,17 @@ export function generateGoogleMeetUrl(): string {
  * Strictly identifies the Wednesday unit meeting, which is the only online service requiring Google Calendar/Meet actions.
  * All other services are strictly in-person and do not display Google Calendar buttons.
  */
-export function isOnlineUnitMeeting(meeting?: { title?: string | null; isOnline?: boolean | null; mode?: string | null } | null): boolean {
+export function isOnlineUnitMeeting(meeting?: { title?: string | null; isOnline?: boolean | null; mode?: string | null; locationName?: string | null } | null): boolean {
   if (!meeting) return false;
   const t = (meeting.title || '').toLowerCase();
+  const loc = (meeting.locationName || '').toLowerCase();
+
+  // Hosting meetings and in-person residence gatherings are strictly physical meetings!
+  if (t.includes('hosting') || loc.includes('residence') || loc.includes('close') || loc.includes('street')) {
+    return false;
+  }
+  if (meeting.isOnline === false) return false;
+
   // Strictly only the Wednesday Unit Meeting is online.
   // In-person church services (First/Second/Third Service, Mid-Week, Divine Intervention, Communion, etc.)
   // must never display Google Calendar buttons or online meeting actions.
@@ -56,7 +64,7 @@ export function isOnlineUnitMeeting(meeting?: { title?: string | null; isOnline?
   const hasUnit = t.includes('unit');
 
   if (hasWednesday && hasUnit) return true;
-  if (Boolean(meeting.isOnline) && (hasWednesday || hasUnit)) return true;
+  if (Boolean(meeting.isOnline) && hasWednesday) return true;
 
   return false;
 }
