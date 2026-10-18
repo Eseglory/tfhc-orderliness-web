@@ -55,7 +55,7 @@ export const SERVICE_SCHEDULES = [
     id: 'wednesday-unit-meeting',
     title: 'Wednesday Unit Weekly Meeting',
     dayOfWeek: 3,
-    startMinutes: 1230,
+    startMinutes: 1200,
     endMinutes: 1260,
     categoryName: 'Unit Meeting',
     eventTypeKey: 'MEETING',

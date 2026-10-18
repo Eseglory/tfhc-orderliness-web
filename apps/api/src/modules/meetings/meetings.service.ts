@@ -1179,8 +1179,21 @@ export class MeetingsService {
 
   async findOpenAttendanceMeetings() {
     const now = new Date();
+    await this.prisma.meeting.updateMany({
+      where: {
+        status: MeetingStatus.SCHEDULED,
+        attendanceOpenTime: { lte: now },
+        attendanceCloseTime: { gt: now },
+      },
+      data: { status: MeetingStatus.ACTIVE },
+    }).catch(() => undefined);
+
     return this.prisma.meeting.findMany({
-      where: { status: MeetingStatus.ACTIVE, attendanceOpenTime: { lte: now }, attendanceCloseTime: { gte: now } },
+      where: {
+        status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
+        attendanceOpenTime: { lte: now },
+        attendanceCloseTime: { gte: now },
+      },
       include: { category: true, eventType: true },
       orderBy: { startTime: 'asc' },
     });
@@ -1189,7 +1202,11 @@ export class MeetingsService {
   async findActiveMeeting() {
     const now = new Date();
     return this.prisma.meeting.findFirst({
-      where: { status: MeetingStatus.ACTIVE, attendanceOpenTime: { lte: now }, attendanceCloseTime: { gte: now } },
+      where: {
+        status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
+        attendanceOpenTime: { lte: now },
+        attendanceCloseTime: { gte: now },
+      },
       include: { category: true, eventType: true, meetingSummary: true },
     });
   }

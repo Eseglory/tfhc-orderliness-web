@@ -77,7 +77,7 @@ export default function AdminLiveMeetingPage() {
     attendanceCode: string;
     validFrom: string;
     validUntil: string;
-    status: 'NOT_ACTIVE_YET' | 'ACTIVE' | 'EXPIRED';
+    status: 'NOT_ACTIVE' | 'NOT_ACTIVE_YET' | 'ACTIVE' | 'EXPIRED';
     startsInMinutes: number;
     presentCount: number;
   } | null>(null);
@@ -863,7 +863,7 @@ export default function AdminLiveMeetingPage() {
                         </span>
                         <span>🟢 ACTIVE</span>
                       </div>
-                    ) : adminOnlineCodeData.status === 'NOT_ACTIVE_YET' ? (
+                    ) : (adminOnlineCodeData.status === 'NOT_ACTIVE' || adminOnlineCodeData.status === 'NOT_ACTIVE_YET') ? (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
                         <Clock className="w-3.5 h-3.5" />
                         <span>Starts in {adminOnlineCodeData.startsInMinutes} minutes · Not active yet</span>

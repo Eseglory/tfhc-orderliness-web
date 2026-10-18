@@ -227,7 +227,12 @@ export class RecurringServicesService implements OnApplicationBootstrap {
       const data = occurrences(schedule, now)
         .filter(({ startTime }) => !skipDates.has(startTime.getTime()))
         .map(({ startTime, endTime }) => {
-          const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
+          const expectedArrivalTime = isOnline
+            ? startTime
+            : new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
+          const attendanceCloseTime = endTime || new Date(startTime.getTime() + 60 * 60000);
+          const attendanceCode = isOnline ? randomInt(100000, 999999).toString() : null;
+          const attendanceCodeExpiresAt = isOnline ? attendanceCloseTime : null;
           return {
             id: randomUUID(),
             serviceScheduleId: schedule.id,
@@ -242,15 +247,16 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             startTime,
             endTime,
             expectedArrivalTime,
-            attendanceOpenTime: new Date(expectedArrivalTime.getTime() - 30 * 60000),
-            attendanceCloseTime: endTime || new Date(startTime.getTime() + 10 * 60000),
+            attendanceOpenTime: isOnline ? startTime : new Date(expectedArrivalTime.getTime() - 30 * 60000),
+            attendanceCloseTime,
             locationName,
             address,
             latitude,
             longitude,
             geofenceRadiusMeters,
             isOnline,
-            attendanceCode: isOnline ? randomInt(100000, 999999).toString() : null,
+            attendanceCode,
+            attendanceCodeExpiresAt,
             isCompulsory: false,
           };
         });
@@ -282,6 +288,8 @@ export class RecurringServicesService implements OnApplicationBootstrap {
                 longitude,
                 geofenceRadiusMeters,
                 isOnline,
+                attendanceCode: meeting.attendanceCode || desired.attendanceCode,
+                attendanceCodeExpiresAt: desired.attendanceCodeExpiresAt || meeting.attendanceCodeExpiresAt,
                 status: 'SCHEDULED',
                 scheduleCancelled: false,
               },

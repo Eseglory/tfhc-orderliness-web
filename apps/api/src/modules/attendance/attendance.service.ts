@@ -145,7 +145,19 @@ export class AttendanceService {
       throw new NotFoundException('Meeting not found');
     }
     if (meeting.status !== 'ACTIVE') {
-      throw new BadRequestException('Attendance check-in is not currently open for this meeting');
+      if (
+        meeting.status === 'SCHEDULED' &&
+        serverTimestamp >= meeting.attendanceOpenTime &&
+        serverTimestamp <= meeting.attendanceCloseTime
+      ) {
+        await this.prisma.meeting.update({
+          where: { id: meeting.id },
+          data: { status: 'ACTIVE' },
+        }).catch(() => undefined);
+        meeting.status = 'ACTIVE';
+      } else {
+        throw new BadRequestException('Attendance check-in is not currently open for this meeting');
+      }
     }
     if (serverTimestamp < meeting.attendanceOpenTime) {
       throw new BadRequestException('Attendance cannot be clocked for a future event or service');
@@ -512,7 +524,10 @@ export class AttendanceService {
     }
 
     const code = crypto.randomInt(100000, 999999).toString();
-    const expiresAt = new Date(Date.now() + Math.min(validMinutes, 120) * 60000);
+    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
+    const minExpiresAt = new Date(baseClose.getTime() + (baseClose.getSeconds() === 0 ? 59999 : 0));
+    const calcExpiresAt = new Date(Date.now() + Math.min(validMinutes, 180) * 60000);
+    const expiresAt = calcExpiresAt > minExpiresAt ? calcExpiresAt : minExpiresAt;
 
     await this.prisma.meeting.update({
       where: { id: meetingId },
@@ -556,35 +571,42 @@ export class AttendanceService {
       throw new BadRequestException('Attendance codes are only used for online gatherings.');
     }
 
-    // Auto-generate unique 6-digit code if not yet set for this occurrence (persisted server-side)
+    // Auto-generate unique 6-digit code and ensure valid expiration window (persisted server-side)
     let code = meeting.attendanceCode;
-    if (!code) {
-      code = crypto.randomInt(100000, 999999).toString();
+    let expiresAt = meeting.attendanceCodeExpiresAt;
+    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
+    const minExpiresAt = new Date(baseClose.getTime() + (baseClose.getSeconds() === 0 ? 59999 : 0));
+
+    if (!code || !expiresAt || expiresAt < minExpiresAt) {
+      if (!code) {
+        code = crypto.randomInt(100000, 999999).toString();
+      }
+      expiresAt = minExpiresAt;
       await this.prisma.meeting.update({
         where: { id: meetingId },
-        data: { attendanceCode: code },
+        data: {
+          attendanceCode: code,
+          attendanceCodeExpiresAt: expiresAt,
+        },
       });
       await this.audit.record({
         actorUserId: adminUserId,
         action: 'ONLINE_ATTENDANCE_CODE_AUTO_GENERATED',
         entity: 'Meeting',
         entityId: meetingId,
-        newData: { code },
+        newData: { code, expiresAt },
       });
     }
 
     const now = new Date();
     // Valid window: from meeting start until meeting end / attendance close time
     const validFrom = meeting.startTime;
-    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
-    const validUntil = meeting.attendanceCodeExpiresAt && meeting.attendanceCodeExpiresAt > baseClose
-      ? meeting.attendanceCodeExpiresAt
-      : baseClose;
+    const validUntil = expiresAt && expiresAt > minExpiresAt ? expiresAt : minExpiresAt;
 
     let status: 'NOT_ACTIVE' | 'ACTIVE' | 'EXPIRED' = 'NOT_ACTIVE';
     if (meeting.status === 'CLOSED' || meeting.status === 'CANCELLED' || now > validUntil) {
       status = 'EXPIRED';
-    } else if (now < validFrom) {
+    } else if (now.getTime() < validFrom.getTime() - 30000) {
       status = 'NOT_ACTIVE';
     } else {
       status = 'ACTIVE';
@@ -664,25 +686,40 @@ export class AttendanceService {
     // Valid window: from meeting start until meeting end / attendance close time
     const validFrom = meeting.startTime;
     const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
-    const validUntil = meeting.attendanceCodeExpiresAt && meeting.attendanceCodeExpiresAt > baseClose
+    const effectiveCloseMs = Math.max(
+      baseClose.getTime() + (baseClose.getSeconds() === 0 && baseClose.getMilliseconds() === 0 ? 59999 : 0),
+      baseClose.getTime()
+    );
+    const effectiveClose = new Date(effectiveCloseMs);
+    const validUntil = meeting.attendanceCodeExpiresAt && meeting.attendanceCodeExpiresAt > effectiveClose
       ? meeting.attendanceCodeExpiresAt
-      : baseClose;
+      : effectiveClose;
 
-    if (now < validFrom) {
+    // 30 seconds leeway for clock skew before scheduled start
+    if (now.getTime() < validFrom.getTime() - 30000) {
       throw new BadRequestException('Attendance Not Yet Available. Attendance opens at scheduled meeting start.');
     }
     if (now > validUntil) {
       throw new BadRequestException('Attendance Closed. The attendance window for this meeting has closed. The attendance code is no longer valid.');
     }
 
-    const acceptedCodes = [meeting.attendanceCode, '786974'].filter(Boolean);
-    if (!meeting.attendanceCode || !acceptedCodes.includes(cleanCode)) {
+    // Dynamic database-backed attendance code validation (no hardcoded fallback)
+    if (!meeting.attendanceCode || meeting.attendanceCode !== cleanCode) {
       const count = (attempt && attempt.resetAt > nowMs ? attempt.count : 0) + 1;
       this.codeAttempts.set(rateKey, { count, resetAt: nowMs + 15 * 60000 });
       throw new BadRequestException('Attendance Code Invalid. The code you entered is incorrect. Please enter the current attendance code shared during the meeting.');
     }
 
     this.codeAttempts.delete(rateKey);
+
+    // Auto-activate meeting if SCHEDULED within attendance window
+    if (meeting.status === 'SCHEDULED' && now.getTime() >= validFrom.getTime() - 30000 && now <= validUntil) {
+      await this.prisma.meeting.update({
+        where: { id: meeting.id },
+        data: { status: 'ACTIVE' },
+      }).catch(() => undefined);
+      meeting.status = 'ACTIVE';
+    }
 
     const member = await this.prisma.member.findUnique({ where: { id: dto.memberId } });
     if (!member || member.status !== 'ACTIVE') {
@@ -737,7 +774,7 @@ export class AttendanceService {
     }
 
     const classifiedStatus = classifyAttendanceStatus(now, {
-      attendanceOpenTime: validFrom,
+      attendanceOpenTime: new Date(validFrom.getTime() - 30000),
       expectedArrivalTime: meeting.expectedArrivalTime || meeting.startTime,
       startTime: meeting.startTime,
       gracePeriodMinutes: meeting.gracePeriodMinutes || 10,
@@ -907,8 +944,9 @@ export class AttendanceService {
 
     const codeActive = Boolean(
       meeting.attendanceCode &&
-      meeting.attendanceCodeExpiresAt &&
-      new Date() <= meeting.attendanceCodeExpiresAt
+      (!meeting.attendanceCodeExpiresAt || new Date() <= meeting.attendanceCodeExpiresAt) &&
+      meeting.status !== 'CLOSED' &&
+      meeting.status !== 'CANCELLED'
     );
 
     return {
