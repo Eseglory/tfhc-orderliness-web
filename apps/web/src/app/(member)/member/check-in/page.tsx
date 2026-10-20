@@ -203,7 +203,7 @@ export default function CheckInPage() {
       const msg = err.message || '';
       if (mounted.current) {
         if (msg.toLowerCase().includes('not yet') || msg.toLowerCase().includes('not open')) {
-          setError('Attendance Not Yet Available: Attendance opens 10 minutes before the meeting starts. Please try again later.');
+          setError('Attendance Not Yet Available: Online attendance opens exactly at the scheduled meeting start. Please try again then.');
         } else if (msg.toLowerCase().includes('closed') || msg.toLowerCase().includes('expired')) {
           setError('Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
         } else if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate')) {

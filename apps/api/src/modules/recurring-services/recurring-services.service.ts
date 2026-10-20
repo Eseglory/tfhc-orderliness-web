@@ -10,6 +10,7 @@ import { renderReminderEmail } from '../mail/templates';
 import { AuditService } from '../../common/rbac/audit.service';
 import { occurrences, SERVICE_SCHEDULES } from './service-schedules';
 import { randomUUID, randomInt } from 'crypto';
+import { serviceAttendanceOpenTime } from '../../common/service-attendance-window';
 
 export type RecurringConfig = {
   venue: { name: string; latitude: number; longitude: number; radiusMeters: number };
@@ -247,7 +248,9 @@ export class RecurringServicesService implements OnApplicationBootstrap {
             startTime,
             endTime,
             expectedArrivalTime,
-            attendanceOpenTime: isOnline ? startTime : new Date(expectedArrivalTime.getTime() - 30 * 60000),
+            attendanceOpenTime: serviceAttendanceOpenTime(startTime,
+              isOnline ? startTime : new Date(expectedArrivalTime.getTime() - 30 * 60000),
+              schedule.eventTypeKey, schedule.categoryName, isOnline),
             attendanceCloseTime,
             locationName,
             address,

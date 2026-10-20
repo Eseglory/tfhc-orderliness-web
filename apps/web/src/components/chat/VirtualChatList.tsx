@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /** Variable-height timeline. Only the viewport and a small overscan are mounted. */
 export function VirtualChatList<T extends { id: string }>({ items, scrollRef, children }: {
@@ -11,7 +11,9 @@ export function VirtualChatList<T extends { id: string }>({ items, scrollRef, ch
   const [revision, invalidate] = useState(0);
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
   const container = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
+  // The scroll element belongs to our parent. Its ref may still be null during
+  // this child's layout effects on mount; subscribe after refs are attached.
+  useEffect(() => {
     const scroll = scrollRef.current;
     if (!scroll) return;
     let frame = 0;

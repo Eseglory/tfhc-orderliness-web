@@ -79,6 +79,7 @@ export function ChatWorkspace({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingRoom, setLoadingRoom] = useState(false);
+  const [roomLoadError, setRoomLoadError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [roomFilter, setRoomFilter] = useState<'ALL' | 'UNREAD' | 'DIRECT' | 'GROUPS'>('ALL');
@@ -189,6 +190,7 @@ export function ChatWorkspace({
       const account = chatAccount();
       activeIdRef.current = roomId;
       setActiveId(roomId);
+      setRoomLoadError('');
       dispatch(setReduxActiveRoomId(roomId));
       setMobileThread(true);
       setReplyTo(null);
@@ -213,8 +215,8 @@ export function ChatWorkspace({
         setLoadingRoom(true);
       }
 
-      socket.subscribe(roomId);
       try {
+        socket.subscribe(roomId);
         const page = await chatApi.messages(roomId);
         chatTiming('conversation.serverPage', started);
         if (chatAccount() !== account || activeIdRef.current !== roomId) return;
@@ -224,11 +226,15 @@ export function ChatWorkspace({
         saveLocalCachedMessages(roomId, combined, previousCursor || page.syncCursor);
         if (previousCursor || page.syncCursor) syncCursors.current.set(roomId, previousCursor || page.syncCursor!);
         setNextCursor(page.nextCursor);
+        // The first page is ready; history synchronization must not hide it.
+        setLoadingRoom(false);
+        scrollToBottom();
         if (page.messages.length) markRoomRead(roomId, page.messages[page.messages.length - 1].id);
         if (previousCursor) await synchronizeRoom(roomId, previousCursor);
       } catch (e) {
+        if (chatAccount() !== account || activeIdRef.current !== roomId) return;
         if (cached.length === 0) {
-          notify(e instanceof Error ? e.message : 'Could not load messages.', 'error');
+          setRoomLoadError(e instanceof Error ? e.message : 'Could not load messages.');
         }
       } finally {
         if (activeIdRef.current !== roomId) return;
@@ -1217,6 +1223,13 @@ export function ChatWorkspace({
                   <div className="py-16 text-center text-xs text-on-surface-variant space-y-2">
                     <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
                     <p>Loading conversation messages…</p>
+                  </div>
+                ) : roomLoadError && displayedMessages.length === 0 ? (
+                  <div role="alert" className="py-16 text-center text-sm space-y-3">
+                    <p>{roomLoadError}</p>
+                    <button className="text-primary underline" onClick={() => activeId && void openRoom(activeId)}>
+                      Retry loading messages
+                    </button>
                   </div>
                 ) : displayedMessages.length === 0 ? (
                   <div className="py-16 text-center text-xs text-on-surface-variant space-y-2">

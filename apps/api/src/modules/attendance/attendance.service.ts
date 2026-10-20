@@ -144,6 +144,9 @@ export class AttendanceService {
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
+    if (meeting.isOnline) {
+      throw new BadRequestException('Online attendance requires a valid attendance code. Direct link check-in is not permitted.');
+    }
     if (meeting.status !== 'ACTIVE') {
       if (
         meeting.status === 'SCHEDULED' &&
@@ -563,10 +566,7 @@ export class AttendanceService {
     }
 
     const code = crypto.randomInt(100000, 999999).toString();
-    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
-    const minExpiresAt = new Date(baseClose.getTime() + (baseClose.getSeconds() === 0 ? 59999 : 0));
-    const calcExpiresAt = new Date(Date.now() + Math.min(validMinutes, 180) * 60000);
-    const expiresAt = calcExpiresAt > minExpiresAt ? calcExpiresAt : minExpiresAt;
+    const expiresAt = meeting.endTime || meeting.attendanceCloseTime;
 
     await this.prisma.meeting.update({
       where: { id: meetingId },
@@ -615,10 +615,9 @@ export class AttendanceService {
     // Auto-generate unique 6-digit code and ensure valid expiration window (persisted server-side)
     let code = meeting.attendanceCode;
     let expiresAt = meeting.attendanceCodeExpiresAt;
-    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
-    const minExpiresAt = new Date(baseClose.getTime() + (baseClose.getSeconds() === 0 ? 59999 : 0));
+    const minExpiresAt = meeting.endTime || meeting.attendanceCloseTime;
 
-    if (!code || !expiresAt || expiresAt < minExpiresAt) {
+    if (!code || !expiresAt || expiresAt.getTime() !== minExpiresAt.getTime()) {
       if (!code) {
         code = crypto.randomInt(100000, 999999).toString();
       }
@@ -642,12 +641,12 @@ export class AttendanceService {
     const now = new Date();
     // Valid window: from meeting start until meeting end / attendance close time
     const validFrom = meeting.startTime;
-    const validUntil = expiresAt && expiresAt > minExpiresAt ? expiresAt : minExpiresAt;
+    const validUntil = minExpiresAt;
 
     let status: 'NOT_ACTIVE' | 'ACTIVE' | 'EXPIRED' = 'NOT_ACTIVE';
-    if (meeting.status === 'CLOSED' || meeting.status === 'CANCELLED' || now > validUntil) {
+    if (meeting.status === 'CLOSED' || meeting.status === 'CANCELLED' || now >= validUntil) {
       status = 'EXPIRED';
-    } else if (now.getTime() < validFrom.getTime() - 30000) {
+    } else if (now.getTime() < validFrom.getTime()) {
       status = 'NOT_ACTIVE';
     } else {
       status = 'ACTIVE';
@@ -728,21 +727,12 @@ export class AttendanceService {
     const now = new Date();
     // Valid window: from meeting start until meeting end / attendance close time
     const validFrom = meeting.startTime;
-    const baseClose = meeting.attendanceCloseTime || meeting.endTime || new Date(meeting.startTime.getTime() + 60 * 60 * 1000);
-    const effectiveCloseMs = Math.max(
-      baseClose.getTime() + (baseClose.getSeconds() === 0 && baseClose.getMilliseconds() === 0 ? 59999 : 0),
-      baseClose.getTime()
-    );
-    const effectiveClose = new Date(effectiveCloseMs);
-    const validUntil = meeting.attendanceCodeExpiresAt && meeting.attendanceCodeExpiresAt > effectiveClose
-      ? meeting.attendanceCodeExpiresAt
-      : effectiveClose;
+    const validUntil = meeting.endTime || meeting.attendanceCloseTime;
 
-    // 30 seconds leeway for clock skew before scheduled start
-    if (now.getTime() < validFrom.getTime() - 30000) {
+    if (now.getTime() < validFrom.getTime()) {
       throw new BadRequestException('Attendance Not Yet Available. Attendance opens at scheduled meeting start.');
     }
-    if (now > validUntil) {
+    if (meeting.status === 'CLOSED' || now >= validUntil) {
       throw new BadRequestException('Attendance Closed. The attendance window for this meeting has closed. The attendance code is no longer valid.');
     }
 
@@ -762,7 +752,7 @@ export class AttendanceService {
     this.codeAttempts.delete(rateKey);
 
     // Auto-activate meeting if SCHEDULED within attendance window
-    if (meeting.status === 'SCHEDULED' && now.getTime() >= validFrom.getTime() - 30000 && now <= validUntil) {
+    if (meeting.status === 'SCHEDULED' && now.getTime() >= validFrom.getTime() && now < validUntil) {
       await this.prisma.meeting.update({
         where: { id: meeting.id },
         data: { status: 'ACTIVE' },
@@ -831,7 +821,7 @@ export class AttendanceService {
     }
 
     const classifiedStatus = classifyAttendanceStatus(now, {
-      attendanceOpenTime: new Date(validFrom.getTime() - 30000),
+      attendanceOpenTime: new Date(validFrom.getTime()),
       expectedArrivalTime: meeting.expectedArrivalTime || meeting.startTime,
       startTime: meeting.startTime,
       gracePeriodMinutes: meeting.gracePeriodMinutes || 10,
@@ -1001,7 +991,8 @@ export class AttendanceService {
 
     const codeActive = Boolean(
       meeting.attendanceCode &&
-      (!meeting.attendanceCodeExpiresAt || new Date() <= meeting.attendanceCodeExpiresAt) &&
+      now >= meeting.startTime.getTime() &&
+      now < (meeting.endTime || meeting.attendanceCloseTime).getTime() &&
       meeting.status !== 'CLOSED' &&
       meeting.status !== 'CANCELLED'
     );

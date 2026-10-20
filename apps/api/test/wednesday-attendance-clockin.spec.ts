@@ -137,6 +137,22 @@ describe('Wednesday Meeting Attendance Clock-In Specification Suite', () => {
   });
 
   describe('1. Attendance Clock-in Window (8:00 PM to 9:00 PM WAT)', () => {
+    it('sets generated code expiry to the scheduled end even for a longer requested duration', async () => {
+      const result = await service.generateAttendanceCode('admin', mockMeeting.id, 180);
+      expect(result.expiresAt).toEqual(wednesdayEndUtc);
+    });
+
+    it('corrects legacy extended expiry and reports the code expired at the exact end', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(wednesdayEndUtc);
+      try {
+        const result = await service.getAttendanceCodeForAdmin('admin', mockMeeting.id);
+        expect(result.validFrom).toEqual(wednesdayStartUtc);
+        expect(result.validUntil).toEqual(wednesdayEndUtc);
+        expect(result.status).toBe('EXPIRED');
+        expect(mockMeeting.attendanceCodeExpiresAt).toEqual(wednesdayEndUtc);
+      } finally { jest.useRealTimers(); }
+    });
     it('rejects clock-in attempt before 8:00 PM (e.g. 7:59 PM WAT)', async () => {
       // 7:59:00 PM WAT = 18:59:00 UTC (1 minute before start)
       jest.useFakeTimers();
@@ -190,21 +206,20 @@ describe('Wednesday Meeting Attendance Clock-In Specification Suite', () => {
       jest.useRealTimers();
     });
 
-    it('successfully accepts clock-in at 9:00 PM (21:00:30 WAT / 20:00:30 UTC - through 9:00 PM)', async () => {
-      // 9:00:30 PM WAT = 20:00:30 UTC
+    it.each(['2026-10-21T20:00:00.000Z', '2026-10-21T20:00:00.001Z', '2026-10-21T20:00:30.000Z'])('rejects code at or after the exact end: %s', async instant => {
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-10-21T20:00:30.000Z'));
+      jest.setSystemTime(new Date(instant));
+      try {
+        await expect(service.submitAttendanceCode({ memberId: mockMember.id, meetingId: mockMeeting.id, code: '584920' })).rejects.toThrow('Attendance Closed');
+      } finally { jest.useRealTimers(); }
+    });
 
-      const result = await service.submitAttendanceCode({
-        memberId: mockMember.id,
-        meetingId: mockMeeting.id,
-        code: '584920',
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.status).toBe('PRESENT');
-
-      jest.useRealTimers();
+    it('rejects code one millisecond before start', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(wednesdayStartUtc.getTime() - 1));
+      try {
+        await expect(service.submitAttendanceCode({ memberId: mockMember.id, meetingId: mockMeeting.id, code: '584920' })).rejects.toThrow('Attendance Not Yet Available');
+      } finally { jest.useRealTimers(); }
     });
 
     it('rejects clock-in after 9:00 PM window has closed (e.g. 9:02 PM WAT / 20:02 UTC)', async () => {

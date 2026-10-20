@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { serviceAttendanceOpenTime } from '../../common/service-attendance-window';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AbsenceProcessingJob } from '../../jobs/absence-processing.job';
 import { AuditService } from '../../common/rbac/audit.service';
@@ -772,10 +773,12 @@ export class MeetingsService {
     if (!category) throw new BadRequestException('Unknown event category');
 
     const eventTypeId = dto.eventTypeId ?? null;
+    let eventTypeKey: string | null = null;
     let compulsoryDefault = dto.isCompulsory;
     if (eventTypeId) {
       const type = await this.prisma.eventType.findUnique({ where: { id: eventTypeId } });
       if (!type || !type.active) throw new BadRequestException('Unknown or inactive event type');
+      eventTypeKey = type.key;
       if (compulsoryDefault === undefined) compulsoryDefault = type.defaultCompulsory;
     }
 
@@ -814,9 +817,9 @@ export class MeetingsService {
         meetingDate: new Date(dto.meetingDate),
         startTime: new Date(dto.startTime),
         expectedArrivalTime: new Date(dto.expectedArrivalTime),
-        attendanceOpenTime: new Date(dto.attendanceOpenTime),
+        attendanceOpenTime: serviceAttendanceOpenTime(dto.startTime, dto.attendanceOpenTime, eventTypeKey, category.name, Boolean(dto.isOnline)),
         gracePeriodMinutes,
-        attendanceCloseTime: new Date(dto.attendanceCloseTime),
+        attendanceCloseTime: new Date(dto.isOnline ? dto.endTime || dto.attendanceCloseTime : dto.attendanceCloseTime),
         endTime: dto.endTime ? new Date(dto.endTime) : null,
         allDay: Boolean(dto.allDay),
         locationName: dto.locationName,
@@ -872,7 +875,7 @@ export class MeetingsService {
   }
 
   async updateMeeting(id: string, dto: Partial<CreateMeetingDto> & { status?: never }, actorUserId: string) {
-    const existing = await this.prisma.meeting.findUnique({ where: { id }, include: { audiences: true } });
+    const existing = await this.prisma.meeting.findUnique({ where: { id }, include: { audiences: true, category: true, eventType: true } });
     if (!existing) throw new NotFoundException('Event not found');
     if (!EDITABLE_STATUSES.includes(existing.status as MeetingStatus))
       throw new BadRequestException(`A ${existing.status.toLowerCase()} event can no longer be edited`);
@@ -889,12 +892,19 @@ export class MeetingsService {
       geofenceRadiusMeters: dto.geofenceRadiusMeters ?? existing.geofenceRadiusMeters,
       gracePeriodMinutes: dto.gracePeriodMinutes ?? existing.gracePeriodMinutes,
     };
-    this.validateTimes(merged);
-
+    let eventTypeKey = existing.eventType?.key;
     if (dto.eventTypeId) {
       const type = await this.prisma.eventType.findUnique({ where: { id: dto.eventTypeId } });
       if (!type || !type.active) throw new BadRequestException('Unknown or inactive event type');
+      eventTypeKey = type.key;
     }
+    const category = dto.categoryId
+      ? await this.prisma.meetingCategory.findUnique({ where: { id: dto.categoryId } })
+      : existing.category;
+    const isOnline = dto.isOnline ?? existing.isOnline;
+    const attendanceOpenTime = serviceAttendanceOpenTime(merged.startTime, merged.attendanceOpenTime, eventTypeKey, category?.name, isOnline);
+    const attendanceCloseTime = new Date(isOnline ? merged.endTime || merged.attendanceCloseTime : merged.attendanceCloseTime);
+    this.validateTimes({ ...merged, attendanceOpenTime, attendanceCloseTime });
 
     const visibility = (dto.visibility ?? existing.visibility) as 'PUBLIC' | 'RESTRICTED';
     const audienceChange = dto.audiences !== undefined || dto.visibility !== undefined;
@@ -935,8 +945,9 @@ export class MeetingsService {
       ...(dto.meetingDate ? { meetingDate: new Date(dto.meetingDate) } : {}),
       ...(dto.startTime ? { startTime: new Date(dto.startTime) } : {}),
       ...(dto.expectedArrivalTime ? { expectedArrivalTime: new Date(dto.expectedArrivalTime) } : {}),
-      ...(dto.attendanceOpenTime ? { attendanceOpenTime: new Date(dto.attendanceOpenTime) } : {}),
-      ...(dto.attendanceCloseTime ? { attendanceCloseTime: new Date(dto.attendanceCloseTime) } : {}),
+      attendanceOpenTime,
+      attendanceCloseTime,
+      ...(isOnline && existing.attendanceCode ? { attendanceCodeExpiresAt: attendanceCloseTime } : {}),
       ...(dto.endTime !== undefined ? { endTime: dto.endTime ? new Date(dto.endTime) : null } : {}),
       ...(dto.allDay !== undefined ? { allDay: Boolean(dto.allDay) } : {}),
       ...(dto.gracePeriodMinutes !== undefined ? { gracePeriodMinutes: dto.gracePeriodMinutes } : {}),
@@ -1194,7 +1205,7 @@ export class MeetingsService {
       where: {
         status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
         attendanceOpenTime: { lte: now },
-        attendanceCloseTime: { gte: now },
+        attendanceCloseTime: { gt: now },
       },
       include: { category: true, eventType: true },
       orderBy: { startTime: 'asc' },
@@ -1207,7 +1218,7 @@ export class MeetingsService {
       where: {
         status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
         attendanceOpenTime: { lte: now },
-        attendanceCloseTime: { gte: now },
+        attendanceCloseTime: { gt: now },
       },
       include: { category: true, eventType: true, meetingSummary: true },
     });
@@ -1471,6 +1482,9 @@ export class MeetingsService {
       data: {
         meetingUrl,
         isOnline: true,
+        attendanceOpenTime: meeting.startTime,
+        attendanceCloseTime: meeting.endTime || meeting.attendanceCloseTime,
+        ...(meeting.attendanceCode ? { attendanceCodeExpiresAt: meeting.endTime || meeting.attendanceCloseTime } : {}),
       },
     });
 
