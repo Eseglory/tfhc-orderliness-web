@@ -1200,7 +1200,6 @@ export class MeetingsService {
       },
       data: { status: MeetingStatus.ACTIVE },
     }).catch(() => undefined);
-
     return this.prisma.meeting.findMany({
       where: {
         status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },
@@ -1214,6 +1213,10 @@ export class MeetingsService {
 
   async findActiveMeeting() {
     const now = new Date();
+    await this.prisma.meeting.updateMany({
+      where: { status: MeetingStatus.SCHEDULED, attendanceOpenTime: { lte: now }, attendanceCloseTime: { gte: now } },
+      data: { status: MeetingStatus.ACTIVE },
+    });
     return this.prisma.meeting.findFirst({
       where: {
         status: { in: [MeetingStatus.ACTIVE, MeetingStatus.SCHEDULED] },

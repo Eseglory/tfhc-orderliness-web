@@ -621,7 +621,7 @@ export class CalendarService {
           startTime: start,
           endTime: end,
           meetingDate: start,
-          attendanceOpenTime: new Date(start.getTime() - 15 * 60000),
+          attendanceOpenTime: (meeting.serviceScheduleId === 'wednesday-unit-meeting' || meeting.title?.toLowerCase().includes('wednesday')) ? start : new Date(start.getTime() - 45 * 60000),
           expectedArrivalTime: start,
           attendanceCloseTime: end,
         },

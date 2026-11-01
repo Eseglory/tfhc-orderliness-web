@@ -293,7 +293,7 @@ export class RecurringServicesService implements OnApplicationBootstrap {
                 isOnline,
                 attendanceCode: meeting.attendanceCode || desired.attendanceCode,
                 attendanceCodeExpiresAt: desired.attendanceCodeExpiresAt || meeting.attendanceCodeExpiresAt,
-                status: 'SCHEDULED',
+                status: (desired.attendanceOpenTime <= now && desired.attendanceCloseTime >= now) ? 'ACTIVE' : 'SCHEDULED',
                 scheduleCancelled: false,
               },
             });

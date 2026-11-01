@@ -235,7 +235,7 @@ export default function MemberMeetingsPage() {
                     {(() => {
                       const now = new Date();
                       const start = new Date(m.startTime || m.meetingDate);
-                      const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(start.getTime() - 30 * 60000);
+                      const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(start.getTime() - 60 * 60000);
                       const closeTime = m.attendanceCloseTime ? new Date(m.attendanceCloseTime) : (m.endTime ? new Date(m.endTime) : new Date(start.getTime() + 60 * 60000));
                       const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
                       const isEligible = now >= openTime && now <= cutoffTime && ['ACTIVE', 'SCHEDULED'].includes(m.status);

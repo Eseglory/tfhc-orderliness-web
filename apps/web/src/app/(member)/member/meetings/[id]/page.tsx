@@ -80,10 +80,15 @@ export default function MeetingDetailPage() {
       );
     } catch (err: any) {
       const msg = err.message || '';
+      const isWed = meeting?.serviceScheduleId === 'wednesday-unit-meeting' || meeting?.title?.toLowerCase().includes('wednesday');
       if (msg.toLowerCase().includes('not yet') || msg.toLowerCase().includes('not open')) {
-        setCodeError('Attendance Not Yet Available: Attendance opens 10 minutes before the meeting starts. Please try again later.');
+        setCodeError(isWed
+          ? 'Attendance Not Yet Available: The Wednesday Unit Meeting attendance opens at 8:00 PM (meeting start). Please enter your code once the meeting begins.'
+          : 'Attendance Not Yet Available: Attendance opens at scheduled meeting start time. Please try again once the meeting begins.');
       } else if (msg.toLowerCase().includes('closed') || msg.toLowerCase().includes('expired')) {
-        setCodeError('Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
+        setCodeError(isWed
+          ? 'Attendance Closed: The Wednesday Unit Weekly Meeting attendance window has closed (closed at 9:00 PM).'
+          : 'Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
       } else if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate')) {
         setCodeError('Attendance Already Recorded: You are already marked PRESENT for this meeting.');
       } else {
@@ -148,9 +153,10 @@ export default function MeetingDetailPage() {
   const description = meeting?.description || 'Join us for this gathering in the presence of God.';
 
   // Attendance timing windows
+  const isWedMeeting = meeting?.serviceScheduleId === 'wednesday-unit-meeting' || meeting?.title?.toLowerCase().includes('wednesday');
   const openTimeDate = meeting?.attendanceOpenTime
     ? new Date(meeting.attendanceOpenTime)
-    : new Date(meetingStartTime.getTime() - 30 * 60000);
+    : new Date(meetingStartTime.getTime() - (isWedMeeting ? 0 : 45 * 60000));
 
   const expectedTimeDate = meeting?.expectedArrivalTime
     ? new Date(meeting.expectedArrivalTime)
@@ -199,7 +205,6 @@ export default function MeetingDetailPage() {
     meeting.title?.toLowerCase().includes('hosting')
   );
   const virtualMeetingUrl = isVirtual ? (meeting.meetingUrl || extractVirtualUrl(meeting) || 'https://meet.google.com/wkx-kgew-iqe') : null;
-  const isWedMeeting = title.toLowerCase().includes('wednesday') && (Boolean(meeting.serviceScheduleId) || title.toLowerCase().includes('weekly'));
   const recurrenceRuleStr = isWedMeeting ? 'FREQ=WEEKLY;BYDAY=WE' : null;
 
   const googleCalUrl = isVirtual ? buildAdvancedGoogleCalendarUrl({

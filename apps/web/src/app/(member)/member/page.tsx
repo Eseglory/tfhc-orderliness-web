@@ -72,7 +72,8 @@ export default function MemberDashboard() {
       if (res?.activeMeeting) {
         const now = new Date();
         const m = res.activeMeeting;
-        const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(new Date(m.startTime).getTime() - 30 * 60000);
+        const isWed = m.serviceScheduleId === 'wednesday-unit-meeting' || m.title?.toLowerCase().includes('wednesday');
+        const openTime = m.attendanceOpenTime ? new Date(m.attendanceOpenTime) : new Date(new Date(m.startTime).getTime() - (isWed ? 0 : 45 * 60000));
         const closeTime = m.attendanceCloseTime ? new Date(m.attendanceCloseTime) : (m.endTime ? new Date(m.endTime) : new Date(new Date(m.startTime).getTime() + 60 * 60000));
         const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
         if (now >= openTime && now <= cutoffTime && !['CANCELLED', 'CLOSED'].includes(m.status)) {
@@ -433,7 +434,7 @@ export default function MemberDashboard() {
                 {hasClockedIn
                   ? 'fact_check'
                   : activeMeeting
-                  ? 'location_on'
+                  ? (activeMeeting?.isOnline || activeMeeting?.serviceScheduleId === 'wednesday-unit-meeting' || activeMeeting?.title?.toLowerCase().includes('wednesday') ? 'videocam' : 'location_on')
                   : nextTodayService
                   ? 'event_upcoming'
                   : availabilityData?.submitted
@@ -443,7 +444,7 @@ export default function MemberDashboard() {
               {hasClockedIn
                 ? 'Clocked In • View Attendance / Clock Out'
                 : activeMeeting
-                ? 'Check In Now'
+                ? (activeMeeting?.isOnline || activeMeeting?.serviceScheduleId === 'wednesday-unit-meeting' || activeMeeting?.title?.toLowerCase().includes('wednesday') ? 'Join Online & Check In' : 'Check In Now')
                 : nextTodayService
                 ? 'View Gathering Details'
                 : availabilityData?.submitted

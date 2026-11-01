@@ -104,7 +104,10 @@ async function main() {
     const eventTypeId = schedule.eventTypeKey ? typeByKey.get(schedule.eventTypeKey) ?? null : null;
 
     const meetingsData = occs.map(({ startTime, endTime }) => {
-      const expectedArrivalTime = new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
+      const isWednesday = schedule.id === 'wednesday-unit-meeting' || schedule.title?.toLowerCase().includes('wednesday');
+      const expectedArrivalTime = isWednesday ? startTime : new Date(startTime.getTime() - config.arrivalMinutesBefore * 60000);
+      const attendanceOpenTime = isWednesday ? startTime : new Date(startTime.getTime() - 45 * 60000);
+      const attendanceCloseTime = endTime || new Date(startTime.getTime() + 60 * 60000);
       return {
         serviceScheduleId: schedule.id,
         occurrenceStart: startTime,
@@ -116,8 +119,8 @@ async function main() {
         startTime,
         endTime,
         expectedArrivalTime,
-        attendanceOpenTime: new Date(expectedArrivalTime.getTime() - 30 * 60000),
-        attendanceCloseTime: endTime || new Date(startTime.getTime() + 10 * 60000),
+        attendanceOpenTime,
+        attendanceCloseTime,
         locationName: config.venue.name,
         latitude: config.venue.latitude,
         longitude: config.venue.longitude,

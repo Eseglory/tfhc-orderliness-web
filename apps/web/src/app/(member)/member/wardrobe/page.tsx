@@ -72,6 +72,15 @@ interface WardrobeSchedule {
 
 // Fallback image mapping if not present in DB
 const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
+  'sched-dec-27': '/wardrobe/native-all.jpg',
+  'sched-dec-20': '/wardrobe/native-all.jpg',
+  'sched-dec-13': '/wardrobe/bright-blazer.jpg',
+  'sched-dec-06': '/wardrobe/colour-riot-suit.jpg',
+  'sched-nov-29': '/wardrobe/adire-black-turtleneck.jpg',
+  'sched-nov-22': '/wardrobe/conference-2026.jpg',
+  'sched-nov-15': '/wardrobe/grey-red-accent.jpg',
+  'sched-nov-08': '/wardrobe/adire-black-turtleneck.jpg',
+  'sched-nov-01': '/wardrobe/native-all.jpg',
   'sched-oct-04': '/wardrobe/native-touch-green.jpg',
   'sched-oct-11': '/wardrobe/conference-2026.jpg',
   'sched-oct-18': '/wardrobe/grey-red-accent.jpg',
@@ -91,6 +100,54 @@ const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
 function getUniformVisualTheme(title: string, instructions: string = '') {
   const text = (title + ' ' + instructions).toLowerCase();
 
+  if (text.includes('wrapper') || text.includes('aso oke') || text.includes('agbada') || text.includes('buba')) {
+    return {
+      gradient: 'from-amber-950 via-[#3a1d08] to-[#1a0c03]',
+      accentBg: 'bg-amber-500/20',
+      accentText: 'text-amber-400',
+      borderColor: 'border-amber-500/40',
+      badgeBg: 'bg-gradient-to-r from-amber-600 via-orange-600 to-yellow-500 text-white',
+      tag: 'Aso Oke & Agbada Traditional',
+      icon: Crown,
+      pattern: 'bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
+    };
+  }
+  if (text.includes('jean') || text.includes('denim')) {
+    return {
+      gradient: 'from-blue-950 via-[#1e3a8a] to-[#0f172a]',
+      accentBg: 'bg-sky-500/20',
+      accentText: 'text-sky-300',
+      borderColor: 'border-sky-500/40',
+      badgeBg: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white',
+      tag: 'Denim & Jean Jacket Casual Corporate',
+      icon: Shirt,
+      pattern: 'bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
+    };
+  }
+  if (text.includes('blue dress') || text.includes('blue suit') || (text.includes('floral') && text.includes('blue'))) {
+    return {
+      gradient: 'from-blue-950 via-[#172554] to-[#1e1b4b]',
+      accentBg: 'bg-pink-500/20',
+      accentText: 'text-pink-300',
+      borderColor: 'border-blue-400/40',
+      badgeBg: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-500 text-white',
+      tag: 'Royal Blue & Floral Accents',
+      icon: Sparkles,
+      pattern: 'bg-[radial-gradient(#ec4899_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
+    };
+  }
+  if (text.includes('combat') || text.includes('boot')) {
+    return {
+      gradient: 'from-slate-950 via-[#1e1b4b] to-[#0f0e26]',
+      accentBg: 'bg-indigo-500/20',
+      accentText: 'text-indigo-400',
+      borderColor: 'border-indigo-500/40',
+      badgeBg: 'bg-gradient-to-r from-indigo-600 via-purple-600 to-slate-800 text-white',
+      tag: 'Combat Trousers & Boots',
+      icon: Layers,
+      pattern: 'bg-[radial-gradient(#6366f1_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
+    };
+  }
   if (text.includes('touch of green') || (text.includes('native') && text.includes('green'))) {
     return {
       gradient: 'from-emerald-950 via-[#064e3b] to-[#022c22]',
@@ -103,14 +160,14 @@ function getUniformVisualTheme(title: string, instructions: string = '') {
       pattern: 'bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
     };
   }
-  if (text.includes('2026 conference') || text.includes('conference outfit')) {
+  if (text.includes('2026 conference') || text.includes('2025 conference') || text.includes('conference outfit')) {
     return {
       gradient: 'from-blue-950 via-[#172554] to-[#081026]',
       accentBg: 'bg-amber-500/20',
       accentText: 'text-amber-400',
       borderColor: 'border-amber-500/40',
       badgeBg: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500 text-white',
-      tag: '2026 Conference Uniform',
+      tag: text.includes('2025') ? '2025 Conference Uniform' : '2026 Conference Uniform',
       icon: Award,
       pattern: 'bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] opacity-25',
     };
@@ -229,7 +286,8 @@ export default function MemberWardrobePage() {
   const [loading, setLoading] = useState(true);
   const [selectedOutfitModal, setSelectedOutfitModal] = useState<WardrobeSchedule | null>(null);
   const [viewTab, setViewTab] = useState<'roster_board' | 'weekly_list'>('roster_board');
-  const [selectedMonth, setSelectedMonth] = useState<'OCTOBER' | 'SEPTEMBER' | 'AUGUST' | 'JULY' | 'ALL'>('OCTOBER');
+  const [selectedMonth, setSelectedMonth] = useState<'NOVEMBER' | 'DECEMBER' | 'OCTOBER' | 'SEPTEMBER' | 'AUGUST' | 'JULY' | 'ALL'>('NOVEMBER');
+  const [showArchive, setShowArchive] = useState(false);
 
   const fetchWardrobeData = useCallback(async () => {
     try {
@@ -265,14 +323,18 @@ export default function MemberWardrobePage() {
     const august: WardrobeSchedule[] = [];
     const september: WardrobeSchedule[] = [];
     const october: WardrobeSchedule[] = [];
+    const november: WardrobeSchedule[] = [];
+    const december: WardrobeSchedule[] = [];
 
     allSchedules.forEach((s) => {
       const d = new Date(s.scheduledDate);
-      const month = d.getUTCMonth(); // 6=July, 7=August, 8=September, 9=October
+      const month = d.getUTCMonth(); // 6=July, 7=August, 8=September, 9=October, 10=November, 11=December
       if (month === 6) july.push(s);
       else if (month === 7) august.push(s);
       else if (month === 8) september.push(s);
       else if (month === 9) october.push(s);
+      else if (month === 10) november.push(s);
+      else if (month === 11) december.push(s);
     });
 
     const sortByDate = (a: WardrobeSchedule, b: WardrobeSchedule) =>
@@ -283,6 +345,8 @@ export default function MemberWardrobePage() {
       august: august.sort(sortByDate),
       september: september.sort(sortByDate),
       october: october.sort(sortByDate),
+      november: november.sort(sortByDate),
+      december: december.sort(sortByDate),
     };
   }, [allSchedules]);
 
@@ -294,6 +358,8 @@ export default function MemberWardrobePage() {
 
   // Filtered schedules for list view
   const displayedSchedules = useMemo(() => {
+    if (selectedMonth === 'NOVEMBER') return schedulesByMonth.november;
+    if (selectedMonth === 'DECEMBER') return schedulesByMonth.december;
     if (selectedMonth === 'OCTOBER') return schedulesByMonth.october;
     if (selectedMonth === 'SEPTEMBER') return schedulesByMonth.september;
     if (selectedMonth === 'AUGUST') return schedulesByMonth.august;
@@ -576,42 +642,45 @@ export default function MemberWardrobePage() {
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800">
                     <th className="p-4 font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 w-32 text-center text-xs">
-                      Month
+                      Month and Dates
                     </th>
                     <th className="p-4 font-black uppercase text-white bg-blue-600 text-center w-1/5 shadow-inner">
                       <span className="text-sm block font-black">1st Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">4th October</span>
+                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 4 • Nov 1 • Dec 6</span>
                     </th>
                     <th className="p-4 font-black uppercase text-white bg-slate-700 text-center w-1/5 shadow-inner">
                       <span className="text-sm block font-black">2nd Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">11th October</span>
+                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 11 • Nov 8 • Dec 13</span>
                     </th>
                     <th className="p-4 font-black uppercase text-white bg-purple-600 text-center w-1/5 shadow-inner">
                       <span className="text-sm block font-black">3rd Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">18th October</span>
+                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 18 • Nov 15 • Dec 20</span>
                     </th>
                     <th className="p-4 font-black uppercase text-white bg-red-600 text-center w-1/5 shadow-inner">
                       <span className="text-sm block font-black">4th Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">25th October</span>
+                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 25 • Nov 22 • Dec 27</span>
                     </th>
                     <th className="p-4 font-black uppercase text-white bg-amber-500 text-center w-1/5 shadow-inner">
                       <span className="text-sm block font-black">5th Sunday</span>
-                      <span className="text-[10px] text-white/90 font-bold block mt-0.5">—</span>
+                      <span className="text-[10px] text-white/90 font-bold block mt-0.5">Nov 29</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
-                  {/* October Row (Active Current Month) */}
-                  <tr className="bg-emerald-500/5 dark:bg-emerald-500/15 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
-                    <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
-                      <span className="text-base font-black block">October</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
+                  {/* October Row */}
+                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                      <span className="text-base font-black text-amber-600 dark:text-amber-400 block">October</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
                     </td>
                     {schedulesByMonth.october.map((sched) => {
                       const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
                       const isNext = nextSchedule?.id === sched.id;
                       const isNative = sched.instructions?.toLowerCase().includes('native');
                       const img = getOutfitImage(sched);
+                      const dateObj = new Date(sched.scheduledDate);
+                      const dayNum = dateObj.getUTCDate();
+                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
 
                       return (
                         <td
@@ -626,7 +695,7 @@ export default function MemberWardrobePage() {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
                             <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
                               <span className="text-[10px] font-black text-white">
-                                {new Date(sched.scheduledDate).getUTCDate()}th Oct
+                                {dayNum}{suffix} Oct
                               </span>
                               {isNext && (
                                 <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
@@ -663,29 +732,43 @@ export default function MemberWardrobePage() {
                     </td>
                   </tr>
 
-                  {/* September Row */}
-                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                      <span className="text-base font-black text-blue-600 dark:text-blue-400 block">September</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
+                  {/* November Row (Active Current Month) */}
+                  <tr className="bg-emerald-500/5 dark:bg-emerald-500/15 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
+                    <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
+                      <span className="text-base font-black block">November</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
+                      <span className="text-[9px] block text-emerald-100 mt-0.5 font-bold">5 Sundays</span>
                     </td>
-                    {schedulesByMonth.september.map((sched) => {
+                    {schedulesByMonth.november.map((sched) => {
                       const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                      const isNext = nextSchedule?.id === sched.id;
                       const isNative = sched.instructions?.toLowerCase().includes('native');
                       const img = getOutfitImage(sched);
+                      const dateObj = new Date(sched.scheduledDate);
+                      const dayNum = dateObj.getUTCDate();
+                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
 
                       return (
                         <td
                           key={sched.id}
                           onClick={() => setSelectedOutfitModal(sched)}
-                          className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group"
+                          className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
+                            isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                          }`}
                         >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
                             <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                            <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">
-                              {new Date(sched.scheduledDate).getUTCDate()}th Sept
-                            </span>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
+                              <span className="text-[10px] font-black text-white">
+                                {dayNum}{suffix} Nov
+                              </span>
+                              {isNext && (
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                  This Sunday
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {isNative ? (
@@ -695,13 +778,74 @@ export default function MemberWardrobePage() {
                           ) : (
                             <div className="space-y-1 text-[11px]">
                               {breakdown.ladies && (
-                                <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}
+                                <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
+                                  <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
                                 </p>
                               )}
                               {breakdown.men && (
-                                <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}
+                                <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
+                                  <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+
+                  {/* December Row */}
+                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                      <span className="text-base font-black text-purple-600 dark:text-purple-400 block">December</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
+                    </td>
+                    {schedulesByMonth.december.map((sched) => {
+                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                      const isNext = nextSchedule?.id === sched.id;
+                      const isNative = sched.instructions?.toLowerCase().includes('native');
+                      const img = getOutfitImage(sched);
+                      const dateObj = new Date(sched.scheduledDate);
+                      const dayNum = dateObj.getUTCDate();
+                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
+
+                      return (
+                        <td
+                          key={sched.id}
+                          onClick={() => setSelectedOutfitModal(sched)}
+                          className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
+                            isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
+                              <span className="text-[10px] font-black text-white">
+                                {dayNum}{suffix} Dec
+                              </span>
+                              {isNext && (
+                                <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                  This Sunday
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {isNative ? (
+                            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
+                              👑 {sched.instructions}
+                            </div>
+                          ) : (
+                            <div className="space-y-1 text-[11px]">
+                              {breakdown.ladies && (
+                                <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
+                                  <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                                </p>
+                              )}
+                              {breakdown.men && (
+                                <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
+                                  <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
                                 </p>
                               )}
                             </div>
@@ -715,107 +859,114 @@ export default function MemberWardrobePage() {
                     </td>
                   </tr>
 
-                  {/* August Row */}
-                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                      <span className="text-base font-black text-emerald-600 dark:text-emerald-400 block">August</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">5 Sundays</span>
-                    </td>
-                    {schedulesByMonth.august.map((sched) => {
-                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                      const isNative = sched.instructions?.toLowerCase().includes('native');
-                      const img = getOutfitImage(sched);
-
-                      return (
-                        <td
-                          key={sched.id}
-                          onClick={() => setSelectedOutfitModal(sched)}
-                          className="p-3.5 align-top cursor-pointer hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group"
-                        >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
-                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                            <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">
-                              {new Date(sched.scheduledDate).getUTCDate()}th Aug
-                            </span>
-                          </div>
-
-                          {isNative ? (
-                            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                              👑 {sched.instructions}
-                            </div>
-                          ) : (
-                            <div className="space-y-1 text-[11px]">
-                              {breakdown.ladies && (
-                                <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}
-                                </p>
-                              )}
-                              {breakdown.men && (
-                                <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                  {/* Optional Q3 Archive Rows */}
+                  {showArchive && (
+                    <>
+                      {/* September Row */}
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-t-2 border-slate-300 dark:border-slate-700">
+                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">September</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
                         </td>
-                      );
-                    })}
-                  </tr>
-
-                  {/* July Row */}
-                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                      <span className="text-base font-black text-purple-600 dark:text-purple-400 block">July</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
-                    </td>
-                    {schedulesByMonth.july.map((sched) => {
-                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                      const isNative = sched.instructions?.toLowerCase().includes('native');
-                      const img = getOutfitImage(sched);
-
-                      return (
-                        <td
-                          key={sched.id}
-                          onClick={() => setSelectedOutfitModal(sched)}
-                          className="p-3.5 align-top cursor-pointer hover:bg-blue-50/70 dark:hover:bg-blue-950/40 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group"
-                        >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
-                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                            <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">
-                              {new Date(sched.scheduledDate).getUTCDate()}th July
-                            </span>
-                          </div>
-
-                          {isNative ? (
-                            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                              👑 Native for all members.
-                            </div>
-                          ) : (
-                            <div className="space-y-1 text-[11px]">
-                              {breakdown.ladies && (
-                                <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}
-                                </p>
+                        {schedulesByMonth.september.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          return (
+                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Sept</span>
+                              </div>
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                </div>
                               )}
-                              {breakdown.men && (
-                                <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}
-                                </p>
-                              )}
-                            </div>
-                          )}
+                            </td>
+                          );
+                        })}
+                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
+                      </tr>
+
+                      {/* August Row */}
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">August</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
                         </td>
-                      );
-                    })}
-                    {/* Blank 5th Sunday */}
-                    <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
-                      —
-                    </td>
-                  </tr>
+                        {schedulesByMonth.august.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          return (
+                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Aug</span>
+                              </div>
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* July Row */}
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">July</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
+                        </td>
+                        {schedulesByMonth.july.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          return (
+                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th July</span>
+                              </div>
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 Native for all members.</div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Archive Toggle Button */}
+            <div className="flex justify-center pt-1">
+              <button
+                onClick={() => setShowArchive(!showArchive)}
+                className="px-5 py-2.5 rounded-2xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-black text-slate-700 dark:text-slate-300 transition-all shadow-xs"
+              >
+                {showArchive ? '▲ Hide Q3 2026 Archive' : '▼ View Q3 2026 Archive (July, August, September)'}
+              </button>
             </div>
           </section>
         )}
@@ -837,7 +988,7 @@ export default function MemberWardrobePage() {
               </div>
 
               <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-300/50 dark:border-slate-700 self-start sm:self-auto overflow-x-auto max-w-full">
-                {(['OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'ALL'] as const).map((m) => (
+                {(['NOVEMBER', 'DECEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'ALL'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSelectedMonth(m)}
@@ -847,7 +998,7 @@ export default function MemberWardrobePage() {
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    {m === 'OCTOBER' ? 'October (Active)' : m === 'ALL' ? `All (${allSchedules.length})` : m}
+                    {m === 'NOVEMBER' ? 'November (Active)' : m === 'ALL' ? `All (${allSchedules.length})` : m}
                   </button>
                 ))}
               </div>

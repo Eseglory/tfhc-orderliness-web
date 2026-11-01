@@ -22,10 +22,32 @@ export default function CheckInPage() {
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [codeValue, setCodeValue] = useState('');
   const [submittingCode, setSubmittingCode] = useState(false);
+  const [requestedMeeting, setRequestedMeeting] = useState<any>(null);
+
+  const isWednesdayToday = (() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Lagos', weekday: 'short' }).format(new Date());
+      return parts.startsWith('Wed');
+    } catch {
+      return new Date().getDay() === 3;
+    }
+  })();
+
+  const lagosHour = (() => {
+    try {
+      const str = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Lagos', hour: 'numeric', hour12: false }).format(new Date());
+      return parseInt(str, 10);
+    } catch {
+      return new Date().getHours();
+    }
+  })();
   const pending = useRef(false);
   const mounted = useRef(true);
   const meeting = meetings.find(m => m.id === meetingId);
-  const isOnlineMeeting = Boolean(meeting?.isOnline) &&
+  const isOnlineMeeting = (Boolean(meeting?.isOnline) ||
+    meeting?.locationName?.toLowerCase().includes('online') ||
+    meeting?.locationName?.toLowerCase().includes('google meet') ||
+    meeting?.locationName?.toLowerCase().includes('virtual')) &&
     !meeting?.locationName?.toLowerCase().includes('residence') &&
     !meeting?.title?.toLowerCase().includes('hosting');
 
@@ -33,11 +55,13 @@ export default function CheckInPage() {
     meeting?.attendanceCode ||
     isOnlineMeeting ||
     meeting?.title?.toLowerCase().includes('hosting') ||
+    isWednesdayToday ||
+    requestedMeeting?.serviceScheduleId === 'wednesday-unit-meeting' ||
     (meeting && meeting.geofenceRadiusMeters >= 50000)
   );
   const isCommittedViaAvailability = Boolean(
     availabilityData?.submitted &&
-      (availabilityData?.selectedMeetingIds?.includes(meetingId) || (!meetingId && availabilityData?.selectedMeetingIds?.length > 0))
+    (availabilityData?.selectedMeetingIds?.includes(meetingId) || (!meetingId && availabilityData?.selectedMeetingIds?.length > 0))
   );
 
   const checkAttendanceStatus = useCallback(async (targetMeetingId: string) => {
@@ -74,7 +98,40 @@ export default function CheckInPage() {
       setAvailabilityData(avail);
       const requested = new URLSearchParams(window.location.search).get('meetingId');
       if (requested && !data.some(m => m.id === requested)) {
-        setError('The selected service is not open for attendance. Choose another open service or ask an administrator.');
+        try {
+          const reqMeeting = await fetchApi<any>(`/meetings/${requested}`);
+          if (reqMeeting && mounted.current) {
+            setRequestedMeeting(reqMeeting);
+            const isWedMeeting = reqMeeting.serviceScheduleId === 'wednesday-unit-meeting' || reqMeeting.title?.toLowerCase().includes('wednesday');
+            const now = new Date();
+            const openTime = new Date(reqMeeting.attendanceOpenTime || reqMeeting.startTime);
+            const closeTime = new Date(reqMeeting.attendanceCloseTime || reqMeeting.endTime || (openTime.getTime() + 60 * 60000));
+            if (isWedMeeting) {
+              if (now < openTime) {
+                setError('The Wednesday Unit Weekly Meeting takes place online from 8:00 PM to 9:00 PM. Attendance check-in opens at 8:00 PM (meeting start). Please check back when the meeting begins to enter the attendance code.');
+              } else if (now > closeTime || reqMeeting.status === 'CLOSED') {
+                setError('The Wednesday Unit Weekly Meeting has concluded (closed at 9:00 PM). Attendance is no longer open for this meeting.');
+              } else {
+                setError('The Wednesday Unit Weekly Meeting attendance window is currently not active. Please refresh or contact your coordinator.');
+              }
+            } else {
+              const openStr = openTime.toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' });
+              if (now < openTime) {
+                setError(`Check-in for "${reqMeeting.title}" is not yet open. Attendance check-in opens 45 minutes before start at ${openStr}. Please check back then.`);
+              } else if (now > closeTime || reqMeeting.status === 'CLOSED') {
+                setError(`"${reqMeeting.title}" has concluded. Attendance is no longer open for this service.`);
+              } else {
+                setError(`"${reqMeeting.title}" is not open for attendance. Choose another open service or ask an administrator.`);
+              }
+            }
+          }
+        } catch {
+          if (mounted.current) {
+            setError(isWednesdayToday
+              ? 'The Wednesday Unit Weekly Meeting is not currently open for attendance. The meeting and attendance window run online from 8:00 PM to 9:00 PM.'
+              : 'The selected service is not open for attendance. Attendance check-in opens 45 minutes before start time and closes when the service ends.');
+          }
+        }
       }
       const selected = data.some(m => m.id === (requested || data[0]?.id))
         ? requested || data[0]?.id || ''
@@ -163,10 +220,10 @@ export default function CheckInPage() {
           e.code === 1
             ? 'Location permission denied. Allow location access in your browser settings, then try again.'
             : e.code === 2
-            ? 'Your location is unavailable. Enable device location and try outdoors.'
-            : e.code === 3
-            ? 'Location took too long. Move outdoors and try again.'
-            : e.message || 'Check-in failed. Please try again.'
+              ? 'Your location is unavailable. Enable device location and try outdoors.'
+              : e.code === 3
+                ? 'Location took too long. Move outdoors and try again.'
+                : e.message || 'Check-in failed. Please try again.'
         );
       }
     } finally {
@@ -203,9 +260,15 @@ export default function CheckInPage() {
       const msg = err.message || '';
       if (mounted.current) {
         if (msg.toLowerCase().includes('not yet') || msg.toLowerCase().includes('not open')) {
-          setError('Attendance Not Yet Available: Online attendance opens exactly at the scheduled meeting start. Please try again then.');
+          const isWed = meeting?.serviceScheduleId === 'wednesday-unit-meeting' || meeting?.title?.toLowerCase().includes('wednesday') || isWednesdayToday;
+          setError(isWed
+            ? 'Attendance Not Yet Available: The Wednesday Unit Meeting attendance opens at 8:00 PM (meeting start). Please enter your code once the meeting begins.'
+            : 'Attendance Not Yet Available: Online attendance opens exactly at the scheduled meeting start. Please try again then.');
         } else if (msg.toLowerCase().includes('closed') || msg.toLowerCase().includes('expired')) {
-          setError('Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
+          const isWed = meeting?.serviceScheduleId === 'wednesday-unit-meeting' || meeting?.title?.toLowerCase().includes('wednesday') || isWednesdayToday;
+          setError(isWed
+            ? 'Attendance Closed: The Wednesday Unit Weekly Meeting attendance window has closed (closed at 9:00 PM).'
+            : 'Attendance Closed: The attendance window for this meeting has closed. The attendance code is no longer valid.');
         } else if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('duplicate')) {
           setError('Attendance Already Recorded: You are already marked PRESENT for this meeting.');
         } else {
@@ -393,7 +456,7 @@ export default function CheckInPage() {
                     meeting.geofenceRadiusMeters >= 50000 || distance <= meeting.geofenceRadiusMeters
                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
                       : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
-                  }`}>
+                    }`}>
                     <span className="truncate">Distance: {distance}m from {meeting.locationName || 'venue'}</span>
                     <span className="shrink-0">Accuracy: ±{Math.round(location!.accuracy)}m</span>
                   </div>
@@ -571,10 +634,47 @@ export default function CheckInPage() {
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-center space-y-2">
-            <span className="material-symbols-outlined text-4xl text-outline">event_busy</span>
-            <p className="font-bold text-on-surface">No Service Open</p>
-            <p className="text-sm text-on-surface-variant">Attendance check-in opens 30 minutes before each service. Please check back when service starts.</p>
+          <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-center space-y-3">
+            <span className="material-symbols-outlined text-4xl text-outline">
+              {isWednesdayToday
+                ? lagosHour < 20
+                  ? 'schedule'
+                  : lagosHour >= 21
+                    ? 'event_busy'
+                    : 'videocam'
+                : 'event_busy'}
+            </span>
+            <p className="font-bold text-on-surface">
+              {isWednesdayToday
+                ? lagosHour < 20
+                  ? 'Wednesday Unit Meeting Opens at 8:00 PM'
+                  : lagosHour >= 21
+                    ? 'Wednesday Unit Meeting Concluded'
+                    : 'Wednesday Unit Meeting in Session'
+                : 'No Service Open'}
+            </p>
+            <p className="text-sm text-on-surface-variant leading-relaxed">
+              {isWednesdayToday
+                ? lagosHour < 20
+                  ? 'The Wednesday Unit Weekly Meeting takes place online from 8:00 PM to 9:00 PM. Attendance check-in opens and closes concurrently with the meeting (8:00 PM – 9:00 PM). Please join Google Meet and submit the 6-digit code announced during the session.'
+                  : lagosHour >= 21
+                    ? 'The Wednesday Unit Weekly Meeting ended at 9:00 PM. Attendance check-in is now closed. Next service check-in will open 45 minutes before the next scheduled service.'
+                    : 'The Wednesday Unit Weekly Meeting is currently active online (8:00 PM – 9:00 PM). Click Refresh below to load the attendance code submission box.'
+                : 'Attendance check-in opens 45 minutes before each service and closes when the service ends. Please check back when service starts.'}
+            </p>
+            {isWednesdayToday && lagosHour < 21 && (
+              <div className="pt-2">
+                <a
+                  href={requestedMeeting?.meetingUrl || 'https://meet.google.com/wkx-kgew-iqe'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[18px]">videocam</span>
+                  <span>Join Wednesday Unit Google Meet</span>
+                </a>
+              </div>
+            )}
           </div>
         )}
 

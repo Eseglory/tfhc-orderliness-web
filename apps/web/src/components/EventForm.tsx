@@ -97,6 +97,21 @@ export const emptyEvent: EventFormValue = {
   supervisingMinisterId: '',
 };
 
+export function subtractMinutes(timeStr: string, minutes: number = 45): string {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
+  const totalM = (h * 60 + m - minutes + 1440) % 1440;
+  const newH = Math.floor(totalM / 60);
+  const newM = totalM % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
+
+export function subtractOneHour(timeStr: string): string {
+  return subtractMinutes(timeStr, 45);
+}
+
+
 export function eventToPayload(v: EventFormValue) {
   const iso = (t: string) => new Date(`${v.date}T${t || '00:00'}`).toISOString();
   const audiences =
@@ -117,6 +132,10 @@ export function eventToPayload(v: EventFormValue) {
     }
   }
 
+  const isWednesday = v.title.toLowerCase().includes('wednesday');
+  const calculatedOpenTime = v.openTime || (v.startTime ? (isWednesday ? v.startTime : subtractMinutes(v.startTime, 45)) : '');
+  const calculatedCloseTime = v.closeTime || v.endTime || v.startTime;
+
   return {
     title: v.title.trim(),
     description: v.description.trim() || undefined,
@@ -126,8 +145,8 @@ export function eventToPayload(v: EventFormValue) {
     meetingDate: new Date(`${v.date}T${v.startTime || '00:00'}`).toISOString(),
     startTime: iso(v.startTime),
     expectedArrivalTime: iso(v.arrivalTime || v.startTime),
-    attendanceOpenTime: iso(v.openTime || v.startTime),
-    attendanceCloseTime: iso(v.closeTime || v.startTime),
+    attendanceOpenTime: iso(calculatedOpenTime || v.startTime),
+    attendanceCloseTime: iso(calculatedCloseTime || v.startTime),
     endTime: v.endTime ? iso(v.endTime) : undefined,
     allDay: v.allDay,
     gracePeriodMinutes: Number(v.gracePeriodMinutes),
@@ -316,7 +335,7 @@ export function EventForm({
         startTime: '08:00',
         arrivalTime: '07:30',
         openTime: '07:00',
-        closeTime: '08:15',
+        closeTime: '11:00',
         endTime: '11:00',
         mode: 'IN_PERSON',
         isCompulsory: true,
@@ -332,9 +351,9 @@ export function EventForm({
         eventTypeId: meetingType,
         categoryId: meetingCat,
         startTime: '18:00',
-        arrivalTime: '17:55',
-        openTime: '17:45',
-        closeTime: '18:15',
+        arrivalTime: '17:30',
+        openTime: '17:00',
+        closeTime: '19:00',
         endTime: '19:00',
         mode: 'HYBRID',
         virtualMeetingUrl: s.virtualMeetingUrl || generateGoogleMeetUrl(),
@@ -351,9 +370,9 @@ export function EventForm({
         eventTypeId: trainType,
         categoryId: trainCat,
         startTime: '17:00',
-        arrivalTime: '16:45',
-        openTime: '16:30',
-        closeTime: '17:15',
+        arrivalTime: '16:30',
+        openTime: '16:00',
+        closeTime: '19:30',
         endTime: '19:30',
         mode: 'IN_PERSON',
         isCompulsory: true,
@@ -371,7 +390,7 @@ export function EventForm({
         startTime: '09:00',
         arrivalTime: '08:30',
         openTime: '08:00',
-        closeTime: '09:30',
+        closeTime: '16:00',
         endTime: '16:00',
         mode: 'HYBRID',
         virtualMeetingUrl: s.virtualMeetingUrl || generateGoogleMeetUrl(),
@@ -805,7 +824,24 @@ export function EventForm({
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Starts At *</label>
-              <input type="time" className={darkInputClass} value={v.startTime} onChange={(e) => set('startTime', e.target.value)} />
+              <input
+                type="time"
+                className={darkInputClass}
+                value={v.startTime}
+                onChange={(e) => {
+                  const newStart = e.target.value;
+                  setV((s) => {
+                    const isWed = s.title.toLowerCase().includes('wednesday');
+                    const prevAutoOpen = s.startTime ? (isWed ? s.startTime : subtractMinutes(s.startTime, 45)) : '';
+                    const shouldAutoUpdateOpen = !s.openTime || s.openTime === prevAutoOpen || s.openTime === s.startTime;
+                    return {
+                      ...s,
+                      startTime: newStart,
+                      openTime: shouldAutoUpdateOpen && newStart ? (isWed ? newStart : subtractMinutes(newStart, 45)) : s.openTime,
+                    };
+                  });
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Check-in Closes</label>
@@ -817,7 +853,19 @@ export function EventForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ends At (Optional)</label>
-              <input type="time" className={darkInputClass} value={v.endTime} onChange={(e) => set('endTime', e.target.value)} />
+              <input
+                type="time"
+                className={darkInputClass}
+                value={v.endTime}
+                onChange={(e) => {
+                  const newEnd = e.target.value;
+                  setV((s) => ({
+                    ...s,
+                    endTime: newEnd,
+                    closeTime: (!s.closeTime || s.closeTime === s.endTime) && newEnd ? newEnd : s.closeTime,
+                  }));
+                }}
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Grace Period (Min)</label>

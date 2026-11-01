@@ -310,7 +310,7 @@ export default function MemberCalendarPage() {
                         {(() => {
                           const now = new Date();
                           const start = new Date(item.startTime);
-                          const openTime = item.attendanceOpenTime ? new Date(item.attendanceOpenTime) : new Date(start.getTime() - 30 * 60000);
+                          const openTime = item.attendanceOpenTime ? new Date(item.attendanceOpenTime) : new Date(start.getTime() - 60 * 60000);
                           const closeTime = item.attendanceCloseTime ? new Date(item.attendanceCloseTime) : (item.endTime ? new Date(item.endTime) : new Date(start.getTime() + 60 * 60000));
                           const cutoffTime = new Date(closeTime.getTime() + 60 * 60000);
                           const isEligible = now >= openTime && now <= cutoffTime && ['ACTIVE', 'SCHEDULED'].includes(item.status);
