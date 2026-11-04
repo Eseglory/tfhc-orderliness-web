@@ -55,7 +55,8 @@ export class MembersReportPdfService {
   private readonly logger = new Logger(MembersReportPdfService.name);
 
   /**
-   * Generates a publication-grade, executive landscape PDF report for members directory & analytics.
+   * Generates a publication-grade, compact executive landscape PDF report
+   * eliminating empty white spaces and spurious page breaks.
    */
   async generateMembersPdf(data: {
     members: MemberReportItem[];
@@ -63,10 +64,14 @@ export class MembersReportPdfService {
   }): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
       try {
+        const marginX = 28;
+        const marginTop = 24;
+        const marginBottom = 24;
+
         const doc = new PDFDocument({
           size: 'A4',
           layout: 'landscape',
-          margin: 36,
+          margins: { top: marginTop, bottom: marginBottom, left: marginX, right: marginX },
           bufferPages: true,
           info: {
             Title: 'TFHC Members Operations Directory & Executive Analytics',
@@ -84,11 +89,10 @@ export class MembersReportPdfService {
           reject(err);
         });
 
-        const margin = 36;
         const pageWidth = doc.page.width; // 841.89
         const pageHeight = doc.page.height; // 595.28
-        const contentWidth = pageWidth - margin * 2; // 769.89
-        const bottomContentLimit = pageHeight - margin - 25; // 534 pt limit for rows
+        const contentWidth = pageWidth - marginX * 2; // 785.89 pt
+        const bottomContentLimit = pageHeight - 32; // 563.28 pt max row boundary
 
         // Colors
         const cNavy = '#0F172A';
@@ -98,62 +102,63 @@ export class MembersReportPdfService {
         const cBorder = '#E2E8F0';
         const cAltRow = '#F8FAFC';
 
-        // Columns definition (Total width = 769.89)
+        // 10 Balanced Columns matching actual content width (Total: 785.89 pt)
         const columns: TableColumn[] = [
-          { key: 'code', label: 'MEMBER ID', width: 64, align: 'left' },
-          { key: 'name', label: 'FULL NAME', width: 126, align: 'left' },
-          { key: 'phone', label: 'PHONE NUMBER', width: 80, align: 'left' },
-          { key: 'email', label: 'EMAIL (DIRECTORY / LOGIN)', width: 145, align: 'left' },
-          { key: 'subteam', label: 'SUB-TEAM', width: 80, align: 'left' },
-          { key: 'role', label: 'UNIT ROLE', width: 66, align: 'left' },
-          { key: 'status', label: 'STATUS', width: 72, align: 'center' },
-          { key: 'portal', label: 'PORTAL', width: 48, align: 'center' },
+          { key: 'code', label: 'MEMBER ID', width: 85, align: 'left' },
+          { key: 'name', label: 'FULL NAME', width: 120, align: 'left' },
+          { key: 'phone', label: 'PHONE NUMBER', width: 75, align: 'left' },
+          { key: 'email', label: 'EMAIL (DIRECTORY / LOGIN)', width: 140, align: 'left' },
+          { key: 'subteam', label: 'SUB-TEAM', width: 95, align: 'left' },
+          { key: 'role', label: 'UNIT ROLE', width: 90, align: 'left' },
+          { key: 'status', label: 'STATUS', width: 58, align: 'center' },
+          { key: 'portal', label: 'PORTAL', width: 38, align: 'center' },
           { key: 'attendance', label: 'ATTEND.', width: 45, align: 'right' },
-          { key: 'joined', label: 'JOINED', width: 43.89, align: 'center' },
+          { key: 'joined', label: 'JOINED', width: 39.89, align: 'center' },
         ];
 
         // ---------------------------------------------------------------------
-        // PAGE 1: EXECUTIVE HEADER
+        // PAGE 1: EXECUTIVE HEADER (Compact & High-Density)
         // ---------------------------------------------------------------------
-        this.drawPageOneHeader(doc, margin, contentWidth, data.analytics);
+        this.drawPageOneHeader(doc, marginX, contentWidth, data.analytics);
 
         // ---------------------------------------------------------------------
-        // PAGE 1: DASHBOARD ANALYTICS SUMMARY (KPI Cards Grid)
+        // PAGE 1: DASHBOARD ANALYTICS SUMMARY (Compact 6 KPI Cards Grid)
         // ---------------------------------------------------------------------
-        this.drawAnalyticsSummarySection(doc, margin, contentWidth, data.analytics);
+        this.drawAnalyticsSummarySection(doc, marginX, contentWidth, data.analytics);
 
         // ---------------------------------------------------------------------
         // TABLE SECTION HEADER
         // ---------------------------------------------------------------------
-        doc.y = 172;
+        const tableTitleY = 129;
         doc
           .fillColor(cNavy)
-          .fontSize(9.5)
+          .fontSize(8.5)
           .font('Helvetica-Bold')
-          .text('VERIFIED MEMBERS REGISTRY', margin, doc.y);
+          .text('VERIFIED MEMBERS REGISTRY', marginX, tableTitleY, { lineBreak: false });
 
         doc
           .fillColor(cMuted)
-          .fontSize(7.5)
+          .fontSize(6.5)
           .font('Helvetica')
           .text(
             `Total Records: ${data.members.length.toLocaleString()} Verified Members · Sorted alphabetically by name`,
-            margin + 175,
-            doc.y - 8.5
+            marginX + 155,
+            tableTitleY + 1,
+            { lineBreak: false }
           );
 
         // ---------------------------------------------------------------------
         // DATA TABLE HEADER
         // ---------------------------------------------------------------------
-        const tableHeaderY = 186;
-        const tableHeaderHeight = 20;
-        this.drawTableHeader(doc, margin, tableHeaderY, contentWidth, tableHeaderHeight, columns);
+        const tableHeaderY = 141;
+        const tableHeaderHeight = 16;
+        this.drawTableHeader(doc, marginX, tableHeaderY, contentWidth, tableHeaderHeight, columns);
         doc.y = tableHeaderY + tableHeaderHeight;
 
         // ---------------------------------------------------------------------
         // DATA ROWS
         // ---------------------------------------------------------------------
-        const rowHeight = 17.5;
+        const rowHeight = 12.8;
         let isAlt = false;
 
         for (let i = 0; i < data.members.length; i++) {
@@ -162,38 +167,40 @@ export class MembersReportPdfService {
           // Check for page overflow
           if (doc.y + rowHeight > bottomContentLimit) {
             doc.addPage();
-            // Subsequent page mini header
-            this.drawSubsequentPageHeader(doc, margin, contentWidth, data.analytics);
+            // Subsequent page compact header
+            this.drawSubsequentPageHeader(doc, marginX, contentWidth, data.analytics);
             // Re-render repeating table header
-            const nextTableHeaderY = 66;
-            this.drawTableHeader(doc, margin, nextTableHeaderY, contentWidth, tableHeaderHeight, columns);
+            const nextTableHeaderY = 48;
+            this.drawTableHeader(doc, marginX, nextTableHeaderY, contentWidth, tableHeaderHeight, columns);
             doc.y = nextTableHeaderY + tableHeaderHeight;
           }
 
           const currentY = doc.y;
+
           // Background fill
           if (isAlt) {
-            doc.rect(margin, currentY, contentWidth, rowHeight).fill(cAltRow);
+            doc.rect(marginX, currentY, contentWidth, rowHeight).fill(cAltRow);
           } else {
-            doc.rect(margin, currentY, contentWidth, rowHeight).fill('#FFFFFF');
+            doc.rect(marginX, currentY, contentWidth, rowHeight).fill('#FFFFFF');
           }
-          // Bottom border
+
+          // Bottom subtle divider
           doc
             .strokeColor(cBorder)
             .lineWidth(0.5)
-            .moveTo(margin, currentY + rowHeight)
-            .lineTo(margin + contentWidth, currentY + rowHeight)
+            .moveTo(marginX, currentY + rowHeight)
+            .lineTo(marginX + contentWidth, currentY + rowHeight)
             .stroke();
 
           // Cell rendering
-          let colX = margin;
+          let colX = marginX;
 
           // 1. Member Code
           doc
-            .fillColor('#1E293B')
-            .fontSize(7)
+            .fillColor(cSlateNavy)
+            .fontSize(6.5)
             .font('Helvetica-Bold')
-            .text(m.memberCode || '—', colX + 4, currentY + 5, {
+            .text(m.memberCode || '—', colX + 4, currentY + 3.5, {
               width: columns[0].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -206,9 +213,9 @@ export class MembersReportPdfService {
             .join(' ');
           doc
             .fillColor(cTextDark)
-            .fontSize(7.5)
+            .fontSize(7)
             .font('Helvetica-Bold')
-            .text(fullName || 'Unknown Member', colX + 4, currentY + 5, {
+            .text(fullName || 'Unknown Member', colX + 4, currentY + 3.5, {
               width: columns[1].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -219,9 +226,9 @@ export class MembersReportPdfService {
           const phone = m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : '—';
           doc
             .fillColor('#334155')
-            .fontSize(7)
+            .fontSize(6.5)
             .font('Helvetica')
-            .text(phone, colX + 4, currentY + 5, {
+            .text(phone, colX + 4, currentY + 3.5, {
               width: columns[2].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -232,9 +239,9 @@ export class MembersReportPdfService {
           const email = m.directoryEmail || m.userEmail || '—';
           doc
             .fillColor('#475569')
-            .fontSize(7)
+            .fontSize(6.5)
             .font('Helvetica')
-            .text(email, colX + 4, currentY + 5, {
+            .text(email, colX + 4, currentY + 3.5, {
               width: columns[3].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -244,9 +251,9 @@ export class MembersReportPdfService {
           // 5. Sub-Team
           doc
             .fillColor('#334155')
-            .fontSize(7)
+            .fontSize(6.5)
             .font('Helvetica')
-            .text(m.subTeamName || 'General', colX + 4, currentY + 5, {
+            .text(m.subTeamName || 'General', colX + 4, currentY + 3.5, {
               width: columns[4].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -256,9 +263,9 @@ export class MembersReportPdfService {
           // 6. Unit Role
           doc
             .fillColor('#475569')
-            .fontSize(7)
+            .fontSize(6.5)
             .font('Helvetica')
-            .text(m.roleInUnit || 'Member', colX + 4, currentY + 5, {
+            .text(m.roleInUnit || 'Member', colX + 4, currentY + 3.5, {
               width: columns[5].width - 8,
               lineBreak: false,
               ellipsis: true,
@@ -276,11 +283,12 @@ export class MembersReportPdfService {
           // 9. Attendance Count
           doc
             .fillColor(cTextDark)
-            .fontSize(7.5)
+            .fontSize(7)
             .font('Helvetica-Bold')
-            .text(String(m.attendanceCount ?? 0), colX + 4, currentY + 5, {
+            .text(String(m.attendanceCount ?? 0), colX + 4, currentY + 3.5, {
               width: columns[8].width - 8,
               align: 'right',
+              lineBreak: false,
             });
           colX += columns[8].width;
 
@@ -296,11 +304,12 @@ export class MembersReportPdfService {
           }
           doc
             .fillColor('#64748B')
-            .fontSize(6.5)
+            .fontSize(6)
             .font('Helvetica')
-            .text(joinedStr, colX + 2, currentY + 5, {
+            .text(joinedStr, colX + 2, currentY + 3.5, {
               width: columns[9].width - 4,
               align: 'center',
+              lineBreak: false,
             });
 
           doc.y = currentY + rowHeight;
@@ -309,58 +318,63 @@ export class MembersReportPdfService {
 
         // ---------------------------------------------------------------------
         // FOOTER & AUTOMATIC "Page X of Y" PASS ACROSS ALL PAGES
+        // CRITICAL: We set doc.page.margins.bottom = 0 and lineBreak: false
+        // to guarantee NO unwanted blank pages are created!
         // ---------------------------------------------------------------------
         const pageRange = doc.bufferedPageRange();
         const totalPages = pageRange.count;
 
         for (let p = pageRange.start; p < pageRange.start + totalPages; p++) {
           doc.switchToPage(p);
+          const origBottom = doc.page.margins.bottom;
+          doc.page.margins.bottom = 0; // Safely bypass page-addition trigger
 
-          const footerY = pageHeight - margin + 6;
+          const footerY = pageHeight - 20;
 
           // Divider rule
           doc
             .strokeColor('#CBD5E1')
             .lineWidth(0.5)
-            .moveTo(margin, footerY)
-            .lineTo(margin + contentWidth, footerY)
+            .moveTo(marginX, footerY)
+            .lineTo(marginX + contentWidth, footerY)
             .stroke();
 
           // Left Footer
           doc
             .fillColor(cMuted)
-            .fontSize(7)
+            .fontSize(6)
             .font('Helvetica-Bold')
             .text(
               "THE FATHER'S HOUSE CHURCH (TFHC) · ORDERLINESS UNIT",
-              margin,
-              footerY + 5,
-              { continued: true }
-            )
-            .font('Helvetica')
-            .text(' · Official Executive Directory & Analytics Ledger');
+              marginX,
+              footerY + 4,
+              { lineBreak: false }
+            );
 
           // Center Footer (Date/Time)
           doc
             .fillColor('#94A3B8')
-            .fontSize(6.5)
+            .fontSize(6)
             .font('Helvetica')
             .text(
-              `Generated: ${data.analytics.generatedAt} (WAT) | Internal Use Only`,
-              margin,
-              footerY + 5,
-              { width: contentWidth, align: 'center' }
+              `Generated: ${data.analytics.generatedAt} (WAT) · Internal Use Only`,
+              marginX,
+              footerY + 4,
+              { width: contentWidth, align: 'center', lineBreak: false }
             );
 
           // Right Footer ("Page X of Y")
           doc
             .fillColor(cSlateNavy)
-            .fontSize(7)
+            .fontSize(6.5)
             .font('Helvetica-Bold')
-            .text(`Page ${p + 1} of ${totalPages}`, margin, footerY + 5, {
+            .text(`Page ${p + 1} of ${totalPages}`, marginX, footerY + 4, {
               width: contentWidth,
               align: 'right',
+              lineBreak: false,
             });
+
+          doc.page.margins.bottom = origBottom;
         }
 
         doc.end();
@@ -376,78 +390,80 @@ export class MembersReportPdfService {
    */
   private drawPageOneHeader(
     doc: any,
-    margin: number,
+    marginX: number,
     contentWidth: number,
     analytics: MemberReportAnalytics
   ): void {
-    const headerHeight = 54;
-    const headerY = margin;
+    const headerHeight = 42;
+    const headerY = 24;
 
     // Navy header box
-    doc.rect(margin, headerY, contentWidth, headerHeight).fill('#0F172A');
-    // Top active accent stripe (Sky blue / Indigo gradient feel)
-    doc.rect(margin, headerY, contentWidth, 3).fill('#2563EB');
+    doc.rect(marginX, headerY, contentWidth, headerHeight).fill('#0F172A');
+    // Top active accent stripe (Blue)
+    doc.rect(marginX, headerY, contentWidth, 2.5).fill('#2563EB');
 
     // Branding / Logo placeholder
-    const logoX = margin + 10;
-    const logoY = headerY + 7;
-    const logoMaxW = 125;
-    const logoMaxH = 40;
+    const logoX = marginX + 10;
+    const logoY = headerY + 5;
+    const logoMaxW = 110;
+    const logoMaxH = 32;
     this.renderLogo(doc, logoX, logoY, logoMaxW, logoMaxH);
 
     // Header Titles
-    const titleX = margin + 145;
+    const titleX = marginX + 130;
     doc
       .fillColor('#94A3B8')
-      .fontSize(7.5)
+      .fontSize(6.5)
       .font('Helvetica-Bold')
       .text(
         "THE FATHER'S HOUSE CHURCH (TFHC) · ORDERLINESS UNIT",
         titleX,
-        headerY + 10
+        headerY + 7,
+        { lineBreak: false }
       );
 
     doc
       .fillColor('#FFFFFF')
-      .fontSize(14)
+      .fontSize(12)
       .font('Helvetica-Bold')
-      .text('MEMBERS DIRECTORY & OPERATIONS ANALYTICS', titleX, headerY + 21);
+      .text('MEMBERS DIRECTORY & OPERATIONS ANALYTICS', titleX, headerY + 16, { lineBreak: false });
 
     doc
       .fillColor('#38BDF8')
-      .fontSize(7.5)
+      .fontSize(6.5)
       .font('Helvetica')
       .text(
         'Verified Personnel Roster · Attendance History · Account Governance Ledger',
         titleX,
-        headerY + 38
+        headerY + 30,
+        { lineBreak: false }
       );
 
     // Right-side Metadata Badge
-    const badgeW = 200;
-    const badgeH = 40;
-    const badgeX = margin + contentWidth - badgeW - 10;
-    const badgeY = headerY + 7;
+    const badgeW = 195;
+    const badgeH = 32;
+    const badgeX = marginX + contentWidth - badgeW - 8;
+    const badgeY = headerY + 5;
 
     doc.rect(badgeX, badgeY, badgeW, badgeH).fillAndStroke('#1E293B', '#334155');
 
     doc
       .fillColor('#94A3B8')
-      .fontSize(6.5)
+      .fontSize(5.5)
       .font('Helvetica-Bold')
-      .text('REPORT GENERATION', badgeX + 8, badgeY + 6);
+      .text('REPORT GENERATION', badgeX + 8, badgeY + 4, { lineBreak: false });
 
     doc
       .fillColor('#FFFFFF')
-      .fontSize(7.5)
+      .fontSize(7)
       .font('Helvetica')
-      .text(analytics.generatedAt, badgeX + 8, badgeY + 16);
+      .text(analytics.generatedAt, badgeX + 8, badgeY + 12, { lineBreak: false });
 
     doc
       .fillColor('#38BDF8')
-      .fontSize(6.5)
+      .fontSize(6)
       .font('Helvetica-Bold')
-      .text(`SCOPE: ${analytics.filterSummary}`, badgeX + 8, badgeY + 27, {
+      .text(`SCOPE: ${analytics.filterSummary}`, badgeX + 8, badgeY + 22, {
         width: badgeW - 16,
         lineBreak: false,
         ellipsis: true,
@@ -459,35 +475,36 @@ export class MembersReportPdfService {
    */
   private drawSubsequentPageHeader(
     doc: any,
-    margin: number,
+    marginX: number,
     contentWidth: number,
     analytics: MemberReportAnalytics
   ): void {
-    const hY = margin;
-    const hHeight = 22;
+    const hY = 24;
+    const hHeight = 20;
 
-    doc.rect(margin, hY, contentWidth, hHeight).fill('#0F172A');
-    doc.rect(margin, hY, contentWidth, 2).fill('#2563EB');
+    doc.rect(marginX, hY, contentWidth, hHeight).fill('#0F172A');
+    doc.rect(marginX, hY, contentWidth, 2).fill('#2563EB');
 
     doc
       .fillColor('#FFFFFF')
-      .fontSize(8)
+      .fontSize(7.5)
       .font('Helvetica-Bold')
       .text(
-        "THE FATHER'S HOUSE CHURCH · ORDERLINESS MEMBERS DIRECTORY",
-        margin + 10,
-        hY + 7
+        "THE FATHER'S HOUSE CHURCH · ORDERLINESS MEMBERS DIRECTORY (Continued)",
+        marginX + 8,
+        hY + 6,
+        { lineBreak: false }
       );
 
     doc
       .fillColor('#38BDF8')
-      .fontSize(7.5)
+      .fontSize(6.5)
       .font('Helvetica')
       .text(
-        `Verified Roster (Continued) · Scope: ${analytics.filterSummary}`,
-        margin + contentWidth - 280,
-        hY + 7,
-        { width: 270, align: 'right' }
+        `Scope: ${analytics.filterSummary}`,
+        marginX + contentWidth - 200,
+        hY + 6,
+        { width: 190, align: 'right', lineBreak: false }
       );
   }
 
@@ -496,35 +513,36 @@ export class MembersReportPdfService {
    */
   private drawAnalyticsSummarySection(
     doc: any,
-    margin: number,
+    marginX: number,
     contentWidth: number,
     analytics: MemberReportAnalytics
   ): void {
-    const secY = 96;
+    const secY = 72;
 
     // Section Title
     doc
       .fillColor('#0F172A')
-      .fontSize(10)
+      .fontSize(8.5)
       .font('Helvetica-Bold')
-      .text('DASHBOARD ANALYTICS SUMMARY', margin, secY);
+      .text('DASHBOARD ANALYTICS SUMMARY', marginX, secY, { lineBreak: false });
 
     doc
       .fillColor('#64748B')
-      .fontSize(7)
+      .fontSize(6.5)
       .font('Helvetica')
       .text(
         'Key performance indicators computed from verified member records and recorded service attendance',
-        margin + 195,
-        secY + 2
+        marginX + 165,
+        secY + 1.5,
+        { lineBreak: false }
       );
 
     // 6 KPI Cards Grid
-    const cardsY = 112;
-    const cardGap = 8;
+    const cardsY = 85;
+    const cardGap = 7;
     const cardCount = 6;
-    const cardWidth = (contentWidth - (cardCount - 1) * cardGap) / cardCount; // ~121.6 pt
-    const cardHeight = 48;
+    const cardWidth = (contentWidth - (cardCount - 1) * cardGap) / cardCount; // ~125 pt
+    const cardHeight = 38;
 
     const cards = [
       {
@@ -573,7 +591,7 @@ export class MembersReportPdfService {
 
     for (let i = 0; i < cards.length; i++) {
       const c = cards[i];
-      const cx = margin + i * (cardWidth + cardGap);
+      const cx = marginX + i * (cardWidth + cardGap);
       this.drawKpiCard(doc, cx, cardsY, cardWidth, cardHeight, c);
     }
   }
@@ -598,28 +616,28 @@ export class MembersReportPdfService {
     // Card Background & Border
     doc.rect(x, y, width, height).fillAndStroke('#F8FAFC', '#E2E8F0');
     // Top accent bar
-    doc.rect(x, y, width, 3).fill(item.accent);
+    doc.rect(x, y, width, 2.5).fill(item.accent);
 
     // Title
     doc
       .fillColor('#64748B')
-      .fontSize(6)
+      .fontSize(5.5)
       .font('Helvetica-Bold')
-      .text(item.title, x + 7, y + 8, { width: width - 14, lineBreak: false });
+      .text(item.title, x + 6, y + 5, { width: width - 12, lineBreak: false });
 
     // Value
     doc
       .fillColor('#0F172A')
-      .fontSize(14)
+      .fontSize(12)
       .font('Helvetica-Bold')
-      .text(item.value, x + 7, y + 18, { width: width - 14, lineBreak: false });
+      .text(item.value, x + 6, y + 13, { width: width - 12, lineBreak: false });
 
     // Subtext
     doc
       .fillColor(item.subColor)
-      .fontSize(6.5)
+      .fontSize(5.5)
       .font('Helvetica-Bold')
-      .text(item.sub, x + 7, y + 35, { width: width - 14, lineBreak: false });
+      .text(item.sub, x + 6, y + 28, { width: width - 12, lineBreak: false });
   }
 
   /**
@@ -635,9 +653,9 @@ export class MembersReportPdfService {
   ): void {
     doc.rect(x, y, width, height).fill('#0F172A');
     let cx = x;
-    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold');
+    doc.fillColor('#FFFFFF').fontSize(6.5).font('Helvetica-Bold');
     for (const col of columns) {
-      doc.text(col.label, cx + 4, y + 6.5, {
+      doc.text(col.label, cx + 4, y + 5.5, {
         width: col.width - 8,
         align: col.align,
         lineBreak: false,
@@ -657,9 +675,9 @@ export class MembersReportPdfService {
     height: number,
     status: string
   ): void {
-    const pillW = width - 12;
-    const pillH = 12;
-    const pillX = x + 6;
+    const pillW = width - 10;
+    const pillH = 9.5;
+    const pillX = x + 5;
     const pillY = y + (height - pillH) / 2;
 
     let bg = '#F1F5F9';
@@ -697,12 +715,12 @@ export class MembersReportPdfService {
         break;
     }
 
-    doc.roundedRect(pillX, pillY, pillW, pillH, 2.5).fillAndStroke(bg, border);
+    doc.roundedRect(pillX, pillY, pillW, pillH, 2).fillAndStroke(bg, border);
     doc
       .fillColor(text)
-      .fontSize(6)
+      .fontSize(5.5)
       .font('Helvetica-Bold')
-      .text(label, pillX, pillY + 2.5, { width: pillW, align: 'center' });
+      .text(label, pillX, pillY + 1.5, { width: pillW, align: 'center', lineBreak: false });
   }
 
   /**
@@ -716,8 +734,8 @@ export class MembersReportPdfService {
     height: number,
     isRegistered: boolean
   ): void {
-    const pillW = 32;
-    const pillH = 11;
+    const pillW = 28;
+    const pillH = 9.5;
     const pillX = x + (width - pillW) / 2;
     const pillY = y + (height - pillH) / 2;
 
@@ -726,12 +744,12 @@ export class MembersReportPdfService {
     const text = isRegistered ? '#166534' : '#64748B';
     const label = isRegistered ? 'Yes' : 'No';
 
-    doc.roundedRect(pillX, pillY, pillW, pillH, 2.5).fillAndStroke(bg, border);
+    doc.roundedRect(pillX, pillY, pillW, pillH, 2).fillAndStroke(bg, border);
     doc
       .fillColor(text)
-      .fontSize(6)
+      .fontSize(5.5)
       .font('Helvetica-Bold')
-      .text(label, pillX, pillY + 2, { width: pillW, align: 'center' });
+      .text(label, pillX, pillY + 1.5, { width: pillW, align: 'center', lineBreak: false });
   }
 
   /**
@@ -749,6 +767,7 @@ export class MembersReportPdfService {
       path.resolve(__dirname, '../../assets/logo.png'),
       path.resolve(__dirname, '../assets/logo.png'),
       path.resolve(process.cwd(), 'apps/api/src/assets/logo.png'),
+      path.resolve(process.cwd(), 'apps/api/dist/assets/logo.png'),
       path.resolve(process.cwd(), 'apps/web/public/logo.png'),
       path.resolve(process.cwd(), 'public/logo.png'),
       path.resolve(__dirname, '../../../../web/public/logo.png'),
@@ -786,23 +805,22 @@ export class MembersReportPdfService {
     width: number,
     height: number
   ): void {
-    const badgeW = Math.min(width, 110);
-    const badgeH = Math.min(height, 36);
+    const badgeW = Math.min(width, 100);
+    const badgeH = Math.min(height, 30);
 
-    doc.roundedRect(x, y, badgeW, badgeH, 4).fillAndStroke('#1E293B', '#38BDF8');
-    doc.rect(x, y, 4, badgeH).fill('#38BDF8');
+    doc.roundedRect(x, y, badgeW, badgeH, 3).fillAndStroke('#1E293B', '#38BDF8');
+    doc.rect(x, y, 3, badgeH).fill('#38BDF8');
 
     doc
       .fillColor('#FFFFFF')
-      .fontSize(10)
+      .fontSize(9)
       .font('Helvetica-Bold')
-      .text('TFHC', x + 10, y + 6);
+      .text('TFHC', x + 8, y + 5, { lineBreak: false });
 
     doc
       .fillColor('#38BDF8')
-      .fontSize(5.5)
+      .fontSize(5)
       .font('Helvetica-Bold')
-      .text('ORDERLINESS', x + 10, y + 20);
+      .text('ORDERLINESS', x + 8, y + 17, { lineBreak: false });
   }
 }
-
