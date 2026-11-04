@@ -746,6 +746,9 @@ export class MembersReportPdfService {
     maxH: number
   ): void {
     const possiblePaths = [
+      path.resolve(__dirname, '../../assets/logo.png'),
+      path.resolve(__dirname, '../assets/logo.png'),
+      path.resolve(process.cwd(), 'apps/api/src/assets/logo.png'),
       path.resolve(process.cwd(), 'apps/web/public/logo.png'),
       path.resolve(process.cwd(), 'public/logo.png'),
       path.resolve(__dirname, '../../../../web/public/logo.png'),
