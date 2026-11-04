@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { UpdateMemberDto } from './member.dto';
 import { MemberStatus, toPascalCase, parseYearlessBirthday } from '@tfhc/shared';
+import { MemberReportItem, MemberReportAnalytics } from './members-report-pdf.service';
 
 import { LookupsService } from '../lookups/lookups.service';
 import { PushService } from '../push/push.service';
@@ -51,6 +52,7 @@ export class MembersService {
       return this.prisma.member.findMany({
         where,
         include: {
+          subTeam: { select: { id: true, name: true } },
           approvedMember: { select: { email: true, status: true, source: true } },
           user: {
             select: {
@@ -84,6 +86,179 @@ export class MembersService {
         orderBy: { firstName: 'asc' },
       });
     }, ['members']);
+  }
+
+  async getMembersExportData(query?: {
+    status?: MemberStatus;
+    subTeamId?: string;
+    search?: string;
+    registration?: string;
+    memberIds?: string[];
+  }): Promise<{ members: MemberReportItem[]; analytics: MemberReportAnalytics }> {
+    const where: any = {
+      approvedMember: {
+        isNot: null,
+        is: {
+          status: 'ACTIVE',
+        },
+      },
+    };
+
+    if (query?.memberIds && Array.isArray(query.memberIds) && query.memberIds.length > 0) {
+      where.id = { in: query.memberIds };
+    } else {
+      if (query?.status) {
+        if (!Object.values(MemberStatus).includes(query.status)) throw new BadRequestException('Invalid member status');
+        where.status = query.status;
+      }
+      if (query?.subTeamId) where.subTeamId = query.subTeamId;
+      if (query?.search) {
+        where.OR = [
+          { firstName: { contains: query.search, mode: 'insensitive' } },
+          { lastName: { contains: query.search, mode: 'insensitive' } },
+          { middleName: { contains: query.search, mode: 'insensitive' } },
+          { preferredName: { contains: query.search, mode: 'insensitive' } },
+          { memberCode: { contains: query.search, mode: 'insensitive' } },
+        ];
+      }
+      if (query?.registration === 'registered') {
+        where.user = {
+          isNot: null,
+          OR: [
+            { emailVerifiedAt: { not: null } },
+            { googleSubject: { not: null } },
+            { passwordAuthEnabled: true },
+          ],
+        };
+      } else if (query?.registration === 'unregistered') {
+        where.OR = [
+          { user: null },
+          {
+            user: {
+              emailVerifiedAt: null,
+              googleSubject: null,
+              passwordAuthEnabled: false,
+            },
+          },
+        ];
+      }
+    }
+
+    const membersRaw = await this.prisma.member.findMany({
+      where,
+      include: {
+        subTeam: { select: { id: true, name: true } },
+        approvedMember: { select: { email: true, status: true, source: true } },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            googleSubject: true,
+            passwordAuthEnabled: true,
+            emailVerifiedAt: true,
+            lastLoginAt: true,
+          },
+        },
+        attendanceRecords: {
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            meeting: { select: { id: true, title: true, startTime: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+        _count: {
+          select: {
+            attendanceRecords: true,
+            duesAssignments: true,
+            payments: true,
+          },
+        },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    const members: MemberReportItem[] = membersRaw.map((m) => {
+      const isRegistered = Boolean(m.user?.emailVerifiedAt || m.user?.googleSubject || m.user?.passwordAuthEnabled);
+      return {
+        id: m.id,
+        memberCode: m.memberCode,
+        firstName: m.firstName,
+        lastName: m.lastName,
+        middleName: m.middleName,
+        preferredName: m.preferredName,
+        phoneNumber: m.phoneNumber,
+        gender: m.gender,
+        roleInUnit: m.roleInUnit,
+        status: m.status,
+        subTeamName: m.subTeam?.name || null,
+        directoryEmail: m.approvedMember?.email || null,
+        userEmail: m.user?.email || null,
+        isRegistered,
+        attendanceCount: m._count?.attendanceRecords ?? 0,
+        lastAttendanceDate: m.attendanceRecords?.[0]?.createdAt ? m.attendanceRecords[0].createdAt.toISOString() : null,
+        lastAttendanceStatus: m.attendanceRecords?.[0]?.status || null,
+        dateJoined: m.dateJoined || null,
+      };
+    });
+
+    const totalMembers = members.length;
+    const activeMembers = members.filter((m) => m.status === 'ACTIVE').length;
+    const inactiveMembers = members.filter((m) => m.status === 'INACTIVE').length;
+    const pendingMembers = members.filter((m) => ['NEW_MEMBER', 'ON_LEAVE', 'SUSPENDED'].includes(m.status)).length;
+    const activeMembershipPercentage = totalMembers > 0 ? (activeMembers / totalMembers) * 100 : 0;
+    const registeredPortalCount = members.filter((m) => m.isRegistered).length;
+    const portalRegistrationPercentage = totalMembers > 0 ? (registeredPortalCount / totalMembers) * 100 : 0;
+    const totalAttendanceRecords = members.reduce((sum, m) => sum + (m.attendanceCount || 0), 0);
+    const averageAttendance = totalMembers > 0 ? totalAttendanceRecords / totalMembers : 0;
+    const subTeamsCount = new Set(members.map((m) => m.subTeamName).filter(Boolean)).size;
+
+    const genderCounts = {
+      male: members.filter((m) => m.gender?.toLowerCase() === 'male').length,
+      female: members.filter((m) => m.gender?.toLowerCase() === 'female').length,
+      unspecified: members.filter((m) => !m.gender || !['male', 'female'].includes(m.gender.toLowerCase())).length,
+    };
+
+    const statusCounts: Record<string, number> = {};
+    for (const m of members) {
+      statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
+    }
+
+    const filterParts: string[] = [];
+    if (query?.memberIds && query.memberIds.length > 0) {
+      filterParts.push(`Selected (${query.memberIds.length} members)`);
+    } else {
+      if (query?.status) filterParts.push(`Status: ${query.status}`);
+      if (query?.subTeamId) filterParts.push(`Sub-Team Filter Applied`);
+      if (query?.search) filterParts.push(`Search: "${query.search}"`);
+      if (query?.registration) filterParts.push(`Portal: ${query.registration}`);
+    }
+    const filterSummary = filterParts.length > 0 ? filterParts.join(' · ') : 'All Enrolled Members';
+
+    const now = new Date();
+    const generatedAt = now.toISOString().replace('T', ' ').slice(0, 19);
+
+    const analytics: MemberReportAnalytics = {
+      totalMembers,
+      activeMembers,
+      inactiveMembers,
+      pendingMembers,
+      activeMembershipPercentage,
+      registeredPortalCount,
+      portalRegistrationPercentage,
+      totalAttendanceRecords,
+      averageAttendance,
+      subTeamsCount,
+      genderCounts,
+      statusCounts,
+      generatedAt,
+      filterSummary,
+    };
+
+    return { members, analytics };
   }
 
   async findOne(id: string) {

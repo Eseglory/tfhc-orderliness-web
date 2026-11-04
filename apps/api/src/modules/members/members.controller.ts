@@ -5,6 +5,8 @@ import { Controller, Get, Post, Put, Body, Param, Query, UseGuards, ForbiddenExc
 import type { Response } from 'express';
 import { MembersService } from './members.service';
 import { MemberImportService } from './member-import.service';
+import { MembersReportPdfService } from './members-report-pdf.service';
+import { MembersReportExcelService } from './members-report-excel.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/rbac/permissions.guard';
@@ -24,6 +26,8 @@ export class MembersController {
     private membersService: MembersService,
     private memberImport: MemberImportService,
     private lookupsService: LookupsService,
+    private membersReportPdf: MembersReportPdfService,
+    private membersReportExcel: MembersReportExcelService,
   ) {}
 
   @RequirePermissions('members.create')
@@ -44,6 +48,86 @@ export class MembersController {
     @Query('search') search?: string
   ) {
     return this.membersService.findAll({ status, subTeamId, search });
+  }
+
+  @Get('export/pdf')
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
+  async exportPdf(
+    @Query('status') status: MemberStatus | undefined,
+    @Query('subTeamId') subTeamId: string | undefined,
+    @Query('search') search: string | undefined,
+    @Query('registration') registration: string | undefined,
+    @Res() res: Response,
+  ) {
+    const data = await this.membersService.getMembersExportData({
+      status,
+      subTeamId,
+      search,
+      registration,
+    });
+    const buffer = await this.membersReportPdf.generateMembersPdf(data);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="TFHC_Members_Executive_Report_${dateStr}.pdf"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
+  }
+
+  @Post('export/pdf')
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
+  async exportPdfPost(
+    @Body() body: { memberIds?: string[]; status?: MemberStatus; subTeamId?: string; search?: string; registration?: string },
+    @Res() res: Response,
+  ) {
+    const data = await this.membersService.getMembersExportData(body);
+    const buffer = await this.membersReportPdf.generateMembersPdf(data);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="TFHC_Members_Executive_Report_${dateStr}.pdf"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
+  }
+
+  @Get('export/excel')
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
+  async exportExcel(
+    @Query('status') status: MemberStatus | undefined,
+    @Query('subTeamId') subTeamId: string | undefined,
+    @Query('search') search: string | undefined,
+    @Query('registration') registration: string | undefined,
+    @Res() res: Response,
+  ) {
+    const data = await this.membersService.getMembersExportData({
+      status,
+      subTeamId,
+      search,
+      registration,
+    });
+    const buffer = await this.membersReportExcel.generateMembersExcel(data);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="TFHC_Members_Analytics_Workbook_${dateStr}.xlsx"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
+  }
+
+  @Post('export/excel')
+  @Roles(Role.ADMIN, Role.LEADER)
+  @RequirePermissions('members.read')
+  async exportExcelPost(
+    @Body() body: { memberIds?: string[]; status?: MemberStatus; subTeamId?: string; search?: string; registration?: string },
+    @Res() res: Response,
+  ) {
+    const data = await this.membersService.getMembersExportData(body);
+    const buffer = await this.membersReportExcel.generateMembersExcel(data);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="TFHC_Members_Analytics_Workbook_${dateStr}.xlsx"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.end(buffer);
   }
 
   @Get('sub-teams')
