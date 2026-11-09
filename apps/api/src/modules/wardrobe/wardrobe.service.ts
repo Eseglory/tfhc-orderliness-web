@@ -104,7 +104,7 @@ export class WardrobeService {
         },
       },
       orderBy: { scheduledDate: 'asc' },
-      take: options?.limit || 20,
+      take: options?.limit || (options?.all ? undefined : 100),
     });
   }
 

@@ -100,6 +100,264 @@ const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
   'sched-aug-30': '/wardrobe/colour-riot-gown-navy-suit.jpg',
 };
 
+// Authoritative Q4 2026 Fallback Roster (Guarantees all 13 Sundays are never empty)
+const FALLBACK_Q4_SCHEDULES: WardrobeSchedule[] = [
+  // OCTOBER 2026
+  {
+    id: 'sched-oct-04',
+    title: 'Sunday 4th October: Native for All (Touch of Green)',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-10-04T07:00:00.000Z',
+    instructions: 'Native for all (Touch of Green)',
+    outfit: {
+      id: 'outfit-oct-04',
+      title: 'Native for all (Touch of Green)',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/native-touch-green.jpg',
+      items: [
+        { item: { id: 'it-1', name: 'Traditional Attire', category: 'TRADITIONAL', gender: 'UNISEX' }, variant: { id: 'v-1', colorName: 'Emerald Green', colorCode: '#047857' } },
+        { item: { id: 'it-2', name: 'Green Accent Accessory', category: 'ACCESSORY', gender: 'UNISEX' }, variant: { id: 'v-2', colorName: 'Touch of Green', colorCode: '#10B981' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-oct-11',
+    title: 'Sunday 11th October: 2026 Conference Outfit for All',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-10-11T07:00:00.000Z',
+    instructions: '2026 Conference outfit for all',
+    outfit: {
+      id: 'outfit-oct-11',
+      title: '2026 Conference outfit for all',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/conference-2026.jpg',
+      items: [
+        { item: { id: 'it-3', name: '2026 Conference Fabric', category: 'UNIFORM', gender: 'UNISEX' }, variant: { id: 'v-3', colorName: 'Conference Navy/Gold', colorCode: '#1E3A8A' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-oct-18',
+    title: 'Sunday 18th October: Grey Corporate & Red Accents',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-10-18T07:00:00.000Z',
+    instructions: 'Ladies: Grey Dress and Red Scarf on the neck. Men: Grey suit / Black Shirt / Red Tie.',
+    outfit: {
+      id: 'outfit-oct-18',
+      title: 'Grey Corporate & Red Accents',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/grey-red-accent.jpg',
+      items: [
+        { item: { id: 'it-4', name: 'Corporate Grey Suit / Dress', category: 'SUIT', gender: 'UNISEX' }, variant: { id: 'v-4', colorName: 'Charcoal Grey', colorCode: '#4B5563' } },
+        { item: { id: 'it-5', name: 'Red Scarf / Tie Accent', category: 'ACCESSORY', gender: 'UNISEX' }, variant: { id: 'v-5', colorName: 'Bold Crimson Red', colorCode: '#DC2626' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-oct-25',
+    title: 'Sunday 25th October: Adire Pant / Skirt & Black Turtleneck',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-10-25T07:00:00.000Z',
+    instructions: 'Adire Pant / Skirt and Black turtleneck for all',
+    outfit: {
+      id: 'outfit-oct-25',
+      title: 'Adire Pant / Skirt & Black Turtleneck for all',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/adire-black-turtleneck.jpg',
+      items: [
+        { item: { id: 'it-6', name: 'Adire Pattern Pant / Skirt', category: 'TRADITIONAL', gender: 'UNISEX' }, variant: { id: 'v-6', colorName: 'Indigo Adire', colorCode: '#312E81' } },
+        { item: { id: 'it-7', name: 'Black Turtleneck Top', category: 'SHIRT', gender: 'UNISEX' }, variant: { id: 'v-7', colorName: 'Jet Black', colorCode: '#0F172A' } },
+      ],
+    },
+  },
+
+  // NOVEMBER 2026 (ACTIVE)
+  {
+    id: 'sched-nov-01',
+    title: 'Sunday 1st November: Wrapper & Buba / Gele & Agbada / Trouser',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-11-01T07:00:00.000Z',
+    instructions: 'Ladies: Wrapper and Buba / Aso Oke, Gele. Men: Agbada / Buba / Trouser',
+    outfit: {
+      id: 'outfit-nov-01',
+      title: 'Wrapper and Buba / Aso Oke, Gele & Agbada / Buba / Trouser',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/wrapper-buba-agbada.jpg',
+      items: [
+        { item: { id: 'it-8', name: 'Aso Oke & Gele (Ladies)', category: 'TRADITIONAL', gender: 'FEMALE' }, variant: { id: 'v-8', colorName: 'Royal Aso Oke', colorCode: '#78350F' } },
+        { item: { id: 'it-9', name: 'Agbada & Buba Trouser (Men)', category: 'TRADITIONAL', gender: 'MALE' }, variant: { id: 'v-9', colorName: 'Regal Agbada', colorCode: '#92400E' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-nov-08',
+    title: 'Sunday 8th November: Blue Jean, White Shirt & Jean Jacket',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-11-08T07:00:00.000Z',
+    instructions: 'Blue Jean Trouser, White Shirt with Jean Jacket for all',
+    outfit: {
+      id: 'outfit-nov-08',
+      title: 'Blue Jean Trouser, White Shirt with Jean Jacket for all',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/denim-jacket-jeans.jpg',
+      items: [
+        { item: { id: 'it-10', name: 'Classic Blue Denim Jeans', category: 'TROUSERS', gender: 'UNISEX' }, variant: { id: 'v-10', colorName: 'Classic Blue Denim', colorCode: '#1D4ED8' } },
+        { item: { id: 'it-11', name: 'Crisp White Shirt', category: 'SHIRT', gender: 'UNISEX' }, variant: { id: 'v-11', colorName: 'Pure White', colorCode: '#FFFFFF' } },
+        { item: { id: 'it-12', name: 'Blue Denim Jean Jacket', category: 'JACKET', gender: 'UNISEX' }, variant: { id: 'v-12', colorName: 'Denim Blue', colorCode: '#2563EB' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-nov-15',
+    title: 'Sunday 15th November: Blue Dress + Floral Scarf & Blue Suit + Floral Tie',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-11-15T07:00:00.000Z',
+    instructions: 'Ladies: Blue Dress with Floral Scarf. Men: Blue Suit / White Shirt / Floral Tie',
+    outfit: {
+      id: 'outfit-nov-15',
+      title: 'Blue Dress with Floral Scarf & Blue Suit with Floral Tie',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/blue-dress-suit-floral.jpg',
+      items: [
+        { item: { id: 'it-13', name: 'Royal Blue Dress (Ladies)', category: 'DRESS', gender: 'FEMALE' }, variant: { id: 'v-13', colorName: 'Royal Blue', colorCode: '#1E40AF' } },
+        { item: { id: 'it-14', name: 'Floral Scarf (Ladies)', category: 'ACCESSORY', gender: 'FEMALE' }, variant: { id: 'v-14', colorName: 'Pink/Yellow Floral', colorCode: '#EC4899' } },
+        { item: { id: 'it-15', name: 'Royal Blue Suit (Men)', category: 'SUIT', gender: 'MALE' }, variant: { id: 'v-15', colorName: 'Royal Blue', colorCode: '#1D4ED8' } },
+        { item: { id: 'it-16', name: 'Floral Necktie (Men)', category: 'ACCESSORY', gender: 'MALE' }, variant: { id: 'v-16', colorName: 'Floral Print', colorCode: '#F59E0B' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-nov-22',
+    title: 'Sunday 22nd November: 2025 Conference Outfit for All',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-11-22T07:00:00.000Z',
+    instructions: '2025 Conference outfit for all',
+    outfit: {
+      id: 'outfit-nov-22',
+      title: '2025 Conference outfit for all',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/conference-2025.jpg',
+      items: [
+        { item: { id: 'it-17', name: '2025 Conference Uniform Fabric', category: 'UNIFORM', gender: 'UNISEX' }, variant: { id: 'v-17', colorName: 'Official Pattern', colorCode: '#1E293B' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-nov-29',
+    title: 'Sunday 29th November: Combat Pant Trouser, Black Top & Boot',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-11-29T07:00:00.000Z',
+    instructions: 'Adire / Aso Oke / Ankara Combat Pant Trouser / Black Top and Boot for all.',
+    outfit: {
+      id: 'outfit-nov-29',
+      title: 'Combat Pant Trouser, Black Top & Boot for all',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/adire-combat-pants-boots.jpg',
+      items: [
+        { item: { id: 'it-18', name: 'Ankara / Adire Combat Pants', category: 'TROUSERS', gender: 'UNISEX' }, variant: { id: 'v-18', colorName: 'Tribal Combat Print', colorCode: '#3730A3' } },
+        { item: { id: 'it-19', name: 'Tactical Black Top', category: 'SHIRT', gender: 'UNISEX' }, variant: { id: 'v-19', colorName: 'Pitch Black', colorCode: '#09090B' } },
+        { item: { id: 'it-20', name: 'Combat Boots', category: 'FOOTWEAR', gender: 'UNISEX' }, variant: { id: 'v-20', colorName: 'Black Leather', colorCode: '#18181B' } },
+      ],
+    },
+  },
+
+  // DECEMBER 2026
+  {
+    id: 'sched-dec-06',
+    title: 'Sunday 6th December: Colour Riot Native for All',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-12-06T07:00:00.000Z',
+    instructions: 'Colour Riot Native for all.',
+    outfit: {
+      id: 'outfit-dec-06',
+      title: 'Colour Riot Native for all.',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/colour-riot-native.jpg',
+      items: [
+        { item: { id: 'it-21', name: 'Vibrant Multi-Colour Native', category: 'TRADITIONAL', gender: 'UNISEX' }, variant: { id: 'v-21', colorName: 'Vibrant Palette', colorCode: '#D946EF' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-dec-13',
+    title: 'Sunday 13th December: Bright Blazer & Black Pant Trousers',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-12-13T07:00:00.000Z',
+    instructions: 'Ladies: Black Pant Trouser, White Camisole with any Bright Coloured Blazer. Men: Black Pant, White Shirt, Blazer Jacket',
+    outfit: {
+      id: 'outfit-dec-13',
+      title: 'Black Pant, White Camisole/Shirt & Bright Coloured Blazer',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/bright-blazer.jpg',
+      items: [
+        { item: { id: 'it-22', name: 'Bright Coloured Statement Blazer', category: 'JACKET', gender: 'UNISEX' }, variant: { id: 'v-22', colorName: 'Cobalt / Mustard / Crimson', colorCode: '#2563EB' } },
+        { item: { id: 'it-23', name: 'White Camisole / Dress Shirt', category: 'SHIRT', gender: 'UNISEX' }, variant: { id: 'v-23', colorName: 'Pure White', colorCode: '#FFFFFF' } },
+        { item: { id: 'it-24', name: 'Tailored Black Trousers', category: 'TROUSERS', gender: 'UNISEX' }, variant: { id: 'v-24', colorName: 'Jet Black', colorCode: '#0F172A' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-dec-20',
+    title: 'Sunday 20th December: Native for All',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-12-20T07:00:00.000Z',
+    instructions: 'Native for all.',
+    outfit: {
+      id: 'outfit-dec-20',
+      title: 'Native for all (Christmas Celebration Attire)',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/native-emerald-gold.jpg',
+      items: [
+        { item: { id: 'it-25', name: 'Festive Traditional Attire', category: 'TRADITIONAL', gender: 'UNISEX' }, variant: { id: 'v-25', colorName: 'Emerald & Gold Brocade', colorCode: '#065F46' } },
+      ],
+    },
+  },
+  {
+    id: 'sched-dec-27',
+    title: 'Sunday 27th December: Native for All',
+    eventType: 'SUNDAY_SERVICE',
+    scheduledDate: '2026-12-27T07:00:00.000Z',
+    instructions: 'Native for all.',
+    outfit: {
+      id: 'outfit-dec-27',
+      title: 'Native for all (End of Year Thanksgiving Attire)',
+      genderTarget: 'ALL',
+      coverImageUrl: '/wardrobe/native-champagne-gold.jpg',
+      items: [
+        { item: { id: 'it-26', name: 'Thanksgiving Traditional Attire', category: 'TRADITIONAL', gender: 'UNISEX' }, variant: { id: 'v-26', colorName: 'Champagne Gold & Cream', colorCode: '#D97706' } },
+      ],
+    },
+  },
+];
+
+// Parser that separates gender-specific directives from unisex directives without text repetition
+function parseOutfitDirective(instructions: string = '', notes: string = '') {
+  const fullText = (instructions || notes || '').trim();
+
+  const isGenderSplit =
+    (fullText.includes('Ladies:') || fullText.includes('Sisters/Ladies:') || fullText.includes('Sisters:')) &&
+    (fullText.includes('Men:') || fullText.includes('Brothers/Men:') || fullText.includes('Brothers:'));
+
+  if (isGenderSplit) {
+    const parts = fullText.split(/Men:|Brothers\/Men:|Brothers:/i);
+    const ladiesPart = parts[0].replace(/•?\s*(Sisters\/Ladies|Ladies|Sisters):\s*/gi, '').trim();
+    const menPart = parts[1] ? parts[1].trim() : '';
+    return {
+      isGenderSplit: true,
+      ladies: ladiesPart,
+      men: menPart,
+      unified: '',
+    };
+  }
+
+  return {
+    isGenderSplit: false,
+    ladies: '',
+    men: '',
+    unified: fullText,
+  };
+}
+
 // Visual Theme Styling by Uniform Type
 function getUniformVisualTheme(title: string, instructions: string = '') {
   const text = (title + ' ' + instructions).toLowerCase();
@@ -299,7 +557,7 @@ export default function MemberWardrobePage() {
       setLoading(true);
       const [nextRes, allRes] = await Promise.all([
         fetchApi<any>('/wardrobe/next').catch(() => null),
-        fetchApi<any>('/wardrobe/upcoming?all=true').catch(() => [])
+        fetchApi<any>('/wardrobe/upcoming?all=true&limit=100').catch(() => [])
       ]);
 
       const nextItem = nextRes?.data || nextRes || null;
@@ -322,7 +580,43 @@ export default function MemberWardrobePage() {
     fetchWardrobeData();
   }, [fetchWardrobeData]);
 
-  // Group schedules by month
+  // Master merged schedules: primes with authoritative Q4 fallbacks, then overlays API data
+  const allMergedSchedules = useMemo(() => {
+    const map = new Map<string, WardrobeSchedule>();
+    // First, seed with all authoritative Q4 fallbacks
+    FALLBACK_Q4_SCHEDULES.forEach((s) => map.set(s.id, s));
+
+    // Next, overlay API data from DB if available
+    allSchedules.forEach((s) => {
+      const existing = map.get(s.id);
+      map.set(s.id, {
+        ...(existing || {}),
+        ...s,
+        outfit: {
+          ...(existing?.outfit || {}),
+          ...(s.outfit || {}),
+          coverImageUrl: s.outfit?.coverImageUrl || existing?.outfit?.coverImageUrl || OUTFIT_IMAGE_FALLBACKS[s.id],
+          items: s.outfit?.items && s.outfit.items.length > 0 ? s.outfit.items : existing?.outfit?.items || [],
+        },
+      });
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
+    );
+  }, [allSchedules]);
+
+  // Active Next Schedule (deterministic: uses API if present, otherwise finds upcoming from merged)
+  const activeNextSchedule = useMemo(() => {
+    if (nextSchedule) return nextSchedule;
+    const now = new Date().getTime();
+    const upcoming = allMergedSchedules
+      .filter((s) => new Date(s.scheduledDate).getTime() >= now - 24 * 60 * 60 * 1000)
+      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime());
+    return upcoming[0] || allMergedSchedules[0] || null;
+  }, [nextSchedule, allMergedSchedules]);
+
+  // Group schedules strictly by calendar month
   const schedulesByMonth = useMemo(() => {
     const july: WardrobeSchedule[] = [];
     const august: WardrobeSchedule[] = [];
@@ -331,7 +625,7 @@ export default function MemberWardrobePage() {
     const november: WardrobeSchedule[] = [];
     const december: WardrobeSchedule[] = [];
 
-    allSchedules.forEach((s) => {
+    allMergedSchedules.forEach((s) => {
       const d = new Date(s.scheduledDate);
       const month = d.getUTCMonth(); // 6=July, 7=August, 8=September, 9=October, 10=November, 11=December
       if (month === 6) july.push(s);
@@ -353,15 +647,15 @@ export default function MemberWardrobePage() {
       november: november.sort(sortByDate),
       december: december.sort(sortByDate),
     };
-  }, [allSchedules]);
+  }, [allMergedSchedules]);
 
   // Next theme styling
   const nextTheme = useMemo(() => {
-    if (!nextSchedule) return null;
-    return getUniformVisualTheme(nextSchedule.outfit.title, nextSchedule.instructions);
-  }, [nextSchedule]);
+    if (!activeNextSchedule) return null;
+    return getUniformVisualTheme(activeNextSchedule.outfit.title, activeNextSchedule.instructions);
+  }, [activeNextSchedule]);
 
-  // Filtered schedules for list view
+  // Filtered schedules for weekly cards view
   const displayedSchedules = useMemo(() => {
     if (selectedMonth === 'NOVEMBER') return schedulesByMonth.november;
     if (selectedMonth === 'DECEMBER') return schedulesByMonth.december;
@@ -369,28 +663,8 @@ export default function MemberWardrobePage() {
     if (selectedMonth === 'SEPTEMBER') return schedulesByMonth.september;
     if (selectedMonth === 'AUGUST') return schedulesByMonth.august;
     if (selectedMonth === 'JULY') return schedulesByMonth.july;
-    return allSchedules;
-  }, [selectedMonth, schedulesByMonth, allSchedules]);
-
-  const getGenderBreakdown = (text: string = '', notes: string = '') => {
-    const fullText = (text + ' ' + notes).trim();
-    let ladies = '';
-    let men = '';
-
-    if (fullText.includes('Ladies:') || fullText.includes('Sisters/Ladies:')) {
-      const parts = fullText.split(/Men:|Brothers\/Men:/i);
-      ladies = parts[0].replace(/•?\s*Sisters\/Ladies:|•?\s*Ladies:/gi, '').trim();
-      if (parts[1]) men = parts[1].trim();
-    } else if (fullText.toLowerCase().includes('for all')) {
-      ladies = 'All sisters wear standard prescribed uniform attire.';
-      men = 'All brothers wear standard prescribed uniform attire.';
-    } else {
-      ladies = fullText;
-      men = fullText;
-    }
-
-    return { ladies, men };
-  };
+    return allMergedSchedules;
+  }, [selectedMonth, schedulesByMonth, allMergedSchedules]);
 
   const getOutfitImage = (sched: WardrobeSchedule) => {
     return sched.outfit.coverImageUrl || OUTFIT_IMAGE_FALLBACKS[sched.id] || '/wardrobe/native-all.jpg';
@@ -421,20 +695,22 @@ export default function MemberWardrobePage() {
         <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 p-1 rounded-2xl border border-slate-300/50 dark:border-slate-700">
           <button
             onClick={() => setViewTab('roster_board')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${viewTab === 'roster_board'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+              viewTab === 'roster_board'
                 ? 'bg-white dark:bg-slate-900 text-primary shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+            }`}
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Roster Board</span>
           </button>
           <button
             onClick={() => setViewTab('weekly_list')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${viewTab === 'weekly_list'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+              viewTab === 'weekly_list'
                 ? 'bg-white dark:bg-slate-900 text-primary shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+            }`}
           >
             <Grid className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Weekly Cards</span>
@@ -442,7 +718,7 @@ export default function MemberWardrobePage() {
         </div>
       </header>
 
-      <main className="flex w-full flex-1 flex-col gap-8 px-4 sm:px-8 py-6 max-w-6xl mx-auto">
+      <main className="flex w-full flex-1 flex-col gap-8 px-4 sm:px-8 py-6 max-w-7xl mx-auto">
         {loading ? (
           <div className="space-y-6">
             <PageLoader
@@ -457,7 +733,7 @@ export default function MemberWardrobePage() {
             {/* =========================================================================
                 FEATURED HERO: UPCOMING SERVICE DRESS CODE (WITH REAL CLOTHING PHOTO)
             ========================================================================= */}
-            {nextSchedule && nextTheme && (
+            {activeNextSchedule && nextTheme && (
               <section className="relative group overflow-hidden rounded-[2.5rem] border-2 border-primary/30 bg-gradient-to-br shadow-2xl transition-all duration-300">
                 {/* Background Layer with Motif */}
                 <div className={`absolute inset-0 bg-gradient-to-br ${nextTheme.gradient}`} />
@@ -481,7 +757,7 @@ export default function MemberWardrobePage() {
                       </div>
 
                       <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white drop-shadow-md">
-                        {nextSchedule.title}
+                        {activeNextSchedule.title}
                       </h2>
                     </div>
 
@@ -493,12 +769,12 @@ export default function MemberWardrobePage() {
                       <div>
                         <span className="text-[10px] uppercase font-black text-white/70 block">Service Date</span>
                         <span className="text-sm font-black text-white">
-                          {new Date(nextSchedule.scheduledDate).toLocaleDateString('default', {
+                          {new Date(activeNextSchedule.scheduledDate).toLocaleDateString('default', {
                             weekday: 'long',
                             month: 'short',
                             day: 'numeric',
                             year: 'numeric',
-                            timeZone: 'UTC'
+                            timeZone: 'UTC',
                           })}
                         </span>
                       </div>
@@ -510,12 +786,12 @@ export default function MemberWardrobePage() {
                     {/* Real Cloth Showcase Photo (5 cols) */}
                     <div className="lg:col-span-5">
                       <div
-                        onClick={() => setSelectedOutfitModal(nextSchedule)}
+                        onClick={() => setSelectedOutfitModal(activeNextSchedule)}
                         className="group/photo relative w-full h-72 sm:h-80 rounded-3xl overflow-hidden border-2 border-white/25 shadow-2xl cursor-pointer"
                       >
                         <img
-                          src={getOutfitImage(nextSchedule)}
-                          alt={nextSchedule.outfit.title}
+                          src={getOutfitImage(activeNextSchedule)}
+                          alt={activeNextSchedule.outfit.title}
                           className="w-full h-full object-cover group-hover/photo:scale-105 transition-transform duration-700"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
@@ -526,7 +802,7 @@ export default function MemberWardrobePage() {
                               Official Attire Model
                             </span>
                             <p className="text-sm font-black text-white drop-shadow-md truncate">
-                              {nextSchedule.outfit.title}
+                              {activeNextSchedule.outfit.title}
                             </p>
                           </div>
                           <span className="p-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/20 text-white group-hover/photo:bg-white group-hover/photo:text-slate-950 transition-colors">
@@ -538,36 +814,57 @@ export default function MemberWardrobePage() {
 
                     {/* Directives & Pieces (7 cols) */}
                     <div className="lg:col-span-7 space-y-5">
-                      {/* Sisters & Brothers Dual Directive Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Sisters Card */}
-                        <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-pink-500/30 text-pink-200 border border-pink-400/40 text-[11px] font-black uppercase tracking-wider">
-                              <Sparkles className="w-3 h-3 text-pink-300" /> Sisters
-                            </span>
-                            <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
+                      {/* Directives Container */}
+                      {(() => {
+                        const parsed = parseOutfitDirective(activeNextSchedule.instructions, activeNextSchedule.outfit.notes);
+
+                        if (parsed.isGenderSplit) {
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {/* Sisters Card */}
+                              <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2 shadow-md">
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-pink-500/30 text-pink-200 border border-pink-400/40 text-[11px] font-black uppercase tracking-wider">
+                                    <Sparkles className="w-3 h-3 text-pink-300" /> Sisters
+                                  </span>
+                                  <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
+                                </div>
+                                <p className="text-xs font-semibold text-white/95 leading-relaxed">
+                                  {parsed.ladies}
+                                </p>
+                              </div>
+
+                              {/* Brothers Card */}
+                              <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2 shadow-md">
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-500/30 text-blue-200 border border-blue-400/40 text-[11px] font-black uppercase tracking-wider">
+                                    <Shirt className="w-3 h-3 text-blue-300" /> Brothers
+                                  </span>
+                                  <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
+                                </div>
+                                <p className="text-xs font-semibold text-white/95 leading-relaxed">
+                                  {parsed.men}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Unified Directive (No repetition!)
+                        return (
+                          <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-5 space-y-2 shadow-md">
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[11px] font-black uppercase tracking-wider">
+                                <Users className="w-3.5 h-3.5 text-emerald-300" /> For All Members
+                              </span>
+                              <span className="text-[10px] text-white/60 font-semibold">Standard Attire Guide</span>
+                            </div>
+                            <p className="text-sm font-bold text-white leading-relaxed">
+                              {parsed.unified}
+                            </p>
                           </div>
-
-                          <p className="text-xs font-semibold text-white/95 leading-relaxed">
-                            {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).ladies}
-                          </p>
-                        </div>
-
-                        {/* Brothers Card */}
-                        <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-500/30 text-blue-200 border border-blue-400/40 text-[11px] font-black uppercase tracking-wider">
-                              <Shirt className="w-3 h-3 text-blue-300" /> Brothers
-                            </span>
-                            <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
-                          </div>
-
-                          <p className="text-xs font-semibold text-white/95 leading-relaxed">
-                            {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).men}
-                          </p>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       {/* Palette & Pieces Swatches */}
                       <div className="space-y-2.5">
@@ -576,12 +873,12 @@ export default function MemberWardrobePage() {
                             <Palette className="w-4 h-4 text-amber-300" /> Required Components &amp; Palette Swatches
                           </span>
                           <span className="text-[11px] text-white/60">
-                            {nextSchedule.outfit.items.length} Required Items
+                            {activeNextSchedule.outfit.items.length} Required Items
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                          {nextSchedule.outfit.items.map((layer, idx) => (
+                          {activeNextSchedule.outfit.items.map((layer, idx) => (
                             <div
                               key={idx}
                               className="p-2.5 rounded-xl bg-black/35 backdrop-blur-md border border-white/15 flex items-center gap-2.5 text-xs"
@@ -604,7 +901,7 @@ export default function MemberWardrobePage() {
                       {/* Action Button */}
                       <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <button
-                          onClick={() => setSelectedOutfitModal(nextSchedule)}
+                          onClick={() => setSelectedOutfitModal(activeNextSchedule)}
                           className="px-7 py-3 rounded-2xl bg-white text-slate-950 hover:bg-amber-100 font-black text-xs transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
                         >
                           <Eye className="w-4 h-4 text-primary" /> View Complete Guidelines &amp; Model Photo
@@ -621,7 +918,7 @@ export default function MemberWardrobePage() {
             )}
 
             {/* =========================================================================
-            VIEW 1: OFFICIAL ROSTER BOARD MATRIX (FAITHFUL TO CHART GRAPHIC)
+            VIEW 1: OFFICIAL ROSTER BOARD MATRIX (FAITHFUL TO CHURCH FLYER DOCUMENT)
         ========================================================================= */}
             {viewTab === 'roster_board' && (
               <section className="space-y-6 animate-in fade-in duration-300">
@@ -664,12 +961,20 @@ export default function MemberWardrobePage() {
                   </div>
                 </div>
 
-                {/* Matrix Columns Table - Formatted Faithfully to Roster Document */}
+                {/* Matrix Columns Table - Formatted Faithfully to Roster Document with Exact Widths */}
                 <div className="overflow-x-auto rounded-[2rem] border-2 border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
-                  <table className="w-full border-collapse text-left text-xs min-w-[1000px]">
+                  <table className="w-full table-fixed border-collapse text-left text-xs min-w-[960px]">
+                    <colgroup>
+                      <col className="w-[15%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[17%]" />
+                    </colgroup>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
                       {/* ========================================================
-                          OCTOBER SECTION
+                          OCTOBER SECTION (4 SUNDAYS)
                       ======================================================== */}
                       {/* Orange Accent Dividing Bar */}
                       <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
@@ -678,22 +983,22 @@ export default function MemberWardrobePage() {
 
                       {/* October Month and Dates Header */}
                       <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
-                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
+                        <th className="p-3.5 font-black uppercase text-center border-r border-slate-300 dark:border-slate-700 text-xs">
                           Month and Dates
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           4<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           11<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           18<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           25<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 w-1/5 italic">
+                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 italic">
                           —
                         </th>
                       </tr>
@@ -704,10 +1009,11 @@ export default function MemberWardrobePage() {
                           <span className="text-base font-black text-amber-600 dark:text-amber-400 block">October</span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
                         </td>
+
                         {schedulesByMonth.october.map((sched, idx) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNext = nextSchedule?.id === sched.id;
-                          const isSageCell = idx === 0; // Oct 4 has sage/green background in flyer
+                          const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
+                          const isNext = activeNextSchedule?.id === sched.id;
+                          const isSageCell = idx === 0; // Oct 4 has touch of green / sage in flyer
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -725,50 +1031,70 @@ export default function MemberWardrobePage() {
                                   : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
                               }`}
                             >
-                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-white">
+                              <div className="relative h-28 w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-700/80 mb-2.5 shadow-sm group-hover:shadow-md transition-shadow">
+                                <img
+                                  src={img}
+                                  alt={sched.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-white drop-shadow">
                                     {dayNum}{suffix} Oct
                                   </span>
                                   {isNext && (
-                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                       This Sunday
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {sched.instructions}
-                              </p>
-
-                              {(breakdown.ladies || breakdown.men) && (
-                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                                  {breakdown.ladies && (
-                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                              {/* Directive Content (Clean, No Duplicate Text!) */}
+                              {parsed.isGenderSplit ? (
+                                <div className="space-y-1.5 text-xs pt-1">
+                                  <div className="p-2 rounded-xl bg-pink-50/80 dark:bg-pink-950/40 border border-pink-200/70 dark:border-pink-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-pink-500 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Ladies
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-pink-100 leading-snug">
+                                      {parsed.ladies}
                                     </p>
-                                  )}
-                                  {breakdown.men && (
-                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-blue-600 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Men
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-blue-100 leading-snug">
+                                      {parsed.men}
                                     </p>
-                                  )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 pt-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[9px] font-black uppercase tracking-wider">
+                                    <Users className="w-2.5 h-2.5" /> For All Members
+                                  </span>
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                    {parsed.unified}
+                                  </p>
                                 </div>
                               )}
                             </td>
                           );
                         })}
-                        {/* Blank 5th Sunday */}
-                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
-                          —
+
+                        {/* Blank 5th Sunday (October has only 4 Sundays) */}
+                        <td className="p-4 text-center align-middle bg-slate-50/70 dark:bg-slate-800/20 border-r border-slate-200 dark:border-slate-800">
+                          <div className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500">
+                            <span className="text-xs font-black uppercase tracking-wider">No 5th Sunday</span>
+                            <span className="text-[10px] mt-0.5">Month ends on 4th Sunday</span>
+                          </div>
                         </td>
                       </tr>
 
                       {/* ========================================================
-                          NOVEMBER SECTION (ACTIVE / CURRENT)
+                          NOVEMBER SECTION (ACTIVE / CURRENT - 5 SUNDAYS)
                       ======================================================== */}
                       {/* Orange Accent Dividing Bar */}
                       <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
@@ -777,37 +1103,38 @@ export default function MemberWardrobePage() {
 
                       {/* November Month and Dates Header */}
                       <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
-                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
+                        <th className="p-3.5 font-black uppercase text-center border-r border-slate-300 dark:border-slate-700 text-xs">
                           Month and Dates
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           1<sup>st</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           8<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           15<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           22<sup>nd</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           29<sup>th</sup>
                         </th>
                       </tr>
 
-                      {/* November Outfits Row */}
+                      {/* November Outfits Row (ALL 5 SUNDAYS FULLY POPULATED) */}
                       <tr className="bg-emerald-500/5 dark:bg-emerald-500/10 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
                         <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
                           <span className="text-base font-black block">November</span>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
                           <span className="text-[9px] block text-emerald-100 mt-0.5 font-bold">5 Sundays</span>
                         </td>
+
                         {schedulesByMonth.november.map((sched, idx) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNext = nextSchedule?.id === sched.id;
-                          const isSageCell = idx === 0; // Nov 1 has sage/green background in flyer
+                          const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
+                          const isNext = activeNextSchedule?.id === sched.id;
+                          const isSageCell = idx === 0; // Nov 1 has sage in flyer
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -825,37 +1152,53 @@ export default function MemberWardrobePage() {
                                   : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
                               }`}
                             >
-                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-white">
+                              <div className="relative h-28 w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-700/80 mb-2.5 shadow-sm group-hover:shadow-md transition-shadow">
+                                <img
+                                  src={img}
+                                  alt={sched.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-white drop-shadow">
                                     {dayNum}{suffix} Nov
                                   </span>
                                   {isNext && (
-                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                       This Sunday
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {sched.instructions}
-                              </p>
-
-                              {(breakdown.ladies || breakdown.men) && (
-                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                                  {breakdown.ladies && (
-                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                              {/* Directive Content (Clean, No Duplicate Text!) */}
+                              {parsed.isGenderSplit ? (
+                                <div className="space-y-1.5 text-xs pt-1">
+                                  <div className="p-2 rounded-xl bg-pink-50/80 dark:bg-pink-950/40 border border-pink-200/70 dark:border-pink-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-pink-500 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Ladies
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-pink-100 leading-snug">
+                                      {parsed.ladies}
                                     </p>
-                                  )}
-                                  {breakdown.men && (
-                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-blue-600 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Men
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-blue-100 leading-snug">
+                                      {parsed.men}
                                     </p>
-                                  )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 pt-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[9px] font-black uppercase tracking-wider">
+                                    <Users className="w-2.5 h-2.5" /> For All Members
+                                  </span>
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                    {parsed.unified}
+                                  </p>
                                 </div>
                               )}
                             </td>
@@ -864,7 +1207,7 @@ export default function MemberWardrobePage() {
                       </tr>
 
                       {/* ========================================================
-                          DECEMBER SECTION
+                          DECEMBER SECTION (4 SUNDAYS)
                       ======================================================== */}
                       {/* Orange Accent Dividing Bar */}
                       <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
@@ -873,35 +1216,36 @@ export default function MemberWardrobePage() {
 
                       {/* December Month and Dates Header */}
                       <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
-                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
+                        <th className="p-3.5 font-black uppercase text-center border-r border-slate-300 dark:border-slate-700 text-xs">
                           Month and Dates
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           6<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           13<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           20<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700">
                           27<sup>th</sup>
                         </th>
-                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 w-1/5 italic">
+                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 italic">
                           —
                         </th>
                       </tr>
 
-                      {/* December Outfits Row */}
+                      {/* December Outfits Row (ALL 4 SUNDAYS FULLY POPULATED) */}
                       <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="p-5 font-black text-center bg-blue-600 text-white border-r border-blue-500/30 shadow-md">
                           <span className="text-base font-black block">December</span>
                           <span className="text-[10px] text-blue-100 font-bold block">4 Sundays</span>
                         </td>
+
                         {schedulesByMonth.december.map((sched) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNext = nextSchedule?.id === sched.id;
+                          const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
+                          const isNext = activeNextSchedule?.id === sched.id;
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -912,48 +1256,70 @@ export default function MemberWardrobePage() {
                               key={sched.id}
                               onClick={() => setSelectedOutfitModal(sched)}
                               className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
-                                isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                                isNext
+                                  ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset'
+                                  : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
                               }`}
                             >
-                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                                  <span className="text-[10px] font-black text-white">
+                              <div className="relative h-28 w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-700/80 mb-2.5 shadow-sm group-hover:shadow-md transition-shadow">
+                                <img
+                                  src={img}
+                                  alt={sched.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+                                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[11px] font-black text-white drop-shadow">
                                     {dayNum}{suffix} Dec
                                   </span>
                                   {isNext && (
-                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[8px] font-black uppercase tracking-wider">
                                       This Sunday
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {sched.instructions}
-                              </p>
-
-                              {(breakdown.ladies || breakdown.men) && (
-                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                                  {breakdown.ladies && (
-                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                              {/* Directive Content (Clean, No Duplicate Text!) */}
+                              {parsed.isGenderSplit ? (
+                                <div className="space-y-1.5 text-xs pt-1">
+                                  <div className="p-2 rounded-xl bg-pink-50/80 dark:bg-pink-950/40 border border-pink-200/70 dark:border-pink-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-pink-500 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Ladies
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-pink-100 leading-snug">
+                                      {parsed.ladies}
                                     </p>
-                                  )}
-                                  {breakdown.men && (
-                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                  </div>
+                                  <div className="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-900/50">
+                                    <span className="inline-block px-1.5 py-0.2 rounded bg-blue-600 text-white text-[9px] font-black uppercase tracking-wider mb-1">
+                                      Men
+                                    </span>
+                                    <p className="text-[11px] font-semibold text-slate-800 dark:text-blue-100 leading-snug">
+                                      {parsed.men}
                                     </p>
-                                  )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5 pt-1">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[9px] font-black uppercase tracking-wider">
+                                    <Users className="w-2.5 h-2.5" /> For All Members
+                                  </span>
+                                  <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                    {parsed.unified}
+                                  </p>
                                 </div>
                               )}
                             </td>
                           );
                         })}
-                        {/* Blank 5th Sunday */}
-                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
-                          —
+
+                        {/* Blank 5th Sunday (December has only 4 Sundays) */}
+                        <td className="p-4 text-center align-middle bg-slate-50/70 dark:bg-slate-800/20 border-r border-slate-200 dark:border-slate-800">
+                          <div className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500">
+                            <span className="text-xs font-black uppercase tracking-wider">No 5th Sunday</span>
+                            <span className="text-[10px] mt-0.5">Month ends on 4th Sunday</span>
+                          </div>
                         </td>
                       </tr>
 
@@ -967,8 +1333,7 @@ export default function MemberWardrobePage() {
                               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
                             </td>
                             {schedulesByMonth.september.map((sched) => {
-                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
                               const img = getOutfitImage(sched);
                               return (
                                 <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
@@ -977,14 +1342,7 @@ export default function MemberWardrobePage() {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Sept</span>
                                   </div>
-                                  {isNative ? (
-                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
-                                  ) : (
-                                    <div className="space-y-1 text-[11px]">
-                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                    </div>
-                                  )}
+                                  <p className="text-xs font-bold leading-snug text-slate-900 dark:text-white truncate">{parsed.unified || sched.instructions}</p>
                                 </td>
                               );
                             })}
@@ -998,8 +1356,7 @@ export default function MemberWardrobePage() {
                               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
                             </td>
                             {schedulesByMonth.august.map((sched) => {
-                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
                               const img = getOutfitImage(sched);
                               return (
                                 <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
@@ -1008,14 +1365,7 @@ export default function MemberWardrobePage() {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Aug</span>
                                   </div>
-                                  {isNative ? (
-                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
-                                  ) : (
-                                    <div className="space-y-1 text-[11px]">
-                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                    </div>
-                                  )}
+                                  <p className="text-xs font-bold leading-snug text-slate-900 dark:text-white truncate">{parsed.unified || sched.instructions}</p>
                                 </td>
                               );
                             })}
@@ -1028,8 +1378,7 @@ export default function MemberWardrobePage() {
                               <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
                             </td>
                             {schedulesByMonth.july.map((sched) => {
-                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
                               const img = getOutfitImage(sched);
                               return (
                                 <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
@@ -1038,14 +1387,7 @@ export default function MemberWardrobePage() {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                                     <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th July</span>
                                   </div>
-                                  {isNative ? (
-                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 Native for all members.</div>
-                                  ) : (
-                                    <div className="space-y-1 text-[11px]">
-                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                    </div>
-                                  )}
+                                  <p className="text-xs font-bold leading-snug text-slate-900 dark:text-white truncate">{parsed.unified || sched.instructions}</p>
                                 </td>
                               );
                             })}
@@ -1090,23 +1432,24 @@ export default function MemberWardrobePage() {
                       <button
                         key={m}
                         onClick={() => setSelectedMonth(m)}
-                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${selectedMonth === m
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${
+                          selectedMonth === m
                             ? 'bg-primary text-white shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                          }`}
+                        }`}
                       >
-                        {m === 'NOVEMBER' ? 'November (Active)' : m === 'ALL' ? `All (${allSchedules.length})` : m}
+                        {m === 'NOVEMBER' ? 'November (Active)' : m === 'ALL' ? `All (${allMergedSchedules.length})` : m}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {displayedSchedules.map((sched) => {
                     const theme = getUniformVisualTheme(sched.outfit.title, sched.instructions);
-                    const isNext = nextSchedule?.id === sched.id;
-                    const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                    const isNext = activeNextSchedule?.id === sched.id;
+                    const parsed = parseOutfitDirective(sched.instructions, sched.outfit.notes);
                     const dateObj = new Date(sched.scheduledDate);
                     const img = getOutfitImage(sched);
 
@@ -1114,13 +1457,14 @@ export default function MemberWardrobePage() {
                       <div
                         key={sched.id}
                         onClick={() => setSelectedOutfitModal(sched)}
-                        className={`group relative overflow-hidden rounded-[2.2rem] border bg-white dark:bg-slate-900 shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col justify-between ${isNext
+                        className={`group relative overflow-hidden rounded-[2.2rem] border bg-white dark:bg-slate-900 shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col justify-between ${
+                          isNext
                             ? 'border-primary ring-2 ring-primary/40'
                             : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-                          }`}
+                        }`}
                       >
                         {/* Realistic Clothing Photo Banner */}
-                        <div className="relative w-full h-52 sm:h-60 overflow-hidden bg-slate-950">
+                        <div className="relative w-full h-56 sm:h-64 overflow-hidden bg-slate-950">
                           <img
                             src={img}
                             alt={sched.outfit.title}
@@ -1156,25 +1500,36 @@ export default function MemberWardrobePage() {
 
                         {/* Directives Body */}
                         <div className="p-5 space-y-4">
-                          {/* Gender Breakdown Container */}
-                          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
-                            <div className="flex items-start gap-2">
-                              <span className="px-2 py-0.5 rounded-md bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
-                                Ladies
+                          {/* Directive Container (No text repetition!) */}
+                          {parsed.isGenderSplit ? (
+                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
+                              <div className="flex items-start gap-2">
+                                <span className="px-2 py-0.5 rounded-md bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
+                                  Ladies
+                                </span>
+                                <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                  {parsed.ladies}
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
+                                <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
+                                  Men
+                                </span>
+                                <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                  {parsed.men}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-xs">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-black text-[10px] uppercase">
+                                <Users className="w-3 h-3" /> For All Members
                               </span>
-                              <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                                {breakdown.ladies}
+                              <p className="text-slate-900 dark:text-slate-100 font-semibold leading-relaxed">
+                                {parsed.unified}
                               </p>
                             </div>
-                            <div className="flex items-start gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
-                              <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
-                                Men
-                              </span>
-                              <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                                {breakdown.men}
-                              </p>
-                            </div>
-                          </div>
+                          )}
 
                           {/* Pieces Swatches & CTA */}
                           <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
@@ -1227,7 +1582,7 @@ export default function MemberWardrobePage() {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',
-                    timeZone: 'UTC'
+                    timeZone: 'UTC',
                   })}
                 </p>
               </div>
@@ -1259,74 +1614,87 @@ export default function MemberWardrobePage() {
               </div>
             </div>
 
-            {/* Instructions */}
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
-              <span className="font-black text-slate-500 uppercase tracking-wider text-[10px] block mb-1">
-                Styling Overview:
-              </span>
-              {selectedOutfitModal.instructions || selectedOutfitModal.outfit.description}
-            </div>
+            {/* Directives Section */}
+            {(() => {
+              const parsed = parseOutfitDirective(selectedOutfitModal.instructions, selectedOutfitModal.outfit.notes);
 
-            {/* Gender Requirements Side-by-Side */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-primary" /> Specific Gender Requirements
-              </h4>
+              if (parsed.isGenderSplit) {
+                return (
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-primary" /> Specific Gender Requirements
+                    </h4>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Sisters */}
-                <div className="p-4 rounded-2xl bg-pink-50/70 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-900/60 space-y-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-pink-200 dark:bg-pink-900 text-pink-900 dark:text-pink-200 font-black text-[10px] uppercase">
-                    Sisters / Ladies
-                  </span>
-                  <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                    {getGenderBreakdown(selectedOutfitModal.instructions, selectedOutfitModal.outfit.notes).ladies}
-                  </p>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Sisters */}
+                      <div className="p-4 rounded-2xl bg-pink-50/70 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-900/60 space-y-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-pink-200 dark:bg-pink-900 text-pink-900 dark:text-pink-200 font-black text-[10px] uppercase">
+                          Sisters / Ladies
+                        </span>
+                        <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                          {parsed.ladies}
+                        </p>
+                      </div>
 
-                {/* Brothers */}
-                <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200 font-black text-[10px] uppercase">
-                    Brothers / Men
-                  </span>
-                  <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                    {getGenderBreakdown(selectedOutfitModal.instructions, selectedOutfitModal.outfit.notes).men}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Required Pieces Checklist */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-primary" /> Required Pieces Checklist ({selectedOutfitModal.outfit.items.length} Items)
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {selectedOutfitModal.outfit.items.map((layer, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center gap-3.5 shadow-xs"
-                  >
-                    <span
-                      className="w-8 h-8 rounded-xl border border-black/15 shadow-sm flex-shrink-0 flex items-center justify-center text-white"
-                      style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
-                    >
-                      <Check className="w-4 h-4 stroke-[3]" />
-                    </span>
-
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                        {layer.item?.name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                        {layer.notes || layer.variant?.colorName || 'Prescribed Item'}
-                      </p>
+                      {/* Brothers */}
+                      <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-blue-200 dark:bg-blue-900 text-blue-900 dark:text-blue-200 font-black text-[10px] uppercase">
+                          Brothers / Men
+                        </span>
+                        <p className="text-xs text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                          {parsed.men}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                ))}
+                );
+              }
+
+              return (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 leading-relaxed space-y-1.5">
+                  <span className="font-black text-slate-500 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary" /> Uniform Directive for All Members:
+                  </span>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">
+                    {parsed.unified}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Required Pieces Checklist */}
+            {selectedOutfitModal.outfit.items.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-primary" /> Required Pieces Checklist ({selectedOutfitModal.outfit.items.length} Items)
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {selectedOutfitModal.outfit.items.map((layer, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center gap-3.5 shadow-xs"
+                    >
+                      <span
+                        className="w-8 h-8 rounded-xl border border-black/15 shadow-sm flex-shrink-0 flex items-center justify-center text-white"
+                        style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
+                      >
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </span>
+
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {layer.item?.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          {layer.notes || layer.variant?.colorName || 'Prescribed Item'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Modal Footer */}
             <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
