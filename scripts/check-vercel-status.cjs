@@ -21,7 +21,7 @@ const token = process.env.VERCEL_TOKEN;
 const teamId = process.env.VERCEL_ORG_ID || 'team_Mf5t14RhxNCW6ED6ryqGTMUY';
 
 async function check() {
-  const res = await fetch('https://api.vercel.com/v13/deployments/dpl_5jy7xY5xT1GL5b61t2JESKfitWy1?teamId=' + teamId, {
+  const res = await fetch('https://api.vercel.com/v13/deployments/dpl_GgFA6eSyLZ8vg1jLQGmEAK4QPoiz?teamId=' + teamId, {
     headers: { Authorization: 'Bearer ' + token }
   });
   const d = await res.json();
