@@ -50,6 +50,8 @@ describe('name matching', () => {
     expect(parseYearlessBirthday('14th March')).toBe('03-14');
     expect(parseYearlessBirthday('13 September')).toBe('09-13');
     expect(parseYearlessBirthday('3rd  February')).toBe('02-03');
+    expect(parseYearlessBirthday('April 2')).toBe('04-02');
+    expect(parseYearlessBirthday('April 2nd')).toBe('04-02');
     expect(parseYearlessBirthday('14/03')).toBe('03-14');
     expect(parseYearlessBirthday('05/11')).toBe('11-05');
     expect(parseYearlessBirthday('03-14')).toBe('03-14');

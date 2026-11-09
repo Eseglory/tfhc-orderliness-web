@@ -243,6 +243,30 @@
       "aliases": [
         "Abiodun Kolade"
       ]
+    },
+    {
+      "firstName": "Oluwabusayomi",
+      "lastName": "Akamo",
+      "email": "orisandetemitope.ot@gmail.com",
+      "phoneNumber": "08166699918",
+      "birthday": "2nd April",
+      "profession": "Medical Laboratory Technician and Fashion Designer",
+      "aliases": [
+        "Akamo Oluwabusayomi"
+      ]
+    },
+    {
+      "firstName": "Titilope",
+      "lastName": "Jaiyeola",
+      "email": "titilopejaiyeola589@gmail.com",
+      "phoneNumber": "07086280424",
+      "alternatePhoneNumber": "09135930027",
+      "birthday": "15th February",
+      "dateOfBirth": "1974-02-15",
+      "profession": "The Mattress Source",
+      "aliases": [
+        "Jaiyeola Titilope"
+      ]
     }
   ],
   "skipped": []

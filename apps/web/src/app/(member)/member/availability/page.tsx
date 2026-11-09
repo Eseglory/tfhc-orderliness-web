@@ -88,6 +88,21 @@ export default function MemberAvailabilityPage() {
   const isRecovery = Boolean(data?.cycle?.isRecovery);
   const isSubmitted = Boolean(data?.submitted);
 
+  const formatDeadline = (dateStr?: string) => {
+    if (!dateStr) return 'Tuesday at 12:00 PM WAT';
+    return (
+      new Date(dateStr).toLocaleString('en-GB', {
+        timeZone: 'Africa/Lagos',
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }) + ' WAT'
+    );
+  };
+
   return (
     <div className="bg-background text-on-background font-body-md min-h-screen pb-safe">
       <header className="bg-background flex justify-between items-center w-full px-edge-margin h-16 sticky top-0 z-40 border-b border-outline-variant/10">
@@ -102,7 +117,7 @@ export default function MemberAvailabilityPage() {
           <div>
             <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Weekly Availability</h1>
             <p className="text-[11px] font-semibold text-on-surface-variant">
-              {isRecovery ? 'Recovery Window (Closes 11:59 PM WAT)' : 'Open: Monday 12:00 AM – Tuesday 12:00 PM WAT'}
+              {isOpen ? `Open until ${formatDeadline(data?.cycle?.closesAt)}` : 'Weekly Service Availability'}
             </p>
           </div>
         </div>
@@ -147,9 +162,7 @@ export default function MemberAvailabilityPage() {
                     </p>
                     {isOpen ? (
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1 font-semibold">
-                        {isRecovery
-                          ? 'Tuesday recovery window remains open until 11:59 PM WAT. You may update your service selection below.'
-                          : 'Window remains open until Tuesday at 12:00 PM WAT. You may update your service selection below.'}
+                        Window remains open until {formatDeadline(data?.cycle?.closesAt)}. You may update your service selection below.
                       </p>
                     ) : (
                       <p className="text-[11px] text-emerald-700 dark:text-emerald-400 pt-1">
@@ -219,7 +232,7 @@ export default function MemberAvailabilityPage() {
                       Let us know which services you will attend this week. Submitting your availability serves as your attendance confirmation.
                     </p>
                     <p className="text-xs text-blue-800 dark:text-blue-300 font-bold pt-1">
-                      Deadline: Tuesday at 12:00 PM WAT
+                      Deadline: {formatDeadline(data?.cycle?.closesAt)}
                     </p>
                   </div>
                 </div>
@@ -332,7 +345,7 @@ export default function MemberAvailabilityPage() {
                   </p>
                 ) : (
                   <p className="text-center text-[11px] text-on-surface-variant">
-                    You can update this until Tuesday at 12:00 PM WAT.
+                    You can update this until {formatDeadline(data?.cycle?.closesAt)}.
                   </p>
                 )}
               </div>

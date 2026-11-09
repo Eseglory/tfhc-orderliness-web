@@ -311,6 +311,7 @@ export class MeetingsService {
       includeArchived?: boolean;
       upcomingOnly?: boolean;
       sortOrder?: 'asc' | 'desc';
+      limit?: number;
     } = {},
     isStaff = true,
     memberId?: string,
@@ -346,7 +347,8 @@ export class MeetingsService {
           ],
         });
 
-      const sortDir = query.sortOrder || (query.status === 'CLOSED' ? 'desc' : 'asc');
+      // Default to descending chronological order (newest/most recent events first)
+      const sortDir: 'asc' | 'desc' = query.sortOrder || 'desc';
 
       return this.prisma.meeting.findMany({
         where: { AND: and },
@@ -379,7 +381,12 @@ export class MeetingsService {
           },
           ...(isStaff ? { audiences: { include: { member: { select: { firstName: true, lastName: true } }, subTeam: true } } } : {}),
         },
-        orderBy: { startTime: sortDir },
+        orderBy: [
+          { startTime: sortDir },
+          { createdAt: sortDir },
+          { id: sortDir },
+        ],
+        ...(query.limit ? { take: Number(query.limit) } : {}),
       });
     }, ['calendar', 'meetings']);
   }

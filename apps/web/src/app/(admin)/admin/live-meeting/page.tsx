@@ -114,9 +114,9 @@ export default function AdminLiveMeetingsIndexPage() {
     return Array.from(map.values()).sort();
   }, [meetings]);
 
-  // Filtered dataset according to user selection
+  // Filtered dataset according to user selection (consistently sorted by newest events first: EventDate DESC)
   const filteredMeetings = useMemo(() => {
-    return meetings.filter((m) => {
+    const list = meetings.filter((m) => {
       // Status filter
       if (statusFilter === 'ACTIVE' && m.status !== 'ACTIVE') return false;
       if (statusFilter === 'SCHEDULED' && m.status !== 'SCHEDULED') return false;
@@ -138,6 +138,16 @@ export default function AdminLiveMeetingsIndexPage() {
       }
 
       return true;
+    });
+
+    return list.slice().sort((a, b) => {
+      const timeA = new Date(a.startTime).getTime();
+      const timeB = new Date(b.startTime).getTime();
+      if (timeB !== timeA) return timeB - timeA;
+      const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (createdB !== createdA) return createdB - createdA;
+      return (b.id || '').localeCompare(a.id || '');
     });
   }, [meetings, statusFilter, categoryFilter, searchQuery]);
 

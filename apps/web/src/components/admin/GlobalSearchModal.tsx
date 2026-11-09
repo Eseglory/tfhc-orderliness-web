@@ -112,7 +112,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
             title: m.title,
             subtitle: `${new Date(m.startTime).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • ${m.category?.name || 'Service'}`,
             category: 'meeting',
-            href: `/admin/meetings/${m.id}`,
+            href: `/admin/live-meeting/${m.id}`,
             badge: m.status,
           }));
 

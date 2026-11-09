@@ -295,10 +295,18 @@ export default function MemberDashboard() {
                         ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
                         : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                     }`}>
-                      {availabilityData?.cycle?.isRecovery ? 'Tuesday Recovery Open' : 'Weekly Availability Open'}
+                      {availabilityData?.cycle?.isRecovery ? 'Extended Window Open' : 'Weekly Availability Open'}
                     </span>
                     <span className="text-[11px] text-on-surface-variant font-medium">
-                      {availabilityData?.cycle?.isRecovery ? 'Closes Tonight 11:59 PM WAT' : 'Closes Tuesday 12:00 PM WAT'}
+                      {availabilityData?.cycle?.closesAt
+                        ? `Closes ${new Date(availabilityData.cycle.closesAt).toLocaleString('en-GB', {
+                            timeZone: 'Africa/Lagos',
+                            weekday: 'short',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })} WAT`
+                        : 'Closes Tuesday 12:00 PM WAT'}
                     </span>
                   </div>
                   <h2 className="text-base sm:text-lg font-black text-on-surface mt-1">

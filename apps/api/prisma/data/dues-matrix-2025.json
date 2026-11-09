@@ -19,7 +19,7 @@
     { "name": "Uchenna Chinenye", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
     { "name": "Nicole Okafor", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
     { "name": "Efionayi Eseosa", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "note": "matches directory 'Glory Eseosa'" },
-    { "name": "Titilope Jaiyeola", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "note": "not in the directory" },
+    { "name": "Titilope Jaiyeola", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
     { "name": "Paseda Oluwafemi", "amount": 2000, "paidMonths": [], "note": "no payments recorded" },
     { "name": "Amaka Otega", "amount": 2000, "paidMonths": [1,2,3,4,5,6,8,9,10,11,12], "note": "not in the directory; July unpaid" },
     { "name": "Martha John-Williams", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9] },

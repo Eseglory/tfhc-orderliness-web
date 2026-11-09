@@ -163,14 +163,35 @@ export function parseYearlessBirthday(raw: string): string | null {
   }
 
   const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+  // Day Month (e.g. "14th March", "13 September", "2nd April")
   const m = trimmed.toLowerCase().match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]+)/);
-  if (!m) return null;
-  const day = Number(m[1]);
-  const month = MONTHS.indexOf(m[2]) + 1;
-  if (!month || day < 1 || day > 31) return null;
-  const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime()) || parsed.getUTCDate() !== day || parsed.getUTCMonth() + 1 !== month) return null;
-  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  if (m) {
+    const day = Number(m[1]);
+    const month = MONTHS.indexOf(m[2]) + 1;
+    if (month && day >= 1 && day <= 31) {
+      const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
+      if (!Number.isNaN(parsed.getTime()) && parsed.getUTCDate() === day && parsed.getUTCMonth() + 1 === month) {
+        return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  }
+
+  // Month Day (e.g. "April 2", "March 14th", "September 13")
+  const m2 = trimmed.toLowerCase().match(/^([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?/);
+  if (m2) {
+    const month = MONTHS.indexOf(m2[1]) + 1;
+    const day = Number(m2[2]);
+    if (month && day >= 1 && day <= 31) {
+      const parsed = new Date(`2000-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`);
+      if (!Number.isNaN(parsed.getTime()) && parsed.getUTCDate() === day && parsed.getUTCMonth() + 1 === month) {
+        return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  }
+
+  return null;
 }
 
 /** Formats a stored MM-DD or DD/MM birthday as DD/MM (e.g. "14/03"). Returns empty string if invalid/missing. */

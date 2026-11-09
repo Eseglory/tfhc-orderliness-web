@@ -147,6 +147,7 @@ export class MeetingsController {
     @Query('includeArchived') includeArchived?: string,
     @Query('upcomingOnly') upcomingOnly?: string,
     @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+    @Query('limit') limit?: string,
   ) {
     return this.meetingsService.findAll(
       {
@@ -159,6 +160,7 @@ export class MeetingsController {
         includeArchived: includeArchived === 'true',
         upcomingOnly: upcomingOnly === 'true',
         sortOrder,
+        limit: limit ? parseInt(limit, 10) : undefined,
       },
       isStaff(role),
       memberId,
