@@ -157,7 +157,7 @@ async function main() {
       { item: agbadaBubaTrouser, layerOrder: 3, notes: 'Men: Agbada / Buba / Trouser' },
       { item: blackShoes, layerOrder: 4, notes: 'All: Formal / traditional footwear' },
     ],
-    '/wardrobe/native-all.jpg',
+    '/wardrobe/wrapper-buba-agbada.jpg',
   );
   await upsertSchedule(
     'sched-nov-01',

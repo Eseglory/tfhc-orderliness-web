@@ -80,7 +80,7 @@ const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
   'sched-nov-22': '/wardrobe/conference-2025.jpg',
   'sched-nov-15': '/wardrobe/blue-dress-suit-floral.jpg',
   'sched-nov-08': '/wardrobe/denim-jacket-jeans.jpg',
-  'sched-nov-01': '/wardrobe/native-all.jpg',
+  'sched-nov-01': '/wardrobe/wrapper-buba-agbada.jpg',
   'sched-oct-04': '/wardrobe/native-touch-green.jpg',
   'sched-oct-11': '/wardrobe/conference-2026.jpg',
   'sched-oct-18': '/wardrobe/grey-red-accent.jpg',
@@ -292,6 +292,7 @@ export default function MemberWardrobePage() {
   const [viewTab, setViewTab] = useState<'roster_board' | 'weekly_list'>('roster_board');
   const [selectedMonth, setSelectedMonth] = useState<'NOVEMBER' | 'DECEMBER' | 'OCTOBER' | 'SEPTEMBER' | 'AUGUST' | 'JULY' | 'ALL'>('NOVEMBER');
   const [showArchive, setShowArchive] = useState(false);
+  const [isFlyerModalOpen, setIsFlyerModalOpen] = useState(false);
 
   const fetchWardrobeData = useCallback(async () => {
     try {
@@ -624,61 +625,89 @@ export default function MemberWardrobePage() {
         ========================================================================= */}
             {viewTab === 'roster_board' && (
               <section className="space-y-6 animate-in fade-in duration-300">
-                {/* Roster Banner */}
-                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-emerald-700 via-blue-700 via-purple-700 to-amber-600 p-7 text-white shadow-xl text-center space-y-2">
-                  <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-                  <span className="text-[11px] font-black uppercase tracking-widest text-white/80 block">
-                    The Father&apos;s House Church • Orderliness Unit
-                  </span>
-                  <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider drop-shadow-md">
-                    OCTOBER, NOVEMBER &amp; DECEMBER 2026 ORDERLINESS UNIFORM ROSTER
-                  </h2>
-                  <p className="text-xs sm:text-sm text-white/95 max-w-2xl mx-auto font-medium leading-relaxed">
-                    Official uniform roster for Sunday services. Click on any date card to view complete outfit breakdowns, grooming guides and required pieces.
-                  </p>
+                {/* Official Roster Header Banner (Faithful to Church Document) */}
+                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 border-primary/40 p-6 sm:p-8 text-white shadow-2xl space-y-4">
+                  {/* Visual Church Color Blocks (Top Accent) */}
+                  <div className="flex items-center justify-between gap-1.5 h-3.5 rounded-full overflow-hidden w-full max-w-xl mx-auto shadow-inner">
+                    <div className="w-1/6 h-full bg-[#f59e0b]" />
+                    <div className="w-1/6 h-full bg-[#1e40af]" />
+                    <div className="w-2/6 h-full bg-[#16a34a]" />
+                    <div className="w-1/6 h-full bg-[#eab308]" />
+                    <div className="w-1/6 h-full bg-[#2563eb]" />
+                  </div>
+
+                  {/* Center Title Box */}
+                  <div className="text-center space-y-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary-foreground/90 px-3.5 py-1 rounded-full bg-white/10 border border-white/15 inline-block">
+                      The Father&apos;s House Church • Orderliness Unit
+                    </span>
+                    <div className="block">
+                      <div className="inline-block px-6 py-2.5 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 border-2 border-blue-400/50 shadow-xl">
+                        <h2 className="text-lg sm:text-2xl md:text-3xl font-black uppercase tracking-wider text-white drop-shadow-md">
+                          OCTOBER, NOVEMBER AND DECEMBER 2026 ORDERLINESS UNIFORM ROSTER
+                        </h2>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed">
+                      Official uniform directives for Sunday services. Click any date card to view the complete model ensemble, component swatches, and styling notes.
+                    </p>
+                  </div>
+
+                  {/* Action Bar: View Original Flyer Graphic */}
+                  <div className="flex items-center justify-center gap-3 pt-1">
+                    <button
+                      onClick={() => setIsFlyerModalOpen(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-transform active:scale-95 shadow-lg"
+                    >
+                      <Eye className="w-4 h-4 text-slate-950" /> View Original Roster Document
+                    </button>
+                  </div>
                 </div>
 
-                {/* Matrix Columns Table */}
-                <div className="overflow-x-auto rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
-                  <table className="w-full border-collapse text-left text-xs min-w-[950px]">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800">
-                        <th className="p-4 font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 w-32 text-center text-xs">
+                {/* Matrix Columns Table - Formatted Faithfully to Roster Document */}
+                <div className="overflow-x-auto rounded-[2rem] border-2 border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+                  <table className="w-full border-collapse text-left text-xs min-w-[1000px]">
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
+                      {/* ========================================================
+                          OCTOBER SECTION
+                      ======================================================== */}
+                      {/* Orange Accent Dividing Bar */}
+                      <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
+                        <td colSpan={6} className="p-0 h-3" />
+                      </tr>
+
+                      {/* October Month and Dates Header */}
+                      <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
+                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
                           Month and Dates
                         </th>
-                        <th className="p-4 font-black uppercase text-white bg-blue-600 text-center w-1/5 shadow-inner">
-                          <span className="text-sm block font-black">1st Sunday</span>
-                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 4 • Nov 1 • Dec 6</span>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          4<sup>th</sup>
                         </th>
-                        <th className="p-4 font-black uppercase text-white bg-slate-700 text-center w-1/5 shadow-inner">
-                          <span className="text-sm block font-black">2nd Sunday</span>
-                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 11 • Nov 8 • Dec 13</span>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          11<sup>th</sup>
                         </th>
-                        <th className="p-4 font-black uppercase text-white bg-purple-600 text-center w-1/5 shadow-inner">
-                          <span className="text-sm block font-black">3rd Sunday</span>
-                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 18 • Nov 15 • Dec 20</span>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          18<sup>th</sup>
                         </th>
-                        <th className="p-4 font-black uppercase text-white bg-red-600 text-center w-1/5 shadow-inner">
-                          <span className="text-sm block font-black">4th Sunday</span>
-                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 25 • Nov 22 • Dec 27</span>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          25<sup>th</sup>
                         </th>
-                        <th className="p-4 font-black uppercase text-white bg-amber-500 text-center w-1/5 shadow-inner">
-                          <span className="text-sm block font-black">5th Sunday</span>
-                          <span className="text-[10px] text-white/90 font-bold block mt-0.5">Nov 29</span>
+                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 w-1/5 italic">
+                          —
                         </th>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
-                      {/* October Row */}
+
+                      {/* October Outfits Row */}
                       <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                        <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-300 dark:border-slate-700">
                           <span className="text-base font-black text-amber-600 dark:text-amber-400 block">October</span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
                         </td>
-                        {schedulesByMonth.october.map((sched) => {
+                        {schedulesByMonth.october.map((sched, idx) => {
                           const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
                           const isNext = nextSchedule?.id === sched.id;
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const isSageCell = idx === 0; // Oct 4 has sage/green background in flyer
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -688,10 +717,15 @@ export default function MemberWardrobePage() {
                             <td
                               key={sched.id}
                               onClick={() => setSelectedOutfitModal(sched)}
-                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                                }`}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
+                                isSageCell
+                                  ? 'bg-emerald-50/70 dark:bg-emerald-950/30'
+                                  : isNext
+                                  ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset'
+                                  : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                              }`}
                             >
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
                                 <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
                                 <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
@@ -706,12 +740,12 @@ export default function MemberWardrobePage() {
                                 </div>
                               </div>
 
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 text-[11px] font-bold">
-                                  🌿 {sched.instructions}
-                                </div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {sched.instructions}
+                              </p>
+
+                              {(breakdown.ladies || breakdown.men) && (
+                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
                                   {breakdown.ladies && (
                                     <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
                                       <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
@@ -733,17 +767,47 @@ export default function MemberWardrobePage() {
                         </td>
                       </tr>
 
-                      {/* November Row (Active Current Month) */}
-                      <tr className="bg-emerald-500/5 dark:bg-emerald-500/15 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
+                      {/* ========================================================
+                          NOVEMBER SECTION (ACTIVE / CURRENT)
+                      ======================================================== */}
+                      {/* Orange Accent Dividing Bar */}
+                      <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
+                        <td colSpan={6} className="p-0 h-3" />
+                      </tr>
+
+                      {/* November Month and Dates Header */}
+                      <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
+                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
+                          Month and Dates
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          1<sup>st</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          8<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          15<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          22<sup>nd</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          29<sup>th</sup>
+                        </th>
+                      </tr>
+
+                      {/* November Outfits Row */}
+                      <tr className="bg-emerald-500/5 dark:bg-emerald-500/10 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
                         <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
                           <span className="text-base font-black block">November</span>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
                           <span className="text-[9px] block text-emerald-100 mt-0.5 font-bold">5 Sundays</span>
                         </td>
-                        {schedulesByMonth.november.map((sched) => {
+                        {schedulesByMonth.november.map((sched, idx) => {
                           const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
                           const isNext = nextSchedule?.id === sched.id;
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const isSageCell = idx === 0; // Nov 1 has sage/green background in flyer
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -753,10 +817,15 @@ export default function MemberWardrobePage() {
                             <td
                               key={sched.id}
                               onClick={() => setSelectedOutfitModal(sched)}
-                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                                }`}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
+                                isSageCell
+                                  ? 'bg-emerald-50/70 dark:bg-emerald-950/30'
+                                  : isNext
+                                  ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset'
+                                  : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                              }`}
                             >
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
                                 <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
                                 <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
@@ -771,12 +840,12 @@ export default function MemberWardrobePage() {
                                 </div>
                               </div>
 
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                                  👑 {sched.instructions}
-                                </div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {sched.instructions}
+                              </p>
+
+                              {(breakdown.ladies || breakdown.men) && (
+                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
                                   {breakdown.ladies && (
                                     <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
                                       <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
@@ -794,16 +863,45 @@ export default function MemberWardrobePage() {
                         })}
                       </tr>
 
-                      {/* December Row */}
+                      {/* ========================================================
+                          DECEMBER SECTION
+                      ======================================================== */}
+                      {/* Orange Accent Dividing Bar */}
+                      <tr className="h-3 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600">
+                        <td colSpan={6} className="p-0 h-3" />
+                      </tr>
+
+                      {/* December Month and Dates Header */}
+                      <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white">
+                        <th className="p-3.5 font-black uppercase text-center w-36 border-r border-slate-300 dark:border-slate-700 text-xs">
+                          Month and Dates
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          6<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          13<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          20<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-sm border-r border-slate-300 dark:border-slate-700 w-1/5">
+                          27<sup>th</sup>
+                        </th>
+                        <th className="p-3.5 font-black text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-900 w-1/5 italic">
+                          —
+                        </th>
+                      </tr>
+
+                      {/* December Outfits Row */}
                       <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                          <span className="text-base font-black text-purple-600 dark:text-purple-400 block">December</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
+                        <td className="p-5 font-black text-center bg-blue-600 text-white border-r border-blue-500/30 shadow-md">
+                          <span className="text-base font-black block">December</span>
+                          <span className="text-[10px] text-blue-100 font-bold block">4 Sundays</span>
                         </td>
                         {schedulesByMonth.december.map((sched) => {
                           const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
                           const isNext = nextSchedule?.id === sched.id;
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
                           const img = getOutfitImage(sched);
                           const dateObj = new Date(sched.scheduledDate);
                           const dayNum = dateObj.getUTCDate();
@@ -813,10 +911,11 @@ export default function MemberWardrobePage() {
                             <td
                               key={sched.id}
                               onClick={() => setSelectedOutfitModal(sched)}
-                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                                }`}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
+                                isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                              }`}
                             >
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                              <div className="relative h-24 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
                                 <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
                                 <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
@@ -831,12 +930,12 @@ export default function MemberWardrobePage() {
                                 </div>
                               </div>
 
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                                  👑 {sched.instructions}
-                                </div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {sched.instructions}
+                              </p>
+
+                              {(breakdown.ladies || breakdown.men) && (
+                                <div className="space-y-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
                                   {breakdown.ladies && (
                                     <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
                                       <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
@@ -1237,6 +1336,51 @@ export default function MemberWardrobePage() {
                 className="px-7 py-3 rounded-2xl bg-primary text-white font-black text-xs hover:bg-primary/90 transition-transform active:scale-95 shadow-md"
               >
                 Understood &amp; Ready
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Roster Document Lightbox / Modal */}
+      {isFlyerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-slate-900 rounded-3xl overflow-hidden border-2 border-primary/40 shadow-2xl flex flex-col">
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white">
+                    Official Q4 2026 Orderliness Uniform Roster Document
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    October, November and December 2026 • The Father&apos;s House Church
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsFlyerModalOpen(false)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-black/40">
+              <img
+                src="/wardrobe/official-roster-q4-2026.jpg"
+                alt="October, November and December 2026 Orderliness Uniform Roaster"
+                className="max-h-[75vh] w-auto object-contain rounded-xl shadow-2xl border border-white/10"
+              />
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span>Authoritative Church Orderliness Schedule</span>
+              <button
+                onClick={() => setIsFlyerModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-primary text-white font-bold hover:bg-primary/90"
+              >
+                Close Document
               </button>
             </div>
           </div>

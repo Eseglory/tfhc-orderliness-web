@@ -303,7 +303,7 @@ export default function WardrobeSchedulePage() {
     const outfit = scheduleOrOutfit?.outfit || scheduleOrOutfit;
     if (outfit?.coverImageUrl) return outfit.coverImageUrl;
     const title = `${scheduleOrOutfit?.title || ''} ${outfit?.title || ''}`.toLowerCase();
-    if (title.includes('wrapper') || title.includes('aso oke') || title.includes('agbada') || title.includes('buba')) return '/wardrobe/native-all.jpg';
+    if (title.includes('wrapper') || title.includes('aso oke') || title.includes('agbada') || title.includes('buba')) return '/wardrobe/wrapper-buba-agbada.jpg';
     if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
     if (title.includes('2025 conference')) return '/wardrobe/conference-2025.jpg';
     if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
@@ -404,6 +404,15 @@ export default function WardrobeSchedulePage() {
 
           {canCreateWardrobe(user) && (
             <div className="flex items-center gap-3 flex-wrap">
+              <a
+                href="/wardrobe/official-roster-q4-2026.jpg"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:bg-amber-100 font-semibold text-sm transition-colors shadow-xs"
+              >
+                <Eye className="w-4 h-4 text-amber-600 dark:text-amber-400" /> View Official Flyer
+              </a>
+
               <button
                 onClick={() => {
                   setBulkOutfitId(outfits[0]?.id || '');

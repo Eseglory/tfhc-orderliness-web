@@ -65,6 +65,7 @@ export default function AdminWardrobeOverviewPage() {
   const getOutfitImage = (schedule: any) => {
     if (schedule?.outfit?.coverImageUrl) return schedule.outfit.coverImageUrl;
     const title = `${schedule?.title || ''} ${schedule?.outfit?.title || ''}`.toLowerCase();
+    if (title.includes('wrapper') || title.includes('buba') || title.includes('agbada') || title.includes('aso oke')) return '/wardrobe/wrapper-buba-agbada.jpg';
     if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
     if (title.includes('2025 conference')) return '/wardrobe/conference-2025.jpg';
     if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
@@ -157,6 +158,16 @@ export default function AdminWardrobeOverviewPage() {
               <Calendar className="w-3.5 h-3.5" />
               <span>Timetable Manager</span>
             </Link>
+
+            <a
+              href="/wardrobe/official-roster-q4-2026.jpg"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 hover:bg-amber-100 transition-colors shadow-xs"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Official Flyer</span>
+            </a>
 
             {canCreateWardrobe(user) && (
               <Link

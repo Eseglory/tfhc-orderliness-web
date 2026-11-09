@@ -270,7 +270,7 @@ export default function WardrobeOutfitsPage() {
   const getOutfitImage = (outfit: WardrobeOutfit | null | undefined): string => {
     if (outfit?.coverImageUrl) return outfit.coverImageUrl;
     const title = (outfit?.title || '').toLowerCase();
-    if (title.includes('wrapper') || title.includes('aso oke') || title.includes('agbada') || title.includes('buba')) return '/wardrobe/native-all.jpg';
+    if (title.includes('wrapper') || title.includes('aso oke') || title.includes('agbada') || title.includes('buba')) return '/wardrobe/wrapper-buba-agbada.jpg';
     if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
     if (title.includes('2025 conference')) return '/wardrobe/conference-2025.jpg';
     if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
