@@ -85,6 +85,35 @@ export default function AdminLiveMeetingsIndexPage() {
     loadMeetings();
   }, [loadMeetings]);
 
+  // Current day in church timezone (Africa/Lagos · WAT)
+  const todayLagosDateStr = useMemo(() => {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Lagos',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  }, []);
+
+  // Today's service/event if any scheduled or active today
+  const todayService = useMemo(() => {
+    const todayList = meetings.filter((m) => {
+      if (m.archivedAt) return false;
+      const evtLagosStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Lagos',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(m.startTime));
+      return m.status === 'ACTIVE' || evtLagosStr === todayLagosDateStr;
+    });
+
+    if (todayList.length === 0) return null;
+    const active = todayList.find((m) => m.status === 'ACTIVE');
+    if (active) return active;
+    return todayList.slice().sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+  }, [meetings, todayLagosDateStr]);
+
   const activeMeetings = useMemo(() => meetings.filter((m) => m.status === 'ACTIVE'), [meetings]);
 
   const upcomingMeetings = useMemo(
@@ -114,7 +143,7 @@ export default function AdminLiveMeetingsIndexPage() {
     return Array.from(map.values()).sort();
   }, [meetings]);
 
-  // Filtered dataset according to user selection (consistently sorted by newest events first: EventDate DESC)
+  // Filtered dataset according to user selection (closest event first)
   const filteredMeetings = useMemo(() => {
     const list = meetings.filter((m) => {
       // Status filter
@@ -140,14 +169,53 @@ export default function AdminLiveMeetingsIndexPage() {
       return true;
     });
 
+    const now = Date.now();
     return list.slice().sort((a, b) => {
-      const timeA = new Date(a.startTime).getTime();
-      const timeB = new Date(b.startTime).getTime();
-      if (timeB !== timeA) return timeB - timeA;
+      // 1. Live Active sessions always strictly first
+      const aActive = a.status === 'ACTIVE';
+      const bActive = b.status === 'ACTIVE';
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+
+      const aTime = new Date(a.startTime).getTime();
+      const bTime = new Date(b.startTime).getTime();
+
+      // If user specifically filtered by 'PAST', show most recent past first
+      if (statusFilter === 'PAST') {
+        if (bTime !== aTime) return bTime - aTime;
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdB - createdA;
+      }
+
+      // If user filtered by 'SCHEDULED', show closest upcoming first
+      if (statusFilter === 'SCHEDULED') {
+        if (aTime !== bTime) return aTime - bTime;
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // For 'ALL': Closest upcoming events first (today, tomorrow...), followed by past events (yesterday, last week...)
+      const aIsPast = ['CLOSED', 'COMPLETED', 'CANCELLED'].includes(a.status) || (a.status !== 'ACTIVE' && aTime < now - 4 * 3600000);
+      const bIsPast = ['CLOSED', 'COMPLETED', 'CANCELLED'].includes(b.status) || (b.status !== 'ACTIVE' && bTime < now - 4 * 3600000);
+
+      if (!aIsPast && bIsPast) return -1;
+      if (aIsPast && !bIsPast) return 1;
+
+      if (!aIsPast && !bIsPast) {
+        // Upcoming: closest to today first
+        if (aTime !== bTime) return aTime - bTime;
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // Past: most recent past first
+      if (bTime !== aTime) return bTime - aTime;
       const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      if (createdB !== createdA) return createdB - createdA;
-      return (b.id || '').localeCompare(a.id || '');
+      return createdB - createdA;
     });
   }, [meetings, statusFilter, categoryFilter, searchQuery]);
 
@@ -174,11 +242,22 @@ export default function AdminLiveMeetingsIndexPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {todayService && (
+              <Link
+                href={`/admin/live-meeting/${todayService.id}`}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm shadow-md shadow-emerald-600/25 active:scale-[0.98] transition-all cursor-pointer animate-pulse"
+                title={`Direct access to today's service: ${todayService.title}`}
+              >
+                <Radio className="w-4 h-4 text-emerald-200" />
+                <span>Go to Today&apos;s Service</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            )}
             <button
               onClick={loadMeetings}
               disabled={loading}
-              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-xs cursor-pointer"
               title="Refresh Gatherings"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

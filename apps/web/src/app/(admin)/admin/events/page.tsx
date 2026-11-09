@@ -343,15 +343,54 @@ function EventsManagementContent() {
       return true;
     });
 
-    // Consistent chronological descending sort: newest events first
+    // Closest event first: Active first, then upcoming (closest to today first), followed by past events (most recent past first)
+    const now = Date.now();
     return list.slice().sort((a, b) => {
-      const timeA = new Date(a.startTime).getTime();
-      const timeB = new Date(b.startTime).getTime();
-      if (timeB !== timeA) return timeB - timeA;
+      // 1. Live Active sessions always strictly first
+      const aActive = a.status === 'ACTIVE';
+      const bActive = b.status === 'ACTIVE';
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+
+      const aTime = new Date(a.startTime).getTime();
+      const bTime = new Date(b.startTime).getTime();
+
+      // If user specifically filtered by 'CLOSED' or 'CANCELLED' or 'archived' tab, show most recent past first
+      if (statusFilter === 'CLOSED' || statusFilter === 'CANCELLED' || categoryTab === 'archived') {
+        if (bTime !== aTime) return bTime - aTime;
+        const createdA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+        const createdB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
+        return createdB - createdA;
+      }
+
+      // If user filtered by 'SCHEDULED', show closest upcoming first
+      if (statusFilter === 'SCHEDULED') {
+        if (aTime !== bTime) return aTime - bTime;
+        const createdA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+        const createdB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // Default: Closest upcoming events first (today, tomorrow...), followed by past events (yesterday, last week...)
+      const aIsPast = ['CLOSED', 'COMPLETED', 'CANCELLED'].includes(a.status) || (a.status !== 'ACTIVE' && aTime < now - 4 * 3600000);
+      const bIsPast = ['CLOSED', 'COMPLETED', 'CANCELLED'].includes(b.status) || (b.status !== 'ACTIVE' && bTime < now - 4 * 3600000);
+
+      if (!aIsPast && bIsPast) return -1;
+      if (aIsPast && !bIsPast) return 1;
+
+      if (!aIsPast && !bIsPast) {
+        // Upcoming: closest to today first
+        if (aTime !== bTime) return aTime - bTime;
+        const createdA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
+        const createdB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
+        return createdA - createdB;
+      }
+
+      // Past: most recent past first
+      if (bTime !== aTime) return bTime - aTime;
       const createdA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
       const createdB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
-      if (createdB !== createdA) return createdB - createdA;
-      return (b.id || '').localeCompare(a.id || '');
+      return createdB - createdA;
     });
   }, [meetings, categoryTab, formatFilter, statusFilter, venueFilter, searchQuery]);
 
@@ -529,6 +568,17 @@ function EventsManagementContent() {
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
               Refresh
             </button>
+            {todayEvents.length > 0 && (
+              <Link
+                href={`/admin/live-meeting/${(todayEvents.find((e) => e.status === 'ACTIVE') || todayEvents[0]).id}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer animate-pulse"
+                title="Direct access to today's service"
+              >
+                <Radio className="w-4 h-4 text-slate-950" />
+                <span>Go to Today&apos;s Service</span>
+                <ArrowRight className="w-4 h-4 text-slate-950" />
+              </Link>
+            )}
             {canCreate && (
               <button
                 onClick={() => {
