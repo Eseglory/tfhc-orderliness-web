@@ -267,6 +267,33 @@ export default function WardrobeOutfitsPage() {
     }
   };
 
+  const getOutfitImage = (outfit: WardrobeOutfit | null | undefined): string => {
+    if (outfit?.coverImageUrl) return outfit.coverImageUrl;
+    const title = (outfit?.title || '').toLowerCase();
+    if (title.includes('wrapper') || title.includes('aso oke') || title.includes('agbada') || title.includes('buba')) return '/wardrobe/native-all.jpg';
+    if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
+    if (title.includes('2025 conference')) return '/wardrobe/conference-2025.jpg';
+    if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
+    if (title.includes('blue dress') || (title.includes('blue suit') && title.includes('floral'))) return '/wardrobe/blue-dress-suit-floral.jpg';
+    if (title.includes('black gown') || (title.includes('black') && title.includes('floral tie'))) return '/wardrobe/black-gown-neckline-scarf.jpg';
+    if (title.includes('red gown') || title.includes('beret')) return '/wardrobe/red-gown-black-beret.jpg';
+    if (title.includes('grey') || title.includes('red scarf')) return '/wardrobe/grey-red-accent.jpg';
+    if (title.includes('jean') || title.includes('denim')) return '/wardrobe/denim-jacket-jeans.jpg';
+    if (title.includes('combat') || title.includes('boot')) return '/wardrobe/adire-combat-pants-boots.jpg';
+    if (title.includes('adire') || title.includes('turtleneck')) return '/wardrobe/adire-black-turtleneck.jpg';
+    if (title.includes('colour riot native') || (title.includes('colour riot') && title.includes('native'))) return '/wardrobe/colour-riot-native.jpg';
+    if (title.includes('colour riot gown') && (title.includes('grey') || title.includes('sky blue'))) return '/wardrobe/colour-riot-gown-grey-skyblue.jpg';
+    if (title.includes('colour riot gown') && (title.includes('navy') || title.includes('bright shirt'))) return '/wardrobe/colour-riot-gown-navy-suit.jpg';
+    if (title.includes('colour riot') || title.includes('color riot')) return '/wardrobe/colour-riot-suit.jpg';
+    if (title.includes('lemon') || title.includes('lime')) return '/wardrobe/lemon-gown.jpg';
+    if (title.includes('white native')) return '/wardrobe/white-native.jpg';
+    if (title.includes('suspenders')) return '/wardrobe/black-suspenders.jpg';
+    if (title.includes('blazer') || title.includes('bright')) return '/wardrobe/bright-blazer.jpg';
+    if (title.includes('native') || title.includes('traditional')) return '/wardrobe/native-all.jpg';
+    if (title.includes('carton') || title.includes('red tie')) return '/wardrobe/carton-red-tie.jpg';
+    return '/wardrobe/native-all.jpg';
+  };
+
   const filteredOutfits = outfits.filter((outfit) => {
     const matchesSearch =
       outfit.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -419,9 +446,9 @@ export default function WardrobeOutfitsPage() {
                 <div>
                   {/* Visual Header / Collage */}
                   <div className="relative w-full h-52 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 overflow-hidden flex items-center justify-center">
-                    {outfit.coverImageUrl ? (
+                    {getOutfitImage(outfit) ? (
                       <img
-                        src={outfit.coverImageUrl}
+                        src={getOutfitImage(outfit)}
                         alt={outfit.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
@@ -861,9 +888,9 @@ export default function WardrobeOutfitsPage() {
 
             {/* Visual Cover Hero */}
             <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center">
-              {previewOutfit.coverImageUrl ? (
+              {getOutfitImage(previewOutfit) ? (
                 <img
-                  src={previewOutfit.coverImageUrl}
+                  src={getOutfitImage(previewOutfit)}
                   alt={previewOutfit.title}
                   className="w-full h-full object-cover"
                 />

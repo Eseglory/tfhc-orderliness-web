@@ -179,7 +179,7 @@ async function main() {
       { item: jeanJacket, layerOrder: 3, notes: 'All: Jean jacket' },
       { item: blackShoes, layerOrder: 4, notes: 'All: Smart footwear / sneakers' },
     ],
-    '/wardrobe/adire-black-turtleneck.jpg',
+    '/wardrobe/denim-jacket-jeans.jpg',
   );
   await upsertSchedule(
     'sched-nov-08',
@@ -203,7 +203,7 @@ async function main() {
       { item: floralTie, layerOrder: 5, notes: 'Men: Floral necktie' },
       { item: blackShoes, layerOrder: 6, notes: 'All: Formal black shoes / heels' },
     ],
-    '/wardrobe/grey-red-accent.jpg',
+    '/wardrobe/blue-dress-suit-floral.jpg',
   );
   await upsertSchedule(
     'sched-nov-15',
@@ -223,7 +223,7 @@ async function main() {
       { item: conf2025Outfit, layerOrder: 1, notes: 'All: Official 2025 Conference uniform outfit' },
       { item: blackShoes, layerOrder: 2, notes: 'All: Formal shoes / heels' },
     ],
-    '/wardrobe/conference-2026.jpg',
+    '/wardrobe/conference-2025.jpg',
   );
   await upsertSchedule(
     'sched-nov-22',
@@ -244,7 +244,7 @@ async function main() {
       { item: blackTop, layerOrder: 2, notes: 'All: Black top / shirt' },
       { item: blackBoots, layerOrder: 3, notes: 'All: Black boots' },
     ],
-    '/wardrobe/adire-black-turtleneck.jpg',
+    '/wardrobe/adire-combat-pants-boots.jpg',
   );
   await upsertSchedule(
     'sched-nov-29',
@@ -271,7 +271,7 @@ async function main() {
       { item: colourRiotNative, layerOrder: 1, notes: 'All: Colour Riot native wear' },
       { item: blackShoes, layerOrder: 2, notes: 'All: Traditional / formal footwear' },
     ],
-    '/wardrobe/colour-riot-suit.jpg',
+    '/wardrobe/colour-riot-native.jpg',
   );
   await upsertSchedule(
     'sched-dec-06',
@@ -314,7 +314,7 @@ async function main() {
     [
       { item: nativeWear, layerOrder: 1, notes: 'All: Traditional native wear (Agbada / Kaftan / Ankara / Lace)' },
     ],
-    '/wardrobe/native-all.jpg',
+    '/wardrobe/native-emerald-gold.jpg',
   );
   await upsertSchedule(
     'sched-dec-20',
@@ -333,7 +333,7 @@ async function main() {
     [
       { item: nativeWear, layerOrder: 1, notes: 'All: Traditional native wear (Agbada / Kaftan / Ankara / Lace)' },
     ],
-    '/wardrobe/native-all.jpg',
+    '/wardrobe/native-champagne-gold.jpg',
   );
   await upsertSchedule(
     'sched-dec-27',

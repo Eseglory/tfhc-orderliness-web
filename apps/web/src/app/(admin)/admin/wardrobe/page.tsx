@@ -66,16 +66,25 @@ export default function AdminWardrobeOverviewPage() {
     if (schedule?.outfit?.coverImageUrl) return schedule.outfit.coverImageUrl;
     const title = `${schedule?.title || ''} ${schedule?.outfit?.title || ''}`.toLowerCase();
     if (title.includes('touch of green') || title.includes('green')) return '/wardrobe/native-touch-green.jpg';
+    if (title.includes('2025 conference')) return '/wardrobe/conference-2025.jpg';
     if (title.includes('2026 conference')) return '/wardrobe/conference-2026.jpg';
+    if (title.includes('blue dress') || (title.includes('blue suit') && title.includes('floral'))) return '/wardrobe/blue-dress-suit-floral.jpg';
+    if (title.includes('black gown') || (title.includes('black') && title.includes('floral tie'))) return '/wardrobe/black-gown-neckline-scarf.jpg';
+    if (title.includes('red gown') || title.includes('beret')) return '/wardrobe/red-gown-black-beret.jpg';
     if (title.includes('grey') || title.includes('red scarf')) return '/wardrobe/grey-red-accent.jpg';
+    if (title.includes('jean') || title.includes('denim')) return '/wardrobe/denim-jacket-jeans.jpg';
+    if (title.includes('combat') || title.includes('boot')) return '/wardrobe/adire-combat-pants-boots.jpg';
     if (title.includes('adire') || title.includes('turtleneck')) return '/wardrobe/adire-black-turtleneck.jpg';
-    if (title.includes('native') || title.includes('traditional')) return '/wardrobe/native-all.jpg';
-    if (title.includes('carton') || title.includes('red tie')) return '/wardrobe/carton-red-tie.jpg';
+    if (title.includes('colour riot native') || (title.includes('colour riot') && title.includes('native'))) return '/wardrobe/colour-riot-native.jpg';
+    if (title.includes('colour riot gown') && (title.includes('grey') || title.includes('sky blue'))) return '/wardrobe/colour-riot-gown-grey-skyblue.jpg';
+    if (title.includes('colour riot gown') && (title.includes('navy') || title.includes('bright shirt'))) return '/wardrobe/colour-riot-gown-navy-suit.jpg';
     if (title.includes('colour riot') || title.includes('color riot')) return '/wardrobe/colour-riot-suit.jpg';
     if (title.includes('lemon') || title.includes('lime')) return '/wardrobe/lemon-gown.jpg';
     if (title.includes('white native')) return '/wardrobe/white-native.jpg';
     if (title.includes('suspenders')) return '/wardrobe/black-suspenders.jpg';
     if (title.includes('blazer') || title.includes('bright')) return '/wardrobe/bright-blazer.jpg';
+    if (title.includes('native') || title.includes('traditional')) return '/wardrobe/native-all.jpg';
+    if (title.includes('carton') || title.includes('red tie')) return '/wardrobe/carton-red-tie.jpg';
     return '/wardrobe/native-all.jpg';
   };
 
@@ -324,7 +333,7 @@ export default function AdminWardrobeOverviewPage() {
                       className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-                    
+
                     {/* Floating Gender/Target Badge */}
                     <div className="absolute top-3 left-3">
                       <span className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/20 text-[11px] font-bold text-white uppercase tracking-wider">

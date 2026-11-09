@@ -106,7 +106,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
   const cartonTrousers = await upsertItem('item-trousers-carton', 'Carton-Colour Pant Trouser', 'TROUSERS', 'ALL', 'Carton / Tan', '#D97706', 'Formal carton-colour tailored pant trouser');
   const blackTrousers = await upsertItem('item-trousers-black', 'Black Pant Trouser', 'TROUSERS', 'ALL', 'Midnight Black', '#111827', 'Formal black tailored trousers');
   const greyTrousers = await upsertItem('item-trousers-grey', 'Grey Pant Trouser', 'TROUSERS', 'MALE', 'Classic Grey', '#6B7280', 'Smart grey tailored formal trousers');
-  
+
   const whiteShirt = await upsertItem('item-shirt-white', 'Crisp White Long-Sleeve Shirt', 'SHIRT', 'ALL', 'Pure White', '#FFFFFF', 'Classic formal white button-up shirt');
   const blackShirt = await upsertItem('item-shirt-black', 'Black Formal Shirt', 'SHIRT', 'MALE', 'Midnight Black', '#111827', 'Smart formal black button-up shirt');
   const skyBlueShirt = await upsertItem('item-shirt-skyblue', 'Sky Blue Formal Shirt', 'SHIRT', 'MALE', 'Sky Blue', '#38BDF8', 'Sky blue buttoned dress shirt');
@@ -260,6 +260,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: blackShirt, layerOrder: 4, notes: 'Men: Black button-up shirt' },
       { item: floralTie, layerOrder: 5, notes: 'Men: Light-coloured floral tie' },
     ],
+    '/wardrobe/black-gown-neckline-scarf.jpg',
   );
   await upsertSchedule(
     'sched-july-12',
@@ -298,6 +299,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: blackSuit, layerOrder: 3, notes: 'Men: Black corporate suit' },
       { item: checkShirt, layerOrder: 4, notes: 'Men: Check shirt' },
     ],
+    '/wardrobe/red-gown-black-beret.jpg',
   );
   await upsertSchedule(
     'sched-july-26',
@@ -377,6 +379,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: skyBlueShirt, layerOrder: 3, notes: 'Men: Sky blue shirt' },
       { item: blackTie, layerOrder: 4, notes: 'Men: Black necktie' },
     ],
+    '/wardrobe/colour-riot-gown-grey-skyblue.jpg',
   );
   await upsertSchedule(
     'sched-aug-23',
@@ -397,6 +400,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: brightShirt, layerOrder: 3, notes: 'Men: Bright Coloured Shirt' },
       { item: blackShoes, layerOrder: 4, notes: 'Men: Black formal shoes' },
     ],
+    '/wardrobe/colour-riot-gown-navy-suit.jpg',
   );
   await upsertSchedule(
     'sched-aug-30',
@@ -794,7 +798,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: jeanJacket, layerOrder: 3, notes: 'All: Jean jacket' },
       { item: blackShoes, layerOrder: 4, notes: 'All: Smart footwear / sneakers' },
     ],
-    '/wardrobe/adire-black-turtleneck.jpg',
+    '/wardrobe/denim-jacket-jeans.jpg',
   );
   await upsertSchedule(
     'sched-nov-08',
@@ -818,7 +822,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: floralTie, layerOrder: 5, notes: 'Men: Floral necktie' },
       { item: blackShoes, layerOrder: 6, notes: 'All: Formal black shoes / heels' },
     ],
-    '/wardrobe/grey-red-accent.jpg',
+    '/wardrobe/blue-dress-suit-floral.jpg',
   );
   await upsertSchedule(
     'sched-nov-15',
@@ -838,7 +842,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: conf2025Outfit, layerOrder: 1, notes: 'All: Official 2025 Conference uniform outfit' },
       { item: blackShoes, layerOrder: 2, notes: 'All: Formal shoes / heels' },
     ],
-    '/wardrobe/conference-2026.jpg',
+    '/wardrobe/conference-2025.jpg',
   );
   await upsertSchedule(
     'sched-nov-22',
@@ -859,7 +863,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: blackTop, layerOrder: 2, notes: 'All: Black top / shirt' },
       { item: blackBoots, layerOrder: 3, notes: 'All: Black boots' },
     ],
-    '/wardrobe/adire-black-turtleneck.jpg',
+    '/wardrobe/adire-combat-pants-boots.jpg',
   );
   await upsertSchedule(
     'sched-nov-29',
@@ -902,7 +906,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
       { item: colourRiotNative, layerOrder: 1, notes: 'All: Colour Riot native wear' },
       { item: blackShoes, layerOrder: 2, notes: 'All: Traditional / formal footwear' },
     ],
-    '/wardrobe/colour-riot-suit.jpg',
+    '/wardrobe/colour-riot-native.jpg',
   );
   await upsertSchedule(
     'sched-dec-06',
@@ -945,7 +949,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
     [
       { item: nativeWear, layerOrder: 1, notes: 'All: Traditional native wear (Agbada / Kaftan / Ankara / Lace)' },
     ],
-    '/wardrobe/native-all.jpg',
+    '/wardrobe/native-emerald-gold.jpg',
   );
   await upsertSchedule(
     'sched-dec-20',
@@ -964,7 +968,7 @@ export async function seedWardrobeSeptemberRoster(prisma: PrismaClient) {
     [
       { item: nativeWear, layerOrder: 1, notes: 'All: Traditional native wear (Agbada / Kaftan / Ankara / Lace)' },
     ],
-    '/wardrobe/native-all.jpg',
+    '/wardrobe/native-champagne-gold.jpg',
   );
   await upsertSchedule(
     'sched-dec-27',

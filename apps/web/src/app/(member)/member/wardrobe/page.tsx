@@ -72,14 +72,14 @@ interface WardrobeSchedule {
 
 // Fallback image mapping if not present in DB
 const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
-  'sched-dec-27': '/wardrobe/native-all.jpg',
-  'sched-dec-20': '/wardrobe/native-all.jpg',
+  'sched-dec-27': '/wardrobe/native-champagne-gold.jpg',
+  'sched-dec-20': '/wardrobe/native-emerald-gold.jpg',
   'sched-dec-13': '/wardrobe/bright-blazer.jpg',
-  'sched-dec-06': '/wardrobe/colour-riot-suit.jpg',
-  'sched-nov-29': '/wardrobe/adire-black-turtleneck.jpg',
-  'sched-nov-22': '/wardrobe/conference-2026.jpg',
-  'sched-nov-15': '/wardrobe/grey-red-accent.jpg',
-  'sched-nov-08': '/wardrobe/adire-black-turtleneck.jpg',
+  'sched-dec-06': '/wardrobe/colour-riot-native.jpg',
+  'sched-nov-29': '/wardrobe/adire-combat-pants-boots.jpg',
+  'sched-nov-22': '/wardrobe/conference-2025.jpg',
+  'sched-nov-15': '/wardrobe/blue-dress-suit-floral.jpg',
+  'sched-nov-08': '/wardrobe/denim-jacket-jeans.jpg',
   'sched-nov-01': '/wardrobe/native-all.jpg',
   'sched-oct-04': '/wardrobe/native-touch-green.jpg',
   'sched-oct-11': '/wardrobe/conference-2026.jpg',
@@ -90,10 +90,14 @@ const OUTFIT_IMAGE_FALLBACKS: Record<string, string> = {
   'sched-sept-13': '/wardrobe/bright-blazer.jpg',
   'sched-sept-27': '/wardrobe/colour-riot-suit.jpg',
   'sched-july-05': '/wardrobe/lemon-gown.jpg',
+  'sched-july-12': '/wardrobe/black-gown-neckline-scarf.jpg',
   'sched-july-19': '/wardrobe/native-all.jpg',
+  'sched-july-26': '/wardrobe/red-gown-black-beret.jpg',
   'sched-aug-02': '/wardrobe/white-native.jpg',
   'sched-aug-09': '/wardrobe/black-suspenders.jpg',
   'sched-aug-16': '/wardrobe/native-all.jpg',
+  'sched-aug-23': '/wardrobe/colour-riot-gown-grey-skyblue.jpg',
+  'sched-aug-30': '/wardrobe/colour-riot-gown-navy-suit.jpg',
 };
 
 // Visual Theme Styling by Uniform Type
@@ -416,22 +420,20 @@ export default function MemberWardrobePage() {
         <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 p-1 rounded-2xl border border-slate-300/50 dark:border-slate-700">
           <button
             onClick={() => setViewTab('roster_board')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-              viewTab === 'roster_board'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${viewTab === 'roster_board'
                 ? 'bg-white dark:bg-slate-900 text-primary shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+              }`}
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Roster Board</span>
           </button>
           <button
             onClick={() => setViewTab('weekly_list')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
-              viewTab === 'weekly_list'
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${viewTab === 'weekly_list'
                 ? 'bg-white dark:bg-slate-900 text-primary shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+              }`}
           >
             <Grid className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Weekly Cards</span>
@@ -455,656 +457,651 @@ export default function MemberWardrobePage() {
                 FEATURED HERO: UPCOMING SERVICE DRESS CODE (WITH REAL CLOTHING PHOTO)
             ========================================================================= */}
             {nextSchedule && nextTheme && (
-          <section className="relative group overflow-hidden rounded-[2.5rem] border-2 border-primary/30 bg-gradient-to-br shadow-2xl transition-all duration-300">
-            {/* Background Layer with Motif */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${nextTheme.gradient}`} />
-            <div className={`absolute inset-0 ${nextTheme.pattern}`} />
+              <section className="relative group overflow-hidden rounded-[2.5rem] border-2 border-primary/30 bg-gradient-to-br shadow-2xl transition-all duration-300">
+                {/* Background Layer with Motif */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${nextTheme.gradient}`} />
+                <div className={`absolute inset-0 ${nextTheme.pattern}`} />
 
-            {/* Glowing Orbs */}
-            <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
+                {/* Glowing Orbs */}
+                <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-primary/25 blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-24 -left-24 w-96 h-96 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 p-6 sm:p-9 text-white space-y-7">
-              {/* Header Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/15 pb-5">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider shadow-md animate-pulse">
-                      <span className="w-2 h-2 rounded-full bg-white animate-ping" /> This Sunday&apos;s Dress Code
-                    </span>
-                    <span className={`px-3 py-1 rounded-full ${nextTheme.badgeBg} text-[10px] font-black uppercase tracking-wider shadow-xs`}>
-                      {nextTheme.tag}
-                    </span>
-                  </div>
+                <div className="relative z-10 p-6 sm:p-9 text-white space-y-7">
+                  {/* Header Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/15 pb-5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-wider shadow-md animate-pulse">
+                          <span className="w-2 h-2 rounded-full bg-white animate-ping" /> This Sunday&apos;s Dress Code
+                        </span>
+                        <span className={`px-3 py-1 rounded-full ${nextTheme.badgeBg} text-[10px] font-black uppercase tracking-wider shadow-xs`}>
+                          {nextTheme.tag}
+                        </span>
+                      </div>
 
-                  <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white drop-shadow-md">
-                    {nextSchedule.title}
-                  </h2>
-                </div>
+                      <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white drop-shadow-md">
+                        {nextSchedule.title}
+                      </h2>
+                    </div>
 
-                {/* Date Pill */}
-                <div className="flex items-center gap-3.5 bg-white/10 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/20 shadow-inner self-start sm:self-auto">
-                  <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-amber-300">
-                    <Calendar className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-black text-white/70 block">Service Date</span>
-                    <span className="text-sm font-black text-white">
-                      {new Date(nextSchedule.scheduledDate).toLocaleDateString('default', {
-                        weekday: 'long',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        timeZone: 'UTC'
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Main Content: Real Clothing Photo (Left) & Directives (Right) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-center">
-                {/* Real Cloth Showcase Photo (5 cols) */}
-                <div className="lg:col-span-5">
-                  <div
-                    onClick={() => setSelectedOutfitModal(nextSchedule)}
-                    className="group/photo relative w-full h-72 sm:h-80 rounded-3xl overflow-hidden border-2 border-white/25 shadow-2xl cursor-pointer"
-                  >
-                    <img
-                      src={getOutfitImage(nextSchedule)}
-                      alt={nextSchedule.outfit.title}
-                      className="w-full h-full object-cover group-hover/photo:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
-
-                    <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
+                    {/* Date Pill */}
+                    <div className="flex items-center gap-3.5 bg-white/10 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/20 shadow-inner self-start sm:self-auto">
+                      <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center text-amber-300">
+                        <Calendar className="w-5 h-5" />
+                      </div>
                       <div>
-                        <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[9px] uppercase tracking-wider block mb-1">
-                          Official Attire Model
+                        <span className="text-[10px] uppercase font-black text-white/70 block">Service Date</span>
+                        <span className="text-sm font-black text-white">
+                          {new Date(nextSchedule.scheduledDate).toLocaleDateString('default', {
+                            weekday: 'long',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            timeZone: 'UTC'
+                          })}
                         </span>
-                        <p className="text-sm font-black text-white drop-shadow-md truncate">
-                          {nextSchedule.outfit.title}
-                        </p>
                       </div>
-                      <span className="p-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/20 text-white group-hover/photo:bg-white group-hover/photo:text-slate-950 transition-colors">
-                        <Maximize2 className="w-4 h-4" />
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Directives & Pieces (7 cols) */}
-                <div className="lg:col-span-7 space-y-5">
-                  {/* Sisters & Brothers Dual Directive Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Sisters Card */}
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-pink-500/30 text-pink-200 border border-pink-400/40 text-[11px] font-black uppercase tracking-wider">
-                          <Sparkles className="w-3 h-3 text-pink-300" /> Sisters
-                        </span>
-                        <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
-                      </div>
-
-                      <p className="text-xs font-semibold text-white/95 leading-relaxed">
-                        {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).ladies}
-                      </p>
-                    </div>
-
-                    {/* Brothers Card */}
-                    <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-500/30 text-blue-200 border border-blue-400/40 text-[11px] font-black uppercase tracking-wider">
-                          <Shirt className="w-3 h-3 text-blue-300" /> Brothers
-                        </span>
-                        <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
-                      </div>
-
-                      <p className="text-xs font-semibold text-white/95 leading-relaxed">
-                        {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).men}
-                      </p>
                     </div>
                   </div>
 
-                  {/* Palette & Pieces Swatches */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase tracking-wider text-white/80 flex items-center gap-1.5">
-                        <Palette className="w-4 h-4 text-amber-300" /> Required Components &amp; Palette Swatches
-                      </span>
-                      <span className="text-[11px] text-white/60">
-                        {nextSchedule.outfit.items.length} Required Items
-                      </span>
-                    </div>
+                  {/* Main Content: Real Clothing Photo (Left) & Directives (Right) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 items-center">
+                    {/* Real Cloth Showcase Photo (5 cols) */}
+                    <div className="lg:col-span-5">
+                      <div
+                        onClick={() => setSelectedOutfitModal(nextSchedule)}
+                        className="group/photo relative w-full h-72 sm:h-80 rounded-3xl overflow-hidden border-2 border-white/25 shadow-2xl cursor-pointer"
+                      >
+                        <img
+                          src={getOutfitImage(nextSchedule)}
+                          alt={nextSchedule.outfit.title}
+                          className="w-full h-full object-cover group-hover/photo:scale-105 transition-transform duration-700"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent pointer-events-none" />
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                      {nextSchedule.outfit.items.map((layer, idx) => (
-                        <div
-                          key={idx}
-                          className="p-2.5 rounded-xl bg-black/35 backdrop-blur-md border border-white/15 flex items-center gap-2.5 text-xs"
-                        >
-                          <span
-                            className="w-4 h-4 rounded-full border-2 border-white shadow-md shrink-0"
-                            style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
-                          />
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-white truncate text-[11px]">{layer.item?.name}</p>
-                            <p className="text-[9px] text-white/70 truncate">
-                              {layer.notes || layer.variant?.colorName || 'Prescribed'}
+                        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between text-white">
+                          <div>
+                            <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[9px] uppercase tracking-wider block mb-1">
+                              Official Attire Model
+                            </span>
+                            <p className="text-sm font-black text-white drop-shadow-md truncate">
+                              {nextSchedule.outfit.title}
                             </p>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Button */}
-                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <button
-                      onClick={() => setSelectedOutfitModal(nextSchedule)}
-                      className="px-7 py-3 rounded-2xl bg-white text-slate-950 hover:bg-amber-100 font-black text-xs transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      <Eye className="w-4 h-4 text-primary" /> View Complete Guidelines &amp; Model Photo
-                    </button>
-
-                    <p className="text-xs text-white/70 italic text-center sm:text-right">
-                      Arrive 30 mins before service in full uniform.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================================
-            VIEW 1: OFFICIAL ROSTER BOARD MATRIX (FAITHFUL TO CHART GRAPHIC)
-        ========================================================================= */}
-        {viewTab === 'roster_board' && (
-          <section className="space-y-6 animate-in fade-in duration-300">
-            {/* Roster Banner */}
-            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-emerald-700 via-blue-700 via-purple-700 to-amber-600 p-7 text-white shadow-xl text-center space-y-2">
-              <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-white/80 block">
-                The Father&apos;s House Church • Orderliness Unit
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider drop-shadow-md">
-                OCTOBER, NOVEMBER &amp; DECEMBER 2026 ORDERLINESS UNIFORM ROSTER
-              </h2>
-              <p className="text-xs sm:text-sm text-white/95 max-w-2xl mx-auto font-medium leading-relaxed">
-                Official uniform roster for Sunday services. Click on any date card to view complete outfit breakdowns, grooming guides and required pieces.
-              </p>
-            </div>
-
-            {/* Matrix Columns Table */}
-            <div className="overflow-x-auto rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
-              <table className="w-full border-collapse text-left text-xs min-w-[950px]">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800">
-                    <th className="p-4 font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 w-32 text-center text-xs">
-                      Month and Dates
-                    </th>
-                    <th className="p-4 font-black uppercase text-white bg-blue-600 text-center w-1/5 shadow-inner">
-                      <span className="text-sm block font-black">1st Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 4 • Nov 1 • Dec 6</span>
-                    </th>
-                    <th className="p-4 font-black uppercase text-white bg-slate-700 text-center w-1/5 shadow-inner">
-                      <span className="text-sm block font-black">2nd Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 11 • Nov 8 • Dec 13</span>
-                    </th>
-                    <th className="p-4 font-black uppercase text-white bg-purple-600 text-center w-1/5 shadow-inner">
-                      <span className="text-sm block font-black">3rd Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 18 • Nov 15 • Dec 20</span>
-                    </th>
-                    <th className="p-4 font-black uppercase text-white bg-red-600 text-center w-1/5 shadow-inner">
-                      <span className="text-sm block font-black">4th Sunday</span>
-                      <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 25 • Nov 22 • Dec 27</span>
-                    </th>
-                    <th className="p-4 font-black uppercase text-white bg-amber-500 text-center w-1/5 shadow-inner">
-                      <span className="text-sm block font-black">5th Sunday</span>
-                      <span className="text-[10px] text-white/90 font-bold block mt-0.5">Nov 29</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
-                  {/* October Row */}
-                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                      <span className="text-base font-black text-amber-600 dark:text-amber-400 block">October</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
-                    </td>
-                    {schedulesByMonth.october.map((sched) => {
-                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                      const isNext = nextSchedule?.id === sched.id;
-                      const isNative = sched.instructions?.toLowerCase().includes('native');
-                      const img = getOutfitImage(sched);
-                      const dateObj = new Date(sched.scheduledDate);
-                      const dayNum = dateObj.getUTCDate();
-                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
-
-                      return (
-                        <td
-                          key={sched.id}
-                          onClick={() => setSelectedOutfitModal(sched)}
-                          className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
-                            isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                              <span className="text-[10px] font-black text-white">
-                                {dayNum}{suffix} Oct
-                              </span>
-                              {isNext && (
-                                <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
-                                  This Sunday
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {isNative ? (
-                            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 text-[11px] font-bold">
-                              🌿 {sched.instructions}
-                            </div>
-                          ) : (
-                            <div className="space-y-1 text-[11px]">
-                              {breakdown.ladies && (
-                                <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
-                                </p>
-                              )}
-                              {breakdown.men && (
-                                <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                    {/* Blank 5th Sunday */}
-                    <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
-                      —
-                    </td>
-                  </tr>
-
-                  {/* November Row (Active Current Month) */}
-                  <tr className="bg-emerald-500/5 dark:bg-emerald-500/15 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
-                    <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
-                      <span className="text-base font-black block">November</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
-                      <span className="text-[9px] block text-emerald-100 mt-0.5 font-bold">5 Sundays</span>
-                    </td>
-                    {schedulesByMonth.november.map((sched) => {
-                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                      const isNext = nextSchedule?.id === sched.id;
-                      const isNative = sched.instructions?.toLowerCase().includes('native');
-                      const img = getOutfitImage(sched);
-                      const dateObj = new Date(sched.scheduledDate);
-                      const dayNum = dateObj.getUTCDate();
-                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
-
-                      return (
-                        <td
-                          key={sched.id}
-                          onClick={() => setSelectedOutfitModal(sched)}
-                          className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
-                            isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                              <span className="text-[10px] font-black text-white">
-                                {dayNum}{suffix} Nov
-                              </span>
-                              {isNext && (
-                                <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
-                                  This Sunday
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {isNative ? (
-                            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                              👑 {sched.instructions}
-                            </div>
-                          ) : (
-                            <div className="space-y-1 text-[11px]">
-                              {breakdown.ladies && (
-                                <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
-                                </p>
-                              )}
-                              {breakdown.men && (
-                                <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-
-                  {/* December Row */}
-                  <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                      <span className="text-base font-black text-purple-600 dark:text-purple-400 block">December</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
-                    </td>
-                    {schedulesByMonth.december.map((sched) => {
-                      const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                      const isNext = nextSchedule?.id === sched.id;
-                      const isNative = sched.instructions?.toLowerCase().includes('native');
-                      const img = getOutfitImage(sched);
-                      const dateObj = new Date(sched.scheduledDate);
-                      const dayNum = dateObj.getUTCDate();
-                      const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
-
-                      return (
-                        <td
-                          key={sched.id}
-                          onClick={() => setSelectedOutfitModal(sched)}
-                          className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${
-                            isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-                          }`}
-                        >
-                          <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
-                            <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-                            <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
-                              <span className="text-[10px] font-black text-white">
-                                {dayNum}{suffix} Dec
-                              </span>
-                              {isNext && (
-                                <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
-                                  This Sunday
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {isNative ? (
-                            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
-                              👑 {sched.instructions}
-                            </div>
-                          ) : (
-                            <div className="space-y-1 text-[11px]">
-                              {breakdown.ladies && (
-                                <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
-                                  <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
-                                </p>
-                              )}
-                              {breakdown.men && (
-                                <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
-                                  <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                    {/* Blank 5th Sunday */}
-                    <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
-                      —
-                    </td>
-                  </tr>
-
-                  {/* Optional Q3 Archive Rows */}
-                  {showArchive && (
-                    <>
-                      {/* September Row */}
-                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-t-2 border-slate-300 dark:border-slate-700">
-                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">September</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
-                        </td>
-                        {schedulesByMonth.september.map((sched) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
-                          const img = getOutfitImage(sched);
-                          return (
-                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Sept</span>
-                              </div>
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
-                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
-                      </tr>
-
-                      {/* August Row */}
-                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">August</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
-                        </td>
-                        {schedulesByMonth.august.map((sched) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
-                          const img = getOutfitImage(sched);
-                          return (
-                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Aug</span>
-                              </div>
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
-                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-
-                      {/* July Row */}
-                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
-                          <span className="text-base font-black text-slate-600 dark:text-slate-400 block">July</span>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
-                        </td>
-                        {schedulesByMonth.july.map((sched) => {
-                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                          const isNative = sched.instructions?.toLowerCase().includes('native');
-                          const img = getOutfitImage(sched);
-                          return (
-                            <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
-                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
-                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th July</span>
-                              </div>
-                              {isNative ? (
-                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 Native for all members.</div>
-                              ) : (
-                                <div className="space-y-1 text-[11px]">
-                                  {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
-                                  {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
-                      </tr>
-                    </>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Archive Toggle Button */}
-            <div className="flex justify-center pt-1">
-              <button
-                onClick={() => setShowArchive(!showArchive)}
-                className="px-5 py-2.5 rounded-2xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-black text-slate-700 dark:text-slate-300 transition-all shadow-xs"
-              >
-                {showArchive ? '▲ Hide Q3 2026 Archive' : '▼ View Q3 2026 Archive (July, August, September)'}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================================
-            VIEW 2: WEEKLY CARDS VIEW (WITH REAL CLOTHING PHOTOS)
-        ========================================================================= */}
-        {viewTab === 'weekly_list' && (
-          <section className="space-y-6 animate-in fade-in duration-300">
-            {/* Header & Filter Pills */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                  Sunday Uniform Showcases
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select a month tab to view each Sunday&apos;s prescribed wear and individual piece breakdown.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-300/50 dark:border-slate-700 self-start sm:self-auto overflow-x-auto max-w-full">
-                {(['NOVEMBER', 'DECEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'ALL'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setSelectedMonth(m)}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${
-                      selectedMonth === m
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {m === 'NOVEMBER' ? 'November (Active)' : m === 'ALL' ? `All (${allSchedules.length})` : m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {displayedSchedules.map((sched) => {
-                const theme = getUniformVisualTheme(sched.outfit.title, sched.instructions);
-                const isNext = nextSchedule?.id === sched.id;
-                const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
-                const dateObj = new Date(sched.scheduledDate);
-                const img = getOutfitImage(sched);
-
-                return (
-                  <div
-                    key={sched.id}
-                    onClick={() => setSelectedOutfitModal(sched)}
-                    className={`group relative overflow-hidden rounded-[2.2rem] border bg-white dark:bg-slate-900 shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col justify-between ${
-                      isNext
-                        ? 'border-primary ring-2 ring-primary/40'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-                    }`}
-                  >
-                    {/* Realistic Clothing Photo Banner */}
-                    <div className="relative w-full h-52 sm:h-60 overflow-hidden bg-slate-950">
-                      <img
-                        src={img}
-                        alt={sched.outfit.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
-
-                      {/* Top Badges */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-3 py-1 rounded-full ${theme.badgeBg} text-[9px] font-black uppercase tracking-wider shadow-md`}>
-                            {theme.tag}
+                          <span className="p-2 rounded-xl bg-black/50 backdrop-blur-md border border-white/20 text-white group-hover/photo:bg-white group-hover/photo:text-slate-950 transition-colors">
+                            <Maximize2 className="w-4 h-4" />
                           </span>
-                          {isNext && (
-                            <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-[9px] font-black uppercase shadow-md animate-pulse">
-                              This Sunday
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Directives & Pieces (7 cols) */}
+                    <div className="lg:col-span-7 space-y-5">
+                      {/* Sisters & Brothers Dual Directive Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Sisters Card */}
+                        <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-pink-500/30 text-pink-200 border border-pink-400/40 text-[11px] font-black uppercase tracking-wider">
+                              <Sparkles className="w-3 h-3 text-pink-300" /> Sisters
                             </span>
-                          )}
-                        </div>
+                            <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
+                          </div>
 
-                        <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white font-black text-xs border border-white/20">
-                          {dateObj.getUTCDate()} {dateObj.toLocaleString([], { month: 'short', timeZone: 'UTC' })}
-                        </span>
-                      </div>
-
-                      {/* Bottom Title on Banner */}
-                      <div className="absolute bottom-3 left-4 right-4">
-                        <h4 className="text-lg font-black text-white leading-tight drop-shadow-md">
-                          {sched.title}
-                        </h4>
-                      </div>
-                    </div>
-
-                    {/* Directives Body */}
-                    <div className="p-5 space-y-4">
-                      {/* Gender Breakdown Container */}
-                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
-                        <div className="flex items-start gap-2">
-                          <span className="px-2 py-0.5 rounded-md bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
-                            Ladies
-                          </span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                            {breakdown.ladies}
+                          <p className="text-xs font-semibold text-white/95 leading-relaxed">
+                            {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).ladies}
                           </p>
                         </div>
-                        <div className="flex items-start gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
-                          <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
-                            Men
-                          </span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
-                            {breakdown.men}
+
+                        {/* Brothers Card */}
+                        <div className="rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 p-4 space-y-2.5 shadow-md">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-500/30 text-blue-200 border border-blue-400/40 text-[11px] font-black uppercase tracking-wider">
+                              <Shirt className="w-3 h-3 text-blue-300" /> Brothers
+                            </span>
+                            <span className="text-[10px] text-white/60 font-semibold">Attire Guide</span>
+                          </div>
+
+                          <p className="text-xs font-semibold text-white/95 leading-relaxed">
+                            {getGenderBreakdown(nextSchedule.instructions, nextSchedule.outfit.notes).men}
                           </p>
                         </div>
                       </div>
 
-                      {/* Pieces Swatches & CTA */}
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          {sched.outfit.items.slice(0, 5).map((layer, idx) => (
-                            <span
+                      {/* Palette & Pieces Swatches */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black uppercase tracking-wider text-white/80 flex items-center gap-1.5">
+                            <Palette className="w-4 h-4 text-amber-300" /> Required Components &amp; Palette Swatches
+                          </span>
+                          <span className="text-[11px] text-white/60">
+                            {nextSchedule.outfit.items.length} Required Items
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {nextSchedule.outfit.items.map((layer, idx) => (
+                            <div
                               key={idx}
-                              title={`${layer.item?.name} (${layer.variant?.colorName || 'Standard'})`}
-                              className="w-4 h-4 rounded-full border border-black/15 dark:border-white/30 shadow-xs"
-                              style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
-                            />
+                              className="p-2.5 rounded-xl bg-black/35 backdrop-blur-md border border-white/15 flex items-center gap-2.5 text-xs"
+                            >
+                              <span
+                                className="w-4 h-4 rounded-full border-2 border-white shadow-md shrink-0"
+                                style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
+                              />
+                              <div className="min-w-0">
+                                <p className="font-extrabold text-white truncate text-[11px]">{layer.item?.name}</p>
+                                <p className="text-[9px] text-white/70 truncate">
+                                  {layer.notes || layer.variant?.colorName || 'Prescribed'}
+                                </p>
+                              </div>
+                            </div>
                           ))}
                         </div>
+                      </div>
 
-                        <span className="text-xs font-black text-primary flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                          <span>Inspect Full Guide</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </span>
+                      {/* Action Button */}
+                      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <button
+                          onClick={() => setSelectedOutfitModal(nextSchedule)}
+                          className="px-7 py-3 rounded-2xl bg-white text-slate-950 hover:bg-amber-100 font-black text-xs transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Eye className="w-4 h-4 text-primary" /> View Complete Guidelines &amp; Model Photo
+                        </button>
+
+                        <p className="text-xs text-white/70 italic text-center sm:text-right">
+                          Arrive 30 mins before service in full uniform.
+                        </p>
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                </div>
+              </section>
+            )}
+
+            {/* =========================================================================
+            VIEW 1: OFFICIAL ROSTER BOARD MATRIX (FAITHFUL TO CHART GRAPHIC)
+        ========================================================================= */}
+            {viewTab === 'roster_board' && (
+              <section className="space-y-6 animate-in fade-in duration-300">
+                {/* Roster Banner */}
+                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-r from-emerald-700 via-blue-700 via-purple-700 to-amber-600 p-7 text-white shadow-xl text-center space-y-2">
+                  <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.15)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-white/80 block">
+                    The Father&apos;s House Church • Orderliness Unit
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-wider drop-shadow-md">
+                    OCTOBER, NOVEMBER &amp; DECEMBER 2026 ORDERLINESS UNIFORM ROSTER
+                  </h2>
+                  <p className="text-xs sm:text-sm text-white/95 max-w-2xl mx-auto font-medium leading-relaxed">
+                    Official uniform roster for Sunday services. Click on any date card to view complete outfit breakdowns, grooming guides and required pieces.
+                  </p>
+                </div>
+
+                {/* Matrix Columns Table */}
+                <div className="overflow-x-auto rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+                  <table className="w-full border-collapse text-left text-xs min-w-[950px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                        <th className="p-4 font-black uppercase text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 w-32 text-center text-xs">
+                          Month and Dates
+                        </th>
+                        <th className="p-4 font-black uppercase text-white bg-blue-600 text-center w-1/5 shadow-inner">
+                          <span className="text-sm block font-black">1st Sunday</span>
+                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 4 • Nov 1 • Dec 6</span>
+                        </th>
+                        <th className="p-4 font-black uppercase text-white bg-slate-700 text-center w-1/5 shadow-inner">
+                          <span className="text-sm block font-black">2nd Sunday</span>
+                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 11 • Nov 8 • Dec 13</span>
+                        </th>
+                        <th className="p-4 font-black uppercase text-white bg-purple-600 text-center w-1/5 shadow-inner">
+                          <span className="text-sm block font-black">3rd Sunday</span>
+                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 18 • Nov 15 • Dec 20</span>
+                        </th>
+                        <th className="p-4 font-black uppercase text-white bg-red-600 text-center w-1/5 shadow-inner">
+                          <span className="text-sm block font-black">4th Sunday</span>
+                          <span className="text-[10px] text-white/80 font-bold block mt-0.5">Oct 25 • Nov 22 • Dec 27</span>
+                        </th>
+                        <th className="p-4 font-black uppercase text-white bg-amber-500 text-center w-1/5 shadow-inner">
+                          <span className="text-sm block font-black">5th Sunday</span>
+                          <span className="text-[10px] text-white/90 font-bold block mt-0.5">Nov 29</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 font-medium">
+                      {/* October Row */}
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                          <span className="text-base font-black text-amber-600 dark:text-amber-400 block">October</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
+                        </td>
+                        {schedulesByMonth.october.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNext = nextSchedule?.id === sched.id;
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          const dateObj = new Date(sched.scheduledDate);
+                          const dayNum = dateObj.getUTCDate();
+                          const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
+
+                          return (
+                            <td
+                              key={sched.id}
+                              onClick={() => setSelectedOutfitModal(sched)}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-white">
+                                    {dayNum}{suffix} Oct
+                                  </span>
+                                  {isNext && (
+                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                      This Sunday
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-950 dark:text-emerald-200 text-[11px] font-bold">
+                                  🌿 {sched.instructions}
+                                </div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && (
+                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
+                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                                    </p>
+                                  )}
+                                  {breakdown.men && (
+                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
+                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        {/* Blank 5th Sunday */}
+                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
+                          —
+                        </td>
+                      </tr>
+
+                      {/* November Row (Active Current Month) */}
+                      <tr className="bg-emerald-500/5 dark:bg-emerald-500/15 hover:bg-emerald-500/10 dark:hover:bg-emerald-500/20 transition-colors">
+                        <td className="p-5 font-black text-center bg-emerald-600 text-white border-r border-emerald-500/30 shadow-md">
+                          <span className="text-base font-black block">November</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200">Active Month</span>
+                          <span className="text-[9px] block text-emerald-100 mt-0.5 font-bold">5 Sundays</span>
+                        </td>
+                        {schedulesByMonth.november.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNext = nextSchedule?.id === sched.id;
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          const dateObj = new Date(sched.scheduledDate);
+                          const dayNum = dateObj.getUTCDate();
+                          const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
+
+                          return (
+                            <td
+                              key={sched.id}
+                              onClick={() => setSelectedOutfitModal(sched)}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-white">
+                                    {dayNum}{suffix} Nov
+                                  </span>
+                                  {isNext && (
+                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                      This Sunday
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
+                                  👑 {sched.instructions}
+                                </div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && (
+                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
+                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                                    </p>
+                                  )}
+                                  {breakdown.men && (
+                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
+                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+
+                      {/* December Row */}
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-5 font-black text-center bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                          <span className="text-base font-black text-purple-600 dark:text-purple-400 block">December</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">4 Sundays</span>
+                        </td>
+                        {schedulesByMonth.december.map((sched) => {
+                          const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                          const isNext = nextSchedule?.id === sched.id;
+                          const isNative = sched.instructions?.toLowerCase().includes('native');
+                          const img = getOutfitImage(sched);
+                          const dateObj = new Date(sched.scheduledDate);
+                          const dayNum = dateObj.getUTCDate();
+                          const suffix = dayNum === 1 || dayNum === 21 || dayNum === 31 ? 'st' : dayNum === 2 || dayNum === 22 ? 'nd' : dayNum === 3 || dayNum === 23 ? 'rd' : 'th';
+
+                          return (
+                            <td
+                              key={sched.id}
+                              onClick={() => setSelectedOutfitModal(sched)}
+                              className={`p-3.5 align-top cursor-pointer transition-all border-r border-slate-200 dark:border-slate-800 space-y-2 group ${isNext ? 'bg-emerald-500/15 dark:bg-emerald-500/25 ring-2 ring-emerald-500 ring-inset' : 'hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
+                                }`}
+                            >
+                              <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-md">
+                                <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                                <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-white">
+                                    {dayNum}{suffix} Dec
+                                  </span>
+                                  {isNext && (
+                                    <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[8px] font-black uppercase">
+                                      This Sunday
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isNative ? (
+                                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">
+                                  👑 {sched.instructions}
+                                </div>
+                              ) : (
+                                <div className="space-y-1 text-[11px]">
+                                  {breakdown.ladies && (
+                                    <p className="text-pink-800 dark:text-pink-300 font-medium line-clamp-2">
+                                      <strong className="text-pink-950 dark:text-pink-100">Ladies:</strong> {breakdown.ladies}
+                                    </p>
+                                  )}
+                                  {breakdown.men && (
+                                    <p className="text-blue-800 dark:text-blue-300 font-medium line-clamp-2">
+                                      <strong className="text-blue-950 dark:text-blue-100">Men:</strong> {breakdown.men}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                        {/* Blank 5th Sunday */}
+                        <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">
+                          —
+                        </td>
+                      </tr>
+
+                      {/* Optional Q3 Archive Rows */}
+                      {showArchive && (
+                        <>
+                          {/* September Row */}
+                          <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-t-2 border-slate-300 dark:border-slate-700">
+                            <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                              <span className="text-base font-black text-slate-600 dark:text-slate-400 block">September</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
+                            </td>
+                            {schedulesByMonth.september.map((sched) => {
+                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const img = getOutfitImage(sched);
+                              return (
+                                <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                                  <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                    <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                    <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Sept</span>
+                                  </div>
+                                  {isNative ? (
+                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
+                                  ) : (
+                                    <div className="space-y-1 text-[11px]">
+                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
+                          </tr>
+
+                          {/* August Row */}
+                          <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                              <span className="text-base font-black text-slate-600 dark:text-slate-400 block">August</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
+                            </td>
+                            {schedulesByMonth.august.map((sched) => {
+                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const img = getOutfitImage(sched);
+                              return (
+                                <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                                  <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                    <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                    <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th Aug</span>
+                                  </div>
+                                  {isNative ? (
+                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 {sched.instructions}</div>
+                                  ) : (
+                                    <div className="space-y-1 text-[11px]">
+                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+
+                          {/* July Row */}
+                          <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                            <td className="p-5 font-black text-center bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
+                              <span className="text-base font-black text-slate-600 dark:text-slate-400 block">July</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Q3 Archive</span>
+                            </td>
+                            {schedulesByMonth.july.map((sched) => {
+                              const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                              const isNative = sched.instructions?.toLowerCase().includes('native');
+                              const img = getOutfitImage(sched);
+                              return (
+                                <td key={sched.id} onClick={() => setSelectedOutfitModal(sched)} className="p-3.5 align-top cursor-pointer hover:bg-slate-100/60 dark:hover:bg-slate-800/60 transition-all border-r border-slate-100 dark:border-slate-800 space-y-2 group">
+                                  <div className="relative h-20 w-full rounded-xl overflow-hidden border mb-2 shadow-xs">
+                                    <img src={img} alt={sched.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                    <span className="absolute bottom-1 left-2 text-[10px] font-black text-white">{new Date(sched.scheduledDate).getUTCDate()}th July</span>
+                                  </div>
+                                  {isNative ? (
+                                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-300 text-[11px] font-bold">👑 Native for all members.</div>
+                                  ) : (
+                                    <div className="space-y-1 text-[11px]">
+                                      {breakdown.ladies && <p className="text-pink-700 dark:text-pink-300 font-medium line-clamp-2"><strong className="text-pink-900 dark:text-pink-200">Ladies:</strong> {breakdown.ladies}</p>}
+                                      {breakdown.men && <p className="text-blue-700 dark:text-blue-300 font-medium line-clamp-2"><strong className="text-blue-900 dark:text-blue-200">Men:</strong> {breakdown.men}</p>}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                            <td className="p-4 text-center text-slate-400 bg-slate-50/50 dark:bg-slate-800/20 italic">—</td>
+                          </tr>
+                        </>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Archive Toggle Button */}
+                <div className="flex justify-center pt-1">
+                  <button
+                    onClick={() => setShowArchive(!showArchive)}
+                    className="px-5 py-2.5 rounded-2xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-black text-slate-700 dark:text-slate-300 transition-all shadow-xs"
+                  >
+                    {showArchive ? '▲ Hide Q3 2026 Archive' : '▼ View Q3 2026 Archive (July, August, September)'}
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {/* =========================================================================
+            VIEW 2: WEEKLY CARDS VIEW (WITH REAL CLOTHING PHOTOS)
+        ========================================================================= */}
+            {viewTab === 'weekly_list' && (
+              <section className="space-y-6 animate-in fade-in duration-300">
+                {/* Header & Filter Pills */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      Sunday Uniform Showcases
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Select a month tab to view each Sunday&apos;s prescribed wear and individual piece breakdown.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-300/50 dark:border-slate-700 self-start sm:self-auto overflow-x-auto max-w-full">
+                    {(['NOVEMBER', 'DECEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'ALL'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setSelectedMonth(m)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 ${selectedMonth === m
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                      >
+                        {m === 'NOVEMBER' ? 'November (Active)' : m === 'ALL' ? `All (${allSchedules.length})` : m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {displayedSchedules.map((sched) => {
+                    const theme = getUniformVisualTheme(sched.outfit.title, sched.instructions);
+                    const isNext = nextSchedule?.id === sched.id;
+                    const breakdown = getGenderBreakdown(sched.instructions, sched.outfit.notes);
+                    const dateObj = new Date(sched.scheduledDate);
+                    const img = getOutfitImage(sched);
+
+                    return (
+                      <div
+                        key={sched.id}
+                        onClick={() => setSelectedOutfitModal(sched)}
+                        className={`group relative overflow-hidden rounded-[2.2rem] border bg-white dark:bg-slate-900 shadow-lg hover:shadow-2xl transition-all cursor-pointer flex flex-col justify-between ${isNext
+                            ? 'border-primary ring-2 ring-primary/40'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                          }`}
+                      >
+                        {/* Realistic Clothing Photo Banner */}
+                        <div className="relative w-full h-52 sm:h-60 overflow-hidden bg-slate-950">
+                          <img
+                            src={img}
+                            alt={sched.outfit.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
+
+                          {/* Top Badges */}
+                          <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-3 py-1 rounded-full ${theme.badgeBg} text-[9px] font-black uppercase tracking-wider shadow-md`}>
+                                {theme.tag}
+                              </span>
+                              {isNext && (
+                                <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-[9px] font-black uppercase shadow-md animate-pulse">
+                                  This Sunday
+                                </span>
+                              )}
+                            </div>
+
+                            <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white font-black text-xs border border-white/20">
+                              {dateObj.getUTCDate()} {dateObj.toLocaleString([], { month: 'short', timeZone: 'UTC' })}
+                            </span>
+                          </div>
+
+                          {/* Bottom Title on Banner */}
+                          <div className="absolute bottom-3 left-4 right-4">
+                            <h4 className="text-lg font-black text-white leading-tight drop-shadow-md">
+                              {sched.title}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Directives Body */}
+                        <div className="p-5 space-y-4">
+                          {/* Gender Breakdown Container */}
+                          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2.5 text-xs">
+                            <div className="flex items-start gap-2">
+                              <span className="px-2 py-0.5 rounded-md bg-pink-100 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
+                                Ladies
+                              </span>
+                              <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                {breakdown.ladies}
+                              </p>
+                            </div>
+                            <div className="flex items-start gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
+                              <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold text-[10px] uppercase shrink-0 mt-0.5">
+                                Men
+                              </span>
+                              <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                {breakdown.men}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Pieces Swatches & CTA */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                            <div className="flex items-center gap-1.5">
+                              {sched.outfit.items.slice(0, 5).map((layer, idx) => (
+                                <span
+                                  key={idx}
+                                  title={`${layer.item?.name} (${layer.variant?.colorName || 'Standard'})`}
+                                  className="w-4 h-4 rounded-full border border-black/15 dark:border-white/30 shadow-xs"
+                                  style={{ backgroundColor: layer.variant?.colorCode || '#D97706' }}
+                                />
+                              ))}
+                            </div>
+
+                            <span className="text-xs font-black text-primary flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                              <span>Inspect Full Guide</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </>
         )}
       </main>
