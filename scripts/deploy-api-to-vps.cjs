@@ -4,8 +4,8 @@ const path = require('path');
 
 const VPS_HOST = 'staging.utilityhub.ng';
 const REMOTE_DIR = '/home/ese/tfhc-production';
-const RELEASE_NAME = 'events-desc-release';
-const IMAGE_TAG = 'tfhc-api:events-desc-20261109';
+const RELEASE_NAME = 'finance-release';
+const IMAGE_TAG = 'tfhc-api:finance-20261121';
 const ROOT = path.resolve(__dirname, '..');
 
 function run(cmd, opts = {}) {
@@ -33,7 +33,7 @@ async function main() {
   run(`robocopy "${path.join(ROOT, 'apps/api/prisma/data')}" "${path.join(stagingDir, 'data')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
 
   // Write Dockerfile
-  const dockerfile = `FROM tfhc-api:members-export-v2-20261104
+  const dockerfile = `FROM tfhc-api:events-desc-20261109
 COPY dist/ /app/apps/api/dist/
 COPY src/ /app/apps/api/src/
 COPY data/ /app/apps/api/prisma/data/
