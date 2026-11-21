@@ -108,6 +108,22 @@ async function main() {
           },
         });
       }
+
+      // Also adjust pending payment declarations that were submitted under the previous ₦50,000 target
+      const updatedPayments = await prisma.payment.updateMany({
+        where: {
+          duesAssignment: { periodId: campaign.id },
+          status: 'PENDING',
+          amount: 50000,
+        },
+        data: {
+          amount: 20000,
+        },
+      });
+      if (updatedPayments.count > 0) {
+        console.log(`  -> Adjusted ${updatedPayments.count} pending payment declaration(s) to ₦20,000.`);
+      }
+
       console.log('  -> Successfully updated campaign and assignments to ₦20,000.');
     }
   }
