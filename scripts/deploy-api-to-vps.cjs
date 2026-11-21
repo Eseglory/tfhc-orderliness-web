@@ -33,7 +33,7 @@ async function main() {
   run(`robocopy "${path.join(ROOT, 'apps/api/prisma/data')}" "${path.join(stagingDir, 'data')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
 
   // Write Dockerfile
-  const dockerfile = `FROM tfhc-api:events-desc-20261109
+  const dockerfile = `FROM tfhc-api:finance-20261121
 COPY dist/ /app/apps/api/dist/
 COPY src/ /app/apps/api/src/
 COPY data/ /app/apps/api/prisma/data/
