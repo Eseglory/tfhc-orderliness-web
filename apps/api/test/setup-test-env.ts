@@ -1,12 +1,30 @@
-import { config } from 'dotenv';
+import * as fs from 'fs';
 import * as path from 'path';
 
 // 1. Force NODE_ENV to test
 process.env.NODE_ENV = 'test';
 
 // 2. Load dedicated test environment files first with override
-config({ path: path.resolve(__dirname, '../.env.test'), override: true, quiet: true });
-config({ path: path.resolve(__dirname, '../../.env.test'), override: true, quiet: true });
+function loadEnvFile(filePath: string) {
+  if (fs.existsSync(filePath)) {
+    const lines = fs.readFileSync(filePath, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+        const idx = trimmed.indexOf('=');
+        const k = trimmed.slice(0, idx).trim();
+        let v = trimmed.slice(idx + 1).trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1);
+        }
+        process.env[k] = v;
+      }
+    }
+  }
+}
+
+loadEnvFile(path.resolve(__dirname, '../../.env.test'));
+loadEnvFile(path.resolve(__dirname, '../.env.test'));
 
 // 3. Guarantee local Docker test database URL
 const LOCAL_TEST_DB = 'postgresql://postgres:tfhc_e2e_only@127.0.0.1:55498/tfhc_e2e';

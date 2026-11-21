@@ -495,7 +495,11 @@ export default function AbsenceRequestsPage() {
                           </>
                         ) : (
                           <span className="text-[11px] text-slate-400 italic">
-                            Only Daniel can approve/reject
+                            {isJacob(request.member)
+                              ? 'Only Daniel can approve/reject'
+                              : user?.email?.toLowerCase() === (request.member?.email || request.member?.user?.email)?.toLowerCase()
+                              ? 'You cannot approve your own request'
+                              : 'Requires Committee or Admin privileges'}
                           </span>
                         )}
                       </>

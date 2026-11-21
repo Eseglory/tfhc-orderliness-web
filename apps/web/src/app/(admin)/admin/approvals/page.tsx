@@ -1522,6 +1522,9 @@ function ApprovalsContent() {
                     >
                       <option value="LEADER">Unit Leader</option>
                       <option value="ADMIN">Administrator</option>
+                      <option value="DISCIPLINARY_COMMITTEE">Disciplinary Committee</option>
+                      <option value="APPROVAL_MANAGER">Approval Manager</option>
+                      <option value="FINANCE">Finance</option>
                       <option value="SUPER_ADMIN">Executive Super Admin</option>
                     </select>
                     {workflowSteps.length > 1 && (

@@ -271,9 +271,13 @@ export class FinanceController {
 
   @Post('payments/:id/confirm')
   @RequirePermissions('payments.manage')
-  confirmPayment(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+  confirmPayment(
+    @Param('id') id: string,
+    @Body() body: { confirmedAmount?: number; adminNote?: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     assertFinanceCrudAuthority(user);
-    return this.payments.confirm(id, user.userId);
+    return this.payments.confirm(id, user.userId, body);
   }
 
   @Post('payments/:id/reject')

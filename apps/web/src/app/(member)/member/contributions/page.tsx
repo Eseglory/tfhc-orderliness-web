@@ -45,6 +45,22 @@ interface Campaign {
   status: string;
   hasPendingPayment?: boolean;
   paymentAccount: Account | null;
+  isPartiallyPaid?: boolean;
+  canSubmitInstallment?: boolean;
+  confirmedInstallmentsCount?: number;
+  maxInstallments?: number | null;
+  payments?: Array<{
+    id: string;
+    reference: string;
+    amount: number;
+    claimedAmount?: number;
+    confirmedAmount?: number;
+    isAdjusted?: boolean;
+    adminNote?: string | null;
+    status: string;
+    paidOn: string;
+    receiptUrl?: string | null;
+  }>;
 }
 
 interface Payment {
@@ -59,6 +75,10 @@ interface Payment {
   receiptName?: string | null;
   description?: string | null;
   rejectionReason?: string | null;
+  claimedAmount?: number;
+  confirmedAmount?: number;
+  isAdjusted?: boolean;
+  adminNote?: string | null;
 }
 
 export default function MemberContributionsPage() {
@@ -166,7 +186,8 @@ export default function MemberContributionsPage() {
         ) : (
           <div className="space-y-4">
             {campaigns.map((c) => {
-              const isPaid = c.status === 'PAID';
+              const isPaid = c.status === 'PAID' || c.balance <= 0;
+              const isPartiallyPaid = c.isPartiallyPaid || c.status === 'PARTIALLY_PAID' || (c.amountPaid > 0 && c.balance > 0);
               const isWaived = c.status === 'WAIVED' || c.status === 'EXEMPT';
               const isPending =
                 !!c.hasPendingPayment ||
@@ -177,6 +198,7 @@ export default function MemberContributionsPage() {
                       p.purpose === 'SPECIAL_CONTRIBUTION') &&
                     p.status === 'PENDING'
                 );
+              const isChristmas = c.title.toLowerCase().includes('christmas') || Boolean(c.maxInstallments);
 
               return (
                 <article
@@ -192,6 +214,10 @@ export default function MemberContributionsPage() {
                         {isPaid ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Fully Paid
+                          </span>
+                        ) : isPartiallyPaid ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-300">
+                            <Clock className="w-3.5 h-3.5" /> Partially Paid
                           </span>
                         ) : isPending ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-300">
@@ -227,17 +253,47 @@ export default function MemberContributionsPage() {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Contribution Amount</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Payable</span>
                       <span className="text-xl font-black text-slate-900 dark:text-white">
                         {naira(c.amountDue)}
                       </span>
-                      {c.balance > 0 && !isWaived && (
+                      {c.balance > 0 && !isWaived ? (
                         <span className="text-xs font-bold text-rose-600 block mt-0.5">
                           {naira(c.balance)} outstanding
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-600 block mt-0.5">
+                          Balance: ₦0
                         </span>
                       )}
                     </div>
                   </div>
+
+                  {/* Installment Tracker for Christmas Contribution */}
+                  {isChristmas && (
+                    <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-indigo-900 dark:text-indigo-200 uppercase tracking-wider text-[10px]">
+                          Installment Plan (Maximum {c.maxInstallments || 2} Installments Allowed)
+                        </span>
+                        <span className="text-indigo-700 dark:text-indigo-300 font-black">
+                          {c.confirmedInstallmentsCount ?? 0} of {c.maxInstallments || 2} Installments Confirmed
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div
+                          className="bg-indigo-600 h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, Math.round(((c.amountPaid || 0) / (c.amountDue || 1)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                        <span>Total Paid &amp; Confirmed: <strong className="text-emerald-600">{naira(c.amountPaid)}</strong></span>
+                        <span>Remaining: <strong className="text-rose-600">{naira(c.balance)}</strong></span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Designated Bank Account for this Specific Campaign */}
                   <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
@@ -280,10 +336,59 @@ export default function MemberContributionsPage() {
                     )}
                   </div>
 
+                  {/* Payment History / Submissions under this Campaign */}
+                  {c.payments && c.payments.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 space-y-2">
+                      <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">
+                        Your Payment Submissions ({c.payments.length})
+                      </span>
+                      <div className="space-y-2">
+                        {c.payments.map((p) => (
+                          <div
+                            key={p.id}
+                            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs space-y-1.5 shadow-2xs"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-slate-900 dark:text-white">
+                                  {naira(p.amount)}
+                                </span>
+                                {p.isAdjusted && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                    Adjusted (Claimed: {naira(p.claimedAmount ?? p.amount)})
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  p.status === 'CONFIRMED'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : p.status === 'PENDING'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                }`}
+                              >
+                                {p.status === 'CONFIRMED' ? 'Confirmed & Credited' : p.status === 'PENDING' ? 'Under Review' : 'Rejected'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              Ref: {p.reference} &bull; {new Date(p.paidOn).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </div>
+                            {p.adminNote && (
+                              <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-900 dark:text-amber-200">
+                                <strong>Admin Note:</strong> &quot;{p.adminNote}&quot;
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
                     <span className="text-xs text-slate-500">
-                      Paid so far: <strong>{naira(c.amountPaid)}</strong>
+                      Total confirmed: <strong>{naira(c.amountPaid)}</strong> of {naira(c.amountDue)}
                     </span>
 
                     {c.balance > 0 && !isWaived && (
@@ -296,13 +401,21 @@ export default function MemberContributionsPage() {
                           <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                           <span>Payment Submitted (Pending Review)</span>
                         </button>
+                      ) : c.canSubmitInstallment === false && (c.confirmedInstallmentsCount ?? 0) >= (c.maxInstallments || 2) ? (
+                        <span className="text-xs font-bold text-amber-600 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60">
+                          Maximum {c.maxInstallments || 2} installments reached
+                        </span>
                       ) : (
                         <button
                           onClick={() => setDeclaring(c)}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm transition-transform active:scale-95 cursor-pointer"
                         >
                           <Upload className="w-3.5 h-3.5" />
-                          <span>I&apos;ve Paid &bull; Upload Receipt</span>
+                          <span>
+                            {c.amountPaid > 0
+                              ? `Pay Next Installment (${naira(c.balance)} remaining)`
+                              : `I've Paid \u2022 Upload Receipt`}
+                          </span>
                         </button>
                       )
                     )}
@@ -439,9 +552,13 @@ function DeclareContributionModal({
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
               min={100}
+              max={campaign.balance}
               required
               className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold"
             />
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              Remaining balance payable: {naira(campaign.balance)}. Maximum allowed for this submission: {naira(campaign.balance)}.
+            </span>
           </div>
 
           <div>

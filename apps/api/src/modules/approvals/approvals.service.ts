@@ -10,13 +10,15 @@ import { ApprovalDecision, ApprovalRequestType, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CacheService } from '../../common/cache/cache.service';
 import { AuditService } from '../../common/rbac/audit.service';
-import { SYSTEM_ROLE, LEGACY_ROLE_FALLBACK } from '@tfhc/shared';
+import { SYSTEM_ROLE, LEGACY_ROLE_FALLBACK, PERMISSION_WILDCARD } from '@tfhc/shared';
 import {
+  AUTHORIZED_PERSONS,
   isJacob,
   isDaniel,
   isLoveth,
   isEseosaGlory,
 } from '../../common/rbac/authorization-rules';
+import { DISCIPLINARY_EMAILS } from '../chat/chat.util';
 
 /** Legacy enum roles (no explicit grants) that satisfy an access-role step. */
 const LEGACY_KEYS_FOR = (roleKey: string): string[] =>
@@ -95,13 +97,29 @@ export class ApprovalsService {
     return req;
   }
 
-  private async approverUserIds(step: {
-    approverMode: string;
-    roleKey: string | null;
-    approverUserId: string | null;
-    approverMemberId?: string | null;
-    permission: string | null;
-  }): Promise<Set<string>> {
+  private async approverUserIds(
+    step: {
+      approverMode: string;
+      roleKey: string | null;
+      approverUserId: string | null;
+      approverMemberId?: string | null;
+      permission: string | null;
+    },
+    context?: {
+      requestType?: ApprovalRequestType;
+      requesterEmail?: string | null;
+      requestedByUserId?: string | null;
+    },
+  ): Promise<Set<string>> {
+    // Rule: Jacob's requests can ONLY be approved by Daniel
+    if (context?.requesterEmail && isJacob(context.requesterEmail)) {
+      const daniel = await this.prisma.user.findFirst({
+        where: { email: { equals: AUTHORIZED_PERSONS.DANIEL_OGUAMANAM, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      return new Set(daniel ? [daniel.id] : []);
+    }
+
     if (step.approverMode === 'SPECIFIC_USER') {
       const set = new Set<string>();
       if (step.approverUserId) set.add(step.approverUserId);
@@ -111,22 +129,84 @@ export class ApprovalsService {
       }
       return set;
     }
+
     if (step.approverMode === 'ROLE' && step.roleKey) {
+      const targetRoles = new Set<string>([step.roleKey, SYSTEM_ROLE.SUPER_ADMIN]);
+
+      // Map role keys & committee memberships
+      if (step.roleKey === 'ADMIN' || step.roleKey === SYSTEM_ROLE.ADMINISTRATION) {
+        targetRoles.add(SYSTEM_ROLE.ADMINISTRATION);
+        targetRoles.add(SYSTEM_ROLE.APPROVAL_MANAGER);
+        targetRoles.add(SYSTEM_ROLE.DISCIPLINARY_COMMITTEE);
+      }
+      if (step.roleKey === SYSTEM_ROLE.DISCIPLINARY_COMMITTEE) {
+        targetRoles.add(SYSTEM_ROLE.APPROVAL_MANAGER);
+        targetRoles.add(SYSTEM_ROLE.ADMINISTRATION);
+      }
+      if (step.roleKey === SYSTEM_ROLE.APPROVAL_MANAGER) {
+        targetRoles.add(SYSTEM_ROLE.DISCIPLINARY_COMMITTEE);
+        targetRoles.add(SYSTEM_ROLE.ADMINISTRATION);
+      }
+      if (step.roleKey === 'LEADER') {
+        targetRoles.add(SYSTEM_ROLE.ADMINISTRATION);
+      }
+
+      // Member absence requests are specifically governed by the Disciplinary Committee & Approval Managers
+      if (context?.requestType === 'ABSENCE') {
+        targetRoles.add(SYSTEM_ROLE.DISCIPLINARY_COMMITTEE);
+        targetRoles.add(SYSTEM_ROLE.APPROVAL_MANAGER);
+        targetRoles.add(SYSTEM_ROLE.ADMINISTRATION);
+      }
+
       const grants = await this.prisma.userAccessRole.findMany({
-        // Super Admins can always act on any role step.
         where: {
           user: { isActive: true },
-          role: { key: { in: [step.roleKey, SYSTEM_ROLE.SUPER_ADMIN] } },
+          role: { key: { in: Array.from(targetRoles) } },
         },
         select: { userId: true },
       });
-      // Transition safety: enum-role accounts with no explicit grants.
+
+      // Also include active users holding relevant review permissions
+      const permUsers = await this.prisma.userAccessRole.findMany({
+        where: {
+          user: { isActive: true },
+          role: {
+            permissions: {
+              some: {
+                permission: { in: [PERMISSION_WILDCARD, 'excuses.review', 'approvals.act'] },
+              },
+            },
+          },
+        },
+        select: { userId: true },
+      });
+
+      // Legacy enum-role accounts with Role.ADMIN
       const legacy = await this.prisma.user.findMany({
-        where: { isActive: true, role: { in: LEGACY_KEYS_FOR(step.roleKey) as Role[] }, accessRoles: { none: {} } },
+        where: {
+          isActive: true,
+          role: { in: [Role.ADMIN, ...(LEGACY_KEYS_FOR(step.roleKey) as Role[])] },
+        },
         select: { id: true },
       });
-      return new Set([...grants.map((g) => g.userId), ...legacy.map((u) => u.id)]);
+
+      // Disciplinary Committee designated member emails
+      const disciplinaryStaff = await this.prisma.user.findMany({
+        where: {
+          isActive: true,
+          email: { in: DISCIPLINARY_EMAILS, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+
+      return new Set([
+        ...grants.map((g) => g.userId),
+        ...permUsers.map((p) => p.userId),
+        ...legacy.map((u) => u.id),
+        ...disciplinaryStaff.map((d) => d.id),
+      ]);
     }
+
     if (step.approverMode === 'ANY_WITH_PERMISSION' && step.permission) {
       const grants = await this.prisma.userAccessRole.findMany({
         where: {
@@ -164,11 +244,6 @@ export class ApprovalsService {
       const step = request.workflow.steps.find((s) => s.order === request.currentStepOrder);
       if (!step) throw new BadRequestException('Approval workflow is misconfigured');
 
-      const approvers = await this.approverUserIds(step);
-      if (!approvers.has(actorUserId)) {
-        throw new ForbiddenException('You are not an approver for the current step');
-      }
-
       // Resolve requester and actor emails
       let requesterEmail: string | null = null;
       if (request.requestedByUserId) {
@@ -185,6 +260,15 @@ export class ApprovalsService {
 
       const actorUser = await tx.user.findUnique({ where: { id: actorUserId }, select: { email: true } });
       const actorEmail = actorUser?.email ?? null;
+
+      const approvers = await this.approverUserIds(step, {
+        requestType: request.requestType,
+        requesterEmail,
+        requestedByUserId: request.requestedByUserId,
+      });
+      if (!approvers.has(actorUserId)) {
+        throw new ForbiddenException('You are not an approver for the current step');
+      }
 
       // Self-approval is strictly forbidden across all approval workflows
       if (
@@ -344,8 +428,21 @@ export class ApprovalsService {
     }
 
     if (user?.userId) {
+      let requesterEmail: string | null = null;
+      if (request.requestedByUserId) {
+        const u = await this.prisma.user.findUnique({ where: { id: request.requestedByUserId }, select: { email: true } });
+        requesterEmail = u?.email?.toLowerCase() ?? null;
+      }
+      if (!requesterEmail && request.requestedByMemberId) {
+        const m = await this.prisma.member.findUnique({ where: { id: request.requestedByMemberId }, select: { user: { select: { email: true } } } });
+        requesterEmail = m?.user?.email?.toLowerCase() ?? null;
+      }
       for (const step of request.workflow.steps) {
-        const approvers = await this.approverUserIds(step);
+        const approvers = await this.approverUserIds(step, {
+          requestType: request.requestType as ApprovalRequestType,
+          requesterEmail,
+          requestedByUserId: request.requestedByUserId,
+        });
         if (approvers.has(user.userId)) {
           return this.shape(request);
         }
@@ -458,6 +555,14 @@ export class ApprovalsService {
           requesterEmail = u?.email ?? null;
         }
 
+        // Self-approval is strictly forbidden
+        if (
+          actorUserId === r.requestedByUserId ||
+          (requesterEmail && actorEmail && requesterEmail.trim().toLowerCase() === actorEmail.trim().toLowerCase())
+        ) {
+          continue;
+        }
+
         if (isJacob(requesterEmail) && !isDaniel(actorEmail)) {
           continue;
         }
@@ -469,7 +574,11 @@ export class ApprovalsService {
 
         const step = r.workflow.steps.find((s) => s.order === r.currentStepOrder);
         if (!step) continue;
-        const approvers = await this.approverUserIds(step);
+        const approvers = await this.approverUserIds(step, {
+          requestType: r.requestType,
+          requesterEmail,
+          requestedByUserId: r.requestedByUserId,
+        });
         const alreadyActed = r.actions.some((a) => a.stepOrder === step.order && a.actorUserId === actorUserId);
         if (approvers.has(actorUserId) && !alreadyActed) out.push(this.shape(r));
       }

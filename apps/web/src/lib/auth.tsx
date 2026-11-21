@@ -241,9 +241,41 @@ export function canApproveAbsenceFor(
   requester?: { email?: string | null; user?: { email?: string | null } | null } | null,
 ): boolean {
   if (!reviewer) return false;
+
+  // Self-approval is strictly forbidden
+  const reviewerEmail = reviewer.email?.toLowerCase();
+  const requesterEmail = (requester?.email || requester?.user?.email)?.toLowerCase();
+  if (reviewerEmail && requesterEmail && reviewerEmail === requesterEmail) {
+    return false;
+  }
+
+  // Jacob's requests can only be approved by Daniel
   if (isJacob(requester)) {
     return isDaniel(reviewer);
   }
-  return true;
+
+  // Super Admin can approve
+  if (reviewer.isSuperAdmin) return true;
+
+  // Granular permissions check
+  const perms = Array.isArray(reviewer.permissions) ? reviewer.permissions : [];
+  if (perms.includes('*') || perms.includes('excuses.review') || perms.includes('approvals.act')) {
+    return true;
+  }
+
+  // Access roles check (Disciplinary Committee, Approval Manager, Administration)
+  const accessRoles = Array.isArray(reviewer.accessRoles) ? reviewer.accessRoles : [];
+  if (
+    accessRoles.some((r) =>
+      ['SUPER_ADMIN', 'ADMINISTRATION', 'APPROVAL_MANAGER', 'DISCIPLINARY_COMMITTEE'].includes(r),
+    )
+  ) {
+    return true;
+  }
+
+  // Base role ADMIN
+  if (reviewer.role === 'ADMIN') return true;
+
+  return false;
 }
 

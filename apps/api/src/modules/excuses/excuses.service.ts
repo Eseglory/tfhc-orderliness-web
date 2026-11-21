@@ -314,14 +314,16 @@ export class ExcusesService implements OnModuleInit {
       if (dto.status === ExcuseStatus.REJECTED) {
         await this.approvals.act(requestId, dto.adminUserId, 'REJECTED', dto.reviewNote || 'Rejected');
       } else {
+        let acted = false;
         for (let guard = 0; guard < 8; guard++) {
           const current = await this.approvals.getById(requestId);
           if (current.status !== 'PENDING') break;
           try {
             await this.approvals.act(requestId, dto.adminUserId, 'APPROVED', dto.reviewNote);
+            acted = true;
           } catch (error) {
             const code = (error as { status?: number }).status;
-            if (code === 403 || code === 409) break; // not an approver for the remaining step(s)
+            if (acted && (code === 403 || code === 409)) break; // not an approver for the remaining step(s)
             throw error;
           }
         }

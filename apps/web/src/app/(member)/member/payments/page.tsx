@@ -48,6 +48,14 @@ interface Payment {
   rejectionReason?: string | null;
   createdAt?: string;
   confirmedAt?: string | null;
+  amountPayable?: number | null;
+  amountPaid?: number;
+  claimedAmount?: number;
+  confirmedAmount?: number;
+  isAdjusted?: boolean;
+  adminNote?: string | null;
+  assignmentStatus?: string | null;
+  assignmentBalance?: number | null;
 }
 
 export default function MemberPaymentsPage() {
@@ -258,9 +266,23 @@ export default function MemberPaymentsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-extrabold text-base text-slate-900 dark:text-white">
-                          {naira(p.amount)}
-                        </span>
+                        {p.isAdjusted ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-base text-emerald-600 dark:text-emerald-400">
+                              {naira(p.confirmedAmount ?? p.amount)}
+                            </span>
+                            <span className="text-xs text-slate-400 line-through">
+                              Claimed: {naira(p.claimedAmount ?? p.amount)}
+                            </span>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                              Adjusted by Admin
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-extrabold text-base text-slate-900 dark:text-white">
+                            {naira(p.amount)}
+                          </span>
+                        )}
                         <span
                           className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
                             p.purpose === 'MONTHLY_DUES'
@@ -274,6 +296,7 @@ export default function MemberPaymentsPage() {
 
                       <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                         {p.duesPeriod ? p.duesPeriod : p.purpose.replace('_', ' ')}
+                        {p.amountPayable ? ` • Total Payable: ${naira(p.amountPayable)}` : ''}
                       </p>
 
                       <p className="text-[11px] text-slate-400 font-mono">
@@ -283,9 +306,15 @@ export default function MemberPaymentsPage() {
 
                     <div className="text-right shrink-0 space-y-1">
                       {isConfirmed ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed
-                        </span>
+                        p.assignmentStatus === 'PARTIALLY_PAID' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                            <Clock className="w-3.5 h-3.5" /> Partially Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Fully Paid
+                          </span>
+                        )
                       ) : isPending ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                           <Clock className="w-3.5 h-3.5" /> Pending Review
@@ -309,6 +338,26 @@ export default function MemberPaymentsPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Admin Discrepancy Note or Adjustment Explanation */}
+                  {p.adminNote && (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs space-y-1">
+                      <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 block">
+                        Administrator Verification Note / Comment:
+                      </span>
+                      <p className="text-amber-900 dark:text-amber-200 font-medium">
+                        &quot;{p.adminNote}&quot;
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Outstanding Balance remaining if partially paid */}
+                  {isConfirmed && p.assignmentBalance !== null && p.assignmentBalance !== undefined && p.assignmentBalance > 0 && (
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
+                      <span className="text-slate-600 dark:text-slate-300 font-semibold">Remaining Balance Outstanding:</span>
+                      <span className="text-rose-600 dark:text-rose-400 font-black text-sm">{naira(p.assignmentBalance)}</span>
+                    </div>
+                  )}
 
                   {/* Payment Note or Payer Reference */}
                   {(p.description || p.payerReference) && (

@@ -55,6 +55,15 @@ interface Payment {
   receiptOptimizedSize?: number | null;
   receiptCompressionRatio?: number | null;
   createdAt: string;
+  amountPayable?: number | null;
+  amountPaid?: number;
+  claimedAmount?: number;
+  confirmedAmount?: number;
+  isAdjusted?: boolean;
+  adminNote?: string | null;
+  assignmentStatus?: string | null;
+  assignmentBalance?: number | null;
+  duesAssignmentId?: string | null;
 }
 
 interface StorageMetrics {
@@ -110,6 +119,7 @@ export default function PaymentsPage() {
   const [busy, setBusy] = useState('');
   const [rejecting, setRejecting] = useState<Payment | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<Payment | null>(null);
+  const [reviewingPayment, setReviewingPayment] = useState<Payment | null>(null);
   const [showStorageModal, setShowStorageModal] = useState(false);
   const [storageMetrics, setStorageMetrics] = useState<StorageMetrics | null>(null);
   const [loadingStorage, setLoadingStorage] = useState(false);
@@ -520,7 +530,8 @@ export default function PaymentsPage() {
                   <tr>
                     <th className="px-4 py-3.5">Member</th>
                     <th className="px-3 py-3.5">Category &amp; Period</th>
-                    <th className="px-3 py-3.5">Amount</th>
+                    <th className="px-3 py-3.5">Payable / Claimed</th>
+                    <th className="px-3 py-3.5">Verified Amount</th>
                     <th className="px-3 py-3.5">Method</th>
                     <th className="px-3 py-3.5">Transaction Ref</th>
                     <th className="px-3 py-3.5">Receipt Proof</th>
@@ -558,8 +569,40 @@ export default function PaymentsPage() {
                         )}
                       </td>
 
-                      <td className="px-3 py-3.5 font-black text-slate-900 dark:text-white text-sm">
-                        {naira(p.amount)}
+                      <td className="px-3 py-3.5">
+                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          {p.amountPayable ? naira(p.amountPayable) : 'N/A'}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Claimed: <span className="font-bold text-slate-600 dark:text-slate-300">{naira(p.claimedAmount ?? p.amount)}</span>
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-3.5">
+                        {p.isAdjusted ? (
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                                {naira(p.confirmedAmount ?? p.amount)}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                Adjusted
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 line-through">
+                              Claimed: {naira(p.claimedAmount ?? p.amount)}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="font-black text-slate-900 dark:text-white text-sm">
+                              {naira(p.amount)}
+                            </span>
+                            {p.status === 'PENDING' && (
+                              <span className="text-[10px] text-amber-600 font-semibold block">Awaiting Verification</span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-3 py-3.5 text-slate-600 dark:text-slate-300">
@@ -578,6 +621,11 @@ export default function PaymentsPage() {
                         {p.description && (
                           <span className="text-[10px] text-slate-500 italic block mt-0.5 line-clamp-1">
                             Note: {p.description}
+                          </span>
+                        )}
+                        {p.adminNote && (
+                          <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded mt-1 border border-amber-200 dark:border-amber-900/50 block">
+                            Admin Note: {p.adminNote}
                           </span>
                         )}
                       </td>
@@ -616,11 +664,10 @@ export default function PaymentsPage() {
                                 Reject
                               </button>
                               <button
-                                disabled={busy === p.id}
-                                onClick={() => confirm(p)}
-                                className="px-3 py-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                                onClick={() => setReviewingPayment(p)}
+                                className="px-3 py-1 text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-xs cursor-pointer"
                               >
-                                {busy === p.id ? 'Confirming…' : 'Confirm'}
+                                Review &amp; Confirm
                               </button>
                             </div>
                           )}
@@ -672,12 +719,30 @@ export default function PaymentsPage() {
           manage={manage}
           onClose={() => setViewingReceipt(null)}
           onConfirm={async () => {
-            await confirm(viewingReceipt);
+            const p = viewingReceipt;
             setViewingReceipt(null);
+            setReviewingPayment(p);
           }}
           onReject={() => {
             const p = viewingReceipt;
             setViewingReceipt(null);
+            setRejecting(p);
+          }}
+        />
+      )}
+
+      {/* Payment Verification & Review Modal */}
+      {reviewingPayment && (
+        <PaymentReviewModal
+          payment={reviewingPayment}
+          onClose={() => setReviewingPayment(null)}
+          onDone={() => {
+            setReviewingPayment(null);
+            load();
+          }}
+          onReject={() => {
+            const p = reviewingPayment;
+            setReviewingPayment(null);
             setRejecting(p);
           }}
         />
@@ -773,7 +838,7 @@ function ReceiptModal({
                   Reject
                 </Button>
                 <Button variant="primary" onClick={onConfirm}>
-                  Confirm &amp; Credit
+                  Review &amp; Confirm
                 </Button>
               </>
             )}
@@ -946,6 +1011,247 @@ function RejectModal({
             required
           />
         </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function PaymentReviewModal({
+  payment,
+  onClose,
+  onDone,
+  onReject,
+}: {
+  payment: Payment;
+  onClose: () => void;
+  onDone: () => void;
+  onReject: () => void;
+}) {
+  const { notify } = useToast();
+  const initialAmount = payment.claimedAmount ?? payment.amount;
+  const [verifiedAmount, setVerifiedAmount] = useState<number>(initialAmount);
+  const [adminNote, setAdminNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showReceiptPreview, setShowReceiptPreview] = useState(true);
+
+  const amountPayable = payment.amountPayable ?? null;
+  const isAdjusted = verifiedAmount !== initialAmount;
+  const outstandingAfter = amountPayable !== null ? Math.max(0, amountPayable - verifiedAmount) : null;
+
+  const isPdf =
+    payment.receiptUrl?.startsWith('data:application/pdf') ||
+    payment.receiptName?.toLowerCase().endsWith('.pdf');
+
+  const handleConfirm = async () => {
+    if (verifiedAmount <= 0) {
+      notify('Verified amount must be greater than zero.', 'error');
+      return;
+    }
+    if (amountPayable !== null && verifiedAmount > amountPayable) {
+      notify(`Verified amount cannot exceed the total payable of ${naira(amountPayable)}.`, 'error');
+      return;
+    }
+    if (isAdjusted && !adminNote.trim()) {
+      notify('Please provide an administrative note explaining the discrepancy to the member.', 'error');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await fetchApi(`/finance/payments/${payment.id}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({
+          confirmedAmount: Number(verifiedAmount),
+          adminNote: adminNote.trim() || undefined,
+        }),
+      });
+      notify(`Payment ${payment.reference} confirmed for ${naira(verifiedAmount)}`, 'success');
+      onDone();
+    } catch (e: any) {
+      notify(e.message || 'Could not confirm payment', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Payment Verification & Approval Review"
+      description={`Review member submission: ${payment.member} (${payment.memberCode})`}
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <Button variant="danger" onClick={onReject} disabled={busy}>
+            Reject Submission
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={busy}
+              onClick={handleConfirm}
+            >
+              Confirm &amp; Credit {naira(verifiedAmount)}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-4 text-xs">
+        {/* 4 Financial Metric Highlights */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 dark:bg-slate-950/70 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contribution</span>
+            <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">
+              {payment.duesPeriod || (payment.purpose === 'MONTHLY_DUES' ? 'Monthly Dues' : 'Special Contribution')}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Amount Payable</span>
+            <span className="font-black text-slate-900 dark:text-white text-sm">
+              {amountPayable ? naira(amountPayable) : 'N/A'}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Claimed by Member</span>
+            <span className="font-black text-indigo-600 dark:text-indigo-400 text-sm">
+              {naira(initialAmount)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Balance After Verification</span>
+            <span className={`font-black text-sm ${outstandingAfter && outstandingAfter > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {outstandingAfter !== null ? (outstandingAfter > 0 ? `${naira(outstandingAfter)} (Partial)` : '₦0 (Fully Paid)') : 'N/A'}
+            </span>
+          </div>
+        </div>
+
+        {/* Receipt Proof Section with preview */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase text-slate-400 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-indigo-500" />
+              Uploaded Receipt Proof
+            </span>
+            <div className="flex items-center gap-2">
+              {payment.receiptUrl && (
+                <button
+                  type="button"
+                  onClick={() => setShowReceiptPreview(!showReceiptPreview)}
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                >
+                  {showReceiptPreview ? 'Hide Preview' : 'Show Preview'}
+                </button>
+              )}
+              {payment.receiptUrl && (
+                <a
+                  href={payment.receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 inline-flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Full Size
+                </a>
+              )}
+            </div>
+          </div>
+
+          {showReceiptPreview && payment.receiptUrl && (
+            <div className="rounded-lg bg-slate-950/5 dark:bg-black/30 p-2 flex items-center justify-center max-h-[240px] overflow-auto">
+              {isPdf ? (
+                <div className="text-center py-4">
+                  <p className="font-bold text-slate-800 dark:text-slate-200">PDF Document Attached</p>
+                  <a
+                    href={payment.receiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-2 text-indigo-600 font-bold hover:underline"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> View Receipt in new tab
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={payment.receiptUrl}
+                  alt="Receipt"
+                  className="max-h-[220px] max-w-full object-contain rounded-md shadow-xs"
+                />
+              )}
+            </div>
+          )}
+
+          {!payment.receiptUrl && (
+            <p className="text-slate-400 italic text-[11px]">No receipt file attached by member.</p>
+          )}
+
+          {payment.description && (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+              <strong>Member Narration:</strong> &quot;{payment.description}&quot;
+            </p>
+          )}
+        </div>
+
+        {/* Verified Amount Paid Input */}
+        <div>
+          <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+            Confirmed Amount Paid (₦)
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">₦</span>
+            <input
+              type="number"
+              min={1}
+              max={amountPayable ?? undefined}
+              value={verifiedAmount}
+              onChange={(e) => setVerifiedAmount(Number(e.target.value))}
+              className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-sm font-black focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            Enter the exact verified amount shown on the bank transfer receipt. Adjust if different from member&apos;s claim.
+          </span>
+        </div>
+
+        {/* Discrepancy Alert */}
+        {isAdjusted && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 space-y-1">
+            <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>Amount Adjustment Discrepancy</span>
+            </div>
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+              Member claimed <strong>{naira(initialAmount)}</strong>, but you are verifying <strong>{naira(verifiedAmount)}</strong>.
+              {outstandingAfter !== null && outstandingAfter > 0 ? (
+                <> A remaining balance of <strong>{naira(outstandingAfter)}</strong> will stay outstanding.</>
+              ) : null}
+            </p>
+          </div>
+        )}
+
+        {/* Administrative Note */}
+        <div>
+          <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1">
+            Administrative Comment / Explanation {isAdjusted && <span className="text-rose-500 font-black">* (Required for adjustments)</span>}
+          </label>
+          <textarea
+            rows={3}
+            value={adminNote}
+            onChange={(e) => setAdminNote(e.target.value)}
+            placeholder={
+              isAdjusted
+                ? `e.g. Your receipt confirms a payment of ${naira(verifiedAmount)}, not ${naira(initialAmount)}. Your remaining balance is ${outstandingAfter ? naira(outstandingAfter) : '₦0'}.`
+                : 'Optional internal or member note regarding this verification...'
+            }
+            className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <span className="text-[10px] text-slate-400 mt-0.5 block">
+            This comment is recorded in the financial audit trail and visible to the member on their payment details.
+          </span>
+        </div>
       </div>
     </Modal>
   );

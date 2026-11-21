@@ -14,7 +14,8 @@
     "**/test/receipt-upload.spec.ts",
     "**/test/dues-matrix.spec.ts",
     "**/test/finance-redesign.spec.ts",
-    "**/test/receipt-upload-optimization.spec.ts"
+    "**/test/receipt-upload-optimization.spec.ts",
+    "**/test/payment-adjustments-and-disciplinary.spec.ts"
   ],
   "moduleNameMapper": {
     "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"

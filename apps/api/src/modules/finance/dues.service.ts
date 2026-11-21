@@ -366,15 +366,37 @@ export class DuesService {
       include: {
         period: { include: { paymentAccount: true } },
         payments: {
-          where: { status: 'PENDING' },
           orderBy: { createdAt: 'desc' },
-          take: 1,
         },
       },
       orderBy: [{ period: { dueDate: 'asc' } }],
     });
     return rows.map((a) => {
-      const pendingPayment = a.payments && a.payments.length > 0 ? a.payments[0] : null;
+      const pendingPayment = a.payments.find((p) => p.status === 'PENDING') || null;
+      const confirmedPayments = a.payments.filter((p) => p.status === 'CONFIRMED');
+      const balance = Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100);
+      const isChristmas = /christmas/i.test(a.period.label);
+      const maxInstallments = isChristmas ? 2 : 5;
+      const canSubmitInstallment = a.status !== 'PAID' && balance > 0 && confirmedPayments.length < maxInstallments;
+
+      const paymentsList = a.payments.map((p) => {
+        const meta = (p.metadata && typeof p.metadata === 'object' ? p.metadata : {}) as Record<string, unknown>;
+        return {
+          id: p.id,
+          reference: p.reference,
+          amount: p.amount,
+          claimedAmount: typeof meta.claimedAmount === 'number' ? meta.claimedAmount : p.amount,
+          confirmedAmount: p.status === 'CONFIRMED' ? p.amount : null,
+          isAdjusted: Boolean(meta.isAdjusted),
+          adminNote: (meta.adminNote as string) || (meta.adminAdjustmentNote as string) || null,
+          status: p.status,
+          paidOn: p.paidOn,
+          description: p.description,
+          rejectionReason: p.rejectionReason,
+          confirmedAt: p.confirmedAt,
+        };
+      });
+
       return {
         id: a.id,
         periodId: a.periodId,
@@ -385,9 +407,14 @@ export class DuesService {
         showAsAlert: a.period.showAsAlert,
         amountDue: a.amountDue,
         amountPaid: a.amountPaid,
-        balance: Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100),
+        balance,
         status: this.effective(a.status, a.period.dueDate),
         hasPendingPayment: !!pendingPayment,
+        confirmedInstallmentsCount: confirmedPayments.length,
+        maxInstallments,
+        canSubmitInstallment,
+        isPartiallyPaid: a.status === 'PARTIALLY_PAID' || (a.amountPaid > 0 && a.amountPaid < a.amountDue),
+        payments: paymentsList,
         pendingPayment: pendingPayment
           ? {
               id: pendingPayment.id,

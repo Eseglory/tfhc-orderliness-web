@@ -300,7 +300,10 @@ describe('Finance Redesign, Payment Management & Dashboard Verification Suite (1
     const searchResults = await paymentsService.list({ search: 'TEST-E2E-CONFIRM-FLOW' });
     expect(searchResults.length).toBeGreaterThanOrEqual(1);
     expect(searchResults[0].payerReference).toBe('TEST-E2E-CONFIRM-FLOW');
-  });
+
+    // Clean up temporary standalone payment so reconciliation in Scenario 16 matches
+    await prisma.payment.deleteMany({ where: { payerReference: 'TEST-E2E-CONFIRM-FLOW' } });
+  }, 15000);
 
   // SCENARIO 10: Monthly dues reminders appear for members with outstanding dues
   it('Scenario 10: Outstanding dues correctly flag members for reminders', async () => {
