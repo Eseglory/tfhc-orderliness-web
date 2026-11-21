@@ -202,7 +202,7 @@ describe('Finance: expenses, dues, payments (operational database)', () => {
     // A member cannot create dues periods or campaigns.
     await http().post('/finance/dues/periods').set(auth(memberToken)).send({ type: 'SPECIAL' }).expect(403);
     // A SPECIAL campaign needs a title and a deadline, unlike a monthly period.
-    await http().post('/finance/dues/periods').set(auth(financeToken)).send({ type: 'SPECIAL', defaultAmount: 50000 }).expect(400);
+    await http().post('/finance/dues/periods').set(auth(financeToken)).send({ type: 'SPECIAL', defaultAmount: 20000 }).expect(400);
 
     const campaign = (
       await http()
@@ -212,7 +212,7 @@ describe('Finance: expenses, dues, payments (operational database)', () => {
           type: 'SPECIAL',
           label: `Christmas Party ${run}`,
           description: 'Please make your Christmas Party contribution before the deadline.',
-          defaultAmount: 50000,
+          defaultAmount: 20000,
           dueDate: '2099-11-06',
           paymentAccountId: account.id,
           showAsAlert: true,
@@ -237,7 +237,7 @@ describe('Finance: expenses, dues, payments (operational database)', () => {
     const myCampaigns = (await http().get('/me/finance/campaigns').set(auth(memberToken)).expect(200)).body;
     const mine = myCampaigns.find((c: any) => c.periodId === campaign.period.id);
     expect(mine).toBeTruthy();
-    expect(mine.amountDue).toBe(50000);
+    expect(mine.amountDue).toBe(20000);
     expect(mine.showAsAlert).toBe(true);
     expect(mine.paymentAccount.accountNumber).toBe('0198765432');
 
@@ -253,14 +253,14 @@ describe('Finance: expenses, dues, payments (operational database)', () => {
     await http()
       .post('/me/finance/payments')
       .set(auth(memberToken))
-      .send({ purpose: 'MONTHLY_DUES', amount: 50000, method: 'BANK_TRANSFER', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
+      .send({ purpose: 'MONTHLY_DUES', amount: 20000, method: 'BANK_TRANSFER', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
       .expect(400);
 
     const pay = (
       await http()
         .post('/me/finance/payments')
         .set(auth(memberToken))
-        .send({ purpose: 'SPECIAL_CONTRIBUTION', amount: 50000, method: 'BANK_TRANSFER', payerReference: 'XMAS1', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
+        .send({ purpose: 'SPECIAL_CONTRIBUTION', amount: 20000, method: 'BANK_TRANSFER', payerReference: 'XMAS1', duesAssignmentId: mine.id, paidOn: '2099-11-01' })
         .expect(201)
     ).body;
     expect(pay.status).toBe('PENDING');

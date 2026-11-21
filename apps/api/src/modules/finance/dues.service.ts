@@ -13,7 +13,7 @@ export class DuesService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly cache: CacheService,
-  ) {}
+  ) { }
 
   /** Effective status: OUTSTANDING/PARTIALLY_PAID become OVERDUE once past due. */
   private effective(status: DuesAssignmentStatus, dueDate: Date): DuesAssignmentStatus {
@@ -264,21 +264,94 @@ export class DuesService {
 
   async myDues(memberId?: string) {
     if (!memberId) return [];
-    const rows = await this.prisma.memberDuesAssignment.findMany({
-      where: { memberId, period: { type: 'MONTHLY' } },
-      include: { period: true },
-      orderBy: [{ period: { year: 'desc' } }, { period: { month: 'desc' } }],
+
+    const [member, defaultAccount, rows] = await Promise.all([
+      this.prisma.member.findUnique({
+        where: { id: memberId },
+        select: { id: true, firstName: true, lastName: true, roleInUnit: true },
+      }),
+      this.prisma.paymentAccount.findFirst({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.memberDuesAssignment.findMany({
+        where: { memberId, period: { type: 'MONTHLY' } },
+        include: {
+          period: { include: { paymentAccount: true } },
+          payments: {
+            select: {
+              id: true,
+              reference: true,
+              amount: true,
+              status: true,
+              paidOn: true,
+              description: true,
+              metadata: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+        orderBy: [{ period: { year: 'desc' } }, { period: { month: 'desc' } }],
+      }),
+    ]);
+
+    // Determine category: Executive (₦2,500/mo) vs Regular (₦2,000/mo)
+    let isExecutive = false;
+    for (const r of rows) {
+      if (r.amountDue >= 2500 || r.amountPaid >= 2500) {
+        isExecutive = true;
+        break;
+      }
+    }
+    if (!isExecutive && (member?.roleInUnit?.toLowerCase().includes('exec') || member?.roleInUnit?.toLowerCase().includes('leader'))) {
+      isExecutive = true;
+    }
+    const category: 'Executive' | 'Regular' = isExecutive ? 'Executive' : 'Regular';
+    const monthlyRate = isExecutive ? 2500 : 2000;
+
+    return rows.map((a) => {
+      const pendingPayment = a.payments.find((p) => p.status === 'PENDING');
+      const latestPayment = a.payments[0] ?? null;
+      const meta = latestPayment?.metadata && typeof latestPayment.metadata === 'object'
+        ? (latestPayment.metadata as Record<string, unknown>)
+        : null;
+
+      const account = a.period.paymentAccount || defaultAccount;
+
+      return {
+        id: a.id,
+        period: a.period.label,
+        periodId: a.periodId,
+        amountDue: a.amountDue,
+        amountPaid: a.amountPaid,
+        balance: Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100),
+        dueDate: a.period.dueDate,
+        status: this.effective(a.status, a.period.dueDate),
+        category,
+        monthlyRate,
+        hasPendingPayment: !!pendingPayment,
+        pendingPayment: pendingPayment
+          ? {
+              id: pendingPayment.id,
+              reference: pendingPayment.reference,
+              amount: pendingPayment.amount,
+              paidOn: pendingPayment.paidOn,
+              description: pendingPayment.description,
+            }
+          : null,
+        receiptUrl: (meta?.receiptUrl as string) || null,
+        receiptName: (meta?.receiptName as string) || null,
+        paymentAccount: account
+          ? {
+              id: account.id,
+              bankName: account.bankName,
+              accountName: account.accountName,
+              accountNumber: account.accountNumber,
+              instructions: account.instructions,
+            }
+          : null,
+      };
     });
-    return rows.map((a) => ({
-      id: a.id,
-      period: a.period.label,
-      periodId: a.periodId,
-      amountDue: a.amountDue,
-      amountPaid: a.amountPaid,
-      balance: Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100),
-      dueDate: a.period.dueDate,
-      status: this.effective(a.status, a.period.dueDate),
-    }));
   }
 
   /**
@@ -320,36 +393,58 @@ export class DuesService {
         orderBy: { month: 'asc' },
       });
 
-      const periodMap = new Map<number, typeof periods[0]>();
+      const periodMap = new Map<number, (typeof periods)[0]>();
       for (const p of periods) {
         periodMap.set(p.month, p);
       }
 
       const periodIds = periods.map((p) => p.id);
 
-      // 2. Get all members who are active in the approved lookup table
+      // 2. Get all members who are active church members or have dues assignments in this year
       const members = await this.prisma.member.findMany({
         where: {
-          approvedMember: { status: 'ACTIVE' },
-          status: { in: ['ACTIVE', 'NEW_MEMBER'] },
+          OR: [
+            { duesAssignments: { some: { period: { year: safeYear, type: 'MONTHLY' } } } },
+            {
+              approvedMember: { status: 'ACTIVE' },
+              status: { in: ['ACTIVE', 'NEW_MEMBER'] },
+            },
+          ],
         },
         include: {
           approvedMember: { select: { email: true } },
-          user: { select: { email: true } },
+          user: { select: { email: true, role: true } },
         },
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       });
 
-      // 3. Get all dues assignments for this year
-      const assignments = periodIds.length > 0 ? await this.prisma.memberDuesAssignment.findMany({
-        where: { periodId: { in: periodIds } },
-        include: {
-          period: true,
-        },
-      }) : [];
+      // 3. Get all dues assignments for this year including payment records
+      const assignments =
+        periodIds.length > 0
+          ? await this.prisma.memberDuesAssignment.findMany({
+            where: { periodId: { in: periodIds } },
+            include: {
+              period: true,
+              payments: {
+                select: {
+                  id: true,
+                  reference: true,
+                  amount: true,
+                  status: true,
+                  paidOn: true,
+                  method: true,
+                  payerReference: true,
+                  description: true,
+                  metadata: true,
+                },
+                orderBy: { paidOn: 'desc' },
+              },
+            },
+          })
+          : [];
 
       // Map: memberId -> monthNumber -> assignment
-      const memberAssignmentMap = new Map<string, Map<number, typeof assignments[0]>>();
+      const memberAssignmentMap = new Map<string, Map<number, (typeof assignments)[0]>>();
       for (const a of assignments) {
         if (!memberAssignmentMap.has(a.memberId)) {
           memberAssignmentMap.set(a.memberId, new Map());
@@ -359,14 +454,35 @@ export class DuesService {
 
       // 4. Build Member Matrix Rows
       const memberRows = members.map((m) => {
-        const name = `${m.firstName || ''} ${m.middleName ? m.middleName + ' ' : ''}${m.lastName || ''}`.trim() || 'Church Member';
+        const name =
+          `${m.firstName || ''} ${m.middleName ? m.middleName + ' ' : ''}${m.lastName || ''}`.trim() || 'Church Member';
         const email = m.approvedMember?.email || m.user?.email || null;
         const phone = m.phoneNumber && m.phoneNumber !== 'UNVERIFIED' ? m.phoneNumber : null;
 
-        const mAssignments = memberAssignmentMap.get(m.id) || new Map();
+        const mAssignments = memberAssignmentMap.get(m.id) || new Map<number, (typeof assignments)[0]>();
+
+        // Determine category & monthly rate:
+        // Executive = ₦2,500/month; Regular = ₦2,000/month
+        let isExecutive = false;
+        for (const a of mAssignments.values()) {
+          if (a.amountDue >= 2500 || a.amountPaid >= 2500) {
+            isExecutive = true;
+            break;
+          }
+        }
+        if (!isExecutive && (m.roleInUnit?.toLowerCase().includes('exec') || m.roleInUnit?.toLowerCase().includes('leader'))) {
+          isExecutive = true;
+        }
+
+        const category: 'Executive' | 'Regular' = isExecutive ? 'Executive' : 'Regular';
+        const monthlyRate = isExecutive ? 2500 : 2000;
+
         let totalExpected = 0;
         let totalPaid = 0;
+        let totalWaived = 0;
         let monthsPaidCount = 0;
+        let monthsUnpaidCount = 0;
+        let monthsWaivedCount = 0;
         let assignedMonthsCount = 0;
 
         const months = Array.from({ length: 12 }, (_, i) => {
@@ -384,35 +500,75 @@ export class DuesService {
               amountPaid: 0,
               balance: 0,
               status: 'NOT_CREATED',
+              storedStatus: 'NOT_CREATED',
               dueDate: null,
+              note: null,
+              hasPendingPayment: false,
+              payments: [],
             };
           }
 
           if (!assignment) {
+            monthsUnpaidCount++;
+            totalExpected += monthlyRate;
             return {
               month: monthNum,
               monthName: MONTHS[i],
               periodId: period.id,
               assignmentId: null,
-              amountDue: period.defaultAmount,
+              amountDue: monthlyRate,
               amountPaid: 0,
-              balance: period.defaultAmount,
+              balance: monthlyRate,
               status: 'NOT_ASSIGNED',
+              storedStatus: 'NOT_ASSIGNED',
               dueDate: period.dueDate,
+              note: null,
+              hasPendingPayment: false,
+              payments: [],
             };
           }
 
           const effectiveStatus = this.effective(assignment.status, period.dueDate);
-          const amountDue = assignment.amountDue;
+          const rawDue = assignment.amountDue > 0 ? assignment.amountDue : monthlyRate;
           const amountPaid = assignment.amountPaid;
-          const balance = Math.max(0, Math.round((amountDue - amountPaid) * 100) / 100);
+          const isWaived = ['EXEMPT', 'WAIVED'].includes(effectiveStatus);
 
-          if (!['EXEMPT', 'WAIVED'].includes(effectiveStatus)) {
-            totalExpected += amountDue;
-            totalPaid += amountPaid;
+          const payments = (assignment.payments || []).map((p) => {
+            const meta = (p.metadata && typeof p.metadata === 'object' ? p.metadata : {}) as Record<string, unknown>;
+            return {
+              id: p.id,
+              reference: p.reference,
+              amount: p.amount,
+              status: p.status,
+              paidOn: p.paidOn,
+              method: p.method,
+              payerReference: p.payerReference,
+              description: p.description,
+              receiptUrl: (meta.receiptUrl as string) || null,
+              receiptName: (meta.receiptName as string) || null,
+            };
+          });
+
+          const hasPendingPayment = payments.some((p) => p.status === 'PENDING');
+
+          let amountDue = rawDue;
+          let balance = 0;
+
+          if (isWaived) {
+            monthsWaivedCount++;
+            totalWaived += rawDue;
+            amountDue = 0; // Waived months excluded from amounts due / expected
+            balance = 0;
+          } else {
             assignedMonthsCount++;
-            if (effectiveStatus === 'PAID') {
+            totalExpected += rawDue;
+            totalPaid += amountPaid;
+            balance = Math.max(0, Math.round((rawDue - amountPaid) * 100) / 100);
+
+            if (effectiveStatus === 'PAID' || amountPaid >= rawDue) {
               monthsPaidCount++;
+            } else {
+              monthsUnpaidCount++;
             }
           }
 
@@ -421,43 +577,89 @@ export class DuesService {
             monthName: MONTHS[i],
             periodId: period.id,
             assignmentId: assignment.id,
-            amountDue,
+            amountDue: isWaived ? 0 : rawDue,
             amountPaid,
             balance,
-            status: effectiveStatus,
+            status: isWaived
+              ? 'WAIVED'
+              : hasPendingPayment && effectiveStatus !== 'PAID'
+                ? 'PENDING_VERIFICATION'
+                : effectiveStatus,
             storedStatus: assignment.status,
             dueDate: period.dueDate,
+            note: assignment.note || null,
+            hasPendingPayment,
+            payments,
           };
         });
 
         const overallBalance = Math.max(0, Math.round((totalExpected - totalPaid) * 100) / 100);
-        const overallStatus =
-          assignedMonthsCount === 0
-            ? 'NO_ASSIGNMENT'
-            : monthsPaidCount === assignedMonthsCount
-            ? 'FULLY_PAID'
-            : totalPaid > 0
-            ? 'PARTIALLY_PAID'
-            : 'UNPAID';
+        const completionRate =
+          totalExpected > 0
+            ? Math.min(100, Math.round((totalPaid / totalExpected) * 100))
+            : monthsWaivedCount > 0
+              ? 100
+              : 0;
+        const monthsAssessed = 12;
+        const monthsRemaining = monthsUnpaidCount;
+
+        // Classification mutually exclusive:
+        // 1. WAIVED: all applicable months were waived (totalExpected === 0 && monthsWaivedCount > 0)
+        // 2. FULLY_PAID: settled all applicable monthly dues (overallBalance === 0 && monthsPaidCount > 0)
+        // 3. PARTIALLY_PAID: made some payments (totalPaid > 0) but has outstanding dues (overallBalance > 0)
+        // 4. NEVER_PAID: made 0 payments (totalPaid === 0) and has outstanding dues (overallBalance > 0)
+        let classification: 'FULLY_PAID' | 'PARTIALLY_PAID' | 'NEVER_PAID' | 'WAIVED';
+        if (totalExpected === 0 && monthsWaivedCount > 0) {
+          classification = 'WAIVED';
+        } else if (overallBalance === 0 && monthsPaidCount > 0) {
+          classification = 'FULLY_PAID';
+        } else if (totalPaid > 0 && overallBalance > 0) {
+          classification = 'PARTIALLY_PAID';
+        } else if (totalPaid === 0 && overallBalance > 0) {
+          classification = 'NEVER_PAID';
+        } else {
+          classification = monthsPaidCount > 0 ? 'FULLY_PAID' : 'NEVER_PAID';
+        }
+
+        const isOutstanding = overallBalance > 0;
 
         return {
+          id: m.id,
           memberId: m.id,
           memberCode: m.memberCode,
           name,
+          firstName: m.firstName,
+          lastName: m.lastName,
           email,
           phone,
           status: m.status,
+          category,
+          monthlyRate,
+          monthsAssessed,
+          monthsPaidCount,
+          monthsUnpaidCount,
+          monthsWaivedCount,
+          monthsRemaining,
           totalExpected: Math.round(totalExpected * 100) / 100,
           totalPaid: Math.round(totalPaid * 100) / 100,
+          totalOutstanding: overallBalance,
           balance: overallBalance,
-          overallStatus,
+          balanceDue: overallBalance,
+          totalWaived: Math.round(totalWaived * 100) / 100,
+          completionRate,
+          complianceRate: completionRate,
+          classification,
+          isOutstanding,
           assignedMonthsCount,
-          monthsPaidCount,
+          overallStatus: classification,
           months,
         };
       });
 
       // 5. Monthly Breakdown KPIs
+      let cumulativeExpected = 0;
+      let cumulativeCollected = 0;
+
       const monthlyBreakdown = Array.from({ length: 12 }, (_, i) => {
         const monthNum = i + 1;
         const period = periodMap.get(monthNum);
@@ -465,27 +667,35 @@ export class DuesService {
 
         let expected = 0;
         let collected = 0;
+        let waived = 0;
         let paidCount = 0;
         let partialCount = 0;
         let overdueCount = 0;
         let outstandingCount = 0;
+        let waivedCount = 0;
 
         if (period) {
           for (const a of monthAssignments) {
             const st = this.effective(a.status, period.dueDate);
-            if (!['EXEMPT', 'WAIVED'].includes(st)) {
+            if (['EXEMPT', 'WAIVED'].includes(st)) {
+              waived += a.amountDue;
+              waivedCount++;
+            } else {
               expected += a.amountDue;
               collected += a.amountPaid;
+              if (st === 'PAID' || a.amountPaid >= a.amountDue) paidCount++;
+              else if (st === 'PARTIALLY_PAID') partialCount++;
+              else if (st === 'OVERDUE') overdueCount++;
+              else outstandingCount++;
             }
-            if (st === 'PAID') paidCount++;
-            else if (st === 'PARTIALLY_PAID') partialCount++;
-            else if (st === 'OVERDUE') overdueCount++;
-            else if (st === 'OUTSTANDING') outstandingCount++;
           }
         }
 
         const outstanding = Math.max(0, Math.round((expected - collected) * 100) / 100);
         const collectionRate = expected > 0 ? Math.round((collected / expected) * 100) : 0;
+
+        cumulativeExpected += expected;
+        cumulativeCollected += collected;
 
         return {
           month: monthNum,
@@ -498,24 +708,89 @@ export class DuesService {
           expected,
           collected,
           outstanding,
+          waived,
           collectionRate,
           paidCount,
           partialCount,
           overdueCount,
           outstandingCount,
+          waivedCount,
           totalAssigned: monthAssignments.length,
+          cumulativeExpected,
+          cumulativeCollected,
         };
       });
 
-      // 6. Annual Overall KPIs
-      const totalExpected = memberRows.reduce((sum, m) => sum + m.totalExpected, 0);
-      const totalCollected = memberRows.reduce((sum, m) => sum + m.totalPaid, 0);
+      // 6. Annual Overall KPIs & Categorical Performance
+      const totalExpected = Math.round(memberRows.reduce((sum, m) => sum + m.totalExpected, 0) * 100) / 100;
+      const totalCollected = Math.round(memberRows.reduce((sum, m) => sum + m.totalPaid, 0) * 100) / 100;
       const totalOutstanding = Math.max(0, Math.round((totalExpected - totalCollected) * 100) / 100);
+      const totalWaived = Math.round(memberRows.reduce((sum, m) => sum + m.totalWaived, 0) * 100) / 100;
       const collectionRate = totalExpected > 0 ? Math.round((totalCollected / totalExpected) * 100) : 0;
 
-      const fullyPaidMembersCount = memberRows.filter((m) => m.assignedMonthsCount > 0 && m.monthsPaidCount === m.assignedMonthsCount).length;
-      const zeroPaidMembersCount = memberRows.filter((m) => m.assignedMonthsCount > 0 && m.totalPaid === 0).length;
-      const partialMembersCount = memberRows.length - fullyPaidMembersCount - zeroPaidMembersCount;
+      // Executive vs Regular member performance breakdown
+      const execRows = memberRows.filter((m) => m.category === 'Executive');
+      const regRows = memberRows.filter((m) => m.category === 'Regular');
+
+      const calcGroupPerf = (rows: typeof memberRows) => {
+        const exp = Math.round(rows.reduce((s, r) => s + r.totalExpected, 0) * 100) / 100;
+        const col = Math.round(rows.reduce((s, r) => s + r.totalPaid, 0) * 100) / 100;
+        const out = Math.max(0, Math.round((exp - col) * 100) / 100);
+        const waiv = Math.round(rows.reduce((s, r) => s + r.totalWaived, 0) * 100) / 100;
+        const rate = exp > 0 ? Math.round((col / exp) * 100) : 0;
+        const fully = rows.filter((r) => r.classification === 'FULLY_PAID').length;
+        const part = rows.filter((r) => r.classification === 'PARTIALLY_PAID').length;
+        const never = rows.filter((r) => r.classification === 'NEVER_PAID').length;
+        const waivedCount = rows.filter((r) => r.classification === 'WAIVED').length;
+        return {
+          count: rows.length,
+          expected: exp,
+          collected: col,
+          outstanding: out,
+          waived: waiv,
+          collectionRate: rate,
+          fullyPaidCount: fully,
+          partiallyPaidCount: part,
+          neverPaidCount: never,
+          waivedCount,
+        };
+      };
+
+      const executivePerformance = calcGroupPerf(execRows);
+      const regularPerformance = calcGroupPerf(regRows);
+
+      const fullyPaidMembersCount = memberRows.filter((m) => m.classification === 'FULLY_PAID').length;
+      const partiallyPaidMembersCount = memberRows.filter((m) => m.classification === 'PARTIALLY_PAID').length;
+      const neverPaidMembersCount = memberRows.filter((m) => m.classification === 'NEVER_PAID').length;
+      const waivedMembersCount = memberRows.filter((m) => m.classification === 'WAIVED').length;
+      const outstandingMembersCount = memberRows.filter((m) => m.isOutstanding).length;
+
+      // Highest & lowest collection months
+      const activeMonths = monthlyBreakdown.filter((m) => m.hasPeriod && m.expected > 0);
+      const sortedByCollection = [...activeMonths].sort((a, b) => b.collected - a.collected);
+      const highestCollectionMonth =
+        sortedByCollection.length > 0
+          ? {
+            month: sortedByCollection[0].month,
+            monthName: sortedByCollection[0].monthName,
+            amount: sortedByCollection[0].collected,
+          }
+          : null;
+      const lowestCollectionMonth =
+        sortedByCollection.length > 0
+          ? {
+            month: sortedByCollection[sortedByCollection.length - 1].month,
+            monthName: sortedByCollection[sortedByCollection.length - 1].monthName,
+            amount: sortedByCollection[sortedByCollection.length - 1].collected,
+          }
+          : null;
+
+      const cumulativeTrends = monthlyBreakdown.map((mb) => ({
+        month: mb.month,
+        monthName: mb.monthName,
+        cumulativeExpected: mb.cumulativeExpected,
+        cumulativeCollected: mb.cumulativeCollected,
+      }));
 
       return {
         year: safeYear,
@@ -530,15 +805,27 @@ export class DuesService {
         })),
         members: memberRows,
         summary: {
-          totalMembers: members.length,
+          totalMembers: memberRows.length,
+          totalExecutiveMembers: execRows.length,
+          totalRegularMembers: regRows.length,
           totalExpected,
           totalCollected,
           totalOutstanding,
+          totalWaived,
           collectionRate,
           fullyPaidMembersCount,
-          partialMembersCount,
-          zeroPaidMembersCount,
+          partiallyPaidMembersCount,
+          neverPaidMembersCount,
+          waivedMembersCount,
+          outstandingMembersCount,
+          partialMembersCount: partiallyPaidMembersCount,
+          zeroPaidMembersCount: neverPaidMembersCount,
+          executivePerformance,
+          regularPerformance,
           monthlyBreakdown,
+          cumulativeTrends,
+          highestCollectionMonth,
+          lowestCollectionMonth,
         },
       };
     }, ['finance']);

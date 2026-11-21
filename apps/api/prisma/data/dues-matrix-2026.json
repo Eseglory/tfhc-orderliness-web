@@ -22,7 +22,7 @@
     { "name": "Titilope Jaiyeola", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
     { "name": "Paseda Oluwafemi", "amount": 2000, "paidMonths": [], "note": "unpaid all year" },
     { "name": "Amaka Otega", "amount": 2000, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
-    { "name": "Martha John-Williams", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9], "note": "paid Jan-Sep; Oct-Dec unpaid" },
+    { "name": "Martha John-Williams", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11], "note": "paid Jan-Nov; Dec unpaid" },
     { "name": "Adekunle Oluwatobi", "amount": 2000, "paidMonths": [1,2,3,4,5,6], "note": "paid Jan-Jun; Jul-Dec unpaid" },
     { "name": "David Folawewo", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "note": "matches directory 'Folawewo David'" },
     { "name": "Lahan Oluwatobiloba", "amount": 2500, "paidMonths": [1,2,3,4,5,6,7,8,9,10,11,12] },
@@ -38,6 +38,6 @@
     { "name": "Faith Ijeoma Brown", "amount": 2000, "paidMonths": [], "newMember": true, "waivedMonths": [1,2,3,4,5,6], "note": "mid-year joiner: Jan-Jun waived, Jul-Dec unpaid" },
     { "name": "Rita Edoki Ilor", "amount": 2000, "paidMonths": [], "newMember": true, "waivedMonths": [1,2,3,4,5,6], "note": "matches directory 'Rita Edoki ilor'; mid-year joiner, Jan-Jun waived, Jul-Dec unpaid" },
     { "name": "Blessing Patrick", "amount": 2000, "paidMonths": [], "newMember": true, "waivedMonths": [1,2,3,4,5,6], "note": "mid-year joiner: Jan-Jun waived, Jul-Dec unpaid" },
-    { "name": "Chioma Happiness Nwankwo", "amount": 2000, "paidMonths": [], "newMember": true, "waivedMonths": [1,2,3,4,5,6], "note": "matches directory 'Chioma Happiness'; mid-year joiner, Jan-Jun waived, Jul-Dec unpaid" }
+    { "name": "Chioma Happiness Nwankwo", "amount": 2000, "paidMonths": [8,9,10,11,12], "newMember": true, "waivedMonths": [1,2,3,4,5,6,7], "note": "matches directory 'Chioma Happiness'; mid-year joiner, Jan-Jul waived, Aug-Dec paid" }
   ]
 }

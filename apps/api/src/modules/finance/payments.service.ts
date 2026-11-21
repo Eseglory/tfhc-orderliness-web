@@ -3,6 +3,7 @@ import { FinancePaymentMethod, PaymentPurpose, PaymentStatus, Prisma } from '@pr
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
 import { DuesService } from './dues.service';
+import { ReceiptStorageService } from './receipt-storage.service';
 import { makeReference, money, parseDateOnly } from './finance.util';
 
 const METHODS = Object.values(FinancePaymentMethod);
@@ -14,9 +15,10 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly dues: DuesService,
+    private readonly receiptStorage: ReceiptStorageService,
   ) {}
 
-  private parse(dto: Record<string, unknown>) {
+  private async parse(dto: Record<string, unknown>) {
     if (!dto || typeof dto !== 'object') throw new BadRequestException('Invalid payload');
     if (!dto.purpose || !PURPOSES.includes(dto.purpose as PaymentPurpose)) {
       throw new BadRequestException(`Purpose must be one of: ${PURPOSES.join(', ')}`);
@@ -29,13 +31,13 @@ export class PaymentsService {
       dto.metadata && typeof dto.metadata === 'object' ? (dto.metadata as Record<string, unknown>) : undefined;
 
     if (!metadata && dto.receiptUrl) {
-      const receiptUrl = String(dto.receiptUrl).trim();
-      if (receiptUrl.length > 20 * 1024 * 1024) {
-        throw new BadRequestException('Receipt file exceeds 15 MB limit');
-      }
+      const optimized = await this.receiptStorage.validateAndOptimizeReceipt(
+        String(dto.receiptUrl),
+        String(dto.receiptName || 'Receipt'),
+        String(dto.purpose || 'PAYMENT'),
+      );
       metadata = {
-        receiptUrl,
-        receiptName: dto.receiptName ? String(dto.receiptName).slice(0, 255).trim() : 'Receipt',
+        ...optimized,
       };
     }
 
@@ -58,6 +60,9 @@ export class PaymentsService {
       if (!assignment || assignment.memberId !== memberId) throw new BadRequestException('That dues record is not yours');
       const expectedType = purpose === 'MONTHLY_DUES' ? 'MONTHLY' : 'SPECIAL';
       if (assignment.period.type !== expectedType) throw new BadRequestException('Payment purpose does not match this dues record');
+      if (assignment.amountPaid >= assignment.amountDue || assignment.status === 'PAID') {
+        throw new BadRequestException('This dues contribution is already fully settled');
+      }
     } else if (duesAssignmentId) {
       throw new BadRequestException('Only dues payments link to a dues period');
     }
@@ -68,8 +73,41 @@ export class PaymentsService {
     if (!memberId) throw new ForbiddenException('A member profile is required');
     const member = await this.prisma.member.findUnique({ where: { id: memberId } });
     if (!member || member.status !== 'ACTIVE') throw new ForbiddenException('Only active members can record payments');
-    const p = this.parse(dto);
+    const p = await this.parse(dto);
     await this.validateDuesLink(p.duesAssignmentId, memberId, p.purpose);
+
+    // Prevent duplicate payment creation when members resubmit receipts for the same dues period
+    if (p.duesAssignmentId) {
+      const existingPending = await this.prisma.payment.findFirst({
+        where: {
+          memberId,
+          duesAssignmentId: p.duesAssignmentId,
+          status: 'PENDING',
+        },
+      });
+
+      if (existingPending) {
+        const updated = await this.prisma.payment.update({
+          where: { id: existingPending.id },
+          data: {
+            amount: p.amount,
+            method: p.method,
+            paidOn: p.paidOn,
+            payerReference: p.payerReference,
+            description: p.description,
+            ...(p.metadata !== undefined ? { metadata: p.metadata } : {}),
+          },
+        });
+        await this.audit.record({
+          actorUserId: userId,
+          action: 'PAYMENT_UPDATED',
+          entity: 'Payment',
+          entityId: updated.id,
+          newData: { amount: p.amount, purpose: p.purpose, resubmitted: true },
+        });
+        return this.getOne(updated.id, memberId, true);
+      }
+    }
 
     const payment = await this.prisma.payment.create({
       data: { ...p, reference: makeReference('PMT'), memberId, status: 'PENDING' },
@@ -83,7 +121,7 @@ export class PaymentsService {
     const memberId = String(dto.memberId ?? '');
     const member = await this.prisma.member.findUnique({ where: { id: memberId } });
     if (!member) throw new BadRequestException('Unknown member');
-    const p = this.parse(dto);
+    const p = await this.parse(dto);
     await this.validateDuesLink(p.duesAssignmentId, memberId, p.purpose);
 
     const payment = await this.prisma.$transaction(async (tx) => {
@@ -136,12 +174,23 @@ export class PaymentsService {
     return this.getOne(id, undefined, true);
   }
 
-  async list(query: { status?: string; purpose?: string; memberId?: string; from?: string; to?: string }) {
+  async list(query: { status?: string; purpose?: string; memberId?: string; from?: string; to?: string; search?: string }) {
     const where: Prisma.PaymentWhereInput = {};
     if (query.status && Object.values(PaymentStatus).includes(query.status as PaymentStatus)) where.status = query.status as PaymentStatus;
     if (query.purpose && PURPOSES.includes(query.purpose as PaymentPurpose)) where.purpose = query.purpose as PaymentPurpose;
     if (query.memberId) where.memberId = query.memberId;
     if (query.from || query.to) where.paidOn = { ...(query.from ? { gte: parseDateOnly(query.from, 'from') } : {}), ...(query.to ? { lte: parseDateOnly(query.to, 'to') } : {}) };
+    if (query.search?.trim()) {
+      const q = query.search.trim();
+      where.OR = [
+        { reference: { contains: q, mode: 'insensitive' } },
+        { payerReference: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { member: { firstName: { contains: q, mode: 'insensitive' } } },
+        { member: { lastName: { contains: q, mode: 'insensitive' } } },
+        { member: { memberCode: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
     const rows = await this.prisma.payment.findMany({
       where,
       include: { member: { select: { firstName: true, lastName: true, memberCode: true } }, duesAssignment: { include: { period: { select: { label: true } } } } },
@@ -190,6 +239,14 @@ export class PaymentsService {
     duesAssignment: { period: { label: string } } | null;
   }) {
     const meta = p.metadata && typeof p.metadata === 'object' ? (p.metadata as Record<string, unknown>) : null;
+    const isPurged = Boolean(meta?.isPurged);
+    const retentionStatus = (meta?.retentionStatus as string) || (isPurged ? 'PURGED' : 'ACTIVE');
+    const purgeReason = (meta?.purgeReason as string) || null;
+    const retentionUntil = (meta?.retentionUntil as string) || null;
+    const originalSize = typeof meta?.originalSize === 'number' ? meta.originalSize : null;
+    const optimizedSize = typeof meta?.optimizedSize === 'number' ? meta.optimizedSize : null;
+    const compressionRatio = typeof meta?.compressionRatio === 'number' ? meta.compressionRatio : null;
+
     return {
       id: p.id,
       reference: p.reference,
@@ -206,6 +263,13 @@ export class PaymentsService {
       duesPeriod: p.duesAssignment?.period.label ?? null,
       receiptUrl: (meta?.receiptUrl as string) || null,
       receiptName: (meta?.receiptName as string) || null,
+      isReceiptArchived: isPurged,
+      receiptArchivedReason: purgeReason,
+      receiptRetentionUntil: retentionUntil,
+      receiptRetentionStatus: retentionStatus,
+      receiptOriginalSize: originalSize,
+      receiptOptimizedSize: optimizedSize,
+      receiptCompressionRatio: compressionRatio,
       metadata: p.metadata ?? null,
       createdAt: p.createdAt,
       confirmedAt: p.confirmedAt,

@@ -7,6 +7,7 @@ import { PaymentAccountsService } from './payment-accounts.service';
 import { DuesService } from './dues.service';
 import { DuesImportService } from './dues-import.service';
 import { PaymentsService } from './payments.service';
+import { ReceiptStorageService } from './receipt-storage.service';
 import { FinancialReportsService } from './financial-reports.service';
 import { FinancialReportPdfService } from './financial-report-pdf.service';
 
@@ -19,9 +20,10 @@ import { FinancialReportPdfService } from './financial-report-pdf.service';
     DuesService,
     DuesImportService,
     PaymentsService,
+    ReceiptStorageService,
     FinancialReportsService,
     FinancialReportPdfService,
   ],
-  exports: [DuesService, FinancialReportsService, FinancialReportPdfService],
+  exports: [DuesService, FinancialReportsService, FinancialReportPdfService, ReceiptStorageService],
 })
 export class FinanceModule {}

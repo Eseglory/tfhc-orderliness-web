@@ -16,6 +16,7 @@ import { DuesService } from './dues.service';
 import { DuesImportService } from './dues-import.service';
 import { PaymentsService } from './payments.service';
 import { FinanceService } from './finance.service';
+import { ReceiptStorageService } from './receipt-storage.service';
 
 @Controller('finance')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -27,7 +28,30 @@ export class FinanceController {
     private readonly dues: DuesService,
     private readonly duesImport: DuesImportService,
     private readonly payments: PaymentsService,
+    private readonly receiptStorage: ReceiptStorageService,
   ) {}
+
+  // ---- Receipt Storage & Retention Management -----------------------------
+  @Get('receipts/storage')
+  @RequirePermissions('reports.view', 'expenses.read')
+  getReceiptStorageMetrics(@CurrentUser() user: AuthenticatedUser) {
+    assertFinanceCrudAuthority(user);
+    return this.receiptStorage.getStorageMetrics();
+  }
+
+  @Get('receipts/retention/preview')
+  @RequirePermissions('reports.view', 'expenses.read')
+  previewRetentionCandidates(@CurrentUser() user: AuthenticatedUser) {
+    assertFinanceCrudAuthority(user);
+    return this.receiptStorage.previewRetentionCandidates();
+  }
+
+  @Post('receipts/retention/cleanup')
+  @RequirePermissions('reports.view', 'expenses.read')
+  applyRetentionCleanup(@Body() body: any, @CurrentUser() user: AuthenticatedUser) {
+    assertFinanceCrudAuthority(user);
+    return this.receiptStorage.applyRetentionCleanup(user.userId, body);
+  }
 
   @Post('dues/import')
   @RequirePermissions('dues.create')
@@ -232,9 +256,10 @@ export class FinanceController {
     @Query('memberId') memberId?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('search') search?: string,
   ) {
     assertFinanceCrudAuthority(user);
-    return this.payments.list({ status, purpose, memberId, from, to });
+    return this.payments.list({ status, purpose, memberId, from, to, search });
   }
 
   @Post('payments/record')

@@ -20,17 +20,17 @@ async function bootstrap() {
     bodyParser: false,
   });
 
-  // Support JSON and URL-encoded payloads up to 15 MB (e.g. proof-of-payment receipts),
+  // Support JSON and URL-encoded payloads up to 50 MB (e.g. proof-of-payment receipts),
   // while preserving rawBody buffer for webhook signature verifications.
   app.use(
     json({
-      limit: '15mb',
+      limit: '50mb',
       verify: (req: any, _res, buf) => {
         req.rawBody = buf;
       },
     })
   );
-  app.use(urlencoded({ extended: true, limit: '15mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // This is a pure JSON API consumed by a separately-hosted web
   // client, not an HTML-serving origin, so the default CSP (which assumes

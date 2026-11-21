@@ -10,7 +10,11 @@
     "**/test/**/*.e2e-spec.ts",
     "**/test/admin-team-invite.spec.ts",
     "**/test/member-lookup-invite.spec.ts",
-    "**/test/security-authorization.spec.ts"
+    "**/test/security-authorization.spec.ts",
+    "**/test/receipt-upload.spec.ts",
+    "**/test/dues-matrix.spec.ts",
+    "**/test/finance-redesign.spec.ts",
+    "**/test/receipt-upload-optimization.spec.ts"
   ],
   "moduleNameMapper": {
     "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"

@@ -110,7 +110,7 @@ export function CampaignAlert() {
           Remind me later
         </button>
         <Link
-          href="/member/dues"
+          href="/member/contributions"
           onClick={dismiss}
           className="px-4 py-1.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-bold text-xs shadow-xs transition-transform active:scale-95 flex items-center gap-1"
         >

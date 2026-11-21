@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -6,8 +7,6 @@ import {
   TrendingUp,
   CreditCard,
   Receipt,
-  ArrowUpRight,
-  ArrowDownRight,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -16,15 +15,84 @@ import {
   RefreshCw,
   Landmark,
   FileText,
+  Sparkles,
+  ArrowRight,
+  ExternalLink,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { Badge, Button, EmptyState, Spinner } from '../../../../components/ui';
 import { fetchApi, ApiError } from '../../../../lib/api';
 import { useAuth } from '../../../../lib/auth';
 
-const naira = (n: number) => `₦${Math.round(n).toLocaleString()}`;
+const naira = (n: number) => `₦${Math.round(n || 0).toLocaleString()}`;
 
-interface Dashboard {
+interface DashboardData {
+  summary: {
+    totalMonthlyDuesCollected: number;
+    outstandingMonthlyDues: number;
+    totalMonthlyDuesExpected: number;
+    totalOtherContributionsCollected: number;
+    totalOtherContributionsExpected: number;
+    outstandingOtherContributions: number;
+    pendingPaymentsCount: number;
+    pendingPaymentsAmount: number;
+    totalVerifiedCollections: number;
+  };
+  monthlyDues: {
+    collected: number;
+    outstanding: number;
+    expected: number;
+    collectionRate: number;
+    currentPeriod: null | {
+      period: string;
+      members: number;
+      expected: number;
+      collected: number;
+      outstanding: number;
+      collectionRate: number;
+      paid: number;
+      overdue: number;
+      exempt: number;
+    };
+  };
+  otherContributions: {
+    collected: number;
+    outstanding: number;
+    expected: number;
+    campaignsCount: number;
+    campaigns: {
+      id: string;
+      label: string;
+      description: string | null;
+      defaultAmount: number;
+      dueDate: string;
+      status: string;
+      showAsAlert: boolean;
+      paymentAccount: { bankName: string; accountName: string; accountNumber: string } | null;
+      expected: number;
+      collected: number;
+      outstanding: number;
+      collectionRate: number;
+      membersCount: number;
+      paidCount: number;
+    }[];
+  };
+  recentActivity: {
+    id: string;
+    reference: string;
+    member: string;
+    memberCode: string;
+    purpose: string;
+    amount: number;
+    method: string;
+    paidOn: string;
+    status: string;
+    duesPeriod: string | null;
+    description: string | null;
+    receiptUrl: string | null;
+    receiptName: string | null;
+    createdAt: string;
+  }[];
   expenses: {
     pendingApproval: number;
     approvedUnpaid: number;
@@ -32,34 +100,25 @@ interface Dashboard {
     ytdApprovedOrPaid: number;
     byCategory: { category: string; amount: number }[];
   };
-  payments: { pending: number };
-  dues: null | {
-    period: string;
-    members: number;
-    expected: number;
-    collected: number;
-    outstanding: number;
-    collectionRate: number;
-    paid: number;
-    overdue: number;
-    exempt: number;
-  };
-  duesTrend: { label: string; expected: number; collected: number }[];
 }
 
 export default function FinanceDashboardPage() {
   const { loading: authLoading } = useAuth();
-  const [data, setData] = useState<Dashboard | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const load = async () => {
     setLoading(true);
     try {
-      setData(await fetchApi<Dashboard>('/finance/dashboard'));
+      setData(await fetchApi<DashboardData>('/finance/dashboard'));
       setError('');
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 403 ? 'You do not have access to finance.' : 'Could not load the finance dashboard.');
+      setError(
+        e instanceof ApiError && e.status === 403
+          ? 'You do not have access to finance.'
+          : 'Could not load the finance dashboard.'
+      );
     } finally {
       setLoading(false);
     }
@@ -68,9 +127,6 @@ export default function FinanceDashboardPage() {
   useEffect(() => {
     if (!authLoading) load();
   }, [authLoading]);
-
-  const maxTrend = Math.max(1, ...(data?.duesTrend.flatMap((t) => [t.expected, t.collected]) ?? [1]));
-  const maxCat = Math.max(1, ...(data?.expenses.byCategory.map((c) => c.amount) ?? [1]));
 
   return (
     <AdminLayoutShell activeHref="/admin/finance">
@@ -81,7 +137,7 @@ export default function FinanceDashboardPage() {
             <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
               <span>TREASURY &amp; STEWARDSHIP</span>
               <span>/</span>
-              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">FINANCIAL INTELLIGENCE</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">FINANCIAL OVERVIEW</span>
             </div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
@@ -89,38 +145,31 @@ export default function FinanceDashboardPage() {
               </h1>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Real-time monitoring of monthly dues, disbursements, member payments, and budget health.
+              Clear separation between recurring monthly dues, special contributions, and verified member payments.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/admin/finance/reports"
+              href="/admin/finance/dues"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-sm"
             >
-              <FileText className="w-3.5 h-3.5 text-white" />
-              Financial Reports
-            </Link>
-            <Link
-              href="/admin/finance/dues"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
-            >
-              <CreditCard className="w-3.5 h-3.5 text-indigo-500" />
-              Dues Periods
-            </Link>
-            <Link
-              href="/admin/finance/expenses"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
-            >
-              <Receipt className="w-3.5 h-3.5 text-amber-500" />
-              Expenses
+              <CreditCard className="w-3.5 h-3.5 text-white" />
+              Monthly Dues Suite
             </Link>
             <Link
               href="/admin/finance/payments"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
             >
               <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-              Payments
+              Payment Management
+            </Link>
+            <Link
+              href="/admin/finance/reports"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-all shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5 text-indigo-500" />
+              Financial Reports
             </Link>
             <Link
               href="/admin/finance/accounts"
@@ -133,219 +182,390 @@ export default function FinanceDashboardPage() {
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-24 text-slate-400"><Spinner /></div>
+          <div className="flex justify-center py-24 text-slate-400">
+            <Spinner />
+          </div>
         ) : error || !data ? (
-          <EmptyState title="Unavailable" description={error} action={<Button variant="secondary" onClick={load}>Retry</Button>} />
+          <EmptyState
+            title="Unavailable"
+            description={error}
+            action={
+              <Button variant="secondary" onClick={load}>
+                Retry
+              </Button>
+            }
+          />
         ) : (
-          <>
-            {/* 4 Metric KPI Cards - Swipeable on mobile */}
-            <div className="flex overflow-x-auto no-scrollbar sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-1 sm:pb-0">
-              <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+          <div className="space-y-6">
+            {/* 5 Well-Organized Executive Summary KPI Cards (Section 4 Requirements) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+              {/* Card 1: Total Monthly Dues Collected */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    DUES COLLECTED
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Monthly Dues Collected
                   </span>
-                  <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
                     <TrendingUp className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">
-                    {data.dues ? naira(data.dues.collected) : '₦0'}
-                  </span>
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {data.dues ? `${data.dues.collectionRate}% collection rate` : 'No active period'}
-                </div>
+                <p className="text-xl font-black text-slate-900 dark:text-white">
+                  {naira(data.summary.totalMonthlyDuesCollected)}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {data.monthlyDues.collectionRate}% of assessed dues
+                </p>
               </div>
 
-              <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+              {/* Card 2: Outstanding Monthly Dues */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    OUTSTANDING DUES
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-500">
+                    Outstanding Monthly Dues
                   </span>
-                  <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600">
+                  <div className="p-1.5 rounded-lg bg-rose-50 dark:bg-rose-950 text-rose-600">
                     <AlertCircle className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">
-                    {data.dues ? naira(data.dues.outstanding) : '₦0'}
-                  </span>
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  {data.dues ? `${data.dues.overdue} overdue members` : '0 overdue'}
-                </div>
+                <p className="text-xl font-black text-rose-600">
+                  {naira(data.summary.outstandingMonthlyDues)}
+                </p>
+                <p className="text-[11px] text-slate-500">Uncollected recurring arrears</p>
               </div>
 
-              <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+              {/* Card 3: Total Other Contributions Collected */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    EXPENSES THIS MONTH
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500">
+                    Other Contributions
                   </span>
-                  <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
-                    <Receipt className="w-4 h-4" />
+                  <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-600">
+                    <Sparkles className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">
-                    {naira(data.expenses.paidThisMonth)}
-                  </span>
-                </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  <span>YTD: {naira(data.expenses.ytdApprovedOrPaid)}</span>
-                </div>
+                <p className="text-xl font-black text-slate-900 dark:text-white">
+                  {naira(data.summary.totalOtherContributionsCollected)}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {data.otherContributions.campaignsCount} special drive(s)
+                </p>
               </div>
 
-              <div className="min-w-[240px] sm:min-w-0 flex-1 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative">
+              {/* Card 4: Pending Payment Verification */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    PENDING APPROVALS
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-500">
+                    Pending Verification
                   </span>
-                  <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600">
+                  <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600">
                     <Clock className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">
-                    {data.expenses.pendingApproval}
+                <p className="text-xl font-black text-amber-600">
+                  {data.summary.pendingPaymentsCount}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {naira(data.summary.pendingPaymentsAmount)} awaiting review
+                </p>
+              </div>
+
+              {/* Card 5: Total Verified Collections */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-1 col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Total Verified Collections
                   </span>
-                  <span className="text-xs font-bold text-slate-400">expenses</span>
+                  <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  <span>{data.payments.pending} payments awaiting review</span>
-                </div>
+                <p className="text-xl font-black text-emerald-600">
+                  {naira(data.summary.totalVerifiedCollections)}
+                </p>
+                <p className="text-[11px] text-slate-500">All confirmed treasury receipts</p>
               </div>
             </div>
 
-            {/* Current Dues Period Card */}
-            {data.dues ? (
-              <section className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Active Dues Period — {data.dues.period}
+            {/* -------------------------------------------------------------- */}
+            {/* SECTION 1: MONTHLY DUES (Distinct from other contributions)    */}
+            {/* -------------------------------------------------------------- */}
+            <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-300">
+                    <CreditCard className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 dark:text-white">
+                      Recurring Monthly Membership Dues
                     </h2>
-                  </div>
-                  <Link
-                    href="/admin/finance/dues"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                  >
-                    Manage Roster <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Expected</p>
-                    <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{naira(data.dues.expected)}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Collected</p>
-                    <p className="mt-1 text-lg font-black text-emerald-600">{naira(data.dues.collected)}</p>
-                    <p className="text-[10px] text-slate-400">{data.dues.collectionRate}% target reached</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Outstanding</p>
-                    <p className={`mt-1 text-lg font-black ${data.dues.outstanding > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
-                      {naira(data.dues.outstanding)}
+                    <p className="text-xs text-slate-400">
+                      Regular monthly member obligations: Executive (₦2,500/mo) &bull; Regular (₦2,000/mo)
                     </p>
-                    <p className="text-[10px] text-slate-400">{data.dues.overdue} overdue</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800">
-                    <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active Members</p>
-                    <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">{data.dues.members}</p>
-                    <p className="text-[10px] text-slate-400">{data.dues.paid} paid · {data.dues.exempt} exempt</p>
                   </div>
                 </div>
 
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs font-bold text-slate-500">
-                    <span>Collection Progress</span>
-                    <span>{data.dues.collectionRate}%</span>
+                <Link
+                  href="/admin/finance/dues"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-950 dark:text-purple-300 font-bold text-xs self-start sm:self-auto"
+                >
+                  <span>Manage Dues Suite &amp; Roster</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              {data.monthlyDues.currentPeriod ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Active Period</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white mt-0.5 block">
+                      {data.monthlyDues.currentPeriod.period}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{data.monthlyDues.currentPeriod.members} members</span>
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500"
-                      style={{ width: `${Math.min(100, data.dues.collectionRate)}%` }}
-                    />
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">Period Expected</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white mt-0.5 block">
+                      {naira(data.monthlyDues.currentPeriod.expected)}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{data.monthlyDues.currentPeriod.paid} paid</span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">
+                      Period Collected
+                    </span>
+                    <span className="text-sm font-black text-emerald-600 mt-0.5 block">
+                      {naira(data.monthlyDues.currentPeriod.collected)}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-bold">
+                      {data.monthlyDues.currentPeriod.collectionRate}% collected
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800">
+                    <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase block">
+                      Period Outstanding
+                    </span>
+                    <span className="text-sm font-black text-rose-600 mt-0.5 block">
+                      {naira(data.monthlyDues.currentPeriod.outstanding)}
+                    </span>
+                    <span className="text-[10px] text-rose-700 font-bold">
+                      {data.monthlyDues.currentPeriod.overdue} in arrears
+                    </span>
                   </div>
                 </div>
-              </section>
-            ) : (
-              <EmptyState
-                title="No Active Dues Period"
-                description="Set up a monthly dues period to start tracking collections and member assignments."
-                action={
-                  <Link href="/admin/finance/dues">
-                    <Button>Set Up Dues</Button>
-                  </Link>
-                }
-              />
-            )}
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl">
+                  No active monthly dues period configured.
+                </div>
+              )}
+            </section>
 
-            {/* Trends and Categories Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Dues Trend */}
-              {data.duesTrend.length > 0 && (
-                <section className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Dues Collection Trend
+            {/* -------------------------------------------------------------- */}
+            {/* SECTION 2: OTHER CONTRIBUTIONS (Christmas Party & Special Drives) */}
+            {/* -------------------------------------------------------------- */}
+            <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 dark:text-white">
+                      Other Contributions &amp; Special Drives
                     </h2>
+                    <p className="text-xs text-slate-400">
+                      Christmas Party (₦20,000/member), fundraising, and approved one-off campaigns with dedicated receiving accounts.
+                    </p>
                   </div>
-                  <div className="space-y-4 pt-2">
-                    {data.duesTrend.map((t) => (
-                      <div key={t.label} className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span className="text-slate-700 dark:text-slate-300">{t.label}</span>
-                          <span className="text-slate-500">
-                            {naira(t.collected)} / <span className="text-slate-400">{naira(t.expected)}</span>
+                </div>
+
+                <Link
+                  href="/admin/finance/dues"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300 font-bold text-xs self-start sm:self-auto"
+                >
+                  <span>Create / Manage Special Drives</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              {data.otherContributions.campaigns.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {data.otherContributions.campaigns.map((c) => (
+                    <article
+                      key={c.id}
+                      className="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-700/80 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">
+                              {c.label}
+                            </h3>
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                              {naira(c.defaultAmount)} / member
+                            </span>
+                          </div>
+                          {c.description && (
+                            <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{c.description}</p>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-500">
+                          Due:{' '}
+                          {new Date(c.dueDate).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-semibold">Expected</span>
+                          <span className="font-black text-slate-900 dark:text-white">{naira(c.expected)}</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-semibold">Collected</span>
+                          <span className="font-black text-emerald-600">{naira(c.collected)}</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                          <span className="text-[10px] text-slate-400 block font-semibold">Outstanding</span>
+                          <span className="font-black text-rose-600">{naira(c.outstanding)}</span>
+                        </div>
+                      </div>
+
+                      {c.paymentAccount && (
+                        <div className="text-[11px] text-slate-500 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+                          <span>
+                            Account: <strong>{c.paymentAccount.bankName}</strong> &bull; {c.paymentAccount.accountName}
+                          </span>
+                          <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                            {c.paymentAccount.accountNumber}
                           </span>
                         </div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-indigo-500"
-                            style={{ width: `${t.expected ? Math.min(100, (t.collected / t.expected) * 100) : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl">
+                  No special contribution campaigns active.
+                </div>
               )}
+            </section>
 
-              {/* Expense by Category */}
-              {data.expenses.byCategory.length > 0 && (
-                <section className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-amber-500" />
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Expenditure by Category (YTD)
+            {/* -------------------------------------------------------------- */}
+            {/* SECTION 3: RECENT PAYMENT ACTIVITY                             */}
+            {/* -------------------------------------------------------------- */}
+            <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-slate-900 dark:text-white">
+                      Recent Payment Activity &amp; Submissions
                     </h2>
+                    <p className="text-xs text-slate-400">
+                      Latest incoming bank transfers and member-declared contributions.
+                    </p>
                   </div>
-                  <div className="space-y-3 pt-2">
-                    {data.expenses.byCategory.map((c) => (
-                      <div key={c.category} className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold">
-                          <span className="text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{c.category}</span>
-                          <span className="text-slate-900 dark:text-white font-extrabold">{naira(c.amount)}</span>
-                        </div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-amber-500"
-                            style={{ width: `${Math.max(8, (c.amount / maxCat) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                </div>
+
+                <Link
+                  href="/admin/finance/payments"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 font-bold text-xs self-start sm:self-auto"
+                >
+                  <span>Review All Payments &amp; Verify Receipts</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              {data.recentActivity && data.recentActivity.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <th className="px-3 py-2.5">Member</th>
+                        <th className="px-3 py-2.5">Category</th>
+                        <th className="px-3 py-2.5">Amount</th>
+                        <th className="px-3 py-2.5">Method</th>
+                        <th className="px-3 py-2.5">Date</th>
+                        <th className="px-3 py-2.5">Status</th>
+                        <th className="px-3 py-2.5 text-center">Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {data.recentActivity.map((p) => (
+                        <tr key={p.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                          <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-white">
+                            {p.member}
+                            <span className="font-mono text-[10px] text-slate-400 block">{p.memberCode}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                p.purpose === 'MONTHLY_DUES'
+                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                  : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+                              }`}
+                            >
+                              {p.purpose === 'MONTHLY_DUES' ? 'Monthly Dues' : 'Special Contribution'}
+                            </span>
+                            {p.duesPeriod && (
+                              <span className="text-[10px] text-slate-400 block mt-0.5">{p.duesPeriod}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 font-black text-slate-900 dark:text-white">
+                            {naira(p.amount)}
+                          </td>
+                          <td className="px-3 py-2.5 font-medium text-slate-500">
+                            {p.method.replace('_', ' ')}
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-500">
+                            {new Date(p.paidOn).toLocaleDateString('en-GB', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                p.status === 'CONFIRMED'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : p.status === 'PENDING'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              }`}
+                            >
+                              {p.status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-center">
+                            {p.receiptUrl ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600">
+                                <Receipt className="w-3.5 h-3.5" />
+                                <span>Attached</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl">
+                  No payment records found.
+                </div>
               )}
-            </div>
-          </>
+            </section>
+          </div>
         )}
       </div>
     </AdminLayoutShell>
