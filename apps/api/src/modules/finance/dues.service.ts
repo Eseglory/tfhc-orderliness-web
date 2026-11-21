@@ -363,23 +363,43 @@ export class DuesService {
     if (!memberId) return [];
     const rows = await this.prisma.memberDuesAssignment.findMany({
       where: { memberId, period: { type: 'SPECIAL' } },
-      include: { period: { include: { paymentAccount: true } } },
+      include: {
+        period: { include: { paymentAccount: true } },
+        payments: {
+          where: { status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
       orderBy: [{ period: { dueDate: 'asc' } }],
     });
-    return rows.map((a) => ({
-      id: a.id,
-      periodId: a.periodId,
-      title: a.period.label,
-      description: a.period.description,
-      deadline: a.period.dueDate,
-      periodStatus: a.period.status,
-      showAsAlert: a.period.showAsAlert,
-      amountDue: a.amountDue,
-      amountPaid: a.amountPaid,
-      balance: Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100),
-      status: this.effective(a.status, a.period.dueDate),
-      paymentAccount: a.period.paymentAccount,
-    }));
+    return rows.map((a) => {
+      const pendingPayment = a.payments && a.payments.length > 0 ? a.payments[0] : null;
+      return {
+        id: a.id,
+        periodId: a.periodId,
+        title: a.period.label,
+        description: a.period.description,
+        deadline: a.period.dueDate,
+        periodStatus: a.period.status,
+        showAsAlert: a.period.showAsAlert,
+        amountDue: a.amountDue,
+        amountPaid: a.amountPaid,
+        balance: Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100),
+        status: this.effective(a.status, a.period.dueDate),
+        hasPendingPayment: !!pendingPayment,
+        pendingPayment: pendingPayment
+          ? {
+              id: pendingPayment.id,
+              reference: pendingPayment.reference,
+              amount: pendingPayment.amount,
+              paidOn: pendingPayment.paidOn,
+              description: pendingPayment.description,
+            }
+          : null,
+        paymentAccount: a.period.paymentAccount,
+      };
+    });
   }
 
   async getAnnualMatrix(year: number) {

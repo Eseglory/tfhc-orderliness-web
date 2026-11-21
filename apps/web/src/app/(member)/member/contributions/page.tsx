@@ -43,6 +43,7 @@ interface Campaign {
   amountPaid: number;
   balance: number;
   status: string;
+  hasPendingPayment?: boolean;
   paymentAccount: Account | null;
 }
 
@@ -167,7 +168,15 @@ export default function MemberContributionsPage() {
             {campaigns.map((c) => {
               const isPaid = c.status === 'PAID';
               const isWaived = c.status === 'WAIVED' || c.status === 'EXEMPT';
-              const isPending = payments.some((p) => p.duesPeriod === c.title && p.status === 'PENDING');
+              const isPending =
+                !!c.hasPendingPayment ||
+                payments.some(
+                  (p) =>
+                    (p.duesPeriod === c.title ||
+                      p.duesPeriod?.toLowerCase().includes('christmas') ||
+                      p.purpose === 'SPECIAL_CONTRIBUTION') &&
+                    p.status === 'PENDING'
+                );
 
               return (
                 <article
@@ -278,13 +287,24 @@ export default function MemberContributionsPage() {
                     </span>
 
                     {c.balance > 0 && !isWaived && (
-                      <button
-                        onClick={() => setDeclaring(c)}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm transition-transform active:scale-95 cursor-pointer"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>I&apos;ve Paid &bull; Upload Receipt</span>
-                      </button>
+                      isPending ? (
+                        <button
+                          onClick={() => setDeclaring(c)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/80 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                          title="You have already indicated payment. Click if you need to update or replace your uploaded receipt."
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>Payment Submitted (Pending Review)</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setDeclaring(c)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm transition-transform active:scale-95 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>I&apos;ve Paid &bull; Upload Receipt</span>
+                        </button>
+                      )
                     )}
                   </div>
                 </article>

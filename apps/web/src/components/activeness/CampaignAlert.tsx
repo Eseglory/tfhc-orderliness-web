@@ -13,6 +13,7 @@ interface Campaign {
   amountDue: number;
   balance: number;
   status: string;
+  hasPendingPayment?: boolean;
   paymentAccount: { bankName: string; accountName: string; accountNumber: string } | null;
 }
 
@@ -70,9 +71,15 @@ export function CampaignAlert() {
               <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
                 {campaign.title}
               </h4>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-900/60 text-[#f2320c] dark:text-red-400">
-                Action Required
-              </span>
+              {campaign.hasPendingPayment ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300">
+                  Receipt Under Review
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-900/60 text-[#f2320c] dark:text-red-400">
+                  Action Required
+                </span>
+              )}
             </div>
             {campaign.description && (
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
@@ -114,7 +121,7 @@ export function CampaignAlert() {
           onClick={dismiss}
           className="px-4 py-1.5 rounded-xl bg-[#f2320c] hover:bg-[#d82a08] text-white font-bold text-xs shadow-xs transition-transform active:scale-95 flex items-center gap-1"
         >
-          <span>View &amp; Pay</span>
+          <span>{campaign.hasPendingPayment ? 'Review Submission' : 'View & Pay'}</span>
           <span className="material-symbols-outlined text-sm">arrow_forward</span>
         </Link>
       </div>

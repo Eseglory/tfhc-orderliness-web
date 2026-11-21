@@ -410,20 +410,38 @@ export default function MemberDuesPage() {
                       )}
 
                       {d.balance > 0 && !isWaived && (
-                        <button
-                          onClick={() =>
-                            setDeclaring({
-                              id: d.id,
-                              label: d.period,
-                              balance: d.balance,
-                              purpose: 'MONTHLY_DUES',
-                            })
-                          }
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-xs transition-transform active:scale-95 cursor-pointer"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>I&apos;ve Paid</span>
-                        </button>
+                        isPending ? (
+                          <button
+                            onClick={() =>
+                              setDeclaring({
+                                id: d.id,
+                                label: d.period,
+                                balance: d.balance,
+                                purpose: 'MONTHLY_DUES',
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/80 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                            title="You have already indicated payment. Click if you need to update or replace your uploaded receipt."
+                          >
+                            <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>Payment Submitted (Pending)</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setDeclaring({
+                                id: d.id,
+                                label: d.period,
+                                balance: d.balance,
+                                purpose: 'MONTHLY_DUES',
+                              })
+                            }
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-xs transition-transform active:scale-95 cursor-pointer"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>I&apos;ve Paid</span>
+                          </button>
+                        )
                       )}
                     </div>
                   </article>

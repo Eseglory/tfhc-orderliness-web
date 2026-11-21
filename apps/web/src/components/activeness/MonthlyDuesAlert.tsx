@@ -227,7 +227,7 @@ export function MonthlyDuesAlert() {
             onClick={dismiss}
             className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition-transform active:scale-95 flex items-center gap-1.5"
           >
-            <span>Pay &amp; Upload Receipt</span>
+            <span>{hasPendingReceipts ? 'Review Submitted Payment' : 'Pay & Upload Receipt'}</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
