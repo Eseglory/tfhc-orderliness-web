@@ -73,6 +73,9 @@ export class TimetableEligibilityService {
     stats: EligibilitySummaryStats;
     eligibleMembers: MemberEligibilityResult[];
     excludedMembers: MemberEligibilityResult[];
+    summary: any;
+    breakdownByReason: Record<string, number>;
+    activeMembers: any[];
   }> {
     const [totalLookupMembers, allMembers] = await Promise.all([
       this.prisma.approvedMember.count(),
@@ -125,10 +128,38 @@ export class TimetableEligibilityService {
       reasonsBreakdown,
     };
 
+    const summary = {
+      totalInLookupTable: totalLookupMembers,
+      registeredProfiles: registeredCount,
+      credentialsRegistered: registeredCount,
+      signedInApp: registeredCount,
+      clockedInAttempted: eligibleMembers.length,
+      totalEligibleActive: eligibleMembers.length,
+      totalExcluded: excludedMembers.length + unlinkedLookupCount,
+    };
+
+    const breakdownByReason: Record<string, number> = {};
+    for (const item of reasonsBreakdown) {
+      breakdownByReason[item.reason] = item.count;
+    }
+
+    const activeMembers = eligibleMembers.map((m) => {
+      const parts = (m.name || '').trim().split(' ');
+      return {
+        id: m.memberId,
+        memberCode: m.memberCode,
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' ') || '',
+      };
+    });
+
     return {
       stats,
       eligibleMembers,
       excludedMembers,
+      summary,
+      breakdownByReason,
+      activeMembers,
     };
   }
 

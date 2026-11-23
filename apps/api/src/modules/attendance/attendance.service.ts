@@ -132,16 +132,18 @@ export class AttendanceService {
     }
 
     // Record clock-in attempt for engagement tracking
-    await this.prisma.clockInAttempt.create({
-      data: {
-        memberId: member.id,
-        meetingId: dto.meetingId,
-        latitude: Number.isFinite(dto.latitude) ? dto.latitude : null,
-        longitude: Number.isFinite(dto.longitude) ? dto.longitude : null,
-        deviceInfo: dto.deviceInfo ?? null,
-        success: false,
-      },
-    }).catch(() => undefined);
+    if ((this.prisma as any).clockInAttempt?.create) {
+      await (this.prisma as any).clockInAttempt.create({
+        data: {
+          memberId: member.id,
+          meetingId: dto.meetingId,
+          latitude: Number.isFinite(dto.latitude) ? dto.latitude : null,
+          longitude: Number.isFinite(dto.longitude) ? dto.longitude : null,
+          deviceInfo: dto.deviceInfo ?? null,
+          success: false,
+        },
+      }).catch(() => undefined);
+    }
 
     if (member.status !== 'ACTIVE') {
       throw new BadRequestException(

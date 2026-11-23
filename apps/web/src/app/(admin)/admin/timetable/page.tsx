@@ -242,8 +242,43 @@ export default function AdminTimetablePage() {
   // Load eligibility stats
   const loadEligibility = useCallback(async () => {
     try {
-      const res = await fetchApi<EligibilityData>('/timetable/admin/eligibility');
-      setEligibility(res);
+      const res = await fetchApi<any>('/timetable/admin/eligibility');
+      if (res) {
+        const stats = res.stats;
+        const eligibleMembers = res.eligibleMembers || [];
+        const excludedMembers = res.excludedMembers || [];
+
+        const summary = res.summary || {
+          totalInLookupTable: stats?.totalLookupMembers ?? 0,
+          registeredProfiles: stats?.totalRegisteredMembers ?? 0,
+          credentialsRegistered: stats?.totalRegisteredMembers ?? 0,
+          signedInApp: stats?.totalRegisteredMembers ?? 0,
+          clockedInAttempted: stats?.totalEligibleActiveMembers ?? 0,
+          totalEligibleActive: stats?.totalEligibleActiveMembers ?? eligibleMembers.length ?? 0,
+          totalExcluded: stats?.totalExcludedMembers ?? excludedMembers.length ?? 0,
+        };
+
+        let breakdownByReason: Record<string, number> = res.breakdownByReason || {};
+        if (!Object.keys(breakdownByReason).length && Array.isArray(stats?.reasonsBreakdown)) {
+          for (const item of stats.reasonsBreakdown) {
+            breakdownByReason[item.reason] = item.count;
+          }
+        }
+
+        const activeMembers = res.activeMembers || eligibleMembers.map((m: any) => ({
+          id: m.memberId || m.id,
+          memberCode: m.memberCode,
+          firstName: m.name ? m.name.split(' ')[0] : m.firstName || '',
+          lastName: m.name ? m.name.split(' ').slice(1).join(' ') : m.lastName || '',
+        }));
+
+        setEligibility({
+          summary,
+          breakdownByReason,
+          activeMembers,
+          excludedMembers: res.excludedMembers || [],
+        });
+      }
     } catch (err) {
       console.error('Failed to load eligibility audit', err);
     }
@@ -509,11 +544,12 @@ export default function AdminTimetablePage() {
     }
   };
 
-  const approvals = data?.reviews?.filter((r) => r.decision === 'APPROVE') || [];
-  const rejections = data?.reviews?.filter((r) => r.decision === 'REJECT') || [];
-  const requiredApprovals = 3;
-  const isApproved = approvals.length >= requiredApprovals;
-  const isPublished = data?.version?.status === 'PUBLISHED';
+  const allReviews: Review[] = data?.reviews || (data as any)?.approvals?.reviews || [];
+  const approvals = allReviews.filter((r) => r.decision === 'APPROVE' || (r.decision as string) === 'APPROVED');
+  const rejections = allReviews.filter((r) => r.decision === 'REJECT' || (r.decision as string) === 'REJECTED');
+  const requiredApprovals = (data as any)?.approvals?.required || 3;
+  const isApproved = (data as any)?.approvals?.isFullyApproved ?? approvals.length >= requiredApprovals;
+  const isPublished = data?.version?.status === 'PUBLISHED' || Boolean((data as any)?.approvals?.isPublished);
   const isRejected = (data?.version?.status as string) === 'REJECTED' || rejections.length > 0;
 
   return (
@@ -630,7 +666,7 @@ export default function AdminTimetablePage() {
           >
             <ShieldCheck className="h-4 w-4" />
             <span>Active Member Eligibility Audit</span>
-            {eligibility && (
+            {eligibility?.summary?.totalEligibleActive != null && (
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                 {eligibility.summary.totalEligibleActive} Eligible
               </span>
@@ -718,12 +754,23 @@ export default function AdminTimetablePage() {
                         </span>
                       </div>
                       <h2 className="text-xl font-extrabold text-slate-900 dark:text-white mt-1.5">
-                        {data.period?.weekLabel}
+                        {data.period?.weekLabel || (data.period as any)?.label || 'Current Week'}
                       </h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Period: {new Date(data.period?.startDate || '').toLocaleDateString('en-GB')} –{' '}
-                        {new Date(data.period?.endDate || '').toLocaleDateString('en-GB')} WAT
-                      </p>
+                      {(() => {
+                        const periodStart = data.period?.startDate || (data.period as any)?.weekStart;
+                        const periodEnd = data.period?.endDate;
+                        const startText = periodStart ? new Date(periodStart).toLocaleDateString('en-GB') : '';
+                        const endText = periodEnd
+                          ? new Date(periodEnd).toLocaleDateString('en-GB')
+                          : periodStart
+                          ? new Date(new Date(periodStart).getTime() + 6 * 24 * 3600 * 1000).toLocaleDateString('en-GB')
+                          : '';
+                        return (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Period: {startText} – {endText} WAT
+                          </p>
+                        );
+                      })()}
                     </div>
 
                     {/* Publish Action Button */}
@@ -764,9 +811,9 @@ export default function AdminTimetablePage() {
                     {/* Reviewers List */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                       {data.reviewers?.map((r) => {
-                        const review = data.reviews?.find((rev) => rev.reviewerUserId === r.userId);
-                        const isApprovedByThis = review?.decision === 'APPROVE';
-                        const isRejectedByThis = review?.decision === 'REJECT';
+                        const review = allReviews.find((rev) => rev.reviewerUserId === r.userId);
+                        const isApprovedByThis = review?.decision === 'APPROVE' || (review?.decision as string) === 'APPROVED';
+                        const isRejectedByThis = review?.decision === 'REJECT' || (review?.decision as string) === 'REJECTED';
 
                         return (
                           <div
@@ -1002,52 +1049,52 @@ export default function AdminTimetablePage() {
               </div>
 
               {/* 5-Criteria Metrics Grid */}
-              {eligibility && (
+              {eligibility?.summary && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Total in Lookup</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                      {eligibility.summary.totalInLookupTable}
+                      {eligibility.summary.totalInLookupTable ?? 0}
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Profile Created</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                      {eligibility.summary.registeredProfiles}
+                      {eligibility.summary.registeredProfiles ?? 0}
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Credentials Active</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                      {eligibility.summary.credentialsRegistered}
+                      {eligibility.summary.credentialsRegistered ?? 0}
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Signed In ≥ 1</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                      {eligibility.summary.signedInApp}
+                      {eligibility.summary.signedInApp ?? 0}
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Clocked In ≥ 1</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                      {eligibility.summary.clockedInAttempted}
+                      {eligibility.summary.clockedInAttempted ?? 0}
                     </p>
                   </div>
                   <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                     <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">Eligible Active</p>
                     <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                      {eligibility.summary.totalEligibleActive}
+                      {eligibility.summary.totalEligibleActive ?? 0}
                     </p>
                   </div>
                 </div>
               )}
 
               {/* Exclusion Reasons Breakdown */}
-              {eligibility && (
+              {eligibility?.breakdownByReason && Object.keys(eligibility.breakdownByReason).length > 0 && (
                 <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 flex flex-col gap-2.5">
                   <h4 className="text-xs font-black uppercase tracking-wider text-rose-800 dark:text-rose-300">
-                    Exclusion Breakdown ({eligibility.summary.totalExcluded} Members Excluded)
+                    Exclusion Breakdown ({eligibility?.summary?.totalExcluded ?? 0} Members Excluded)
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
                     {Object.entries(eligibility.breakdownByReason).map(([reason, count]) => (

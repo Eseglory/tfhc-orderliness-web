@@ -293,9 +293,15 @@ export class TimetableService {
       return {
         hasTimetable: false,
         period: null,
+        version: null,
+        sessions: [],
+        reviews: [],
         currentWeekMonday,
         nextWeekMonday,
         isDesignatedReviewer,
+        isReviewer: isDesignatedReviewer,
+        userReview: null,
+        canPublish: false,
         designatedReviewers,
         reviewers: formattedReviewers,
         officialReviewersStatus: officialStatus,
@@ -307,13 +313,42 @@ export class TimetableService {
     const approvedReviews = version.reviews.filter((r) => r.decision === 'APPROVED');
     const myReview = version.reviews.find((r) => r.reviewerUserId === userId) || null;
 
+    const formattedReviews = version.reviews.map((r) => ({
+      id: r.id,
+      reviewerUserId: r.reviewerUserId,
+      decision: r.decision === 'APPROVED' ? 'APPROVE' : r.decision === 'REJECTED' ? 'REJECT' : r.decision,
+      comments: r.comments,
+      rejectionReason: r.rejectionReason,
+      reviewedAt: r.reviewedAt,
+      createdAt: (r as any).reviewedAt || (r as any).createdAt,
+      reviewer: r.reviewerUser ? {
+        email: r.reviewerUser.email,
+        member: r.reviewerUser.member,
+      } : undefined,
+    }));
+
     return {
       hasTimetable: true,
       isDesignatedReviewer,
+      isReviewer: isDesignatedReviewer,
+      userReview: myReview ? {
+        id: myReview.id,
+        reviewerUserId: myReview.reviewerUserId,
+        decision: myReview.decision === 'APPROVED' ? 'APPROVE' : myReview.decision === 'REJECTED' ? 'REJECT' : myReview.decision,
+        comments: myReview.comments,
+        rejectionReason: myReview.rejectionReason,
+        reviewedAt: myReview.reviewedAt,
+        createdAt: (myReview as any).reviewedAt || (myReview as any).createdAt,
+      } : null,
+      canPublish: approvedReviews.length >= activePolicy.requiredApprovalsCount && version.status !== 'PUBLISHED',
       period: {
         id: period.id,
         weekStart: period.weekStart,
+        startDate: period.weekStart,
+        endDate: new Date(new Date(period.weekStart).getTime() + 6 * 24 * 60 * 60 * 1000).toISOString(),
         label: period.label,
+        weekLabel: period.label,
+        targetWeek: period.periodType,
         status: period.status,
         currentVersion: period.currentVersion,
         publishedAt: period.publishedAt,
@@ -333,7 +368,7 @@ export class TimetableService {
         approvedCount: approvedReviews.length,
         isFullyApproved: approvedReviews.length >= activePolicy.requiredApprovalsCount,
         isPublished: version.status === 'PUBLISHED',
-        reviews: version.reviews,
+        reviews: formattedReviews,
         myReview,
         isDesignatedReviewer,
         canReview: isDesignatedReviewer && !myReview && ['PENDING_REVIEW', 'DRAFT'].includes(version.status),
@@ -342,6 +377,7 @@ export class TimetableService {
       reviewers: formattedReviewers,
       officialReviewersStatus: officialStatus,
       sessions: version.sessions,
+      reviews: formattedReviews,
     };
   }
 
