@@ -449,6 +449,10 @@ export class AuthService {
       throw new ForbiddenException({ code: 'ACCOUNT_DEACTIVATED', message: 'This account has been deactivated. Contact a Super Admin.' });
     }
 
+    if (user.inviteTokenHash) {
+      throw new ForbiddenException({ code: 'INVITE_PENDING', message: 'Finish setting up your account from the invitation email before signing in.' });
+    }
+
     if (user.role === Role.MEMBER && !user.passwordAuthEnabled && user.googleSubject) {
       throw new ForbiddenException({
         code: 'PASSWORD_AUTH_DISABLED',

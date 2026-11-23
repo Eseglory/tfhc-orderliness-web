@@ -609,8 +609,113 @@ export class TimetableReviewService {
   }
 
   /**
-   * Controlled manual assignment adjustment by Super Admin.
-   * Changes an usher assignment, records an audit log, and validates constraints.
+   * Checks whether a user is an authorized reviewer (one of the 3 designated reviewers or Super Admin / Admin).
+   */
+  async isAuthorizedReviewerOrAdmin(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        timetableReviewerDesignations: { where: { active: true } },
+        accessRoles: { include: { role: true } },
+      },
+    });
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+    if (user.timetableReviewerDesignations.length > 0) return true;
+    if (OFFICIAL_TIMETABLE_REVIEWERS.some((r) => r.email.toLowerCase() === user.email.toLowerCase())) return true;
+    return user.accessRoles.some(
+      (ar) =>
+        ar.role.key === 'SUPER_ADMIN' ||
+        ar.role.key === 'TIMETABLE_REVIEWER' ||
+        ar.role.key === 'ADMIN',
+    );
+  }
+
+  /**
+   * Only the three designated reviewers and the Platform Owner may initiate special-event timetable generation.
+   * Super Admin visibility and management permissions must not automatically grant permission to initiate special-event generation.
+   */
+  async isAuthorizedForSpecialEvent(userId: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        timetableReviewerDesignations: { where: { active: true } },
+      },
+    });
+    if (!user) return false;
+
+    // 1. Is designated active reviewer in DB?
+    if (user.timetableReviewerDesignations.length > 0) return true;
+
+    // 2. Is in the 3 official designated reviewers definition?
+    if (OFFICIAL_TIMETABLE_REVIEWERS.some((r) => r.email.toLowerCase() === user.email.toLowerCase())) {
+      return true;
+    }
+
+    // 3. Is the Platform Owner?
+    const platformOwnerEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com').toLowerCase();
+    if (user.email.toLowerCase() === platformOwnerEmail) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Resets prior approvals for a version when a material change (swap, replace, position, minister) occurs.
+   * Modifying an already-approved version resets approval status so all 3 reviewers must independently re-approve.
+   */
+  private async resetPriorApprovals(
+    tx: Prisma.TransactionClient,
+    versionId: string,
+    periodId: string,
+    reason: string,
+    actorUserId: string,
+  ) {
+    const existingReviews = await tx.timetableReview.findMany({
+      where: { versionId },
+    });
+
+    if (existingReviews.length > 0) {
+      await tx.timetableReview.deleteMany({
+        where: { versionId },
+      });
+    }
+
+    await tx.timetableVersion.update({
+      where: { id: versionId },
+      data: {
+        status: TimetableVersionStatus.PENDING_REVIEW,
+        publishedAt: null,
+        publishedByUserId: null,
+      },
+    });
+
+    await tx.timetablePeriod.update({
+      where: { id: periodId },
+      data: {
+        status: TimetablePeriodStatus.PENDING_REVIEW,
+        publishedAt: null,
+        publishedByUserId: null,
+      },
+    });
+
+    if (existingReviews.length > 0) {
+      await this.audit.recordWithin(tx, {
+        actorUserId,
+        action: 'TIMETABLE_APPROVALS_RESET',
+        entity: 'TimetableVersion',
+        entityId: versionId,
+        reason: `Approvals reset due to timetable modification: ${reason}`,
+        newData: { previousApprovedCount: existingReviews.length },
+      });
+    }
+  }
+
+  /**
+   * Controlled manual assignment adjustment by Designated Reviewer or Admin.
+   * Changes an usher assignment, records an audit log, validates constraints,
+   * and resets prior approvals requiring fresh review.
    */
   async adjustAssignment(params: {
     sessionId: string;
@@ -621,6 +726,11 @@ export class TimetableReviewService {
   }) {
     if (!params.reason?.trim()) {
       throw new BadRequestException('A reason is required for manual assignment adjustment');
+    }
+
+    const isAuth = await this.isAuthorizedReviewerOrAdmin(params.actorUserId);
+    if (!isAuth) {
+      throw new ForbiddenException('Only designated reviewers or administrators can adjust assignments');
     }
 
     const session = await this.prisma.timetableServiceSession.findUnique({
@@ -663,17 +773,14 @@ export class TimetableReviewService {
         },
       });
 
-      // Material change: if version was approved or published, reset to PENDING_REVIEW requiring fresh approval
-      if (['APPROVED', 'PUBLISHED'].includes(session.version.status)) {
-        await tx.timetableVersion.update({
-          where: { id: session.version.id },
-          data: { status: TimetableVersionStatus.PENDING_REVIEW },
-        });
-        await tx.timetablePeriod.update({
-          where: { id: session.version.periodId },
-          data: { status: TimetablePeriodStatus.PENDING_REVIEW },
-        });
-      }
+      // Reset approvals if any existed
+      await this.resetPriorApprovals(
+        tx,
+        session.version.id,
+        session.version.periodId,
+        params.reason.trim(),
+        params.actorUserId,
+      );
 
       await this.audit.recordWithin(tx, {
         actorUserId: params.actorUserId,
@@ -690,6 +797,250 @@ export class TimetableReviewService {
       });
 
       return newAssignment;
+    });
+  }
+
+  /**
+   * Swaps two usher assignments across or within sessions.
+   * Authorized for designated reviewers and Super Admins.
+   * Resets prior approvals so all 3 reviewers must re-approve.
+   */
+  async swapAssignments(params: {
+    assignmentId1: string;
+    assignmentId2: string;
+    reason?: string;
+    actorUserId: string;
+  }) {
+    const isAuth = await this.isAuthorizedReviewerOrAdmin(params.actorUserId);
+    if (!isAuth) {
+      throw new ForbiddenException('Only designated reviewers or administrators can swap assignments');
+    }
+
+    const a1 = await this.prisma.timetableAssignment.findUnique({
+      where: { id: params.assignmentId1 },
+      include: { session: { include: { version: true } }, member: true },
+    });
+    const a2 = await this.prisma.timetableAssignment.findUnique({
+      where: { id: params.assignmentId2 },
+      include: { session: { include: { version: true } }, member: true },
+    });
+
+    if (!a1 || !a2) {
+      throw new NotFoundException('One or both assignments could not be found');
+    }
+
+    if (a1.session.versionId !== a2.session.versionId) {
+      throw new BadRequestException('Cannot swap assignments belonging to different timetable versions');
+    }
+
+    const versionId = a1.session.versionId;
+    const periodId = a1.session.version.periodId;
+    const reason = params.reason?.trim() || `Swapped ${a1.member.firstName} ${a1.member.lastName} with ${a2.member.firstName} ${a2.member.lastName}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      if (a1.sessionId !== a2.sessionId) {
+        const clash1 = await tx.timetableAssignment.findFirst({
+          where: { sessionId: a1.sessionId, memberId: a2.memberId },
+        });
+        if (clash1) {
+          throw new BadRequestException(
+            `${a2.member.firstName} ${a2.member.lastName} is already assigned to ${a1.session.serviceName}`,
+          );
+        }
+        const clash2 = await tx.timetableAssignment.findFirst({
+          where: { sessionId: a2.sessionId, memberId: a1.memberId },
+        });
+        if (clash2) {
+          throw new BadRequestException(
+            `${a1.member.firstName} ${a1.member.lastName} is already assigned to ${a2.session.serviceName}`,
+          );
+        }
+      }
+
+      // Safe swap that avoids unique constraint collisions on (sessionId, memberId)
+      // by temporarily removing a2 before updating a1, then recreating a2 with the same ID.
+      const a2Data = {
+        id: a2.id,
+        sessionId: a2.sessionId,
+        role: a2.role,
+        position: a2.position,
+      };
+
+      await tx.timetableAssignment.delete({
+        where: { id: a2.id },
+      });
+
+      const updated1 = await tx.timetableAssignment.update({
+        where: { id: a1.id },
+        data: {
+          memberId: a2.memberId,
+          isManualAdjustment: true,
+          adjustedByUserId: params.actorUserId,
+          adjustmentReason: reason,
+        },
+        include: { member: true },
+      });
+
+      const updated2 = await tx.timetableAssignment.create({
+        data: {
+          id: a2Data.id,
+          sessionId: a2Data.sessionId,
+          memberId: a1.memberId,
+          role: a2Data.role,
+          position: a2Data.position,
+          isManualAdjustment: true,
+          adjustedByUserId: params.actorUserId,
+          adjustmentReason: reason,
+        },
+        include: { member: true },
+      });
+
+      await this.resetPriorApprovals(tx, versionId, periodId, reason, params.actorUserId);
+
+      await this.audit.recordWithin(tx, {
+        actorUserId: params.actorUserId,
+        action: 'TIMETABLE_ASSIGNMENT_SWAP',
+        entity: 'TimetableVersion',
+        entityId: versionId,
+        reason,
+        newData: {
+          assignment1: { id: a1.id, previousMember: a1.memberId, newMember: a2.memberId },
+          assignment2: { id: a2.id, previousMember: a2.memberId, newMember: a1.memberId },
+        },
+      });
+
+      return { assignment1: updated1, assignment2: updated2 };
+    });
+  }
+
+  /**
+   * Updates an assigned usher's position and/or role.
+   * Authorized for designated reviewers and Super Admins.
+   * Resets prior approvals so all 3 reviewers must re-approve.
+   */
+  async updateAssignmentPosition(params: {
+    assignmentId: string;
+    position?: string;
+    role?: string;
+    reason?: string;
+    actorUserId: string;
+  }) {
+    const isAuth = await this.isAuthorizedReviewerOrAdmin(params.actorUserId);
+    if (!isAuth) {
+      throw new ForbiddenException('Only designated reviewers or administrators can update assignments');
+    }
+
+    const assignment = await this.prisma.timetableAssignment.findUnique({
+      where: { id: params.assignmentId },
+      include: { session: { include: { version: true } }, member: true },
+    });
+    if (!assignment) throw new NotFoundException('Assignment not found');
+
+    const versionId = assignment.session.versionId;
+    const periodId = assignment.session.version.periodId;
+    const reason = params.reason?.trim() || `Updated position to "${params.position || assignment.position}" / role to "${params.role || assignment.role}"`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.timetableAssignment.update({
+        where: { id: params.assignmentId },
+        data: {
+          position: params.position !== undefined ? params.position : assignment.position,
+          role: params.role !== undefined ? params.role : assignment.role,
+          isManualAdjustment: true,
+          adjustedByUserId: params.actorUserId,
+          adjustmentReason: reason,
+        },
+        include: { member: true },
+      });
+
+      await this.resetPriorApprovals(tx, versionId, periodId, reason, params.actorUserId);
+
+      await this.audit.recordWithin(tx, {
+        actorUserId: params.actorUserId,
+        action: 'TIMETABLE_POSITION_UPDATE',
+        entity: 'TimetableAssignment',
+        entityId: params.assignmentId,
+        reason,
+        newData: {
+          assignmentId: params.assignmentId,
+          position: updated.position,
+          role: updated.role,
+        },
+      });
+
+      return updated;
+    });
+  }
+
+  /**
+   * Updates the supervising minister for a timetable service session.
+   * Authorized for designated reviewers and Super Admins.
+   * Resets prior approvals so all 3 reviewers must re-approve.
+   */
+  async updateSessionSupervisingMinister(params: {
+    sessionId: string;
+    supervisingMinisterId: string;
+    reason?: string;
+    actorUserId: string;
+  }) {
+    const isAuth = await this.isAuthorizedReviewerOrAdmin(params.actorUserId);
+    if (!isAuth) {
+      throw new ForbiddenException('Only designated reviewers or administrators can update supervising ministers');
+    }
+
+    const session = await this.prisma.timetableServiceSession.findUnique({
+      where: { id: params.sessionId },
+      include: { version: true, supervisingMinister: true },
+    });
+    if (!session) throw new NotFoundException('Service session not found');
+
+    const minister = await this.prisma.member.findUnique({
+      where: { id: params.supervisingMinisterId },
+    });
+    if (!minister || minister.status !== 'ACTIVE') {
+      throw new BadRequestException('Selected supervising minister does not exist or is not active');
+    }
+
+    const versionId = session.versionId;
+    const periodId = session.version.periodId;
+    const reason = params.reason?.trim() || `Changed supervising minister to ${minister.firstName} ${minister.lastName}`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedSession = await tx.timetableServiceSession.update({
+        where: { id: params.sessionId },
+        data: {
+          supervisingMinisterId: params.supervisingMinisterId,
+        },
+        include: {
+          supervisingMinister: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              preferredName: true,
+              profilePhotoUrl: true,
+              roleInUnit: true,
+            },
+          },
+        },
+      });
+
+      await this.resetPriorApprovals(tx, versionId, periodId, reason, params.actorUserId);
+
+      await this.audit.recordWithin(tx, {
+        actorUserId: params.actorUserId,
+        action: 'TIMETABLE_SUPERVISING_MINISTER_UPDATE',
+        entity: 'TimetableServiceSession',
+        entityId: params.sessionId,
+        reason,
+        newData: {
+          sessionId: params.sessionId,
+          previousMinisterId: session.supervisingMinisterId,
+          newMinisterId: params.supervisingMinisterId,
+        },
+      });
+
+      return updatedSession;
     });
   }
 }

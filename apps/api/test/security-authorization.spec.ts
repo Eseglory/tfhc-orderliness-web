@@ -79,11 +79,11 @@ describe('Security & Authorization E2E Suite (ADMIN vs MEMBER, IDOR, Secrets, Is
       },
     });
 
-    // Grant ADMIN role in RBAC
+    // Grant SUPER_ADMIN role in RBAC
     const adminRole = await db.accessRole.upsert({
-      where: { key: 'ADMIN' },
+      where: { key: 'SUPER_ADMIN' },
       update: {},
-      create: { key: 'ADMIN', name: 'Admin', description: 'System Administrator' },
+      create: { key: 'SUPER_ADMIN', name: 'Super Admin', description: 'System Administrator' },
     });
     await db.userAccessRole.create({ data: { userId: adminUserId, roleId: adminRole.id } });
     adminToken = authService.generateToken(adminUserId, adminUser.email, 'ADMIN', adminMember.id);

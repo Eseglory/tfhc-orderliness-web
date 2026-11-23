@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Body,
   Param,
   Query,
@@ -15,6 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/jwt.strategy';
 import { RequirePermissions } from '../../common/rbac/permissions.decorator';
 import { TimetableService } from './timetable.service';
+import { TimetableGeneratorService } from './timetable-generator.service';
 import { TimetableReviewService } from './timetable-review.service';
 import { TimetableEligibilityService } from './timetable-eligibility.service';
 import { TimetableReviewDecision } from '@prisma/client';
@@ -41,6 +43,7 @@ export class MemberTimetableController {
 export class TimetableAdminController {
   constructor(
     private readonly timetableService: TimetableService,
+    private readonly generator: TimetableGeneratorService,
     private readonly reviewService: TimetableReviewService,
     private readonly eligibilityService: TimetableEligibilityService,
   ) {}
@@ -96,7 +99,6 @@ export class TimetableAdminController {
   }
 
   @Post('admin/adjust')
-  @RequirePermissions('timetable.manage')
   async adjustAssignment(
     @Body() body: { sessionId: string; existingMemberId: string; newMemberId: string; reason: string },
     @CurrentUser() user: AuthenticatedUser,
@@ -108,6 +110,86 @@ export class TimetableAdminController {
       reason: body.reason,
       actorUserId: user.userId,
     });
+  }
+
+  @Post('admin/swap-assignments')
+  async swapAssignments(
+    @Body() body: { assignmentId1: string; assignmentId2: string; reason?: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reviewService.swapAssignments({
+      assignmentId1: body.assignmentId1,
+      assignmentId2: body.assignmentId2,
+      reason: body.reason,
+      actorUserId: user.userId,
+    });
+  }
+
+  @Patch('admin/assignment-position')
+  async updateAssignmentPosition(
+    @Body() body: { assignmentId: string; position?: string; role?: string; reason?: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reviewService.updateAssignmentPosition({
+      assignmentId: body.assignmentId,
+      position: body.position,
+      role: body.role,
+      reason: body.reason,
+      actorUserId: user.userId,
+    });
+  }
+
+  @Patch('admin/session-supervising-minister')
+  async updateSessionSupervisingMinister(
+    @Body() body: { sessionId: string; supervisingMinisterId: string; reason?: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reviewService.updateSessionSupervisingMinister({
+      sessionId: body.sessionId,
+      supervisingMinisterId: body.supervisingMinisterId,
+      reason: body.reason,
+      actorUserId: user.userId,
+    });
+  }
+
+  @Post('admin/special-event')
+  async generateSpecialEvent(
+    @Body()
+    body: {
+      title: string;
+      eventDate: string;
+      startTime: string;
+      endTime?: string;
+      requiredUshers: number;
+      supervisingMinisterId?: string;
+      notes?: string;
+      manualMemberIds?: string[];
+    },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const isAuth = await this.reviewService.isAuthorizedForSpecialEvent(user.userId);
+    if (!isAuth) {
+      throw new ForbiddenException(
+        'Only the three designated timetable reviewers and the Platform Owner may initiate special-event timetable generation.',
+      );
+    }
+    return this.generator.generateSpecialEventTimetable({
+      title: body.title,
+      eventDate: new Date(body.eventDate),
+      startTime: new Date(body.startTime),
+      endTime: body.endTime ? new Date(body.endTime) : undefined,
+      requiredUshers: Number(body.requiredUshers),
+      supervisingMinisterId: body.supervisingMinisterId,
+      notes: body.notes,
+      manualMemberIds: body.manualMemberIds,
+      actorUserId: user.userId,
+    });
+  }
+
+  @Get('admin/supervising-ministers')
+  @RequirePermissions('timetable.read')
+  async getSupervisingMinisters() {
+    return this.generator.getSupervisingMinisterCandidates();
   }
 
   @Get('admin/eligibility')

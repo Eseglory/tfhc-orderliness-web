@@ -4,8 +4,8 @@ const path = require('path');
 
 const VPS_HOST = 'staging.utilityhub.ng';
 const REMOTE_DIR = '/home/ese/tfhc-production';
-const RELEASE_NAME = 'timetable-analytics-release-1';
-const IMAGE_TAG = 'tfhc-api:timetable-analytics-20261123';
+const RELEASE_NAME = 'timetable-prod-release-final';
+const IMAGE_TAG = 'tfhc-api:timetable-prod-20261123';
 const ROOT = path.resolve(__dirname, '..');
 
 function run(cmd, opts = {}) {
@@ -29,14 +29,15 @@ async function main() {
   run(`robocopy "${path.join(ROOT, 'apps/api/dist')}" "${path.join(stagingDir, 'dist')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
   // Copy src
   run(`robocopy "${path.join(ROOT, 'apps/api/src')}" "${path.join(stagingDir, 'src')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
-  // Copy data
-  run(`robocopy "${path.join(ROOT, 'apps/api/prisma/data')}" "${path.join(stagingDir, 'data')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
+  // Copy prisma
+  run(`robocopy "${path.join(ROOT, 'apps/api/prisma')}" "${path.join(stagingDir, 'prisma')}" /E /NFL /NDL /NJH /NJS || ver>nul`);
 
   // Write Dockerfile
   const dockerfile = `FROM tfhc-api:finance-approvals-20261123
 COPY dist/ /app/apps/api/dist/
 COPY src/ /app/apps/api/src/
-COPY data/ /app/apps/api/prisma/data/
+COPY prisma/ /app/apps/api/prisma/
+RUN cd /app/apps/api && npx prisma generate
 `;
   fs.writeFileSync(path.join(stagingDir, 'Dockerfile'), dockerfile, 'utf8');
 

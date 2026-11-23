@@ -644,4 +644,174 @@ describe('Automated Weekly Ushering Timetable E2E & Integration Verification Sui
     const expenses = await prisma.expense.findMany({ take: 1 });
     expect(expenses).toBeDefined();
   });
+
+  // -------------------------------------------------------------------------
+  // Test 16: Supervising Ministers & Separate Sunday Sessions
+  // -------------------------------------------------------------------------
+  it('Scenario 16: Assigns supervising minister to weekly services and keeps Sunday 2nd & 3rd separate', async () => {
+    // Ensure an executive member exists to serve as candidate
+    const execCandidate = await prisma.member.findFirst({
+      where: {
+        status: MemberStatus.ACTIVE,
+        OR: [
+          { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+          { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+        ],
+      },
+    });
+
+    if (!execCandidate) {
+      await prisma.member.create({
+        data: {
+          memberCode: `EXEC_${Date.now()}`,
+          firstName: 'Executive',
+          lastName: 'Leader',
+          phoneNumber: '+234800000099',
+          roleInUnit: 'Leader',
+          status: MemberStatus.ACTIVE,
+        },
+      });
+    }
+
+    const result = await timetableService.catchUpOrGenerate(superAdminUser.id, 'CURRENT');
+    expect(result.sessions.length).toBe(5);
+
+    const sundaySecond = result.sessions.find((s) => s.sessionKey === 'SUNDAY_SECOND');
+    const sundayThird = result.sessions.find((s) => s.sessionKey === 'SUNDAY_THIRD');
+
+    expect(sundaySecond).toBeDefined();
+    expect(sundayThird).toBeDefined();
+    expect(sundaySecond?.id).not.toBe(sundayThird?.id);
+
+    // Verify supervising ministers can be fetched
+    const candidates = await generatorService.getSupervisingMinisterCandidates();
+    expect(candidates.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 17: Reviewer Modifications & Prior Approval Reset
+  // -------------------------------------------------------------------------
+  it('Scenario 17: Reviewer modifications (swap, position, minister) reset prior approvals requiring fresh review', async () => {
+    const result = await timetableService.catchUpOrGenerate(superAdminUser.id, 'CURRENT');
+    const versionId = result.version.id;
+
+    // Reviewer 1 submits approval
+    await reviewService.submitReview({
+      versionId,
+      reviewerUserId: designatedReviewers[0].id,
+      decision: TimetableReviewDecision.APPROVED,
+      comments: 'Looks good to me',
+    });
+
+    let reviews = await prisma.timetableReview.findMany({ where: { versionId } });
+    expect(reviews.length).toBe(1);
+
+    // Pick two assignments to swap within the same session
+    const assignments = await prisma.timetableAssignment.findMany({
+      where: { session: { versionId, sessionKey: 'TUESDAY_MIDWEEK' } },
+      take: 2,
+    });
+    expect(assignments.length).toBe(2);
+
+    // Reviewer performs swap
+    const swapResult = await reviewService.swapAssignments({
+      assignmentId1: assignments[0].id,
+      assignmentId2: assignments[1].id,
+      reason: 'Testing reviewer swap resets prior approvals',
+      actorUserId: designatedReviewers[0].id,
+    });
+
+    expect(swapResult.assignment1.memberId).toBe(assignments[1].memberId);
+    expect(swapResult.assignment2.memberId).toBe(assignments[0].memberId);
+
+    // Prior approval MUST be reset
+    reviews = await prisma.timetableReview.findMany({ where: { versionId } });
+    expect(reviews.length).toBe(0);
+
+    const versionAfterSwap = await prisma.timetableVersion.findUnique({ where: { id: versionId } });
+    expect(versionAfterSwap?.status).toBe(TimetableVersionStatus.PENDING_REVIEW);
+
+    // Update position
+    const updatedPos = await reviewService.updateAssignmentPosition({
+      assignmentId: assignments[0].id,
+      position: 'Altar Sanctuary Lead',
+      role: 'LEAD_USHER',
+      reason: 'Assigned as lead',
+      actorUserId: designatedReviewers[0].id,
+    });
+    expect(updatedPos.position).toBe('Altar Sanctuary Lead');
+
+    // Update supervising minister
+    const ministerCandidates = await generatorService.getSupervisingMinisterCandidates();
+    if (ministerCandidates.length > 0) {
+      const updatedSession = await reviewService.updateSessionSupervisingMinister({
+        sessionId: assignments[0].sessionId,
+        supervisingMinisterId: ministerCandidates[0].id,
+        reason: 'Supervising mid-week service',
+        actorUserId: designatedReviewers[0].id,
+      });
+      expect(updatedSession.supervisingMinisterId).toBe(ministerCandidates[0].id);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 18: Special Events & Programmes Workflow & Strict Permission Gate
+  // -------------------------------------------------------------------------
+  it('Scenario 18: Special events generation runs as independent workflow without overwriting regular weekly timetable', async () => {
+    // 1. Permission Gate Verification:
+    // Create an ordinary Super Admin who is NOT in the 3 designated reviewers and NOT the platform owner
+    const ordinaryAdmin = await prisma.user.create({
+      data: {
+        email: `ordinary_admin_${Date.now()}@tfhc.test`,
+        passwordHash: '$2b$10$hashedtestpassword1234567890',
+        role: 'ADMIN',
+        isActive: true,
+      },
+    });
+
+    const isOrdinaryAdminAuth = await reviewService.isAuthorizedForSpecialEvent(ordinaryAdmin.id);
+    expect(isOrdinaryAdminAuth).toBe(false);
+
+    // Designated Reviewer MUST be authorized
+    const isReviewerAuth = await reviewService.isAuthorizedForSpecialEvent(designatedReviewers[0].id);
+    expect(isReviewerAuth).toBe(true);
+
+    // Platform Owner MUST be authorized
+    const ownerEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com').toLowerCase();
+    let ownerUser = await prisma.user.findFirst({
+      where: { email: { equals: ownerEmail, mode: 'insensitive' } },
+    });
+    if (!ownerUser) {
+      ownerUser = await prisma.user.create({
+        data: {
+          email: ownerEmail,
+          passwordHash: '$2b$10$hashedtestpassword1234567890',
+          role: 'ADMIN',
+          isActive: true,
+        },
+      });
+    }
+    const isOwnerAuth = await reviewService.isAuthorizedForSpecialEvent(ownerUser.id);
+    expect(isOwnerAuth).toBe(true);
+
+    // 2. Generate Special Event
+    const specialEvent = await generatorService.generateSpecialEventTimetable({
+      title: 'Night of Praise & Breakthrough',
+      eventDate: new Date('2026-12-05'),
+      startTime: new Date('2026-12-05T18:00:00Z'),
+      endTime: new Date('2026-12-05T21:00:00Z'),
+      requiredUshers: 5,
+      actorUserId: designatedReviewers[0].id,
+    });
+
+    expect(specialEvent.period.periodType).toBe('SPECIAL_EVENT');
+    expect(specialEvent.session.isSpecialEvent).toBe(true);
+    expect(specialEvent.session.specialEventTitle).toBe('Night of Praise & Breakthrough');
+
+    // Verify regular weekly periods remain intact
+    const regularPeriods = await prisma.timetablePeriod.findMany({
+      where: { periodType: 'REGULAR_WEEKLY' },
+    });
+    expect(regularPeriods.length).toBeGreaterThan(0);
+  });
 });

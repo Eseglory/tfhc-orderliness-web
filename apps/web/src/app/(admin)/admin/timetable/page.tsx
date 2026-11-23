@@ -19,6 +19,12 @@ import {
   Sliders,
   Sparkles,
   BarChart3,
+  UserCog,
+  ArrowLeftRight,
+  PlusCircle,
+  Crown,
+  MapPin,
+  CalendarPlus,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi, ApiError } from '../../../../lib/api';
@@ -32,6 +38,8 @@ interface TimetableAssignment {
   memberCode: string;
   profilePhotoUrl?: string | null;
   roleTitle?: string;
+  position?: string;
+  role?: string;
   assignedAt: string;
 }
 
@@ -44,6 +52,13 @@ interface TimetableSession {
   endTime: string;
   locationName: string;
   requiredUshers: number;
+  supervisingMinister?: {
+    id: string;
+    name: string;
+    preferredName?: string;
+    roleInUnit?: string;
+    profilePhotoUrl?: string | null;
+  } | null;
   assignments: TimetableAssignment[];
 }
 
@@ -171,6 +186,48 @@ export default function AdminTimetablePage() {
   const [adjustReason, setAdjustReason] = useState('');
   const [submittingAdjust, setSubmittingAdjust] = useState(false);
 
+  // Supervising Minister state
+  const [ministers, setMinisters] = useState<Array<{ id: string; firstName: string; lastName: string; roleInUnit: string }>>([]);
+  const [ministerModalSession, setMinisterModalSession] = useState<TimetableSession | null>(null);
+  const [selectedMinisterId, setSelectedMinisterId] = useState('');
+  const [ministerReason, setMinisterReason] = useState('');
+  const [submittingMinister, setSubmittingMinister] = useState(false);
+
+  // Swap Two Ushers state
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapAssignmentId1, setSwapAssignmentId1] = useState('');
+  const [swapAssignmentId2, setSwapAssignmentId2] = useState('');
+  const [swapReason, setSwapReason] = useState('');
+  const [submittingSwap, setSubmittingSwap] = useState(false);
+
+  // Position & Role update state
+  const [positionModalAssignment, setPositionModalAssignment] = useState<{ id: string; name: string; position: string; role: string } | null>(null);
+  const [editPosition, setEditPosition] = useState('');
+  const [editRole, setEditRole] = useState('USHER');
+  const [positionReason, setPositionReason] = useState('');
+  const [submittingPosition, setSubmittingPosition] = useState(false);
+
+  // Special Event state
+  const [showSpecialModal, setShowSpecialModal] = useState(false);
+  const [specialTitle, setSpecialTitle] = useState('');
+  const [specialDate, setSpecialDate] = useState('');
+  const [specialStartTime, setSpecialStartTime] = useState('09:00');
+  const [specialEndTime, setSpecialEndTime] = useState('12:00');
+  const [specialRequiredUshers, setSpecialRequiredUshers] = useState(6);
+  const [specialMinisterId, setSpecialMinisterId] = useState('');
+  const [specialNotes, setSpecialNotes] = useState('');
+  const [submittingSpecial, setSubmittingSpecial] = useState(false);
+
+  // Load ministers list
+  const loadMinisters = useCallback(async () => {
+    try {
+      const res = await fetchApi<any[]>('/timetable/admin/supervising-ministers');
+      setMinisters(Array.isArray(res) ? res : []);
+    } catch (err) {
+      console.error('Failed to load ministers', err);
+    }
+  }, []);
+
   // Load current timetable
   const loadCurrent = useCallback(async () => {
     try {
@@ -204,10 +261,10 @@ export default function AdminTimetablePage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([loadCurrent(), loadEligibility(), loadHistory()]).finally(() => {
+    Promise.all([loadCurrent(), loadEligibility(), loadHistory(), loadMinisters()]).finally(() => {
       setLoading(false);
     });
-  }, [loadCurrent, loadEligibility, loadHistory]);
+  }, [loadCurrent, loadEligibility, loadHistory, loadMinisters]);
 
   const handleGenerate = async () => {
     if (!confirm(`Generate ushering timetable for ${targetWeekOption === 'CURRENT' ? 'the CURRENT week' : 'NEXT week'}?`)) {
@@ -327,6 +384,131 @@ export default function AdminTimetablePage() {
     }
   };
 
+  const handleChangeMinister = async () => {
+    if (!ministerModalSession || !selectedMinisterId) {
+      alert('Please select a supervising minister.');
+      return;
+    }
+    setSubmittingMinister(true);
+    setActionSuccess('');
+    setError('');
+    try {
+      await fetchApi('/timetable/admin/session-supervising-minister', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          sessionId: ministerModalSession.id,
+          supervisingMinisterId: selectedMinisterId,
+          reason: ministerReason.trim() || undefined,
+        }),
+      });
+      setMinisterModalSession(null);
+      setSelectedMinisterId('');
+      setMinisterReason('');
+      setActionSuccess('Supervising minister updated successfully! Prior approvals have been reset for fresh review.');
+      await loadCurrent();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update minister');
+    } finally {
+      setSubmittingMinister(false);
+    }
+  };
+
+  const handleSwap = async () => {
+    if (!swapAssignmentId1 || !swapAssignmentId2) {
+      alert('Please select both ushers to swap.');
+      return;
+    }
+    if (swapAssignmentId1 === swapAssignmentId2) {
+      alert('Cannot swap an usher with themselves. Please pick two different ushers.');
+      return;
+    }
+    setSubmittingSwap(true);
+    setActionSuccess('');
+    setError('');
+    try {
+      await fetchApi('/timetable/admin/swap-assignments', {
+        method: 'POST',
+        body: JSON.stringify({
+          assignmentId1: swapAssignmentId1,
+          assignmentId2: swapAssignmentId2,
+          reason: swapReason.trim() || undefined,
+        }),
+      });
+      setShowSwapModal(false);
+      setSwapAssignmentId1('');
+      setSwapAssignmentId2('');
+      setSwapReason('');
+      setActionSuccess('Ushers swapped successfully! Prior approvals have been reset for fresh review.');
+      await loadCurrent();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to swap ushers');
+    } finally {
+      setSubmittingSwap(false);
+    }
+  };
+
+  const handleUpdatePosition = async () => {
+    if (!positionModalAssignment) return;
+    setSubmittingPosition(true);
+    setActionSuccess('');
+    setError('');
+    try {
+      await fetchApi('/timetable/admin/assignment-position', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          assignmentId: positionModalAssignment.id,
+          position: editPosition.trim() || undefined,
+          role: editRole,
+          reason: positionReason.trim() || undefined,
+        }),
+      });
+      setPositionModalAssignment(null);
+      setEditPosition('');
+      setPositionReason('');
+      setActionSuccess('Position & role updated successfully! Prior approvals have been reset for fresh review.');
+      await loadCurrent();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update position');
+    } finally {
+      setSubmittingPosition(false);
+    }
+  };
+
+  const handleCreateSpecialEvent = async () => {
+    if (!specialTitle.trim() || !specialDate || !specialStartTime) {
+      alert('Please provide event title, date, and start time.');
+      return;
+    }
+    setSubmittingSpecial(true);
+    setActionSuccess('');
+    setError('');
+    try {
+      await fetchApi('/timetable/admin/special-event', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: specialTitle.trim(),
+          eventDate: specialDate,
+          startTime: `${specialDate}T${specialStartTime}:00Z`,
+          endTime: specialEndTime ? `${specialDate}T${specialEndTime}:00Z` : undefined,
+          requiredUshers: Number(specialRequiredUshers),
+          supervisingMinisterId: specialMinisterId || undefined,
+          notes: specialNotes.trim() || undefined,
+        }),
+      });
+      setShowSpecialModal(false);
+      setSpecialTitle('');
+      setSpecialDate('');
+      setSpecialNotes('');
+      setActionSuccess('Special Event timetable created and submitted for review!');
+      await loadCurrent();
+      await loadHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create special event');
+    } finally {
+      setSubmittingSpecial(false);
+    }
+  };
+
   const approvals = data?.reviews?.filter((r) => r.decision === 'APPROVE') || [];
   const rejections = data?.reviews?.filter((r) => r.decision === 'REJECT') || [];
   const requiredApprovals = 3;
@@ -368,6 +550,24 @@ export default function AdminTimetablePage() {
               >
                 <Sparkles className="h-4 w-4" />
                 <span>{generating ? 'Generating...' : 'Generate Timetable'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowSpecialModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors shadow-sm"
+            >
+              <CalendarPlus className="h-4 w-4" />
+              <span>+ Special Event</span>
+            </button>
+
+            {data?.sessions && data.sessions.length > 0 && !isPublished && (
+              <button
+                onClick={() => setShowSwapModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors shadow-sm"
+              >
+                <ArrowLeftRight className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Swap Ushers</span>
               </button>
             )}
 
@@ -681,6 +881,41 @@ export default function AdminTimetablePage() {
                             </div>
                           </div>
 
+                          {/* Supervising Minister Section */}
+                          <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                                {session.supervisingMinister?.profilePhotoUrl ? (
+                                  <img src={session.supervisingMinister.profilePhotoUrl} alt="Minister" className="w-full h-full object-cover" />
+                                ) : (
+                                  <Crown className="h-4 w-4" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                                  Supervising Minister
+                                </span>
+                                <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                  {session.supervisingMinister ? session.supervisingMinister.name : 'Not yet assigned'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {!isPublished && (can('timetable.manage') || data.isReviewer || user?.isSuperAdmin) && (
+                              <button
+                                onClick={() => {
+                                  setMinisterModalSession(session);
+                                  setSelectedMinisterId(session.supervisingMinister?.id || '');
+                                  setMinisterReason('');
+                                }}
+                                className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 shadow-xs cursor-pointer"
+                              >
+                                <UserCog className="h-3.5 w-3.5" />
+                                <span>Change Minister</span>
+                              </button>
+                            )}
+                          </div>
+
                           {/* Ushers Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                             {session.assignments?.map((a) => (
@@ -701,25 +936,44 @@ export default function AdminTimetablePage() {
                                       {a.fullName}
                                     </p>
                                     <p className="text-[10px] text-slate-400 truncate">
-                                      {a.memberCode}
+                                      {a.memberCode} {a.position ? `• ${a.position}` : ''}
                                     </p>
                                   </div>
                                 </div>
 
-                                {/* Replace / Swap Button (for Admins) */}
-                                {(can('timetable.manage') || user?.isSuperAdmin) && !isPublished && (
-                                  <button
-                                    onClick={() => {
-                                      setAdjustSession(session);
-                                      setAdjustOldMemberId(a.memberId);
-                                      setAdjustNewMemberId('');
-                                      setAdjustReason('');
-                                    }}
-                                    className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0"
-                                    title="Replace Usher"
-                                  >
-                                    Swap
-                                  </button>
+                                {/* Modifier Action Buttons */}
+                                {!isPublished && (can('timetable.manage') || data.isReviewer || user?.isSuperAdmin) && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      onClick={() => {
+                                        setPositionModalAssignment({
+                                          id: a.id,
+                                          name: a.fullName,
+                                          position: a.position || '',
+                                          role: a.role || 'USHER',
+                                        });
+                                        setEditPosition(a.position || '');
+                                        setEditRole(a.role || 'USHER');
+                                        setPositionReason('');
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                      title="Edit Position / Role"
+                                    >
+                                      Position
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setAdjustSession(session);
+                                        setAdjustOldMemberId(a.memberId);
+                                        setAdjustNewMemberId('');
+                                        setAdjustReason('');
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                      title="Replace Usher"
+                                    >
+                                      Replace
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -1063,7 +1317,7 @@ export default function AdminTimetablePage() {
           </div>
         )}
 
-        {/* Modal: Swap / Adjust Usher */}
+        {/* Modal: Replace Usher */}
         {adjustSession && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col gap-4">
@@ -1130,6 +1384,410 @@ export default function AdminTimetablePage() {
                   className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <span>{submittingAdjust ? 'Updating...' : 'Confirm Replacement'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Change Supervising Minister */}
+        {ministerModalSession && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Crown className="h-5 w-5 text-amber-500" />
+                    Change Supervising Minister
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{ministerModalSession.serviceTitle}</p>
+                </div>
+                <button
+                  onClick={() => setMinisterModalSession(null)}
+                  className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Select Supervising Minister (Executive / Disciplinary Committee)
+                </label>
+                <select
+                  value={selectedMinisterId}
+                  onChange={(e) => setSelectedMinisterId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                >
+                  <option value="">-- Choose supervising minister --</option>
+                  {ministers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.firstName} {m.lastName} {m.roleInUnit ? `(${m.roleInUnit})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Reason for Change (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={ministerReason}
+                  onChange={(e) => setMinisterReason(e.target.value)}
+                  placeholder="e.g. Assigned to supervise Divine Intervention service..."
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-[11px] text-amber-900 dark:text-amber-200">
+                Note: Updating the supervising minister resets prior approvals so all 3 designated reviewers can re-verify.
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setMinisterModalSession(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleChangeMinister}
+                  disabled={submittingMinister || !selectedMinisterId}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span>{submittingMinister ? 'Saving...' : 'Save Minister'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Swap Two Ushers */}
+        {showSwapModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <ArrowLeftRight className="h-5 w-5 text-indigo-500" />
+                    Swap Two Assigned Ushers
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Select two ushers to exchange their assignments</p>
+                </div>
+                <button
+                  onClick={() => setShowSwapModal(false)}
+                  className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Usher 1
+                </label>
+                <select
+                  value={swapAssignmentId1}
+                  onChange={(e) => setSwapAssignmentId1(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                >
+                  <option value="">-- Choose First Usher --</option>
+                  {data?.sessions?.flatMap((s) =>
+                    s.assignments.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {s.serviceTitle}: {a.fullName} ({a.memberCode})
+                      </option>
+                    )),
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Usher 2
+                </label>
+                <select
+                  value={swapAssignmentId2}
+                  onChange={(e) => setSwapAssignmentId2(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                >
+                  <option value="">-- Choose Second Usher --</option>
+                  {data?.sessions?.flatMap((s) =>
+                    s.assignments
+                      .filter((a) => a.id !== swapAssignmentId1)
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {s.serviceTitle}: {a.fullName} ({a.memberCode})
+                        </option>
+                      )),
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Reason for Swap (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={swapReason}
+                  onChange={(e) => setSwapReason(e.target.value)}
+                  placeholder="e.g. Mutual swap requested by both members..."
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/50 text-[11px] text-indigo-900 dark:text-indigo-200">
+                Note: Swapping assignments resets prior approvals so all 3 designated reviewers can re-verify.
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSwapModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSwap}
+                  disabled={submittingSwap || !swapAssignmentId1 || !swapAssignmentId2}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span>{submittingSwap ? 'Swapping...' : 'Confirm Swap'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Update Position / Role */}
+        {positionModalAssignment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                    Update Position & Role
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{positionModalAssignment.name}</p>
+                </div>
+                <button
+                  onClick={() => setPositionModalAssignment(null)}
+                  className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Assigned Section / Position
+                </label>
+                <input
+                  type="text"
+                  value={editPosition}
+                  onChange={(e) => setEditPosition(e.target.value)}
+                  placeholder="e.g. Main Sanctuary Lead, Altar Area, Gallery, Left Wing"
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {['Main Sanctuary Lead', 'Altar Area', 'Gallery / Balcony', 'Left Wing', 'Right Wing', 'Entrance Gate'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setEditPosition(preset)}
+                      className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-[10px] font-semibold text-slate-600 dark:text-slate-300"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Role
+                </label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                >
+                  <option value="USHER">USHER</option>
+                  <option value="LEAD_USHER">LEAD_USHER</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Reason for Adjustment (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={positionReason}
+                  onChange={(e) => setPositionReason(e.target.value)}
+                  placeholder="e.g. Assigned as section lead for this service..."
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPositionModalAssignment(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUpdatePosition}
+                  disabled={submittingPosition}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span>{submittingPosition ? 'Saving...' : 'Save Position'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Create Special Event */}
+        {showSpecialModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <CalendarPlus className="h-5 w-5 text-purple-600" />
+                    Create Special Event Timetable
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Separate workflow for special programmes and events</p>
+                </div>
+                <button
+                  onClick={() => setShowSpecialModal(false)}
+                  className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Event Title (Required)
+                </label>
+                <input
+                  type="text"
+                  value={specialTitle}
+                  onChange={(e) => setSpecialTitle(e.target.value)}
+                  placeholder="e.g. Night of Worship, Thanksgiving Banquet"
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Event Date
+                  </label>
+                  <input
+                    type="date"
+                    value={specialDate}
+                    onChange={(e) => setSpecialDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={specialStartTime}
+                    onChange={(e) => setSpecialStartTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={specialEndTime}
+                    onChange={(e) => setSpecialEndTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-800 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Required Ushers
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={specialRequiredUshers}
+                    onChange={(e) => setSpecialRequiredUshers(Number(e.target.value))}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Supervising Minister (Optional)
+                  </label>
+                  <select
+                    value={specialMinisterId}
+                    onChange={(e) => setSpecialMinisterId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-800 dark:text-white"
+                  >
+                    <option value="">-- Auto-select from Committee --</option>
+                    {ministers.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.firstName} {m.lastName} {m.roleInUnit ? `(${m.roleInUnit})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Notes / Instructions (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={specialNotes}
+                  onChange={(e) => setSpecialNotes(e.target.value)}
+                  placeholder="Special instructions or event details..."
+                  className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 text-xs text-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSpecialModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateSpecialEvent}
+                  disabled={submittingSpecial || !specialTitle.trim() || !specialDate}
+                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <span>{submittingSpecial ? 'Generating...' : 'Generate Special Event'}</span>
                 </button>
               </div>
             </div>

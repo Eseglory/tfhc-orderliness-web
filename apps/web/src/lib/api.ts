@@ -8,7 +8,7 @@ export const getApiBaseUrl = (): string => {
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
       const configured = process.env.NEXT_PUBLIC_API_URL;
-      if (configured && configured.startsWith('http')) {
+      if (configured && configured.startsWith('http') && (configured.includes('localhost') || configured.includes('127.0.0.1'))) {
         return configured;
       }
       const port = (window as any).__E2E_API_PORT__ || (window.location.port === '3100' ? '4100' : '4000');

@@ -237,14 +237,15 @@ export class TimetableGeneratorService {
 
     const label = `Week of ${weekMonday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekSunday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
-    let period = await this.prisma.timetablePeriod.findUnique({
-      where: { weekStart: weekMonday },
+    let period = await this.prisma.timetablePeriod.findFirst({
+      where: { weekStart: weekMonday, periodType: 'REGULAR_WEEKLY' },
     });
 
     if (!period) {
       period = await this.prisma.timetablePeriod.create({
         data: {
           weekStart: weekMonday,
+          periodType: 'REGULAR_WEEKLY',
           label,
           status: TimetablePeriodStatus.DRAFT,
           currentVersion: 1,
@@ -371,7 +372,19 @@ export class TimetableGeneratorService {
       uniqueMembersScheduled: currentWeekAssignments.size,
     };
 
-    // 5. Persist TimetableVersion, Sessions and Assignments atomically
+    // 5. Select supervising ministers from Executive / Disciplinary pool
+    const ministerCandidates = await this.getSupervisingMinisterCandidates();
+    const assignedMinisters = new Map<string, string>();
+    if (ministerCandidates.length > 0) {
+      // Fairly and pseudo-randomly distribute candidates across the 5 weekly services
+      const shuffled = [...ministerCandidates].sort(() => rng() - 0.5);
+      WEEKLY_SERVICES.forEach((service, idx) => {
+        const minister = shuffled[idx % shuffled.length];
+        assignedMinisters.set(service.sessionKey, minister.id);
+      });
+    }
+
+    // 6. Persist TimetableVersion, Sessions and Assignments atomically
     return this.prisma.$transaction(async (tx) => {
       // Mark any previous active versions for this period as SUPERSEDED
       await tx.timetableVersion.updateMany({
@@ -405,6 +418,7 @@ export class TimetableGeneratorService {
 
         const required = config.quotas[service.sessionKey] ?? service.defaultUshers;
         const memberIds = assignedPerSession.get(service.sessionKey) || [];
+        const ministerId = assignedMinisters.get(service.sessionKey) || null;
 
         const session = await tx.timetableServiceSession.create({
           data: {
@@ -419,10 +433,14 @@ export class TimetableGeneratorService {
             requiredUshers: required,
             assignedUshersCount: memberIds.length,
             isFullyStaffed: memberIds.length >= required,
+            supervisingMinisterId: ministerId,
             assignments: {
               create: memberIds.map((mId, index) => ({
                 memberId: mId,
                 role: index === 0 ? 'LEAD_USHER' : 'USHER',
+                position: index === 0
+                  ? (service.sessionKey.includes('SEAT') ? 'Lead Floor Coordinator' : 'Main Sanctuary Lead')
+                  : `Usher Section ${index + 1}`,
               })),
             },
           },
@@ -443,6 +461,161 @@ export class TimetableGeneratorService {
         sessions: createdSessions,
         unfulfilledSlots,
       };
+    });
+  }
+
+  /**
+   * Retrieves active supervising minister candidates from Executive / Disciplinary pool.
+   */
+  async getSupervisingMinisterCandidates() {
+    return this.prisma.member.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { subTeam: { name: { in: ['Executive', 'Disciplinary Committee', 'Disciplinary Commitee'] } } },
+          { roleInUnit: { in: ['Executive', 'Leader', 'Administrator'] } },
+        ],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        preferredName: true,
+        profilePhotoUrl: true,
+        roleInUnit: true,
+        subTeam: { select: { id: true, name: true } },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+  }
+
+  /**
+   * Generates a timetable for a Special Event or Programme.
+   * Runs as a separate workflow that does not overwrite or interfere with regular weekly periods.
+   */
+  async generateSpecialEventTimetable(params: {
+    title: string;
+    eventDate: Date;
+    startTime: Date;
+    endTime?: Date;
+    requiredUshers: number;
+    supervisingMinisterId?: string;
+    notes?: string;
+    manualMemberIds?: string[];
+    actorUserId: string;
+  }): Promise<{
+    period: TimetablePeriod;
+    version: TimetableVersion;
+    session: TimetableServiceSession;
+  }> {
+    if (!params.title?.trim()) {
+      throw new BadRequestException('Special event title is required');
+    }
+    if (!params.requiredUshers || params.requiredUshers < 1) {
+      throw new BadRequestException('At least 1 usher is required for the special event');
+    }
+
+    // 1. Get eligible active members
+    const eligibleMembers = await this.eligibilityService.getEligibleActiveMembers();
+    const eligibleMemberIds = new Set(eligibleMembers.map((m) => m.memberId));
+
+    let selectedMemberIds: string[] = [];
+    if (params.manualMemberIds && params.manualMemberIds.length > 0) {
+      for (const mId of params.manualMemberIds) {
+        if (!eligibleMemberIds.has(mId)) {
+          throw new BadRequestException(`Member ${mId} does not qualify as an active eligible usher`);
+        }
+      }
+      selectedMemberIds = Array.from(new Set(params.manualMemberIds));
+    } else {
+      // Fairly select from eligible active pool
+      const eligibleList = [...eligibleMembers].sort(() => Math.random() - 0.5);
+      selectedMemberIds = eligibleList.slice(0, params.requiredUshers).map((m) => m.memberId);
+    }
+
+    // 2. Resolve supervising minister
+    let ministerId = params.supervisingMinisterId || null;
+    if (!ministerId) {
+      const candidates = await this.getSupervisingMinisterCandidates();
+      if (candidates.length > 0) {
+        ministerId = candidates[Math.floor(Math.random() * candidates.length)].id;
+      }
+    }
+
+    const dateUtc = new Date(
+      Date.UTC(
+        params.eventDate.getUTCFullYear(),
+        params.eventDate.getUTCMonth(),
+        params.eventDate.getUTCDate(),
+      ),
+    );
+
+    const label = `Special Event: ${params.title} (${dateUtc.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})`;
+
+    return this.prisma.$transaction(async (tx) => {
+      const period = await tx.timetablePeriod.create({
+        data: {
+          weekStart: dateUtc,
+          periodType: 'SPECIAL_EVENT',
+          label,
+          status: TimetablePeriodStatus.PENDING_REVIEW,
+          currentVersion: 1,
+        },
+      });
+
+      const version = await tx.timetableVersion.create({
+        data: {
+          periodId: period.id,
+          versionNumber: 1,
+          status: TimetableVersionStatus.PENDING_REVIEW,
+          generationType: TimetableGenerationType.MANUAL_INITIAL,
+          generatedByUserId: params.actorUserId,
+          metadata: {
+            isSpecialEvent: true,
+            title: params.title,
+            eventDate: dateUtc.toISOString(),
+            requiredUshers: params.requiredUshers,
+            assignedCount: selectedMemberIds.length,
+          },
+          summary: {
+            isSpecialEvent: true,
+            title: params.title,
+            required: params.requiredUshers,
+            assigned: selectedMemberIds.length,
+          },
+        },
+      });
+
+      const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+      const serviceDay = dayNames[dateUtc.getUTCDay()];
+
+      const session = await tx.timetableServiceSession.create({
+        data: {
+          versionId: version.id,
+          serviceDay,
+          serviceName: params.title,
+          sessionKey: `SPECIAL_${Date.now()}`,
+          serviceDate: dateUtc,
+          startTime: params.startTime,
+          endTime: params.endTime || null,
+          requiredUshers: params.requiredUshers,
+          assignedUshersCount: selectedMemberIds.length,
+          isFullyStaffed: selectedMemberIds.length >= params.requiredUshers,
+          supervisingMinisterId: ministerId,
+          isSpecialEvent: true,
+          specialEventTitle: params.title,
+          notes: params.notes || null,
+          assignments: {
+            create: selectedMemberIds.map((mId, index) => ({
+              memberId: mId,
+              role: index === 0 ? 'LEAD_USHER' : 'USHER',
+              position: index === 0 ? 'Event Lead Usher' : `Usher Position ${index + 1}`,
+            })),
+          },
+        },
+      });
+
+      return { period, version, session };
     });
   }
 }

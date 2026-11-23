@@ -14,6 +14,8 @@ interface TimetableAssignment {
   memberCode: string;
   profilePhotoUrl?: string | null;
   roleTitle?: string;
+  position?: string;
+  role?: string;
 }
 
 interface TimetableSession {
@@ -25,6 +27,13 @@ interface TimetableSession {
   endTime: string;
   locationName: string;
   requiredUshers: number;
+  supervisingMinister?: {
+    id: string;
+    name: string;
+    preferredName?: string;
+    roleInUnit?: string;
+    profilePhotoUrl?: string | null;
+  } | null;
   assignments: TimetableAssignment[];
 }
 
@@ -239,11 +248,10 @@ export default function MemberTimetablePage() {
                 return (
                   <div
                     key={session.id}
-                    className={`rounded-2xl border transition-all ${
-                      isAssigned
+                    className={`rounded-2xl border transition-all ${isAssigned
                         ? 'border-emerald-500/60 bg-white dark:bg-slate-900 ring-2 ring-emerald-500/20 shadow-md'
                         : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm'
-                    } p-4 sm:p-5`}
+                      } p-4 sm:p-5`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
                       <div>
@@ -274,10 +282,29 @@ export default function MemberTimetablePage() {
                       </div>
                     </div>
 
+                    {/* Supervising Minister */}
+                    {session.supervisingMinister && (
+                      <div className="mt-3 flex items-center justify-between p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/50">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-lg">
+                            shield_person
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                              Supervising Minister
+                            </span>
+                            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                              {session.supervisingMinister.name} {session.supervisingMinister.roleInUnit ? `(${session.supervisingMinister.roleInUnit})` : ''}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Assigned Ushers List */}
                     <div className="mt-3.5">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                        Assigned Ushers
+                        Assigned Ushers ({session.assignments?.length || 0})
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                         {session.assignments?.map((u) => {
@@ -285,11 +312,10 @@ export default function MemberTimetablePage() {
                           return (
                             <div
                               key={u.memberId}
-                              className={`flex items-center gap-2.5 p-2 rounded-xl border ${
-                                isMe
+                              className={`flex items-center gap-2.5 p-2 rounded-xl border ${isMe
                                   ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100 font-bold'
                                   : 'border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
-                              }`}
+                                }`}
                             >
                               <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold">
                                 {u.profilePhotoUrl ? (
@@ -303,7 +329,7 @@ export default function MemberTimetablePage() {
                                   {u.fullName} {isMe && <span className="text-emerald-600 dark:text-emerald-400 font-black">(You)</span>}
                                 </p>
                                 <p className="text-[10px] text-slate-400 truncate">
-                                  {u.memberCode}
+                                  {u.memberCode} {u.position ? `• ${u.position}` : ''}
                                 </p>
                               </div>
                             </div>

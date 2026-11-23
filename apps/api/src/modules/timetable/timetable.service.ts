@@ -80,6 +80,7 @@ export class TimetableService {
     const period = await this.prisma.timetablePeriod.findFirst({
       where: {
         weekStart: { gte: currentWeekMonday },
+        periodType: 'REGULAR_WEEKLY',
         status: TimetablePeriodStatus.PUBLISHED,
       },
       orderBy: { weekStart: 'asc' },
@@ -92,6 +93,16 @@ export class TimetableService {
             sessions: {
               orderBy: { serviceDate: 'asc' },
               include: {
+                supervisingMinister: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    preferredName: true,
+                    profilePhotoUrl: true,
+                    roleInUnit: true,
+                  },
+                },
                 assignments: {
                   include: {
                     member: {
@@ -159,6 +170,15 @@ export class TimetableService {
         assignedUshersCount: session.assignedUshersCount,
         isFullyStaffed: session.isFullyStaffed,
         isAssignedToMe: isAssigned,
+        supervisingMinister: session.supervisingMinister
+          ? {
+              id: session.supervisingMinister.id,
+              name: `${session.supervisingMinister.firstName} ${session.supervisingMinister.lastName}`.trim(),
+              preferredName: session.supervisingMinister.preferredName,
+              profilePhotoUrl: session.supervisingMinister.profilePhotoUrl,
+              roleInUnit: session.supervisingMinister.roleInUnit,
+            }
+          : null,
         ushers: session.assignments.map((a) => ({
           assignmentId: a.id,
           memberId: a.member.id,
@@ -214,7 +234,10 @@ export class TimetableService {
 
     // Find the current period (or upcoming)
     let period = await this.prisma.timetablePeriod.findFirst({
-      where: { weekStart: { in: [currentWeekMonday, nextWeekMonday] } },
+      where: {
+        weekStart: { in: [currentWeekMonday, nextWeekMonday] },
+        periodType: 'REGULAR_WEEKLY',
+      },
       orderBy: { weekStart: 'asc' },
       include: {
         versions: {
@@ -235,6 +258,16 @@ export class TimetableService {
             sessions: {
               orderBy: { serviceDate: 'asc' },
               include: {
+                supervisingMinister: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    preferredName: true,
+                    profilePhotoUrl: true,
+                    roleInUnit: true,
+                  },
+                },
                 assignments: {
                   include: {
                     member: {
@@ -367,8 +400,8 @@ export class TimetableService {
     const { currentWeekMonday, nextWeekMonday } = this.getWatWeekStart();
     const targetMonday = targetWeek === 'CURRENT' ? currentWeekMonday : nextWeekMonday;
 
-    const existing = await this.prisma.timetablePeriod.findUnique({
-      where: { weekStart: targetMonday },
+    const existing = await this.prisma.timetablePeriod.findFirst({
+      where: { weekStart: targetMonday, periodType: 'REGULAR_WEEKLY' },
     });
 
     const generationType = existing ? TimetableGenerationType.MANUAL_REGENERATE : TimetableGenerationType.MANUAL_INITIAL;
@@ -394,8 +427,8 @@ export class TimetableService {
     const { nextWeekMonday } = this.getWatWeekStart();
 
     // Idempotency check: if next week's timetable was already generated and published/approved, skip
-    const existing = await this.prisma.timetablePeriod.findUnique({
-      where: { weekStart: nextWeekMonday },
+    const existing = await this.prisma.timetablePeriod.findFirst({
+      where: { weekStart: nextWeekMonday, periodType: 'REGULAR_WEEKLY' },
       include: { versions: { where: { status: { in: ['APPROVED', 'PUBLISHED', 'PENDING_REVIEW'] } } } },
     });
 
@@ -460,6 +493,16 @@ export class TimetableService {
         sessions: {
           orderBy: { serviceDate: 'asc' },
           include: {
+            supervisingMinister: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                preferredName: true,
+                profilePhotoUrl: true,
+                roleInUnit: true,
+              },
+            },
             assignments: {
               include: {
                 member: {

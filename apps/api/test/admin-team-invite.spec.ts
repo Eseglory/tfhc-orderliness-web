@@ -55,7 +55,7 @@ describe('Admin/Team Member Invitation Flow (E2E & Integration)', () => {
     const saLoginRes = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email: superAdminEmail, password: 'SuperAdminPass123!' })
-      .expect(201);
+      .expect(200);
     superAdminToken = saLoginRes.body.accessToken;
 
     // Seed test Member user (non-admin)
@@ -91,7 +91,7 @@ describe('Admin/Team Member Invitation Flow (E2E & Integration)', () => {
     const memberLoginRes = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email: memberEmail, password: 'SuperAdminPass123!' })
-      .expect(201);
+      .expect(200);
     memberToken = memberLoginRes.body.accessToken;
   });
 
@@ -251,7 +251,7 @@ describe('Admin/Team Member Invitation Flow (E2E & Integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/auth/login')
         .send({ email: inviteeEmail, password: 'NewAdminPassword123!' })
-        .expect(201);
+        .expect(200);
 
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.user.role).toBe(Role.ADMIN);

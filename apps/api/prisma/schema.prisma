@@ -276,6 +276,7 @@ model Member {
   supervisedMeetings Meeting[]           @relation("MeetingSupervisingMinister")
   assignedAgendaItems MeetingAgendaItem[]
   timetableAssignments TimetableAssignment[]
+  timetableSessionsSupervised TimetableServiceSession[] @relation("TimetableSessionSupervisingMinister")
   clockInAttempts ClockInAttempt[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -1629,7 +1630,8 @@ enum TimetableReviewDecision {
 
 model TimetablePeriod {
   id                String                 @id @default(uuid())
-  weekStart         DateTime               @unique @db.Date
+  weekStart         DateTime               @db.Date
+  periodType        String                 @default("REGULAR_WEEKLY")
   label             String
   status            TimetablePeriodStatus  @default(DRAFT)
   currentVersion    Int                    @default(1)
@@ -1641,6 +1643,8 @@ model TimetablePeriod {
   versions          TimetableVersion[]
 
   @@index([status])
+  @@index([weekStart])
+  @@index([periodType])
   @@map("timetable_periods")
 }
 
@@ -1681,6 +1685,10 @@ model TimetableServiceSession {
   requiredUshers      Int                  @default(5)
   assignedUshersCount Int                  @default(0)
   isFullyStaffed      Boolean              @default(false)
+  supervisingMinisterId String?
+  supervisingMinister   Member?              @relation("TimetableSessionSupervisingMinister", fields: [supervisingMinisterId], references: [id], onDelete: SetNull)
+  isSpecialEvent        Boolean              @default(false)
+  specialEventTitle     String?
   notes               String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -1688,6 +1696,7 @@ model TimetableServiceSession {
 
   @@unique([versionId, sessionKey])
   @@index([versionId, serviceDate])
+  @@index([supervisingMinisterId])
   @@map("timetable_service_sessions")
 }
 
