@@ -98,6 +98,13 @@ export const PERMISSION_CATALOG: readonly PermissionDef[] = [
   { key: 'wardrobe.read', group: 'Wardrobe', label: 'View wardrobe timetable & outfits' },
   { key: 'wardrobe.manage', group: 'Wardrobe', label: 'Manage clothing catalogue, outfits, and schedules' },
 
+  // Timetable Management
+  { key: 'timetable.read', group: 'Timetable', label: 'View weekly ushering timetables' },
+  { key: 'timetable.generate', group: 'Timetable', label: 'Generate or regenerate weekly ushering timetables' },
+  { key: 'timetable.review', group: 'Timetable', label: 'Review, approve or reject weekly ushering timetables' },
+  { key: 'timetable.publish', group: 'Timetable', label: 'Publish approved weekly ushering timetables' },
+  { key: 'timetable.manage', group: 'Timetable', label: 'Manage timetable settings and reviewer designations' },
+
   // Administration
   { key: 'users.read', group: 'Administration', label: 'View admin team' },
   { key: 'users.create', group: 'Administration', label: 'Invite / create admins' },
@@ -149,6 +156,7 @@ export const SYSTEM_ROLE = {
   EVENT_MANAGER: 'EVENT_MANAGER',
   APPROVAL_MANAGER: 'APPROVAL_MANAGER',
   WELFARE_SECRETARY: 'WELFARE_SECRETARY',
+  TIMETABLE_REVIEWER: 'TIMETABLE_REVIEWER',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE)[keyof typeof SYSTEM_ROLE];
@@ -271,6 +279,12 @@ export const SYSTEM_ROLE_DEFINITIONS: Record<
     description:
       'Submission and tracking of welfare fund requests on behalf of the Welfare unit. View-only access across other modules.',
     permissions: [...READ_ONLY_KEYS, 'welfare.create'],
+  },
+  TIMETABLE_REVIEWER: {
+    name: 'Timetable Reviewer',
+    description:
+      'Designated reviewer authorized to inspect, approve, or reject weekly ushering timetables. View-only access across other modules.',
+    permissions: [...READ_ONLY_KEYS, 'timetable.read', 'timetable.review'],
   },
 };
 

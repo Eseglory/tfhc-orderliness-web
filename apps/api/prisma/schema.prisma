@@ -159,6 +159,11 @@ model User {
   resumableUploads ResumableUpload[]
   headcountsRecorded ServiceHeadcount[] @relation("HeadcountRecordedBy")
   headcountsUpdated  ServiceHeadcount[] @relation("HeadcountUpdatedBy")
+  timetableReviews TimetableReview[]
+  timetableReviewerDesignations TimetableReviewer[] @relation("TimetableReviewerUser")
+  timetableDesignatedBy TimetableReviewer[] @relation("TimetableReviewerDesignatedBy")
+  timetableVersionsGenerated TimetableVersion[] @relation("TimetableVersionGeneratedBy")
+  timetablePeriodsPublished TimetablePeriod[] @relation("TimetablePeriodPublishedBy")
 
   @@index([isActive])
   @@map("users")
@@ -270,6 +275,8 @@ model Member {
   hiddenChatMessages ChatMessageHidden[]
   supervisedMeetings Meeting[]           @relation("MeetingSupervisingMinister")
   assignedAgendaItems MeetingAgendaItem[]
+  timetableAssignments TimetableAssignment[]
+  clockInAttempts ClockInAttempt[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -1583,4 +1590,171 @@ model ChatMessageHidden {
   @@id([messageId, memberId])
   @@index([memberId])
   @@map("chat_message_hidden")
+}
+
+// ---------------------------------------------------------------------------
+// Ushering Timetable Management
+// ---------------------------------------------------------------------------
+
+enum TimetablePeriodStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+}
+
+enum TimetableVersionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  SUPERSEDED
+}
+
+enum TimetableGenerationType {
+  SCHEDULED_AUTO
+  MANUAL_INITIAL
+  MANUAL_REGENERATE
+  MANUAL_ADJUSTMENT
+  CATCH_UP
+}
+
+enum TimetableReviewDecision {
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model TimetablePeriod {
+  id                String                 @id @default(uuid())
+  weekStart         DateTime               @unique @db.Date
+  label             String
+  status            TimetablePeriodStatus  @default(DRAFT)
+  currentVersion    Int                    @default(1)
+  publishedAt       DateTime?
+  publishedByUserId String?
+  publishedBy       User?                  @relation("TimetablePeriodPublishedBy", fields: [publishedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  versions          TimetableVersion[]
+
+  @@index([status])
+  @@map("timetable_periods")
+}
+
+model TimetableVersion {
+  id                String                  @id @default(uuid())
+  periodId          String
+  period            TimetablePeriod         @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  versionNumber     Int                     @default(1)
+  status            TimetableVersionStatus  @default(DRAFT)
+  generationType    TimetableGenerationType @default(MANUAL_INITIAL)
+  generatedByUserId String?
+  generatedByUser   User?                   @relation("TimetableVersionGeneratedBy", fields: [generatedByUserId], references: [id], onDelete: SetNull)
+  metadata          Json?
+  summary           Json?
+  publishedAt       DateTime?
+  publishedByUserId String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  sessions          TimetableServiceSession[]
+  reviews           TimetableReview[]
+
+  @@unique([periodId, versionNumber])
+  @@index([periodId, status])
+  @@map("timetable_versions")
+}
+
+model TimetableServiceSession {
+  id                  String               @id @default(uuid())
+  versionId           String
+  version             TimetableVersion     @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  serviceScheduleId   String?
+  serviceDay          String               // TUESDAY, THURSDAY, SATURDAY, SUNDAY
+  serviceName         String               // e.g. Mid-Week Service, Divine Intervention Service, Seat Arrangement, Sunday Second Service, Sunday Third Service
+  sessionKey          String               // TUESDAY_MIDWEEK, THURSDAY_DIVINE, SATURDAY_SEATS, SUNDAY_SECOND, SUNDAY_THIRD
+  serviceDate         DateTime             @db.Date
+  startTime           DateTime
+  endTime             DateTime?
+  requiredUshers      Int                  @default(5)
+  assignedUshersCount Int                  @default(0)
+  isFullyStaffed      Boolean              @default(false)
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  assignments         TimetableAssignment[]
+
+  @@unique([versionId, sessionKey])
+  @@index([versionId, serviceDate])
+  @@map("timetable_service_sessions")
+}
+
+model TimetableAssignment {
+  id                 String                  @id @default(uuid())
+  sessionId          String
+  session            TimetableServiceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  memberId           String
+  member             Member                  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role               String                  @default("USHER")
+  position           String?
+  isManualAdjustment Boolean                 @default(false)
+  adjustedByUserId   String?
+  adjustmentReason   String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@unique([sessionId, memberId])
+  @@index([sessionId])
+  @@index([memberId])
+  @@map("timetable_assignments")
+}
+
+model TimetableReviewer {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation("TimetableReviewerUser", fields: [userId], references: [id], onDelete: Cascade)
+  designatedByUserId String?
+  designatedByUser   User?    @relation("TimetableReviewerDesignatedBy", fields: [designatedByUserId], references: [id], onDelete: SetNull)
+  active             Boolean  @default(true)
+  orderIndex         Int      @default(1)
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([active])
+  @@map("timetable_reviewers")
+}
+
+model TimetableReview {
+  id              String                  @id @default(uuid())
+  versionId       String
+  version         TimetableVersion        @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  reviewerUserId  String
+  reviewerUser    User                    @relation(fields: [reviewerUserId], references: [id], onDelete: Cascade)
+  decision        TimetableReviewDecision
+  comments        String?
+  rejectionReason String?
+  reviewedAt      DateTime                @default(now())
+
+  @@unique([versionId, reviewerUserId])
+  @@index([versionId, decision])
+  @@map("timetable_reviews")
+}
+
+model ClockInAttempt {
+  id           String   @id @default(uuid())
+  memberId     String
+  member       Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  meetingId    String?
+  attemptedAt  DateTime @default(now())
+  success      Boolean  @default(false)
+  reason       String?
+  latitude     Float?
+  longitude    Float?
+  deviceInfo   String?
+
+  @@index([memberId, attemptedAt])
+  @@map("clock_in_attempts")
 }

@@ -130,6 +130,19 @@ export class AttendanceService {
     if (!member) {
       throw new NotFoundException('Member profile not found');
     }
+
+    // Record clock-in attempt for engagement tracking
+    await this.prisma.clockInAttempt.create({
+      data: {
+        memberId: member.id,
+        meetingId: dto.meetingId,
+        latitude: Number.isFinite(dto.latitude) ? dto.latitude : null,
+        longitude: Number.isFinite(dto.longitude) ? dto.longitude : null,
+        deviceInfo: dto.deviceInfo ?? null,
+        success: false,
+      },
+    }).catch(() => undefined);
+
     if (member.status !== 'ACTIVE') {
       throw new BadRequestException(
         `Member status is ${member.status}. Only ACTIVE members can check in.`
@@ -349,6 +362,17 @@ export class AttendanceService {
       where: { id: dto.memberId },
     });
     if (!member) throw new NotFoundException('Member profile not found');
+
+    // Record online clock-in attempt
+    await this.prisma.clockInAttempt.create({
+      data: {
+        memberId: member.id,
+        meetingId: dto.meetingId,
+        deviceInfo: dto.deviceInfo ?? null,
+        success: false,
+      },
+    }).catch(() => undefined);
+
     if (member.status !== 'ACTIVE') {
       throw new BadRequestException(`Member status is ${member.status}. Only ACTIVE members can check in.`);
     }

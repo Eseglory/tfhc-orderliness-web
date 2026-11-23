@@ -1,0 +1,448 @@
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { TimetableEligibilityService, MemberEligibilityResult } from './timetable-eligibility.service';
+import {
+  TimetablePeriod,
+  TimetableVersion,
+  TimetableServiceSession,
+  TimetableGenerationType,
+  TimetableVersionStatus,
+  TimetablePeriodStatus,
+  Prisma,
+} from '@prisma/client';
+import { randomBytes } from 'crypto';
+
+export interface ServiceDefinition {
+  sessionKey: string;
+  serviceDay: string;
+  serviceName: string;
+  dayOfWeekOffset: number; // 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
+  defaultUshers: number;
+  serviceScheduleId?: string;
+}
+
+export const WEEKLY_SERVICES: ServiceDefinition[] = [
+  {
+    sessionKey: 'TUESDAY_MIDWEEK',
+    serviceDay: 'TUESDAY',
+    serviceName: 'Mid-Week Service',
+    dayOfWeekOffset: 1, // Tuesday
+    startHour: 18,
+    startMinute: 45,
+    endHour: 20,
+    endMinute: 15,
+    defaultUshers: 4,
+    serviceScheduleId: 'tuesday-midweek',
+  },
+  {
+    sessionKey: 'THURSDAY_DIVINE',
+    serviceDay: 'THURSDAY',
+    serviceName: 'Divine Intervention Service',
+    dayOfWeekOffset: 3, // Thursday
+    startHour: 8,
+    startMinute: 0,
+    endHour: 10,
+    endMinute: 0,
+    defaultUshers: 4,
+    serviceScheduleId: 'thursday-divine',
+  },
+  {
+    sessionKey: 'SATURDAY_SEATS',
+    serviceDay: 'SATURDAY',
+    serviceName: 'Seat Arrangement',
+    dayOfWeekOffset: 5, // Saturday
+    startHour: 17,
+    startMinute: 0,
+    endHour: 18,
+    endMinute: 0,
+    defaultUshers: 6,
+    serviceScheduleId: 'saturday-seat-arrangement',
+  },
+  {
+    sessionKey: 'SUNDAY_SECOND',
+    serviceDay: 'SUNDAY',
+    serviceName: 'Sunday Second Service',
+    dayOfWeekOffset: 6, // Sunday
+    startHour: 8,
+    startMinute: 30,
+    endHour: 10,
+    endMinute: 0,
+    defaultUshers: 8,
+    serviceScheduleId: 'sunday-second',
+  },
+  {
+    sessionKey: 'SUNDAY_THIRD',
+    serviceDay: 'SUNDAY',
+    serviceName: 'Sunday Third Service',
+    dayOfWeekOffset: 6, // Sunday
+    startHour: 10,
+    startMinute: 30,
+    endHour: 12,
+    endMinute: 0,
+    defaultUshers: 8,
+    serviceScheduleId: 'sunday-third',
+  },
+];
+
+export interface TimetableConfig {
+  quotas: Record<string, number>;
+  maxAssignmentsPerMemberPerWeek: number;
+  lookbackWeeks: number;
+  fairnessWeight: number; // 0.0 to 1.0
+  consecutiveRestPreferred: boolean;
+}
+
+export const DEFAULT_TIMETABLE_CONFIG: TimetableConfig = {
+  quotas: {
+    TUESDAY_MIDWEEK: 4,
+    THURSDAY_DIVINE: 4,
+    SATURDAY_SEATS: 6,
+    SUNDAY_SECOND: 8,
+    SUNDAY_THIRD: 8,
+  },
+  maxAssignmentsPerMemberPerWeek: 2,
+  lookbackWeeks: 6,
+  fairnessWeight: 0.7,
+  consecutiveRestPreferred: true,
+};
+
+/**
+ * Seeded Mulberry32 pseudo-random number generator for deterministic repeatability and auditing.
+ */
+function createPrng(seedStr: string): () => number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seedStr.length; i++) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  let s = h >>> 0;
+  return function () {
+    s |= 0;
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+@Injectable()
+export class TimetableGeneratorService {
+  private readonly logger = new Logger(TimetableGeneratorService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eligibilityService: TimetableEligibilityService,
+  ) {}
+
+  /**
+   * Loads current system configuration or falls back to defaults.
+   */
+  async getConfig(): Promise<TimetableConfig> {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: 'timetable_config' },
+    });
+    if (!setting) return DEFAULT_TIMETABLE_CONFIG;
+    try {
+      const parsed = JSON.parse(setting.value);
+      return {
+        quotas: { ...DEFAULT_TIMETABLE_CONFIG.quotas, ...(parsed.quotas || {}) },
+        maxAssignmentsPerMemberPerWeek:
+          parsed.maxAssignmentsPerMemberPerWeek || DEFAULT_TIMETABLE_CONFIG.maxAssignmentsPerMemberPerWeek,
+        lookbackWeeks: parsed.lookbackWeeks || DEFAULT_TIMETABLE_CONFIG.lookbackWeeks,
+        fairnessWeight: parsed.fairnessWeight ?? DEFAULT_TIMETABLE_CONFIG.fairnessWeight,
+        consecutiveRestPreferred: parsed.consecutiveRestPreferred ?? DEFAULT_TIMETABLE_CONFIG.consecutiveRestPreferred,
+      };
+    } catch {
+      return DEFAULT_TIMETABLE_CONFIG;
+    }
+  }
+
+  /**
+   * Generates a timetable version for the specified weekStart date.
+   */
+  async generateTimetable(params: {
+    weekStart: Date;
+    generationType: TimetableGenerationType;
+    actorUserId?: string;
+    customSeed?: string;
+    overrideConfig?: Partial<TimetableConfig>;
+  }): Promise<{
+    period: TimetablePeriod;
+    version: TimetableVersion;
+    sessions: TimetableServiceSession[];
+    unfulfilledSlots: Array<{ sessionKey: string; missingCount: number; reason: string }>;
+  }> {
+    const config = {
+      ...(await this.getConfig()),
+      ...(params.overrideConfig || {}),
+    };
+
+    const seed = params.customSeed || randomBytes(16).toString('hex');
+    const rng = createPrng(seed);
+
+    // 1. Fetch eligible active members
+    const eligibleMembers = await this.eligibilityService.getEligibleActiveMembers();
+
+    // 2. Fetch lookback assignment history to calculate past load per member
+    const lookbackStart = new Date(params.weekStart);
+    lookbackStart.setDate(lookbackStart.getDate() - config.lookbackWeeks * 7);
+
+    const pastAssignments = await this.prisma.timetableAssignment.findMany({
+      where: {
+        session: {
+          version: {
+            status: { in: ['APPROVED', 'PUBLISHED'] },
+          },
+          serviceDate: {
+            gte: lookbackStart,
+            lt: params.weekStart,
+          },
+        },
+      },
+      select: {
+        memberId: true,
+        session: {
+          select: { serviceDate: true, sessionKey: true },
+        },
+      },
+    });
+
+    // Map historical count and recency
+    const pastCounts = new Map<string, number>();
+    const lastAssignedDate = new Map<string, Date>();
+
+    for (const pa of pastAssignments) {
+      pastCounts.set(pa.memberId, (pastCounts.get(pa.memberId) || 0) + 1);
+      const currLast = lastAssignedDate.get(pa.memberId);
+      if (!currLast || pa.session.serviceDate > currLast) {
+        lastAssignedDate.set(pa.memberId, pa.session.serviceDate);
+      }
+    }
+
+    // 3. Find or create TimetablePeriod
+    const weekMonday = new Date(
+      Date.UTC(
+        params.weekStart.getUTCFullYear(),
+        params.weekStart.getUTCMonth(),
+        params.weekStart.getUTCDate(),
+      ),
+    );
+
+    const weekSunday = new Date(weekMonday);
+    weekSunday.setUTCDate(weekSunday.getUTCDate() + 6);
+
+    const label = `Week of ${weekMonday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${weekSunday.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+    let period = await this.prisma.timetablePeriod.findUnique({
+      where: { weekStart: weekMonday },
+    });
+
+    if (!period) {
+      period = await this.prisma.timetablePeriod.create({
+        data: {
+          weekStart: weekMonday,
+          label,
+          status: TimetablePeriodStatus.DRAFT,
+          currentVersion: 1,
+        },
+      });
+    } else {
+      // Increment version number on regeneration
+      period = await this.prisma.timetablePeriod.update({
+        where: { id: period.id },
+        data: {
+          currentVersion: { increment: 1 },
+          status: TimetablePeriodStatus.DRAFT,
+        },
+      });
+    }
+
+    const versionNumber = period.currentVersion;
+
+    // 4. Constraint-based scheduling across the 5 services
+    const currentWeekAssignments = new Map<string, number>(); // memberId -> count this week
+    const assignedPerSession = new Map<string, string[]>(); // sessionKey -> memberId[]
+    const unfulfilledSlots: Array<{ sessionKey: string; missingCount: number; reason: string }> = [];
+
+    // Schedule each of the 5 services
+    for (const service of WEEKLY_SERVICES) {
+      const required = config.quotas[service.sessionKey] ?? service.defaultUshers;
+      const assignedMembers: string[] = [];
+
+      // Determine available candidates for this service
+      // A candidate must:
+      // a) Not already be assigned to this session
+      // b) Not exceed maxAssignmentsPerMemberPerWeek
+      const eligiblePool = eligibleMembers.filter((m) => {
+        const assignedThisWeek = currentWeekAssignments.get(m.memberId) || 0;
+        return assignedThisWeek < config.maxAssignmentsPerMemberPerWeek;
+      });
+
+      const slotsToFill = Math.min(required, eligiblePool.length);
+
+      for (let slot = 0; slot < slotsToFill; slot++) {
+        // Compute dynamic fair weights for remaining candidates
+        const candidates = eligiblePool.filter((m) => !assignedMembers.includes(m.memberId));
+        if (candidates.length === 0) break;
+
+        const candidateWeights: Array<{ member: MemberEligibilityResult; weight: number }> = [];
+
+        for (const cand of candidates) {
+          const currentWeekCount = currentWeekAssignments.get(cand.memberId) || 0;
+          const pastCount = pastCounts.get(cand.memberId) || 0;
+
+          // Base inverse weight: fewer assignments = higher probability
+          let weight = 100 / (1 + currentWeekCount * 4 + pastCount * 1.5);
+
+          // Sunday consecutive service rest constraint:
+          // If this is SUNDAY_THIRD and they are already assigned to SUNDAY_SECOND (or vice-versa), penalize heavily
+          if (service.sessionKey === 'SUNDAY_THIRD' && assignedPerSession.get('SUNDAY_SECOND')?.includes(cand.memberId)) {
+            weight *= 0.05;
+          } else if (service.sessionKey === 'SUNDAY_SECOND' && assignedPerSession.get('SUNDAY_THIRD')?.includes(cand.memberId)) {
+            weight *= 0.05;
+          }
+
+          candidateWeights.push({ member: cand, weight: Math.max(weight, 0.01) });
+        }
+
+        // Weighted random selection using seeded PRNG
+        const totalWeight = candidateWeights.reduce((sum, c) => sum + c.weight, 0);
+        let roll = rng() * totalWeight;
+        let selected = candidateWeights[0].member;
+
+        for (const cw of candidateWeights) {
+          roll -= cw.weight;
+          if (roll <= 0) {
+            selected = cw.member;
+            break;
+          }
+        }
+
+        assignedMembers.push(selected.memberId);
+        currentWeekAssignments.set(
+          selected.memberId,
+          (currentWeekAssignments.get(selected.memberId) || 0) + 1,
+        );
+      }
+
+      assignedPerSession.set(service.sessionKey, assignedMembers);
+
+      if (assignedMembers.length < required) {
+        unfulfilledSlots.push({
+          sessionKey: service.sessionKey,
+          missingCount: required - assignedMembers.length,
+          reason: `Eligible active member pool exhausted under max weekly assignment limit (${config.maxAssignmentsPerMemberPerWeek}/week)`,
+        });
+      }
+    }
+
+    // Calculate fairness metrics
+    const assignedMemberCounts = Array.from(currentWeekAssignments.values());
+    const totalAssignedSlots = assignedMemberCounts.reduce((a, b) => a + b, 0);
+    const totalRequiredSlots = WEEKLY_SERVICES.reduce(
+      (sum, s) => sum + (config.quotas[s.sessionKey] ?? s.defaultUshers),
+      0,
+    );
+
+    const metadata: Prisma.InputJsonValue = {
+      seed,
+      generationType: params.generationType,
+      configSnapshot: config as unknown as Prisma.InputJsonValue,
+      eligibleCount: eligibleMembers.length,
+      totalRequiredSlots,
+      totalAssignedSlots,
+      coveragePercentage: Math.round((totalAssignedSlots / totalRequiredSlots) * 1000) / 10,
+      unfulfilledSlots: unfulfilledSlots as unknown as Prisma.InputJsonValue,
+      generatedAt: new Date().toISOString(),
+    };
+
+    const summary: Prisma.InputJsonValue = {
+      services: WEEKLY_SERVICES.map((s) => ({
+        sessionKey: s.sessionKey,
+        serviceName: s.serviceName,
+        required: config.quotas[s.sessionKey] ?? s.defaultUshers,
+        assigned: assignedPerSession.get(s.sessionKey)?.length || 0,
+        isFullyStaffed: (assignedPerSession.get(s.sessionKey)?.length || 0) >= (config.quotas[s.sessionKey] ?? s.defaultUshers),
+      })),
+      uniqueMembersScheduled: currentWeekAssignments.size,
+    };
+
+    // 5. Persist TimetableVersion, Sessions and Assignments atomically
+    return this.prisma.$transaction(async (tx) => {
+      // Mark any previous active versions for this period as SUPERSEDED
+      await tx.timetableVersion.updateMany({
+        where: { periodId: period.id, status: { notIn: ['SUPERSEDED', 'REJECTED'] } },
+        data: { status: TimetableVersionStatus.SUPERSEDED },
+      });
+
+      const version = await tx.timetableVersion.create({
+        data: {
+          periodId: period.id,
+          versionNumber,
+          status: TimetableVersionStatus.PENDING_REVIEW,
+          generationType: params.generationType,
+          generatedByUserId: params.actorUserId || null,
+          metadata,
+          summary,
+        },
+      });
+
+      const createdSessions: TimetableServiceSession[] = [];
+
+      for (const service of WEEKLY_SERVICES) {
+        const serviceDate = new Date(weekMonday);
+        serviceDate.setUTCDate(serviceDate.getUTCDate() + service.dayOfWeekOffset);
+
+        const startTime = new Date(serviceDate);
+        startTime.setUTCHours(service.startHour - 1, service.startMinute, 0, 0); // Convert WAT (UTC+1) to UTC
+
+        const endTime = new Date(serviceDate);
+        endTime.setUTCHours(service.endHour - 1, service.endMinute, 0, 0);
+
+        const required = config.quotas[service.sessionKey] ?? service.defaultUshers;
+        const memberIds = assignedPerSession.get(service.sessionKey) || [];
+
+        const session = await tx.timetableServiceSession.create({
+          data: {
+            versionId: version.id,
+            serviceScheduleId: service.serviceScheduleId || null,
+            serviceDay: service.serviceDay,
+            serviceName: service.serviceName,
+            sessionKey: service.sessionKey,
+            serviceDate,
+            startTime,
+            endTime,
+            requiredUshers: required,
+            assignedUshersCount: memberIds.length,
+            isFullyStaffed: memberIds.length >= required,
+            assignments: {
+              create: memberIds.map((mId, index) => ({
+                memberId: mId,
+                role: index === 0 ? 'LEAD_USHER' : 'USHER',
+              })),
+            },
+          },
+        });
+
+        createdSessions.push(session);
+      }
+
+      // Update period status to PENDING_REVIEW
+      const updatedPeriod = await tx.timetablePeriod.update({
+        where: { id: period.id },
+        data: { status: TimetablePeriodStatus.PENDING_REVIEW },
+      });
+
+      return {
+        period: updatedPeriod,
+        version,
+        sessions: createdSessions,
+        unfulfilledSlots,
+      };
+    });
+  }
+}

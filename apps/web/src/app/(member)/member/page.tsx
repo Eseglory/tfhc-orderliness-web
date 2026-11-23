@@ -52,6 +52,14 @@ export default function MemberDashboard() {
     cycle?: { state?: string; closesAt?: string; isOpen?: boolean; isRecovery?: boolean };
   } | null>(null);
 
+  const [timetableData, setTimetableData] = useState<{
+    period: { id: string; weekLabel: string; startDate: string; endDate: string } | null;
+    version: { id: string; versionNumber: number; status: string } | null;
+    sessions: Array<any>;
+    myAssignments: Array<any>;
+  } | null>(null);
+  const [reviewerPending, setReviewerPending] = useState(false);
+
   const [hasClockedIn, setHasClockedIn] = useState(false);
   const [isStandalone, setIsStandalone] = useState(true);
 
@@ -133,6 +141,18 @@ export default function MemberDashboard() {
         setAvailabilityOpen(open && !a?.submitted);
       })
       .catch(() => {});
+
+    get<any>('/me/timetable/current')
+      .then((res) => setTimetableData(res))
+      .catch(() => {});
+
+    get<any>('/timetable/admin/current')
+      .then((res) => {
+        if (res?.isReviewer && res?.version && res.version.status !== 'PUBLISHED' && !res.userReview) {
+          setReviewerPending(true);
+        }
+      })
+      .catch(() => {});
     return () => ac.abort();
   }, []);
 
@@ -157,7 +177,7 @@ export default function MemberDashboard() {
     { href: '/member/leaderboard', label: 'Leaderboard', icon: 'emoji_events', iconColor: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/50' },
     { href: '/member/dues', label: 'Finance', icon: 'payments', iconColor: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
     { href: '/member/welfare', label: 'Requests', icon: 'rate_review', iconColor: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950/50' },
-    { href: '/member/availability', label: 'Availability', icon: 'event_available', iconColor: 'text-[#0b1c30] dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-800' },
+    { href: '/member/timetable', label: 'Timetable', icon: 'table_chart', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
     { href: '/member/calendar', label: 'Calendar', icon: 'calendar_month', iconColor: 'text-[#f2320c]', bg: 'bg-red-50 dark:bg-red-950/50' },
     { href: '/member/submit-excuse', label: 'Absence', icon: 'event_busy', iconColor: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/50' },
     { href: '/member/analytics', label: 'Analytics', icon: 'monitoring', iconColor: 'text-[#0b1c30] dark:text-blue-400', bg: 'bg-slate-100 dark:bg-slate-800' },
@@ -280,75 +300,130 @@ export default function MemberDashboard() {
           </section>
         )}
 
-        {/* Prominent Weekly Availability Section (Top of Dashboard) */}
-        {availabilityOpen ? (
-          <section className="relative overflow-hidden rounded-3xl border-2 border-primary/40 bg-gradient-to-br from-primary/10 via-surface-container-low to-primary/5 p-5 shadow-md">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
-                  <span className="material-symbols-outlined text-2xl">event_available</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                      availabilityData?.cycle?.isRecovery
-                        ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                        : 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                    }`}>
-                      {availabilityData?.cycle?.isRecovery ? 'Extended Window Open' : 'Weekly Availability Open'}
-                    </span>
-                    <span className="text-[11px] text-on-surface-variant font-medium">
-                      {availabilityData?.cycle?.closesAt
-                        ? `Closes ${new Date(availabilityData.cycle.closesAt).toLocaleString('en-GB', {
-                            timeZone: 'Africa/Lagos',
-                            weekday: 'short',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true,
-                          })} WAT`
-                        : 'Closes Tuesday 12:00 PM WAT'}
-                    </span>
-                  </div>
-                  <h2 className="text-base sm:text-lg font-black text-on-surface mt-1">
-                    {availabilityData?.cycle?.isRecovery
-                      ? 'Submit Your Weekly Availability (Recovery Window)'
-                      : 'Indicate Your Service Availability For This Week'}
-                  </h2>
-                  <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed max-w-xl">
-                    {availabilityData?.cycle?.isRecovery
-                      ? 'The weekly poll was reopened for this week. Please choose the services you expect to attend or serve in.'
-                      : 'Help your leadership plan effectively by selecting which services you will attend.'}
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/member/availability"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-primary text-on-primary font-black text-xs hover:opacity-90 active:scale-95 transition-all shadow-lg shrink-0"
-              >
-                <span>Select Services</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </Link>
-            </div>
-          </section>
-        ) : availabilityData?.submitted ? (
-          <section className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/90 dark:bg-emerald-950/50 px-4 py-3 text-emerald-950 dark:text-emerald-200 shadow-xs">
+        {/* Designated Reviewer Pending Timetable Alert */}
+        {reviewerPending && (
+          <section className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-red-500/10 border border-amber-500/40 shadow-xs">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
+                <span className="material-symbols-outlined text-xl">rate_review</span>
+              </div>
               <div className="min-w-0">
-                <p className="text-xs font-extrabold text-emerald-900 dark:text-emerald-100">Weekly Availability Submitted</p>
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 truncate">
-                  You have confirmed your availability for this week&apos;s service.
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-amber-950 dark:text-amber-100 uppercase tracking-wider">
+                    Timetable Review Requested
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                    Action Required
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 truncate mt-0.5">
+                  The automated weekly ushering roster is ready for your designated review and approval.
                 </p>
               </div>
             </div>
             <Link
-              href="/member/availability"
-              className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 active:scale-95 transition-all shrink-0"
+              href="/admin/timetable"
+              className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-xs transition-all shrink-0 shadow-sm"
             >
-              View / Update
+              Review Timetable
             </Link>
           </section>
-        ) : null}
+        )}
+
+        {/* This Week's Timetable Widget */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          {timetableData?.version?.status === 'PUBLISHED' ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <span className="material-symbols-outlined text-2xl">table_chart</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300">
+                        Approved & Published
+                      </span>
+                    </div>
+                    <h2 className="text-base font-extrabold text-[#0b1c30] dark:text-white mt-1">
+                      This Week&apos;s Ushering Timetable
+                    </h2>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {timetableData.period?.weekLabel || 'Current Week'}
+                    </p>
+                  </div>
+                </div>
+
+                <Link
+                  href="/member/timetable"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition-colors shrink-0"
+                >
+                  <span>View Full Roster</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
+              </div>
+
+              {/* Personal Serving Highlight */}
+              {timetableData.myAssignments?.length > 0 ? (
+                <div className="p-3.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/60 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/5 flex items-start gap-3">
+                  <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-xl mt-0.5">how_to_reg</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-emerald-950 dark:text-emerald-100">
+                      You are scheduled to serve this week!
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {timetableData.myAssignments.map((a: any, i: number) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-slate-800 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                        >
+                          <span className="material-symbols-outlined text-xs">schedule</span>
+                          {a.serviceTitle} ({a.startTime} – {a.endTime})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-slate-400 text-xl">event_seat</span>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    You are not rostered to serve this week. Enjoy worshipping in God&apos;s presence!
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-2xl">pending_actions</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                      In Finalisation
+                    </span>
+                  </div>
+                  <h2 className="text-base font-extrabold text-[#0b1c30] dark:text-white mt-1">
+                    This Week&apos;s Ushering Timetable
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    Timetable for this week is being finalised. Please check back soon.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/member/timetable"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors shrink-0"
+              >
+                <span>Check Status</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </Link>
+            </div>
+          )}
+        </section>
 
         {/* Dynamic Gathering / Check-in Hero Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
@@ -366,7 +441,7 @@ export default function MemberDashboard() {
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                       Live Check-In Open
                     </span>
-                  ) : availabilityData?.submitted ? (
+                  ) : (Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted)) ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
                       <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
                       Rostered for Service
@@ -402,11 +477,11 @@ export default function MemberDashboard() {
                     ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName || 'Main Sanctuary'}`
                     : 'Check the upcoming schedule below for the next service.'}
                 </p>
-                {availabilityData?.submitted && !hasClockedIn && (
+                {(Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted)) && !hasClockedIn && (
                   <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
                     {activeMeeting
                       ? 'You are scheduled for service. Please check in now to record your arrival.'
-                      : 'You have submitted your availability. Remember to check in when you arrive at church.'}
+                      : 'You are rostered for service this week. Remember to check in when you arrive at church.'}
                   </p>
                 )}
               </div>
@@ -426,8 +501,8 @@ export default function MemberDashboard() {
                   ? `/member/check-in?meetingId=${activeMeeting.id}`
                   : nextTodayService
                   ? `/member/meetings/${nextTodayService.id}`
-                  : availabilityData?.submitted
-                  ? '/member/availability'
+                  : (Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted))
+                  ? '/member/timetable'
                   : '/member/calendar'
               }
               className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 px-4 text-sm font-extrabold transition-all active:scale-[0.98] shadow-sm ${

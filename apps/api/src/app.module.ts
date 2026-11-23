@@ -33,6 +33,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { AvailabilityModule } from './modules/availability/availability.module';
 import { AbsenceProcessingModule } from './jobs/absence-processing.module';
 import { WeeklyAvailabilityJob } from './jobs/weekly-availability.job';
+import { WeeklyTimetableJob } from './jobs/weekly-timetable.job';
+import { TimetableModule } from './modules/timetable/timetable.module';
 import { DailySyncJob, OPERATIONAL_SYNC_RUNNER } from './database-sync/daily-sync.job';
 import { PrismaService } from './prisma/prisma.service';
 import { SyncRunner } from './database-sync/sync-runner';
@@ -89,6 +91,7 @@ import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
     PushModule,
     PwaModule,
     WebhooksModule,
+    TimetableModule,
   ],
   controllers: [AppController],
   providers: [
@@ -103,6 +106,7 @@ import { WardrobeModule } from './modules/wardrobe/wardrobe.module';
     } },
     DailySyncJob,
     WeeklyAvailabilityJob,
+    WeeklyTimetableJob,
     { provide: APP_INTERCEPTOR, useClass: SqliteRequestInterceptor },
     { provide: APP_INTERCEPTOR, useClass: ResponseSecretsInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
