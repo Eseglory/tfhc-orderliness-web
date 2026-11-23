@@ -116,7 +116,7 @@ const NAVIGATION_TREE: NavParent[] = [
     key: 'attendance',
     label: 'Attendance',
     icon: BarChart3,
-    anyOf: ['reports.view', 'attendance.read'],
+    anyOf: ['reports.view', 'attendance.read', 'timetable.read', 'timetable.review'],
     children: [
       { href: '/admin/timetable', label: 'Ushering Timetable', icon: Calendar, anyOf: ['timetable.read', 'timetable.generate', 'timetable.review'] },
       { href: '/admin/availability', label: 'Weekly Availability', icon: Calendar, anyOf: ['reports.view', 'attendance.read'] },
@@ -212,10 +212,30 @@ export const AdminLayoutShell: React.FC<AdminLayoutShellProps> = ({ children }) 
     });
   }, [pathname]);
 
-  // Protect Admin Portal: Redirect pure members to /member
+  // Protect Admin Portal: Redirect pure members without administrative or reviewer roles to /member
   useEffect(() => {
     if (!loading && user && user.role === 'MEMBER' && !user.isSuperAdmin) {
-      router.replace('/member');
+      const hasPrivilegedAccess =
+        (user.permissions &&
+          user.permissions.some(
+            (p) =>
+              p.startsWith('timetable.') ||
+              p.startsWith('wardrobe.') ||
+              p.startsWith('events.') ||
+              p.startsWith('members.') ||
+              p.startsWith('scoring.') ||
+              p.startsWith('finance.') ||
+              p.startsWith('approvals.') ||
+              p.startsWith('reports.') ||
+              p.startsWith('attendance.') ||
+              p.startsWith('excuses.') ||
+              p.startsWith('welfare.')
+          )) ||
+        (user.accessRoles && user.accessRoles.some((r) => r !== 'MEMBER'));
+
+      if (!hasPrivilegedAccess) {
+        router.replace('/member');
+      }
     }
   }, [loading, user, router]);
 

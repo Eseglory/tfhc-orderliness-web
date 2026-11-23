@@ -199,6 +199,18 @@ export class TimetableService {
 
     const activePolicy = await this.review.getPolicy();
     const designatedReviewers = await this.review.getReviewers();
+    const officialStatus = await this.review.getOfficialReviewersStatus();
+    const formattedReviewers = designatedReviewers.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      email: r.user.email,
+      fullName: r.user.member
+        ? `${r.user.member.firstName} ${r.user.member.lastName}`.trim()
+        : r.user.email,
+      role: r.user.role,
+      active: r.active,
+      orderIndex: r.orderIndex,
+    }));
 
     // Find the current period (or upcoming)
     let period = await this.prisma.timetablePeriod.findFirst({
@@ -252,6 +264,8 @@ export class TimetableService {
         nextWeekMonday,
         isDesignatedReviewer,
         designatedReviewers,
+        reviewers: formattedReviewers,
+        officialReviewersStatus: officialStatus,
         policy: activePolicy,
       };
     }
@@ -292,8 +306,57 @@ export class TimetableService {
         canReview: isDesignatedReviewer && !myReview && ['PENDING_REVIEW', 'DRAFT'].includes(version.status),
       },
       designatedReviewers,
+      reviewers: formattedReviewers,
+      officialReviewersStatus: officialStatus,
       sessions: version.sessions,
     };
+  }
+
+  /**
+   * Notifies designated active reviewers that a generated timetable is ready for review.
+   */
+  async notifyReviewers(
+    period: { id: string; label: string },
+    version: { id: string; versionNumber: number },
+    actorUserId?: string,
+  ) {
+    try {
+      const activeReviewers = await this.review.getReviewers();
+      for (const reviewer of activeReviewers) {
+        if (reviewer.user?.member?.id) {
+          await this.prisma.memberNotification.create({
+            data: {
+              memberId: reviewer.user.member.id,
+              type: 'TIMETABLE_REVIEW_REQUIRED',
+              title: 'Weekly Ushering Timetable Ready for Review',
+              body: `The ushering timetable for the week of ${period.label} (Version ${version.versionNumber}) has been generated and requires your review and approval.`,
+              data: {
+                periodId: period.id,
+                versionId: version.id,
+                versionNumber: version.versionNumber,
+              },
+            },
+          });
+        }
+      }
+
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: actorUserId || 'SYSTEM',
+          action: 'TIMETABLE_REVIEW_NOTIFICATION_SENT',
+          entity: 'TimetableVersion',
+          entityId: version.id,
+          newData: {
+            periodId: period.id,
+            versionNumber: version.versionNumber,
+            recipientCount: activeReviewers.length,
+            reviewers: activeReviewers.map((r) => ({ id: r.id, userId: r.userId, email: r.user.email })),
+          },
+        },
+      });
+    } catch (err) {
+      this.logger.error('Failed to dispatch notifications to timetable reviewers', err as Error);
+    }
   }
 
   /**
@@ -310,11 +373,17 @@ export class TimetableService {
 
     const generationType = existing ? TimetableGenerationType.MANUAL_REGENERATE : TimetableGenerationType.MANUAL_INITIAL;
 
-    return this.generator.generateTimetable({
+    const result = await this.generator.generateTimetable({
       weekStart: targetMonday,
       generationType,
       actorUserId,
     });
+
+    if (result?.period && result?.version) {
+      await this.notifyReviewers(result.period, result.version, actorUserId);
+    }
+
+    return result;
   }
 
   /**
@@ -337,10 +406,16 @@ export class TimetableService {
 
     this.logger.log(`Executing automated Saturday ushering timetable generation for ${nextWeekMonday.toISOString()}`);
 
-    return this.generator.generateTimetable({
+    const result = await this.generator.generateTimetable({
       weekStart: nextWeekMonday,
       generationType: TimetableGenerationType.SCHEDULED_AUTO,
     });
+
+    if (result?.period && result?.version) {
+      await this.notifyReviewers(result.period, result.version);
+    }
+
+    return result;
   }
 
   /**

@@ -122,6 +122,18 @@ export class TimetableAdminController {
     return this.reviewService.getReviewers();
   }
 
+  @Get('admin/reviewers/official-status')
+  @RequirePermissions('timetable.read')
+  async getOfficialReviewersStatus() {
+    return this.reviewService.getOfficialReviewersStatus();
+  }
+
+  @Post('admin/reviewers/sync-official')
+  @RequirePermissions('timetable.manage')
+  async syncOfficialReviewers(@CurrentUser() user: AuthenticatedUser) {
+    return this.reviewService.syncOfficialReviewers(user.userId);
+  }
+
   @Post('admin/reviewers')
   @RequirePermissions('timetable.manage')
   async setReviewers(

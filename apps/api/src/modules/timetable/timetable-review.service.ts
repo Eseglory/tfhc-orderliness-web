@@ -25,6 +25,31 @@ export const DEFAULT_REVIEW_POLICY: TimetableReviewPolicy = {
   autoPublishOnFullApproval: true,
 };
 
+export interface OfficialReviewerConfig {
+  name: string;
+  email: string;
+  orderIndex: number;
+}
+
+export const OFFICIAL_TIMETABLE_REVIEWERS: OfficialReviewerConfig[] = [
+  { name: 'Aanu Oyeniran', email: 'aanuoyeniran@gmail.com', orderIndex: 1 },
+  { name: 'Daniel Oguamanam', email: 'danoguamanam@gmail.com', orderIndex: 2 },
+  { name: 'Paseda Oluwafemi', email: 'folashadeogunlade86@gmail.com', orderIndex: 3 },
+];
+
+export interface OfficialReviewerStatusItem {
+  name: string;
+  officialEmail: string;
+  orderIndex: number;
+  matched: boolean;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  hasReviewerAccessRole?: boolean;
+  isDesignatedActiveReviewer: boolean;
+  notes?: string;
+}
+
 @Injectable()
 export class TimetableReviewService {
   private readonly logger = new Logger(TimetableReviewService.name);
@@ -84,6 +109,170 @@ export class TimetableReviewService {
   }
 
   /**
+   * Retrieves the current match and configuration status for the 3 official reviewers.
+   * Reports whether each reviewer's user account exists, whether permissions are bound,
+   * or whether registration is pending.
+   */
+  async getOfficialReviewersStatus(): Promise<{
+    officialReviewers: OfficialReviewerStatusItem[];
+    matchedCount: number;
+    unmatchedCount: number;
+    allConfigured: boolean;
+  }> {
+    const results: OfficialReviewerStatusItem[] = [];
+
+    for (const conf of OFFICIAL_TIMETABLE_REVIEWERS) {
+      const user = await this.prisma.user.findFirst({
+        where: { email: { equals: conf.email, mode: 'insensitive' } },
+        include: {
+          member: true,
+          accessRoles: { include: { role: true } },
+          timetableReviewerDesignations: { where: { active: true } },
+        },
+      });
+
+      if (user) {
+        const hasRole = user.accessRoles.some((ar) => ar.role.key === 'TIMETABLE_REVIEWER') || user.role === 'ADMIN';
+        const isDesignated = user.timetableReviewerDesignations.length > 0;
+        results.push({
+          name: conf.name,
+          officialEmail: conf.email,
+          orderIndex: conf.orderIndex,
+          matched: true,
+          userId: user.id,
+          userEmail: user.email,
+          userRole: user.role,
+          hasReviewerAccessRole: hasRole,
+          isDesignatedActiveReviewer: isDesignated,
+          notes: isDesignated
+            ? 'Account verified and active as designated reviewer.'
+            : 'Account found. Ready to be designated.',
+        });
+      } else {
+        results.push({
+          name: conf.name,
+          officialEmail: conf.email,
+          orderIndex: conf.orderIndex,
+          matched: false,
+          isDesignatedActiveReviewer: false,
+          hasReviewerAccessRole: false,
+          notes: `Account not yet registered in application. Member must create login credentials with directory email (${conf.email}).`,
+        });
+      }
+    }
+
+    const matchedCount = results.filter((r) => r.matched).length;
+    return {
+      officialReviewers: results,
+      matchedCount,
+      unmatchedCount: results.length - matchedCount,
+      allConfigured: matchedCount === results.length,
+    };
+  }
+
+  /**
+   * Synchronizes the 3 official designated reviewers:
+   * 1. Looks up existing accounts matching official directory emails.
+   * 2. For matched accounts, activates them in TimetableReviewer and grants TIMETABLE_REVIEWER role.
+   * 3. For unmatched accounts, does NOT create duplicate or fake accounts; reports status.
+   */
+  async syncOfficialReviewers(actorUserId?: string) {
+    const reviewerRole = await this.prisma.accessRole.findUnique({
+      where: { key: 'TIMETABLE_REVIEWER' },
+    });
+
+    const results: OfficialReviewerStatusItem[] = [];
+
+    return this.prisma.$transaction(async (tx) => {
+      const matchedUserIds: string[] = [];
+
+      for (const conf of OFFICIAL_TIMETABLE_REVIEWERS) {
+        const user = await tx.user.findFirst({
+          where: { email: { equals: conf.email, mode: 'insensitive' } },
+          include: { member: true },
+        });
+
+        if (user) {
+          matchedUserIds.push(user.id);
+
+          // Upsert TimetableReviewer
+          await tx.timetableReviewer.upsert({
+            where: { userId: user.id },
+            update: {
+              active: true,
+              orderIndex: conf.orderIndex,
+              designatedByUserId: actorUserId || null,
+            },
+            create: {
+              userId: user.id,
+              active: true,
+              orderIndex: conf.orderIndex,
+              designatedByUserId: actorUserId || null,
+            },
+          });
+
+          // Ensure TIMETABLE_REVIEWER access role
+          if (reviewerRole) {
+            await tx.userAccessRole.upsert({
+              where: {
+                userId_roleId: {
+                  userId: user.id,
+                  roleId: reviewerRole.id,
+                },
+              },
+              update: {},
+              create: {
+                userId: user.id,
+                roleId: reviewerRole.id,
+              },
+            });
+          }
+
+          results.push({
+            name: conf.name,
+            officialEmail: conf.email,
+            orderIndex: conf.orderIndex,
+            matched: true,
+            userId: user.id,
+            userEmail: user.email,
+            userRole: user.role,
+            hasReviewerAccessRole: true,
+            isDesignatedActiveReviewer: true,
+            notes: 'Successfully matched and designated as official timetable reviewer.',
+          });
+        } else {
+          results.push({
+            name: conf.name,
+            officialEmail: conf.email,
+            orderIndex: conf.orderIndex,
+            matched: false,
+            isDesignatedActiveReviewer: false,
+            hasReviewerAccessRole: false,
+            notes: `User account not found. Member has not yet registered in the application. Directory email is ${conf.email}. No duplicate account created.`,
+          });
+        }
+      }
+
+      await this.audit.recordWithin(tx, {
+        actorUserId: actorUserId || 'SYSTEM',
+        action: 'TIMETABLE_OFFICIAL_REVIEWERS_SYNCED',
+        entity: 'TimetableReviewer',
+        entityId: 'OFFICIAL_REVIEWERS',
+        newData: {
+          matchedUserIds,
+          results,
+        } as unknown as Prisma.InputJsonValue,
+      });
+
+      return {
+        officialReviewers: results,
+        matchedCount: matchedUserIds.length,
+        unmatchedCount: OFFICIAL_TIMETABLE_REVIEWERS.length - matchedUserIds.length,
+      };
+    });
+  }
+
+  /**
    * Designates the designated reviewer accounts (e.g. 3 reviewers).
    */
   async setReviewers(userIds: string[], actorUserId: string) {
@@ -103,6 +292,10 @@ export class TimetableReviewService {
       throw new BadRequestException('One or more user accounts could not be found');
     }
 
+    const reviewerRole = await this.prisma.accessRole.findUnique({
+      where: { key: 'TIMETABLE_REVIEWER' },
+    });
+
     return this.prisma.$transaction(async (tx) => {
       // Deactivate existing reviewers not in new list
       await tx.timetableReviewer.updateMany({
@@ -110,7 +303,7 @@ export class TimetableReviewService {
         data: { active: false },
       });
 
-      // Upsert active designated reviewers
+      // Upsert active designated reviewers and ensure TIMETABLE_REVIEWER access role
       for (let i = 0; i < uniqueUserIds.length; i++) {
         const uId = uniqueUserIds[i];
         await tx.timetableReviewer.upsert({
@@ -127,6 +320,22 @@ export class TimetableReviewService {
             designatedByUserId: actorUserId,
           },
         });
+
+        if (reviewerRole) {
+          await tx.userAccessRole.upsert({
+            where: {
+              userId_roleId: {
+                userId: uId,
+                roleId: reviewerRole.id,
+              },
+            },
+            update: {},
+            create: {
+              userId: uId,
+              roleId: reviewerRole.id,
+            },
+          });
+        }
       }
 
       await this.audit.recordWithin(tx, {

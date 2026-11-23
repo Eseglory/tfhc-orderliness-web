@@ -13,6 +13,7 @@ import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { Role, toPascalCase, bestNameMatch, validateEmail, normalizeEmail } from '@tfhc/shared';
 import { MemberStatus } from '@prisma/client';
+import { OFFICIAL_TIMETABLE_REVIEWERS } from '../timetable/timetable-review.service';
 
 
 const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -722,10 +723,37 @@ export class AuthService {
   }
 
   /** Shared response body for every flow that ends in an authenticated session. */
+  private async ensureOfficialReviewerDesignation(userId: string, email: string): Promise<void> {
+    const norm = normalizeEmail(email);
+    const conf = OFFICIAL_TIMETABLE_REVIEWERS.find((c) => c.email.toLowerCase() === norm);
+    if (!conf) return;
+
+    try {
+      const reviewerRole = await this.prisma.accessRole.findUnique({
+        where: { key: 'TIMETABLE_REVIEWER' },
+      });
+
+      await this.prisma.timetableReviewer.upsert({
+        where: { userId },
+        update: { active: true, orderIndex: conf.orderIndex },
+        create: { userId, active: true, orderIndex: conf.orderIndex },
+      });
+
+      if (reviewerRole) {
+        await this.prisma.userAccessRole.upsert({
+          where: { userId_roleId: { userId, roleId: reviewerRole.id } },
+          update: {},
+          create: { userId, roleId: reviewerRole.id },
+        });
+      }
+    } catch (e) {
+      this.logger.error(`Failed to auto-bind official reviewer for ${email}`, e as Error);
+    }
+  }
+
   private async buildAuthResponse(user: { id: string; email: string; role: string; member?: ({ id: string } & Record<string, unknown>) | null }) {
-    const access = user.role === Role.MEMBER
-      ? { roleKeys: [] as string[], permissions: [] as string[], isSuperAdmin: false }
-      : await this.rbac.resolveAccess(user.id, user.role);
+    await this.ensureOfficialReviewerDesignation(user.id, user.email);
+    const access = await this.rbac.resolveAccess(user.id, user.role);
     return {
       user: {
         id: user.id,

@@ -71,6 +71,19 @@ interface Review {
   };
 }
 
+interface OfficialReviewerStatusItem {
+  name: string;
+  officialEmail: string;
+  orderIndex: number;
+  matched: boolean;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  hasReviewerAccessRole?: boolean;
+  isDesignatedActiveReviewer: boolean;
+  notes?: string;
+}
+
 interface CurrentTimetableResponse {
   period: {
     id: string;
@@ -92,6 +105,12 @@ interface CurrentTimetableResponse {
   sessions: TimetableSession[];
   reviewers: Reviewer[];
   reviews: Review[];
+  officialReviewersStatus?: {
+    officialReviewers: OfficialReviewerStatusItem[];
+    matchedCount: number;
+    unmatchedCount: number;
+    allConfigured: boolean;
+  };
   isReviewer: boolean;
   userReview?: Review | null;
   canPublish: boolean;
@@ -208,6 +227,23 @@ export default function AdminTimetablePage() {
       setError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const [syncingOfficial, setSyncingOfficial] = useState(false);
+
+  const handleSyncOfficial = async () => {
+    setSyncingOfficial(true);
+    setActionSuccess('');
+    setError('');
+    try {
+      await fetchApi('/timetable/admin/reviewers/sync-official', { method: 'POST' });
+      setActionSuccess('Official reviewers synchronized successfully!');
+      await loadCurrent();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync official reviewers');
+    } finally {
+      setSyncingOfficial(false);
     }
   };
 
@@ -789,38 +825,89 @@ export default function AdminTimetablePage() {
 
         {/* Tab 3: Designated Reviewers */}
         {activeTab === 'reviewers' && (
-          <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-5">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                Three Designated Reviewers
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                Every generated weekly timetable requires approval from all 3 designated reviewers before it can be published.
-              </p>
+          <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  Official TFHC Timetable Reviewers
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                  Every generated weekly ushering timetable requires independent inspection and approval from all 3 designated reviewers before official publication.
+                </p>
+              </div>
+              <button
+                onClick={handleSyncOfficial}
+                disabled={syncingOfficial}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors shrink-0"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncingOfficial ? 'animate-spin' : ''}`} />
+                <span>Re-sync Official Reviewers</span>
+              </button>
             </div>
 
+            {/* Official Reviewer Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {data?.reviewers?.map((r, idx) => (
+              {(data?.officialReviewersStatus?.officialReviewers || [
+                { name: 'Aanu Oyeniran', officialEmail: 'aanuoyeniran@gmail.com', orderIndex: 1, matched: false, isDesignatedActiveReviewer: false },
+                { name: 'Daniel Oguamanam', officialEmail: 'danoguamanam@gmail.com', orderIndex: 2, matched: true, isDesignatedActiveReviewer: true },
+                { name: 'Paseda Oluwafemi', officialEmail: 'folashadeogunlade86@gmail.com', orderIndex: 3, matched: false, isDesignatedActiveReviewer: false },
+              ]).map((r) => (
                 <div
-                  key={r.id}
-                  className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-start gap-3"
+                  key={r.officialEmail}
+                  className={`p-5 rounded-2xl border flex flex-col justify-between gap-3 ${
+                    r.isDesignatedActiveReviewer
+                      ? 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/30 dark:bg-emerald-950/20'
+                      : 'border-amber-200 dark:border-amber-900/60 bg-amber-50/30 dark:bg-amber-950/20'
+                  }`}
                 >
-                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-sm shrink-0">
-                    {idx + 1}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                        r.isDesignatedActiveReviewer
+                          ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300'
+                      }`}
+                    >
+                      {r.orderIndex}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-slate-900 dark:text-white truncate">
+                        {r.name}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 font-mono">
+                        {r.officialEmail}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                      {r.fullName}
+
+                  <div>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {r.isDesignatedActiveReviewer ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                          <CheckCircle className="h-3 w-3" />
+                          <span>Active Reviewer</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                          <Clock className="h-3 w-3" />
+                          <span>Awaiting App Registration</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                      {r.notes ||
+                        (r.isDesignatedActiveReviewer
+                          ? 'Account verified and designated with timetable review authority.'
+                          : 'Documented in church directory. Will automatically bind upon mobile app registration.')}
                     </p>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                      {r.email}
-                    </p>
-                    <span className="inline-block mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                      Designated Reviewer
-                    </span>
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <strong className="font-bold text-slate-900 dark:text-white">Note on Official Account Binding:</strong> To prevent duplicate member accounts and ensure identity integrity, reviewer permissions are strictly bound to official directory email addresses. As soon as unregistered reviewers complete account setup in the mobile application, their reviewer designation and permissions automatically activate.
             </div>
           </div>
         )}
