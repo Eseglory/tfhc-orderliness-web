@@ -18,6 +18,7 @@ import {
   History,
   Sliders,
   Sparkles,
+  BarChart3,
 } from 'lucide-react';
 import { AdminLayoutShell } from '../../../../components/admin/AdminLayoutShell';
 import { fetchApi, ApiError } from '../../../../lib/api';
@@ -369,6 +370,14 @@ export default function AdminTimetablePage() {
                 <span>{generating ? 'Generating...' : 'Generate Timetable'}</span>
               </button>
             )}
+
+            <Link
+              href="/admin/timetable/analytics"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 font-bold text-xs transition-colors border border-slate-300 dark:border-slate-700"
+            >
+              <BarChart3 className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <span>Analytics & Reports</span>
+            </Link>
 
             <button
               onClick={() => {

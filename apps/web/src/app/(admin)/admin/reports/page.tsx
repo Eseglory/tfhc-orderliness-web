@@ -529,6 +529,14 @@ export default function AdminReportsPage() {
             </div>
 
             <Link
+              href="/admin/timetable/analytics"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs sm:text-sm font-semibold border border-slate-300 dark:border-slate-700 transition-all active:scale-95"
+            >
+              <BarChart3 className="w-4 h-4 text-red-600 dark:text-red-400" />
+              <span>Timetable Analytics</span>
+            </Link>
+
+            <Link
               href="/admin/availability"
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95"
             >

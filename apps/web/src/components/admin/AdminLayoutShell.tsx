@@ -119,6 +119,7 @@ const NAVIGATION_TREE: NavParent[] = [
     anyOf: ['reports.view', 'attendance.read', 'timetable.read', 'timetable.review'],
     children: [
       { href: '/admin/timetable', label: 'Ushering Timetable', icon: Calendar, anyOf: ['timetable.read', 'timetable.generate', 'timetable.review'] },
+      { href: '/admin/timetable/analytics', label: 'Timetable Analytics', icon: BarChart3, anyOf: ['timetable.read', 'reports.view'] },
       { href: '/admin/availability', label: 'Weekly Availability', icon: Calendar, anyOf: ['reports.view', 'attendance.read'] },
       { href: '/admin/reports', label: 'Reports', icon: BarChart3, anyOf: ['reports.view'] },
     ],
