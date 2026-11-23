@@ -17,7 +17,9 @@
     "**/test/receipt-upload-optimization.spec.ts",
     "**/test/payment-adjustments-and-disciplinary.spec.ts",
     "**/test/payment-review-and-balance-management.spec.ts",
-    "**/test/timetable-e2e.spec.ts"
+    "**/test/timetable-e2e.spec.ts",
+    "**/test/official-reviewers.spec.ts",
+    "**/test/timetable-analytics.spec.ts"
   ],
   "moduleNameMapper": {
     "^@tfhc/shared$": "<rootDir>/../../packages/shared/src"
