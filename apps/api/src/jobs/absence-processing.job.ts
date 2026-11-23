@@ -145,9 +145,22 @@ export class AbsenceProcessingJob {
       const attendanceRate = expectedCount > 0 ? (presentCount / expectedCount) * 100 : 0;
       const punctualityRate = presentCount > 0 ? ((earlyCount + onTimeCount) / presentCount) * 100 : 0;
 
-      await tx.meetingSummary.create({
-        data: {
+      await tx.meetingSummary.upsert({
+        where: { meetingId },
+        create: {
           meetingId,
+          expectedCount,
+          presentCount,
+          absentCount,
+          earlyCount,
+          onTimeCount,
+          gracePeriodCount,
+          lateCount,
+          excusedCount,
+          attendanceRate: Math.round(attendanceRate * 10) / 10,
+          punctualityRate: Math.round(punctualityRate * 10) / 10,
+        },
+        update: {
           expectedCount,
           presentCount,
           absentCount,
