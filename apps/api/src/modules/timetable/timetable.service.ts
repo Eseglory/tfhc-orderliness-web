@@ -373,20 +373,28 @@ export class TimetableService {
         }
       }
 
-      await this.prisma.auditLog.create({
-        data: {
-          actorUserId: actorUserId || 'SYSTEM',
-          action: 'TIMETABLE_REVIEW_NOTIFICATION_SENT',
-          entity: 'TimetableVersion',
-          entityId: version.id,
-          newData: {
-            periodId: period.id,
-            versionNumber: version.versionNumber,
-            recipientCount: activeReviewers.length,
-            reviewers: activeReviewers.map((r) => ({ id: r.id, userId: r.userId, email: r.user.email })),
+      let effectiveActorUserId = actorUserId;
+      if (!effectiveActorUserId) {
+        const sysAdmin = await this.prisma.user.findFirst({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+        effectiveActorUserId = sysAdmin?.id;
+      }
+
+      if (effectiveActorUserId) {
+        await this.prisma.auditLog.create({
+          data: {
+            actorUserId: effectiveActorUserId,
+            action: 'TIMETABLE_REVIEW_NOTIFICATION_SENT',
+            entity: 'TimetableVersion',
+            entityId: version.id,
+            newData: {
+              periodId: period.id,
+              versionNumber: version.versionNumber,
+              recipientCount: activeReviewers.length,
+              reviewers: activeReviewers.map((r) => ({ id: r.id, userId: r.userId, email: r.user.email })),
+            },
           },
-        },
-      });
+        });
+      }
     } catch (err) {
       this.logger.error('Failed to dispatch notifications to timetable reviewers', err as Error);
     }
