@@ -14,7 +14,6 @@ export default function MeetingDetailPage() {
   const [error, setError] = useState('');
   const [meeting, setMeeting] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [availabilityData, setAvailabilityData] = useState<any>(null);
 
   // Online Meeting Attendance State
   const [attendanceRecord, setAttendanceRecord] = useState<any>(null);
@@ -29,12 +28,6 @@ export default function MeetingDetailPage() {
       fetchApi(`/meetings/${meetingId}`)
         .then((data) => setMeeting(data))
         .catch((err) => setError(err.message));
-
-      fetchApi<any>('/availability/current')
-        .then((res) => {
-          setAvailabilityData(res);
-        })
-        .catch(() => {});
 
       // Check attendance status for the current member
       fetchApi<{ clockedIn: boolean; record: any }>(`/attendance/status?meetingId=${meetingId}`)
@@ -124,28 +117,6 @@ export default function MeetingDetailPage() {
   }
 
   const meetingStartTime = new Date(meeting.startTime);
-
-  // Determine availability status from Weekly Availability cycle & service commitments
-  const memberAvailabilityStatus: 'AVAILABLE' | 'UNAVAILABLE' | 'PENDING' = (() => {
-    // 1. Direct commitment attached to meeting for this member
-    const directCommitment = meeting?.serviceCommitments?.[0]?.status;
-    if (directCommitment === 'COMMITTED') return 'AVAILABLE';
-    if (directCommitment === 'NOT_COMMITTED') return 'UNAVAILABLE';
-
-    // 2. Check weekly availability cycle response
-    if (availabilityData?.submitted) {
-      if (Array.isArray(availabilityData.selectedMeetingIds) && availabilityData.selectedMeetingIds.includes(meetingId)) {
-        return 'AVAILABLE';
-      }
-      return 'UNAVAILABLE';
-    }
-
-    // 3. Fallback to eventResponses if legacy response exists
-    if (meeting?.eventResponses?.[0]?.attending === true) return 'AVAILABLE';
-    if (meeting?.eventResponses?.[0]?.attending === false) return 'UNAVAILABLE';
-
-    return 'PENDING';
-  })();
 
   const title = meeting?.title || 'Church Gathering';
   const categoryName = meeting?.category?.name || 'Service';
@@ -544,101 +515,24 @@ export default function MeetingDetailPage() {
           </section>
         )}
 
-        {/* Weekly Availability Status Card */}
-        <section className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 p-5 shadow-xs space-y-3.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-xl">event_available</span>
-              <h3 className="font-bold text-sm text-[#0b1c30] dark:text-white">Weekly Availability Status</h3>
+        {/* Absence Request / Service Notice */}
+        <section className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 p-4 shadow-xs flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary shrink-0">
+              <span className="material-symbols-outlined text-lg">event_note</span>
             </div>
-            {memberAvailabilityStatus === 'AVAILABLE' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                <span>Confirmed Available</span>
-              </span>
-            ) : memberAvailabilityStatus === 'UNAVAILABLE' ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800">
-                <span className="material-symbols-outlined text-[13px]">cancel</span>
-                <span>Indicated Unavailable</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                <span className="material-symbols-outlined text-[13px]">pending</span>
-                <span>Pending Weekly Poll</span>
-              </span>
-            )}
+            <div>
+              <p className="text-xs font-bold text-[#0b1c30] dark:text-white">Unable to attend this service?</p>
+              <p className="text-[11px] text-on-surface-variant">Submit an advance absence excuse to your unit coordinators.</p>
+            </div>
           </div>
-
-          {memberAvailabilityStatus === 'AVAILABLE' ? (
-            <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-900/50 p-3.5 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shrink-0 mt-0.5">
-                <span className="material-symbols-outlined text-lg">verified</span>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
-                  You indicated availability for this service
-                </p>
-                <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
-                  Recorded in your Weekly Availability submission. Unit coordinators reference this for attendance planning and service rosters.
-                </p>
-              </div>
-            </div>
-          ) : memberAvailabilityStatus === 'UNAVAILABLE' ? (
-            <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/70 dark:border-slate-800 p-3.5 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-950/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 mt-0.5">
-                <span className="material-symbols-outlined text-lg">event_busy</span>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  You indicated unavailable for this service
-                </p>
-                <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Recorded in your Weekly Availability submission. If your schedule changes, you can update your selection while the weekly poll is open.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 p-3.5 flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/60 flex items-center justify-center text-amber-700 dark:text-amber-300 shrink-0 mt-0.5">
-                <span className="material-symbols-outlined text-lg">help_outline</span>
-              </div>
-              <div className="space-y-1.5 flex-1 min-w-0">
-                <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
-                  Weekly availability not yet submitted
-                </p>
-                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
-                  Complete this week&apos;s availability form to let your unit leaders know which services and meetings you can attend.
-                </p>
-                <div className="pt-1">
-                  <Link
-                    href="/member/availability"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs"
-                  >
-                    <span>Fill Weekly Availability</span>
-                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-3 text-xs flex-wrap">
-            <Link
-              className="text-primary font-bold hover:underline inline-flex items-center gap-1"
-              href="/member/availability"
-            >
-              <span>Weekly Availability Form</span>
-              <span className="material-symbols-outlined text-xs">open_in_new</span>
-            </Link>
-
-            <Link
-              className="text-slate-500 hover:text-slate-800 dark:hover:text-white font-medium inline-flex items-center gap-1"
-              href={`/member/submit-excuse?meetingId=${meetingId}`}
-            >
-              <span>Submit Absence Excuse</span>
-              <span className="material-symbols-outlined text-xs">arrow_forward</span>
-            </Link>
-          </div>
+          <Link
+            className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5 transition-colors"
+            href={`/member/submit-excuse?meetingId=${meetingId}`}
+          >
+            <span>Submit Excuse</span>
+            <span className="material-symbols-outlined text-xs">arrow_forward</span>
+          </Link>
         </section>
 
         {/* Time Grid (2x2) */}

@@ -2006,11 +2006,11 @@ export default function AdminLiveMeetingPage() {
               {/* Modal Footer */}
               <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50">
                 <Link
-                  href="/admin/availability"
+                  href="/admin/timetable"
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  <span>Open Weekly Availability Reconciliation &rarr;</span>
+                  <span>View Ushering Timetable Roster &rarr;</span>
                 </Link>
                 <button
                   type="button"

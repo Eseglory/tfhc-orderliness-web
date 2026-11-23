@@ -18,7 +18,6 @@ export default function CheckInPage() {
   const [result, setResult] = useState<any>(null);
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [activeRecord, setActiveRecord] = useState<any>(null);
-  const [availabilityData, setAvailabilityData] = useState<any>(null);
   const [showCodeInput, setShowCodeInput] = useState(false);
   const [codeValue, setCodeValue] = useState('');
   const [submittingCode, setSubmittingCode] = useState(false);
@@ -59,10 +58,6 @@ export default function CheckInPage() {
     requestedMeeting?.serviceScheduleId === 'wednesday-unit-meeting' ||
     (meeting && meeting.geofenceRadiusMeters >= 50000)
   );
-  const isCommittedViaAvailability = Boolean(
-    availabilityData?.submitted &&
-    (availabilityData?.selectedMeetingIds?.includes(meetingId) || (!meetingId && availabilityData?.selectedMeetingIds?.length > 0))
-  );
 
   const checkAttendanceStatus = useCallback(async (targetMeetingId: string) => {
     if (!targetMeetingId) {
@@ -89,13 +84,9 @@ export default function CheckInPage() {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [data, avail] = await Promise.all([
-        fetchApi<any[]>('/meetings/attendance-open'),
-        fetchApi<any>('/availability/current').catch(() => null),
-      ]);
+      const data = await fetchApi<any[]>('/meetings/attendance-open');
       if (!mounted.current) return;
       setMeetings(data);
-      setAvailabilityData(avail);
       const requested = new URLSearchParams(window.location.search).get('meetingId');
       if (requested && !data.some(m => m.id === requested)) {
         try {
@@ -370,18 +361,6 @@ export default function CheckInPage() {
                 ))}
               </select>
             </div>
-
-            {isCommittedViaAvailability && (
-              <div className="p-4 rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 text-xs sm:text-sm font-semibold flex items-start gap-3 shadow-xs">
-                <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl shrink-0">verified</span>
-                <div>
-                  <p className="font-extrabold text-emerald-900 dark:text-emerald-100">Availability Already Submitted</p>
-                  <p className="font-medium text-emerald-800 dark:text-emerald-300 mt-0.5">
-                    You have submitted your availability for this week&apos;s service. Remember to mark your attendance when joining.
-                  </p>
-                </div>
-              </div>
-            )}
 
             {meeting && (
               <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-5 space-y-4 shadow-xs">

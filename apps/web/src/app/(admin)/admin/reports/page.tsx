@@ -535,14 +535,6 @@ export default function AdminReportsPage() {
               <BarChart3 className="w-4 h-4 text-red-600 dark:text-red-400" />
               <span>Timetable Analytics</span>
             </Link>
-
-            <Link
-              href="/admin/availability"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95"
-            >
-              <Calendar className="w-4 h-4 text-indigo-200" />
-              <span>Poll Management</span>
-            </Link>
           </div>
         </div>
 

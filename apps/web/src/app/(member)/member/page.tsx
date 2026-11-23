@@ -42,15 +42,8 @@ export default function MemberDashboard() {
   const [nextTodayService, setNextTodayService] = useState<any>(null);
   const [nextWardrobe, setNextWardrobe] = useState<any>(null);
   const [upcoming, setUpcoming] = useState<any[]>([]);
-  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const { unreadCount: notificationUnread } = useNotifications();
   const chatUnread = useChatUnread();
-
-  const [availabilityData, setAvailabilityData] = useState<{
-    submitted?: boolean;
-    selectedMeetingIds?: string[];
-    cycle?: { state?: string; closesAt?: string; isOpen?: boolean; isRecovery?: boolean };
-  } | null>(null);
 
   const [timetableData, setTimetableData] = useState<{
     period: { id: string; weekLabel: string; startDate: string; endDate: string } | null;
@@ -131,16 +124,6 @@ export default function MemberDashboard() {
       );
       setUpcoming(combined.slice(0, 5));
     }).catch(() => {});
-
-    get<any>('/availability/current')
-      .then((a) => {
-        setAvailabilityData(a);
-        const open = Boolean(
-          a?.cycle?.isOpen ?? (a?.cycle?.state === 'OPEN' && (!a?.cycle?.closesAt || new Date(a.cycle.closesAt) > new Date()))
-        );
-        setAvailabilityOpen(open && !a?.submitted);
-      })
-      .catch(() => {});
 
     get<any>('/me/timetable/current')
       .then((res) => setTimetableData(res))
@@ -441,7 +424,7 @@ export default function MemberDashboard() {
                       <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                       Live Check-In Open
                     </span>
-                  ) : (Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted)) ? (
+                  ) : Boolean(timetableData?.myAssignments?.length) ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-bold">
                       <span className="material-symbols-outlined text-xs text-emerald-600">verified</span>
                       Rostered for Service
@@ -477,7 +460,7 @@ export default function MemberDashboard() {
                     ? `${new Date(nextTodayService.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${nextTodayService.locationName || 'Main Sanctuary'}`
                     : 'Check the upcoming schedule below for the next service.'}
                 </p>
-                {(Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted)) && !hasClockedIn && (
+                {Boolean(timetableData?.myAssignments?.length) && !hasClockedIn && (
                   <p className="mt-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
                     {activeMeeting
                       ? 'You are scheduled for service. Please check in now to record your arrival.'
@@ -501,7 +484,7 @@ export default function MemberDashboard() {
                   ? `/member/check-in?meetingId=${activeMeeting.id}`
                   : nextTodayService
                   ? `/member/meetings/${nextTodayService.id}`
-                  : (Boolean(timetableData?.myAssignments?.length) || Boolean(availabilityData?.submitted))
+                  : Boolean(timetableData?.myAssignments?.length)
                   ? '/member/timetable'
                   : '/member/calendar'
               }
@@ -520,7 +503,7 @@ export default function MemberDashboard() {
                   ? (activeMeeting?.isOnline || activeMeeting?.serviceScheduleId === 'wednesday-unit-meeting' || activeMeeting?.title?.toLowerCase().includes('wednesday') ? 'videocam' : 'location_on')
                   : nextTodayService
                   ? 'event_upcoming'
-                  : availabilityData?.submitted
+                  : Boolean(timetableData?.myAssignments?.length)
                   ? 'event_available'
                   : 'calendar_month'}
               </span>
@@ -530,8 +513,8 @@ export default function MemberDashboard() {
                 ? (activeMeeting?.isOnline || activeMeeting?.serviceScheduleId === 'wednesday-unit-meeting' || activeMeeting?.title?.toLowerCase().includes('wednesday') ? 'Join Online & Check In' : 'Check In Now')
                 : nextTodayService
                 ? 'View Gathering Details'
-                : availabilityData?.submitted
-                ? 'View Availability'
+                : Boolean(timetableData?.myAssignments?.length)
+                ? 'View Ushering Timetable'
                 : 'View Calendar & Events'}
             </Link>
           </div>
