@@ -375,9 +375,7 @@ export class DuesService {
       const pendingPayment = a.payments.find((p) => p.status === 'PENDING') || null;
       const confirmedPayments = a.payments.filter((p) => p.status === 'CONFIRMED');
       const balance = Math.max(0, Math.round((a.amountDue - a.amountPaid) * 100) / 100);
-      const isChristmas = /christmas/i.test(a.period.label);
-      const maxInstallments = isChristmas ? 2 : 5;
-      const canSubmitInstallment = a.status !== 'PAID' && balance > 0 && confirmedPayments.length < maxInstallments;
+      const canSubmitInstallment = a.status !== 'PAID' && balance > 0;
 
       const paymentsList = a.payments.map((p) => {
         const meta = (p.metadata && typeof p.metadata === 'object' ? p.metadata : {}) as Record<string, unknown>;
@@ -411,7 +409,7 @@ export class DuesService {
         status: this.effective(a.status, a.period.dueDate),
         hasPendingPayment: !!pendingPayment,
         confirmedInstallmentsCount: confirmedPayments.length,
-        maxInstallments,
+        maxInstallments: null,
         canSubmitInstallment,
         isPartiallyPaid: a.status === 'PARTIALLY_PAID' || (a.amountPaid > 0 && a.amountPaid < a.amountDue),
         payments: paymentsList,

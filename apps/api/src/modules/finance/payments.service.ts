@@ -94,12 +94,6 @@ export class PaymentsService {
         );
       }
 
-      if (isChristmas) {
-        if (confirmedPayments.length >= 2) {
-          throw new BadRequestException('Maximum of two approved installments reached for the Christmas contribution');
-        }
-      }
-
       const existingPending = assignment.payments.find((x) => x.status === 'PENDING');
 
       if (existingPending) {
@@ -229,11 +223,6 @@ export class PaymentsService {
             id: { not: id },
           },
         });
-
-        const isChristmas = /christmas/i.test(assignment.period.label);
-        if (isChristmas && otherConfirmed.length >= 2) {
-          throw new BadRequestException('Maximum of two approved installments reached for this Christmas contribution');
-        }
 
         const otherSum = otherConfirmed.reduce((s, p) => s + p.amount, 0);
         if (otherSum + amountToConfirm > assignment.amountDue) {

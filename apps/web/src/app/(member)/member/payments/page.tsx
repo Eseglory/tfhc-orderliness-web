@@ -278,6 +278,15 @@ export default function MemberPaymentsPage() {
                               Adjusted by Admin
                             </span>
                           </div>
+                        ) : isPending ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
+                              {naira(p.amount)}
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-900/60">
+                              Claimed (Awaiting Verification)
+                            </span>
+                          </div>
                         ) : (
                           <span className="font-extrabold text-base text-slate-900 dark:text-white">
                             {naira(p.amount)}

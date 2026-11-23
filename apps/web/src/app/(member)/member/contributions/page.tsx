@@ -269,15 +269,17 @@ export default function MemberContributionsPage() {
                     </div>
                   </div>
 
-                  {/* Installment Tracker for Christmas Contribution */}
-                  {isChristmas && (
+                  {/* Installment Tracker for Contributions with multiple payments */}
+                  {(isChristmas || (c.amountPaid > 0 && c.balance > 0) || (c.confirmedInstallmentsCount ?? 0) > 0) && (
                     <div className="p-3.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-2">
                       <div className="flex items-center justify-between text-xs font-bold">
                         <span className="text-indigo-900 dark:text-indigo-200 uppercase tracking-wider text-[10px]">
-                          Installment Plan (Maximum {c.maxInstallments || 2} Installments Allowed)
+                          Installment Payment Progress
                         </span>
                         <span className="text-indigo-700 dark:text-indigo-300 font-black">
-                          {c.confirmedInstallmentsCount ?? 0} of {c.maxInstallments || 2} Installments Confirmed
+                          {(c.confirmedInstallmentsCount ?? 0) > 0
+                            ? `${c.confirmedInstallmentsCount} Installment${(c.confirmedInstallmentsCount ?? 0) > 1 ? 's' : ''} Confirmed`
+                            : 'No installments confirmed yet'}
                         </span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
@@ -401,10 +403,6 @@ export default function MemberContributionsPage() {
                           <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                           <span>Payment Submitted (Pending Review)</span>
                         </button>
-                      ) : c.canSubmitInstallment === false && (c.confirmedInstallmentsCount ?? 0) >= (c.maxInstallments || 2) ? (
-                        <span className="text-xs font-bold text-amber-600 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60">
-                          Maximum {c.maxInstallments || 2} installments reached
-                        </span>
                       ) : (
                         <button
                           onClick={() => setDeclaring(c)}
