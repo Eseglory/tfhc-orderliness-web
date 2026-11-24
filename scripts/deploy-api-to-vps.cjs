@@ -4,8 +4,8 @@ const path = require('path');
 
 const VPS_HOST = 'staging.utilityhub.ng';
 const REMOTE_DIR = '/home/ese/tfhc-production';
-const RELEASE_NAME = 'timetable-release-final-v4';
-const IMAGE_TAG = 'tfhc-api:timetable-release-final-v4';
+const RELEASE_NAME = 'timetable-release-v5-approved';
+const IMAGE_TAG = 'tfhc-api:timetable-release-v5-approved';
 const ROOT = path.resolve(__dirname, '..');
 
 function run(cmd, opts = {}) {
