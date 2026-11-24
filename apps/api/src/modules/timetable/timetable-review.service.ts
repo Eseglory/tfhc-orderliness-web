@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../common/rbac/audit.service';
+import { TimetableNotificationService } from './timetable-notification.service';
 import {
   TimetablePeriodStatus,
   TimetableVersionStatus,
@@ -16,12 +17,12 @@ import {
 } from '@prisma/client';
 
 export interface TimetableReviewPolicy {
-  requiredApprovalsCount: number; // default 3
+  requiredApprovalsCount: number; // default 4 (all 3 designated reviewers + platform owner)
   autoPublishOnFullApproval: boolean;
 }
 
 export const DEFAULT_REVIEW_POLICY: TimetableReviewPolicy = {
-  requiredApprovalsCount: 3,
+  requiredApprovalsCount: 4,
   autoPublishOnFullApproval: true,
 };
 
@@ -35,6 +36,17 @@ export const OFFICIAL_TIMETABLE_REVIEWERS: OfficialReviewerConfig[] = [
   { name: 'Aanu Oyeniran', email: 'aanuoyeniran@gmail.com', orderIndex: 1 },
   { name: 'Daniel Oguamanam', email: 'danoguamanam@gmail.com', orderIndex: 2 },
   { name: 'Paseda Oluwafemi', email: 'folashadeogunlade86@gmail.com', orderIndex: 3 },
+];
+
+export const PLATFORM_OWNER_CONFIG: OfficialReviewerConfig = {
+  name: 'Glory Eseosa (Owner)',
+  email: 'engreseglory@gmail.com',
+  orderIndex: 4,
+};
+
+export const ALL_REQUIRED_APPROVERS: OfficialReviewerConfig[] = [
+  ...OFFICIAL_TIMETABLE_REVIEWERS,
+  PLATFORM_OWNER_CONFIG,
 ];
 
 export interface OfficialReviewerStatusItem {
@@ -57,10 +69,11 @@ export class TimetableReviewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: TimetableNotificationService,
   ) {}
 
   /**
-   * Retrieves the configured approval policy (default: 3 designated reviewers).
+   * Retrieves the configured approval policy (default: 4 required approvals).
    */
   async getPolicy(): Promise<TimetableReviewPolicy> {
     const setting = await this.prisma.systemSetting.findUnique({
@@ -70,7 +83,7 @@ export class TimetableReviewService {
     try {
       const parsed = JSON.parse(setting.value);
       return {
-        requiredApprovalsCount: parsed.requiredApprovalsCount ?? 3,
+        requiredApprovalsCount: parsed.requiredApprovalsCount ?? 4,
         autoPublishOnFullApproval: parsed.autoPublishOnFullApproval ?? true,
       };
     } catch {
@@ -115,6 +128,8 @@ export class TimetableReviewService {
    */
   async getOfficialReviewersStatus(): Promise<{
     officialReviewers: OfficialReviewerStatusItem[];
+    platformOwner?: OfficialReviewerStatusItem;
+    allApprovers: OfficialReviewerStatusItem[];
     matchedCount: number;
     unmatchedCount: number;
     allConfigured: boolean;
@@ -161,9 +176,47 @@ export class TimetableReviewService {
       }
     }
 
+    // Also look up Platform Owner (Glory Eseosa)
+    const platformOwnerEmail = (process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com').toLowerCase();
+    const ownerUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: { equals: platformOwnerEmail, mode: 'insensitive' } },
+          { email: { equals: 'engreseglory@gmail.com', mode: 'insensitive' } },
+          { email: { equals: 'portal-admin@tfhc.org', mode: 'insensitive' } },
+        ],
+      },
+      include: { member: true },
+    });
+
+    const platformOwnerStatus: OfficialReviewerStatusItem = ownerUser
+      ? {
+          name: ownerUser.member ? `${ownerUser.member.firstName} ${ownerUser.member.lastName}`.trim() : 'Glory Eseosa',
+          officialEmail: 'engreseglory@gmail.com',
+          orderIndex: 4,
+          matched: true,
+          userId: ownerUser.id,
+          userEmail: ownerUser.email,
+          userRole: ownerUser.role,
+          hasReviewerAccessRole: true,
+          isDesignatedActiveReviewer: true,
+          notes: 'Platform Owner verified and active as required approver.',
+        }
+      : {
+          name: 'Glory Eseosa (Owner)',
+          officialEmail: 'engreseglory@gmail.com',
+          orderIndex: 4,
+          matched: false,
+          isDesignatedActiveReviewer: false,
+          hasReviewerAccessRole: false,
+          notes: 'Platform Owner account not found.',
+        };
+
     const matchedCount = results.filter((r) => r.matched).length;
     return {
       officialReviewers: results,
+      platformOwner: platformOwnerStatus,
+      allApprovers: [...results, platformOwnerStatus],
       matchedCount,
       unmatchedCount: results.length - matchedCount,
       allConfigured: matchedCount === results.length,
@@ -405,11 +458,22 @@ export class TimetableReviewService {
       );
     }
 
-    // 2. Verify reviewer is a designated active reviewer
+    // 2. Verify reviewer is a designated active reviewer or Platform Owner (engreseglory)
     const reviewer = await this.prisma.timetableReviewer.findFirst({
       where: { userId: params.reviewerUserId, active: true },
     });
-    if (!reviewer) {
+    const reviewerUser = await this.prisma.user.findUnique({
+      where: { id: params.reviewerUserId },
+    });
+    const isOwnerOrGlory = Boolean(
+      reviewerUser?.email &&
+      (reviewerUser.email.toLowerCase() === 'engreseglory@gmail.com' ||
+       reviewerUser.email.toLowerCase().includes('engreseglory') ||
+       reviewerUser.email.toLowerCase() === 'portal-admin@tfhc.org' ||
+       reviewerUser.email.toLowerCase() === (process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com').toLowerCase())
+    );
+
+    if (!reviewer && !isOwnerOrGlory) {
       throw new ForbiddenException('You are not a designated reviewer for weekly timetables');
     }
 
@@ -432,7 +496,7 @@ export class TimetableReviewService {
 
     const policy = await this.getPolicy();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Create review record
       const review = await tx.timetableReview.create({
         data: {
@@ -539,18 +603,28 @@ export class TimetableReviewService {
         isFullyApproved,
         isPublished,
         message: isPublished
-          ? 'All 3 approvals received. Timetable has been officially published!'
+          ? `All required approvals (${approvedCount}/${policy.requiredApprovalsCount}) received. Timetable has been officially published!`
           : isFullyApproved
-          ? 'All 3 approvals received. Timetable is approved and eligible for publication.'
+          ? `All required approvals (${approvedCount}/${policy.requiredApprovalsCount}) received. Timetable is approved and eligible for publication.`
           : `Approval recorded (${approvedCount} of ${policy.requiredApprovalsCount} required approvals).`,
       };
     });
+
+    if (result.isPublished) {
+      this.notifications.notifyPublished({
+        versionId: params.versionId,
+        weekLabel: version.period?.label || 'Weekly Timetable',
+      }).catch((e) => this.logger.warn(`Failed to dispatch publication notifications: ${e.message}`));
+    }
+
+    return result;
   }
 
   /**
-   * Explicit publish action by Super Admin / Platform Owner once fully approved.
+   * Explicit publish action by Super Admin / Platform Owner once fully approved,
+   * or immediate override publish for emergency / initial rollout.
    */
-  async publishTimetable(versionId: string, actorUserId: string) {
+  async publishTimetable(versionId: string, actorUserId: string, bypassRequirements = false) {
     const version = await this.prisma.timetableVersion.findUnique({
       where: { id: versionId },
       include: { period: true, reviews: true },
@@ -561,10 +635,12 @@ export class TimetableReviewService {
       throw new BadRequestException('Cannot publish a rejected timetable');
     }
 
+    const isAuthorizedOverride = Boolean(bypassRequirements);
+
     const policy = await this.getPolicy();
     const approvedReviews = version.reviews.filter((r) => r.decision === TimetableReviewDecision.APPROVED);
 
-    if (approvedReviews.length < policy.requiredApprovalsCount) {
+    if (!isAuthorizedOverride && approvedReviews.length < policy.requiredApprovalsCount) {
       throw new BadRequestException(
         `Cannot publish timetable. Only ${approvedReviews.length} of ${policy.requiredApprovalsCount} required reviewer approvals have been received.`,
       );
@@ -572,7 +648,7 @@ export class TimetableReviewService {
 
     const publishedAt = new Date();
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Mark version and period as PUBLISHED
       const updatedVersion = await tx.timetableVersion.update({
         where: { id: versionId },
@@ -606,6 +682,13 @@ export class TimetableReviewService {
         publishedAt,
       };
     });
+
+    this.notifications.notifyPublished({
+      versionId,
+      weekLabel: version.period?.label || 'Weekly Timetable',
+    }).catch((e) => this.logger.warn(`Failed to dispatch publication notifications: ${e.message}`));
+
+    return result;
   }
 
   /**
@@ -758,7 +841,7 @@ export class TimetableReviewService {
       throw new BadRequestException('The replacement member is already assigned to this service session');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       // Delete old assignment and create replacement
       await tx.timetableAssignment.delete({ where: { id: existing.id } });
       const newAssignment = await tx.timetableAssignment.create({
@@ -798,6 +881,15 @@ export class TimetableReviewService {
 
       return newAssignment;
     });
+
+    this.notifications.notifyReviewers({
+      versionId: session.version.id,
+      weekLabel: session.version.period?.label || 'Weekly Timetable',
+      isResubmission: true,
+      reason: params.reason.trim(),
+    }).catch((e) => this.logger.warn(`Failed to dispatch notification: ${e.message}`));
+
+    return res;
   }
 
   /**
@@ -837,7 +929,7 @@ export class TimetableReviewService {
     const periodId = a1.session.version.periodId;
     const reason = params.reason?.trim() || `Swapped ${a1.member.firstName} ${a1.member.lastName} with ${a2.member.firstName} ${a2.member.lastName}`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       if (a1.sessionId !== a2.sessionId) {
         const clash1 = await tx.timetableAssignment.findFirst({
           where: { sessionId: a1.sessionId, memberId: a2.memberId },
@@ -911,6 +1003,15 @@ export class TimetableReviewService {
 
       return { assignment1: updated1, assignment2: updated2 };
     });
+
+    this.notifications.notifyReviewers({
+      versionId,
+      weekLabel: 'Weekly Timetable',
+      isResubmission: true,
+      reason,
+    }).catch((e) => this.logger.warn(`Failed to dispatch notification: ${e.message}`));
+
+    return res;
   }
 
   /**
@@ -940,7 +1041,7 @@ export class TimetableReviewService {
     const periodId = assignment.session.version.periodId;
     const reason = params.reason?.trim() || `Updated position to "${params.position || assignment.position}" / role to "${params.role || assignment.role}"`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.timetableAssignment.update({
         where: { id: params.assignmentId },
         data: {
@@ -970,6 +1071,15 @@ export class TimetableReviewService {
 
       return updated;
     });
+
+    this.notifications.notifyReviewers({
+      versionId,
+      weekLabel: 'Weekly Timetable',
+      isResubmission: true,
+      reason,
+    }).catch((e) => this.logger.warn(`Failed to dispatch notification: ${e.message}`));
+
+    return res;
   }
 
   /**
@@ -1005,7 +1115,7 @@ export class TimetableReviewService {
     const periodId = session.version.periodId;
     const reason = params.reason?.trim() || `Changed supervising minister to ${minister.firstName} ${minister.lastName}`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const res = await this.prisma.$transaction(async (tx) => {
       const updatedSession = await tx.timetableServiceSession.update({
         where: { id: params.sessionId },
         data: {
@@ -1041,6 +1151,36 @@ export class TimetableReviewService {
       });
 
       return updatedSession;
+    });
+
+    this.notifications.notifyReviewers({
+      versionId,
+      weekLabel: 'Weekly Timetable',
+      isResubmission: true,
+      reason,
+    }).catch((e) => this.logger.warn(`Failed to dispatch notification: ${e.message}`));
+
+    return res;
+  }
+
+  /**
+   * Manually sends review request notifications to all 4 required approvers.
+   */
+  async sendReviewNotifications(versionId: string, actorUserId: string) {
+    const isAuth = await this.isAuthorizedReviewerOrAdmin(actorUserId);
+    if (!isAuth) {
+      throw new ForbiddenException('Only designated reviewers or administrators can send review notifications');
+    }
+    const version = await this.prisma.timetableVersion.findUnique({
+      where: { id: versionId },
+      include: { period: true },
+    });
+    if (!version) throw new NotFoundException('Timetable version not found');
+
+    return this.notifications.notifyReviewers({
+      versionId,
+      weekLabel: version.period?.label || 'Weekly Timetable',
+      isResubmission: version.status === TimetableVersionStatus.PENDING_REVIEW,
     });
   }
 }

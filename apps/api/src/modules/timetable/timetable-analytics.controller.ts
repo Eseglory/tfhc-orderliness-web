@@ -204,4 +204,16 @@ export class TimetableAnalyticsController {
 
     return res.end(excelBuffer);
   }
+
+  @Get('monthly-rotation')
+  @RequirePermissions('timetable.read')
+  async getMonthlyRotation(
+    @Query('year') year?: number,
+    @Query('month') month?: number,
+  ) {
+    return this.analyticsService.getMonthlyRotationAnalytics(
+      year ? Number(year) : undefined,
+      month ? Number(month) : undefined,
+    );
+  }
 }

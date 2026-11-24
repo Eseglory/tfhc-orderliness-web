@@ -19,6 +19,7 @@ import { TimetableService } from './timetable.service';
 import { TimetableGeneratorService } from './timetable-generator.service';
 import { TimetableReviewService } from './timetable-review.service';
 import { TimetableEligibilityService } from './timetable-eligibility.service';
+import { TimetableAnalyticsService } from './timetable-analytics.service';
 import { TimetableReviewDecision } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ export class MemberTimetableController {
 
   @Get('current')
   async getCurrent(@CurrentUser() user: AuthenticatedUser) {
-    return this.timetableService.getMemberCurrentTimetable(user.memberId);
+    return this.timetableService.getMemberCurrentTimetable(user.memberId, user.userId);
   }
 }
 
@@ -46,6 +47,7 @@ export class TimetableAdminController {
     private readonly generator: TimetableGeneratorService,
     private readonly reviewService: TimetableReviewService,
     private readonly eligibilityService: TimetableEligibilityService,
+    private readonly analyticsService: TimetableAnalyticsService,
   ) {}
 
   @Get('admin/current')
@@ -93,9 +95,11 @@ export class TimetableAdminController {
   @RequirePermissions('timetable.publish')
   async publishVersion(
     @Param('id') id: string,
+    @Body() body: { force?: boolean } = {},
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.reviewService.publishTimetable(id, user.userId);
+    const isSuperAdmin = user.isSuperAdmin || user.role === 'SUPER_ADMIN' || user.permissions?.includes('*') || user.role === 'ADMIN';
+    return this.reviewService.publishTimetable(id, user.userId, isSuperAdmin && Boolean(body?.force));
   }
 
   @Post('admin/adjust')
@@ -238,5 +242,40 @@ export class TimetableAdminController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.reviewService.updatePolicy(body, user.userId);
+  }
+
+  @Get('admin/chair-groups')
+  @RequirePermissions('timetable.read')
+  async getChairGroups(@Query('weekDate') weekDate?: string) {
+    return this.timetableService.getSaturdayChairGroups(weekDate);
+  }
+
+  @Post('admin/chair-groups')
+  @RequirePermissions('timetable.manage')
+  async updateChairGroups(
+    @Body() body: { groupA: string[]; groupB: string[] },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.timetableService.updateSaturdayChairGroups(body, user.userId);
+  }
+
+  @Get('admin/monthly-rotation')
+  @RequirePermissions('timetable.read')
+  async getMonthlyRotation(
+    @Query('year') year?: number,
+    @Query('month') month?: number,
+  ) {
+    return this.analyticsService.getMonthlyRotationAnalytics(
+      year ? Number(year) : undefined,
+      month ? Number(month) : undefined,
+    );
+  }
+
+  @Post('admin/notify-reviewers')
+  async notifyReviewers(
+    @Body() body: { versionId: string },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reviewService.sendReviewNotifications(body.versionId, user.userId);
   }
 }

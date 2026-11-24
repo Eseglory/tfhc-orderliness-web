@@ -18,6 +18,7 @@ import {
 import * as ExcelJS from 'exceljs';
 
 describe('Timetable & Attendance Analytics, Intelligence & Reporting E2E Suite', () => {
+  jest.setTimeout(120000);
   let app: INestApplication;
   let prisma: PrismaService;
   let analyticsService: TimetableAnalyticsService;

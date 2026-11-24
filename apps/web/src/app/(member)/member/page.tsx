@@ -315,7 +315,7 @@ export default function MemberDashboard() {
 
         {/* This Week's Timetable Widget */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-          {timetableData?.version?.status === 'PUBLISHED' ? (
+          {timetableData?.version?.status === 'PUBLISHED' || Boolean((timetableData as any)?.published) ? (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-3">
@@ -332,7 +332,7 @@ export default function MemberDashboard() {
                       This Week&apos;s Ushering Timetable
                     </h2>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {timetableData.period?.weekLabel || 'Current Week'}
+                      {timetableData?.period?.weekLabel || (timetableData as any)?.label || 'Current Week'}
                     </p>
                   </div>
                 </div>
@@ -347,7 +347,7 @@ export default function MemberDashboard() {
               </div>
 
               {/* Personal Serving Highlight */}
-              {timetableData.myAssignments?.length > 0 ? (
+              {(timetableData?.myAssignments?.length ?? 0) > 0 ? (
                 <div className="p-3.5 rounded-2xl border border-emerald-300 dark:border-emerald-800/60 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-emerald-500/5 flex items-start gap-3">
                   <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-xl mt-0.5">how_to_reg</span>
                   <div className="min-w-0 flex-1">
@@ -355,13 +355,13 @@ export default function MemberDashboard() {
                       You are scheduled to serve this week!
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-2">
-                      {timetableData.myAssignments.map((a: any, i: number) => (
+                      {timetableData?.myAssignments?.map((a: any, i: number) => (
                         <span
                           key={i}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/90 dark:bg-slate-800 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
                         >
                           <span className="material-symbols-outlined text-xs">schedule</span>
-                          {a.serviceTitle} ({a.startTime} – {a.endTime})
+                          {a.serviceTitle || a.serviceName} ({a.startTime} – {a.endTime})
                         </span>
                       ))}
                     </div>

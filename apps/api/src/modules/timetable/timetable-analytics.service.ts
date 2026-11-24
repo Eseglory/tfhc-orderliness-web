@@ -1288,4 +1288,157 @@ export class TimetableAnalyticsService {
       supervisedServices: assignments,
     };
   }
+
+  /**
+   * Monthly Member Rotation tracking against the policy target of ≥ 2 assignments per month.
+   * Categorizes members as:
+   * - Target met (≥ 2)
+   * - One more assignment needed (1)
+   * - Not yet scheduled (0)
+   * - Attendance pending verification
+   */
+  async getMonthlyRotationAnalytics(year?: number, month?: number) {
+    const now = new Date();
+    const targetYear = year ? Number(year) : now.getUTCFullYear();
+    const targetMonth = month ? Number(month) : now.getUTCMonth() + 1; // 1-12
+
+    const startOfMonth = new Date(Date.UTC(targetYear, targetMonth - 1, 1, 0, 0, 0));
+    const endOfMonth = new Date(Date.UTC(targetYear, targetMonth, 0, 23, 59, 59, 999));
+
+    // 1. Fetch all eligible active members
+    const eligible = await this.prisma.member.findMany({
+      where: { status: 'ACTIVE' },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        memberCode: true,
+        phoneNumber: true,
+        profilePhotoUrl: true,
+        roleInUnit: true,
+        subTeam: { select: { name: true } },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    // 2. Query assignments for this calendar month
+    const assignments = await this.prisma.timetableAssignment.findMany({
+      where: {
+        session: {
+          serviceDate: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
+          version: {
+            status: { in: ['APPROVED', 'PUBLISHED', 'PENDING_REVIEW'] },
+          },
+        },
+      },
+      include: {
+        session: {
+          select: {
+            id: true,
+            sessionKey: true,
+            serviceName: true,
+            serviceDay: true,
+            serviceDate: true,
+            startTime: true,
+            version: { select: { id: true, status: true, versionNumber: true } },
+          },
+        },
+      },
+    });
+
+    // 3. Map assignments to members
+    const memberAssignmentsMap = new Map<string, any[]>();
+    for (const a of assignments) {
+      if (!memberAssignmentsMap.has(a.memberId)) {
+        memberAssignmentsMap.set(a.memberId, []);
+      }
+      memberAssignmentsMap.get(a.memberId)!.push({
+        assignmentId: a.id,
+        sessionId: a.session.id,
+        sessionKey: a.session.sessionKey,
+        serviceName: a.session.serviceName,
+        serviceDay: a.session.serviceDay,
+        serviceDate: a.session.serviceDate,
+        role: a.role,
+        position: a.position,
+        versionStatus: a.session.version.status,
+      });
+    }
+
+    let targetMetCount = 0;
+    let oneNeededCount = 0;
+    let notScheduledCount = 0;
+    let attendancePendingCount = 0;
+
+    const membersList = eligible.map((m) => {
+      const list = memberAssignmentsMap.get(m.id) || [];
+      const scheduledCount = list.length;
+      let status: 'TARGET_MET' | 'ONE_MORE_NEEDED' | 'NOT_YET_SCHEDULED' | 'ATTENDANCE_PENDING' = 'NOT_YET_SCHEDULED';
+
+      if (scheduledCount >= 2) {
+        status = 'TARGET_MET';
+        targetMetCount++;
+      } else if (scheduledCount === 1) {
+        status = 'ONE_MORE_NEEDED';
+        oneNeededCount++;
+      } else {
+        status = 'NOT_YET_SCHEDULED';
+        notScheduledCount++;
+      }
+
+      const hasPastSession = list.some((s) => new Date(s.serviceDate) <= now);
+      if (scheduledCount > 0 && hasPastSession) {
+        attendancePendingCount++;
+      }
+
+      return {
+        memberId: m.id,
+        memberCode: m.memberCode,
+        name: `${m.firstName} ${m.lastName}`.trim(),
+        fullName: `${m.firstName} ${m.lastName}`.trim(),
+        firstName: m.firstName,
+        lastName: m.lastName,
+        profilePhotoUrl: m.profilePhotoUrl,
+        roleInUnit: m.roleInUnit,
+        subTeamName: m.subTeam?.name || null,
+        scheduledCount,
+        assignmentCount: scheduledCount,
+        targetCount: 2,
+        status,
+        statusLabel:
+          status === 'TARGET_MET'
+            ? 'Target met (≥2)'
+            : status === 'ONE_MORE_NEEDED'
+            ? 'One more assignment needed'
+            : 'Not yet scheduled',
+        assignments: list,
+      };
+    });
+
+    const totalEligible = eligible.length;
+    const complianceRate = totalEligible > 0 ? Number(((targetMetCount / totalEligible) * 100).toFixed(1)) : 0;
+
+    return {
+      period: {
+        year: targetYear,
+        month: targetMonth,
+        monthName: startOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        startDate: startOfMonth.toISOString(),
+        endDate: endOfMonth.toISOString(),
+      },
+      targetPerMemberPerMonth: 2,
+      summary: {
+        totalEligible,
+        targetMetCount,
+        oneNeededCount,
+        notScheduledCount,
+        attendancePendingCount,
+        complianceRate,
+      },
+      members: membersList,
+    };
+  }
 }

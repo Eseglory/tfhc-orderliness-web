@@ -73,7 +73,12 @@ export class TimetableService {
    * Ordinary members ONLY see official PUBLISHED timetables.
    * Drafts, unapproved, and rejected versions are never exposed to ordinary members.
    */
-  async getMemberCurrentTimetable(memberId?: string) {
+  async getMemberCurrentTimetable(memberId?: string, userId?: string) {
+    if (!memberId && userId) {
+      const member = await this.prisma.member.findFirst({ where: { userId } });
+      if (member) memberId = member.id;
+    }
+
     const { currentWeekMonday } = this.getWatWeekStart();
 
     // Find the latest period for this week or upcoming
@@ -129,43 +134,135 @@ export class TimetableService {
       const pendingPeriod = await this.prisma.timetablePeriod.findFirst({
         where: { weekStart: { gte: currentWeekMonday } },
         orderBy: { weekStart: 'asc' },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+          },
+        },
       });
 
       return {
         published: false,
-        period: null,
+        period: pendingPeriod
+          ? {
+              id: pendingPeriod.id,
+              weekLabel: pendingPeriod.label,
+              startDate: pendingPeriod.weekStart.toISOString(),
+              endDate: new Date(pendingPeriod.weekStart.getTime() + 6 * 86400000).toISOString(),
+              targetWeek: pendingPeriod.periodType,
+            }
+          : null,
+        version: pendingPeriod?.versions?.[0]
+          ? {
+              id: pendingPeriod.versions[0].id,
+              versionNumber: pendingPeriod.versions[0].versionNumber,
+              status: pendingPeriod.versions[0].status,
+              publishedAt: null,
+            }
+          : null,
         status: pendingPeriod ? pendingPeriod.status : 'NO_TIMETABLE_YET',
         message: pendingPeriod
           ? 'This week’s ushering timetable has been generated and is awaiting administrative review and approval.'
           : 'No ushering timetable has been generated for this week yet.',
+        sessions: [],
+        myAssignments: [],
       };
     }
 
     const version = period.versions[0];
     const myAssignments: any[] = [];
+    const chairArrangement = await this.getSaturdayChairGroups(period.weekStart);
+
+    const formatTimeOnly = (d: Date | string | null | undefined) => {
+      if (!d) return '';
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return String(d);
+      return date.toLocaleTimeString('en-US', {
+        timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    };
+
+    const formatDateOnly = (d: Date | string | null | undefined) => {
+      if (!d) return '';
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return String(d);
+      return date.toLocaleDateString('en-GB', {
+        timeZone: process.env.TFHC_TIMEZONE || 'Africa/Lagos',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    };
 
     const formattedSessions = version.sessions.map((session) => {
-      const isAssigned = session.assignments.some((a) => a.memberId === memberId);
+      const myAssignmentRecord = session.assignments.find((a) => a.memberId === memberId);
+      const isAssigned = Boolean(myAssignmentRecord);
+
       if (isAssigned) {
         myAssignments.push({
           sessionId: session.id,
           sessionKey: session.sessionKey,
           serviceName: session.serviceName,
+          serviceTitle: (session as any).serviceTitle || session.serviceName,
           serviceDay: session.serviceDay,
           serviceDate: session.serviceDate,
-          startTime: session.startTime,
-          endTime: session.endTime,
+          formattedDate: formatDateOnly(session.serviceDate),
+          startTime: formatTimeOnly(session.startTime),
+          endTime: formatTimeOnly(session.endTime),
+          rawStartTime: session.startTime,
+          rawEndTime: session.endTime,
+          locationName: (session as any).location || 'Main Sanctuary',
+          roleTitle: myAssignmentRecord?.position || myAssignmentRecord?.role || myAssignmentRecord?.member?.roleInUnit || 'General Usher',
+          position: myAssignmentRecord?.position || 'General Usher',
         });
       }
+
+      const formattedAssignments = session.assignments.map((a) => {
+        const fullName = `${a.member.firstName} ${a.member.lastName}`.trim();
+        return {
+          id: a.id,
+          assignmentId: a.id,
+          memberId: a.member.id,
+          fullName,
+          name: fullName,
+          memberCode: a.member.memberCode,
+          role: a.position || a.role || a.member.roleInUnit || 'General Usher',
+          roleTitle: a.position || a.role || a.member.roleInUnit || 'General Usher',
+          position: a.position || 'General Usher',
+          profilePhotoUrl: a.member.profilePhotoUrl,
+          isMe: a.member.id === memberId,
+        };
+      });
+
+      const leadAssignment = session.assignments.find((a) => a.role === 'LEAD_USHER' || a.position?.toLowerCase().includes('lead')) || session.assignments[0] || null;
+      const leadUsher = leadAssignment ? {
+        id: leadAssignment.member.id,
+        name: `${leadAssignment.member.firstName} ${leadAssignment.member.lastName}`.trim(),
+        role: leadAssignment.role,
+        position: leadAssignment.position || 'Lead Usher',
+        profilePhotoUrl: leadAssignment.member.profilePhotoUrl,
+      } : null;
+      const isSaturday = session.serviceDay === 'SATURDAY' || session.sessionKey === 'SATURDAY_SEATS';
 
       return {
         id: session.id,
         sessionKey: session.sessionKey,
         serviceDay: session.serviceDay,
         serviceName: session.serviceName,
+        serviceTitle: (session as any).serviceTitle || session.serviceName,
         serviceDate: session.serviceDate,
-        startTime: session.startTime,
-        endTime: session.endTime,
+        formattedDate: formatDateOnly(session.serviceDate),
+        startTime: formatTimeOnly(session.startTime),
+        endTime: formatTimeOnly(session.endTime),
+        rawStartTime: session.startTime,
+        rawEndTime: session.endTime,
+        locationName: (session as any).location || 'Main Sanctuary',
+        location: (session as any).location || 'Main Sanctuary',
         requiredUshers: session.requiredUshers,
         assignedUshersCount: session.assignedUshersCount,
         isFullyStaffed: session.isFullyStaffed,
@@ -179,28 +276,38 @@ export class TimetableService {
               roleInUnit: session.supervisingMinister.roleInUnit,
             }
           : null,
-        ushers: session.assignments.map((a) => ({
-          assignmentId: a.id,
-          memberId: a.member.id,
-          name: `${a.member.firstName} ${a.member.lastName}`.trim(),
-          memberCode: a.member.memberCode,
-          role: a.role,
-          position: a.position,
-          isMe: a.member.id === memberId,
-        })),
+        leadUsher,
+        chairArrangement: isSaturday ? chairArrangement : null,
+        assignments: formattedAssignments,
+        ushers: formattedAssignments,
       };
     });
 
     return {
       published: true,
+      chairArrangement,
+      period: {
+        id: period.id,
+        weekLabel: period.label,
+        startDate: period.weekStart.toISOString(),
+        endDate: new Date(period.weekStart.getTime() + 6 * 86400000).toISOString(),
+        targetWeek: period.periodType,
+      },
+      version: {
+        id: version.id,
+        versionNumber: version.versionNumber,
+        status: version.status,
+        publishedAt: version.publishedAt?.toISOString() || null,
+      },
+      sessions: formattedSessions,
+      myAssignments,
+      // Backward-compatible flat fields
       periodId: period.id,
       weekStart: period.weekStart,
       label: period.label,
       publishedAt: period.publishedAt,
       versionNumber: version.versionNumber,
       hasMyAssignment: myAssignments.length > 0,
-      myAssignments,
-      sessions: formattedSessions,
     };
   }
 
@@ -211,11 +318,19 @@ export class TimetableService {
   async getAdminCurrentTimetable(userId: string) {
     const { currentWeekMonday, nextWeekMonday } = this.getWatWeekStart();
 
-    // Check if user is a designated reviewer
+    // Check if user is a designated reviewer or Platform Owner (engreseglory)
     const reviewerRecord = await this.prisma.timetableReviewer.findFirst({
       where: { userId, active: true },
     });
-    const isDesignatedReviewer = Boolean(reviewerRecord);
+    const currentUser = await this.prisma.user.findUnique({ where: { id: userId } });
+    const isOwnerOrGlory = Boolean(
+      currentUser?.email &&
+      (currentUser.email.toLowerCase() === 'engreseglory@gmail.com' ||
+       currentUser.email.toLowerCase().includes('engreseglory') ||
+       currentUser.email.toLowerCase() === 'portal-admin@tfhc.org' ||
+       currentUser.email.toLowerCase() === (process.env.BOOTSTRAP_ADMIN_EMAIL || 'engreseglory@gmail.com').toLowerCase())
+    );
+    const isDesignatedReviewer = Boolean(reviewerRecord) || isOwnerOrGlory;
 
     const activePolicy = await this.review.getPolicy();
     const designatedReviewers = await this.review.getReviewers();
@@ -231,6 +346,31 @@ export class TimetableService {
       active: r.active,
       orderIndex: r.orderIndex,
     }));
+
+    // If engreseglory is not in formattedReviewers, add engreseglory as an authorized reviewer
+    const gloryUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: { equals: 'engreseglory@gmail.com', mode: 'insensitive' } },
+          { email: { contains: 'engreseglory', mode: 'insensitive' } },
+        ],
+      },
+      include: { member: true },
+    });
+
+    if (gloryUser && !formattedReviewers.some((r) => r.userId === gloryUser.id)) {
+      formattedReviewers.push({
+        id: `reviewer-owner-${gloryUser.id}`,
+        userId: gloryUser.id,
+        email: gloryUser.email,
+        fullName: gloryUser.member
+          ? `${gloryUser.member.firstName} ${gloryUser.member.lastName}`.trim()
+          : 'Glory Eseosa (Owner)',
+        role: gloryUser.role,
+        active: true,
+        orderIndex: 0,
+      });
+    }
 
     // Find the current period (or upcoming)
     let period = await this.prisma.timetablePeriod.findFirst({
@@ -327,6 +467,8 @@ export class TimetableService {
       } : undefined,
     }));
 
+    const chairArrangement = await this.getSaturdayChairGroups(period.weekStart);
+
     const formattedSessions = version.sessions.map((s) => {
       const min = s.supervisingMinister;
       const supervisingMinister = min
@@ -345,16 +487,29 @@ export class TimetableService {
         profilePhotoUrl: (a.member as any)?.profilePhotoUrl || null,
       }));
 
+      const leadAssignment = assignments.find((a: any) => a.role === 'LEAD_USHER' || a.position?.toLowerCase().includes('lead')) || assignments[0] || null;
+      const leadUsher = leadAssignment ? {
+        id: leadAssignment.memberId,
+        name: leadAssignment.fullName,
+        role: leadAssignment.role,
+        position: leadAssignment.position || 'Lead Usher',
+        profilePhotoUrl: leadAssignment.profilePhotoUrl,
+      } : null;
+      const isSaturday = s.serviceDay === 'SATURDAY' || s.sessionKey === 'SATURDAY_SEATS';
+
       return {
         ...s,
         serviceTitle: s.serviceName,
         supervisingMinister,
+        leadUsher,
+        chairArrangement: isSaturday ? chairArrangement : null,
         assignments,
       };
     });
 
     return {
       hasTimetable: true,
+      chairArrangement,
       isDesignatedReviewer,
       isReviewer: isDesignatedReviewer,
       userReview: myReview ? {
@@ -593,5 +748,100 @@ export class TimetableService {
     });
     if (!version) throw new NotFoundException('Timetable version not found');
     return version;
+  }
+
+  /**
+   * Retrieves Saturday Chair Arrangement groups (Group A and Group B),
+   * member rosters, and determines which team is scheduled for the week.
+   */
+  async getSaturdayChairGroups(weekDate?: Date | string) {
+    const setting = await this.prisma.systemSetting.findUnique({
+      where: { key: 'timetable_chair_groups' },
+    });
+    let parsed: { groupA: string[]; groupB: string[] } = { groupA: [], groupB: [] };
+    if (setting) {
+      try {
+        parsed = JSON.parse(setting.value);
+      } catch {}
+    }
+
+    // Auto-seed balanced teams from active eligible members if empty
+    if ((!parsed.groupA || parsed.groupA.length === 0) && (!parsed.groupB || parsed.groupB.length === 0)) {
+      const activeMembers = await this.prisma.member.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, firstName: true, lastName: true },
+        take: 24,
+      });
+      parsed.groupA = activeMembers.slice(0, 12).map((m) => m.id);
+      parsed.groupB = activeMembers.slice(12, 24).map((m) => m.id);
+      await this.prisma.systemSetting.upsert({
+        where: { key: 'timetable_chair_groups' },
+        update: { value: JSON.stringify(parsed) },
+        create: { key: 'timetable_chair_groups', value: JSON.stringify(parsed) },
+      });
+    }
+
+    const [membersA, membersB] = await Promise.all([
+      this.prisma.member.findMany({
+        where: { id: { in: parsed.groupA || [] } },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          memberCode: true,
+          phoneNumber: true,
+          profilePhotoUrl: true,
+        },
+      }),
+      this.prisma.member.findMany({
+        where: { id: { in: parsed.groupB || [] } },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          memberCode: true,
+          phoneNumber: true,
+          profilePhotoUrl: true,
+        },
+      }),
+    ]);
+
+    // Calculate alternating group parity for the target week
+    const refDate = weekDate ? new Date(weekDate) : new Date();
+    const baseline = new Date(Date.UTC(2026, 10, 23)); // Monday Nov 23, 2026 is Group A
+    const diffWeeks = Math.floor((refDate.getTime() - baseline.getTime()) / (7 * 86400000));
+    const isGroupA = Math.abs(diffWeeks) % 2 === 0;
+
+    const groupAFormatted = membersA.map((m) => ({ ...m, fullName: `${m.firstName} ${m.lastName}`.trim() }));
+    const groupBFormatted = membersB.map((m) => ({ ...m, fullName: `${m.firstName} ${m.lastName}`.trim() }));
+
+    return {
+      groupA: groupAFormatted,
+      groupB: groupBFormatted,
+      activeGroup: isGroupA ? 'GROUP_A' : 'GROUP_B',
+      activeGroupName: isGroupA ? 'Group A' : 'Group B',
+      activeMembers: isGroupA ? groupAFormatted : groupBFormatted,
+      note: 'Two alternating teams: Group A and Group B for Saturday seat arrangement.',
+    };
+  }
+
+  /**
+   * Updates Group A and Group B rosters for Saturday Chair Arrangement.
+   */
+  async updateSaturdayChairGroups(
+    data: { groupA: string[]; groupB: string[] },
+    actorUserId?: string,
+  ) {
+    const cleanA = Array.from(new Set(data.groupA || []));
+    const cleanB = Array.from(new Set(data.groupB || []));
+    const payload = { groupA: cleanA, groupB: cleanB };
+
+    await this.prisma.systemSetting.upsert({
+      where: { key: 'timetable_chair_groups' },
+      update: { value: JSON.stringify(payload) },
+      create: { key: 'timetable_chair_groups', value: JSON.stringify(payload) },
+    });
+
+    return this.getSaturdayChairGroups();
   }
 }

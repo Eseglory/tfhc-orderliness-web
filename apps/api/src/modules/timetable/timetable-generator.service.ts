@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TimetableEligibilityService, MemberEligibilityResult } from './timetable-eligibility.service';
+import { TimetableNotificationService } from './timetable-notification.service';
 import {
   TimetablePeriod,
   TimetableVersion,
@@ -136,6 +137,7 @@ export class TimetableGeneratorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eligibilityService: TimetableEligibilityService,
+    private readonly notifications: TimetableNotificationService,
   ) {}
 
   /**
@@ -223,6 +225,28 @@ export class TimetableGeneratorService {
       }
     }
 
+    // Fetch current calendar month assignments to prioritize members reaching >= 2 target
+    const monthStart = new Date(Date.UTC(params.weekStart.getUTCFullYear(), params.weekStart.getUTCMonth(), 1));
+    const monthAssignments = await this.prisma.timetableAssignment.findMany({
+      where: {
+        session: {
+          version: {
+            status: { in: ['APPROVED', 'PUBLISHED'] },
+          },
+          serviceDate: {
+            gte: monthStart,
+            lt: params.weekStart,
+          },
+        },
+      },
+      select: { memberId: true },
+    });
+
+    const monthlyCounts = new Map<string, number>();
+    for (const ma of monthAssignments) {
+      monthlyCounts.set(ma.memberId, (monthlyCounts.get(ma.memberId) || 0) + 1);
+    }
+
     // 3. Find or create TimetablePeriod
     const weekMonday = new Date(
       Date.UTC(
@@ -298,6 +322,21 @@ export class TimetableGeneratorService {
 
           // Base inverse weight: fewer assignments = higher probability
           let weight = 100 / (1 + currentWeekCount * 4 + pastCount * 1.5);
+
+          // Monthly rotation constraint: prioritize candidates who need assignments to reach monthly target (>=2)
+          const candMonthlyCount = monthlyCounts.get(cand.memberId) || 0;
+          if (candMonthlyCount === 0) {
+            weight *= 2.5;
+          } else if (candMonthlyCount === 1) {
+            weight *= 1.5;
+          }
+
+          // Spacing constraint: Avoid assigning the same member to both Tuesday and Thursday in the same week when alternatives exist
+          if (service.sessionKey === 'THURSDAY_DIVINE' && assignedPerSession.get('TUESDAY_MIDWEEK')?.includes(cand.memberId)) {
+            weight *= 0.1;
+          } else if (service.sessionKey === 'TUESDAY_MIDWEEK' && assignedPerSession.get('THURSDAY_DIVINE')?.includes(cand.memberId)) {
+            weight *= 0.1;
+          }
 
           // Sunday consecutive service rest constraint:
           // If this is SUNDAY_THIRD and they are already assigned to SUNDAY_SECOND (or vice-versa), penalize heavily
@@ -385,7 +424,7 @@ export class TimetableGeneratorService {
     }
 
     // 6. Persist TimetableVersion, Sessions and Assignments atomically
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Mark any previous active versions for this period as SUPERSEDED
       await tx.timetableVersion.updateMany({
         where: { periodId: period.id, status: { notIn: ['SUPERSEDED', 'REJECTED'] } },
@@ -435,13 +474,25 @@ export class TimetableGeneratorService {
             isFullyStaffed: memberIds.length >= required,
             supervisingMinisterId: ministerId,
             assignments: {
-              create: memberIds.map((mId, index) => ({
-                memberId: mId,
-                role: index === 0 ? 'LEAD_USHER' : 'USHER',
-                position: index === 0
-                  ? (service.sessionKey.includes('SEAT') ? 'Lead Floor Coordinator' : 'Main Sanctuary Lead')
-                  : `Usher Section ${index + 1}`,
-              })),
+              create: memberIds.map((mId, index) => {
+                const isLead = index === 0;
+                const role = isLead ? 'LEAD_USHER' : 'USHER';
+                let position = `Usher Section ${index + 1}`;
+                if (isLead) {
+                  if (service.sessionKey === 'TUESDAY_MIDWEEK' || service.sessionKey === 'THURSDAY_DIVINE') {
+                    position = 'Lead Usher';
+                  } else if (service.sessionKey.includes('SEAT')) {
+                    position = 'Lead Floor Coordinator';
+                  } else {
+                    position = 'Main Sanctuary Lead';
+                  }
+                }
+                return {
+                  memberId: mId,
+                  role,
+                  position,
+                };
+              }),
             },
           },
         });
@@ -462,6 +513,14 @@ export class TimetableGeneratorService {
         unfulfilledSlots,
       };
     });
+
+    this.notifications.notifyReviewers({
+      versionId: result.version.id,
+      weekLabel: result.period.label,
+      isResubmission: false,
+    }).catch((e) => this.logger.warn(`Failed to dispatch initial review notifications: ${e.message}`));
+
+    return result;
   }
 
   /**

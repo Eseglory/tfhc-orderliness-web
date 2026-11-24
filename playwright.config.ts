@@ -26,7 +26,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { baseURL: `http://127.0.0.1:${webPort}`, trace: 'retain-on-failure', screenshot: 'only-on-failure', serviceWorkers: 'block' },
   projects: [
-    { name: 'chromium', testMatch: ['chat-reliability.spec.ts', 'invitations.spec.ts', 'member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts', 'auth.spec.ts'], use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', testMatch: ['member-assigned-flow.spec.ts', 'timetable-flow.spec.ts', 'chat-reliability.spec.ts', 'invitations.spec.ts', 'member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts', 'auth.spec.ts'], use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile-web', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
     { name: 'webkit', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['Desktop Safari'] } },
     { name: 'mobile-safari', testMatch: ['member-portal.spec.ts', 'web.spec.ts', 'admin.spec.ts', 'pwa.spec.ts', 'device.spec.ts'], use: { ...devices['iPhone 13'] } },
@@ -35,7 +35,7 @@ export default defineConfig({
   ],
   globalSetup: './tests/e2e/setup.ts',
   webServer: [
-    { command: 'node apps/api/dist/apps/api/src/main.js', url: `http://127.0.0.1:${apiPort}/health`, reuseExistingServer: false, env: { DATABASE_URL: database, CHAT_SHARED_DB_PATH: path.join(os.tmpdir(), `tfhc-playwright-${process.pid}.db`), JWT_SECRET: 'e2e-local-only-secret', PORT: apiPort, GOOGLE_OAUTH_CLIENT_IDS: 'e2e-test.apps.googleusercontent.com', DISABLE_RATE_LIMIT: 'true', DISABLE_SCHEDULED_JOBS: 'true', SMTP_HOST: '', SMTP_USER: '', SMTP_PASSWORD: '', CORS_ORIGIN: `http://127.0.0.1:${webPort}`, APP_WEB_URL: `http://127.0.0.1:${webPort}` }, timeout: 120000 },
-    { command: `corepack yarn workspace @tfhc/web exec next start -p ${webPort}`, url: `http://127.0.0.1:${webPort}/login`, reuseExistingServer: false, env: { PWA_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: 'e2e-test.apps.googleusercontent.com', NEXT_DIST_DIR: `.next-e2e-${webPort}` }, timeout: 120000 },
+    { command: 'node -e "const fs = require(\'fs\'); const p = fs.existsSync(\'./apps/api/dist/src/main.js\') ? \'./apps/api/dist/src/main.js\' : \'./apps/api/dist/apps/api/src/main.js\'; require(p);"', url: `http://127.0.0.1:${apiPort}/health`, reuseExistingServer: false, env: { DATABASE_URL: database, CHAT_SHARED_DB_PATH: path.join(os.tmpdir(), `tfhc-playwright-${process.pid}.db`), JWT_SECRET: 'e2e-local-only-secret', PORT: apiPort, GOOGLE_OAUTH_CLIENT_IDS: 'e2e-test.apps.googleusercontent.com', DISABLE_RATE_LIMIT: 'true', DISABLE_SCHEDULED_JOBS: 'true', SMTP_HOST: '', SMTP_USER: '', SMTP_PASSWORD: '', CORS_ORIGIN: `http://127.0.0.1:${webPort}`, APP_WEB_URL: `http://127.0.0.1:${webPort}` }, timeout: 120000 },
+    { command: `corepack yarn workspace @tfhc/web exec next start -p ${webPort}`, url: `http://127.0.0.1:${webPort}/login`, reuseExistingServer: false, env: { PWA_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_API_URL: `http://127.0.0.1:${apiPort}`, NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID: 'e2e-test.apps.googleusercontent.com' }, timeout: 120000 },
   ],
 });

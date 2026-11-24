@@ -7,12 +7,15 @@ export const getApiBaseUrl = (): string => {
     }
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
+      if (window.location.port === '3100' || (window as any).__E2E_API_PORT__) {
+        const e2ePort = (window as any).__E2E_API_PORT__ || '4100';
+        return `${window.location.protocol}//${host}:${e2ePort}`;
+      }
       const configured = process.env.NEXT_PUBLIC_API_URL;
       if (configured && configured.startsWith('http') && (configured.includes('localhost') || configured.includes('127.0.0.1'))) {
         return configured;
       }
-      const port = (window as any).__E2E_API_PORT__ || (window.location.port === '3100' ? '4100' : '4000');
-      return `${window.location.protocol}//${host}:${port}`;
+      return `${window.location.protocol}//${host}:4000`;
     }
 
     // Specific host mappings
