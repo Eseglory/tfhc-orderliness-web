@@ -5,7 +5,7 @@ describe('Profile photos in chat', () => {
   it('allows the public photo to render on the separate frontend origin and revalidate after edits', async () => {
     const photo = { buffer: Buffer.from('photo'), contentType: 'image/webp' };
     const members = { getPhotoBuffer: jest.fn().mockResolvedValue(photo) };
-    const controller = new MembersController(members as any, {} as any, {} as any);
+    const controller = new MembersController(members as any, {} as any, {} as any, {} as any, {} as any);
     const response = { setHeader: jest.fn(), send: jest.fn() };
     await controller.getMemberPhoto('member', response as any);
     expect(response.setHeader).toHaveBeenCalledWith('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -15,7 +15,7 @@ describe('Profile photos in chat', () => {
   });
 
   it('does not turn absent photos into successful image responses', async () => {
-    const controller = new MembersController({ getPhotoBuffer: jest.fn().mockResolvedValue(null) } as any, {} as any, {} as any);
+    const controller = new MembersController({ getPhotoBuffer: jest.fn().mockResolvedValue(null) } as any, {} as any, {} as any, {} as any, {} as any);
     await expect(controller.getMemberPhoto('member', {} as any)).rejects.toThrow('Photo not found');
   });
 
