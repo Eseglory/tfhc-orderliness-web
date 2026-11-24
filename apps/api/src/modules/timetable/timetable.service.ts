@@ -327,6 +327,32 @@ export class TimetableService {
       } : undefined,
     }));
 
+    const formattedSessions = version.sessions.map((s) => {
+      const min = s.supervisingMinister;
+      const supervisingMinister = min
+        ? {
+            ...min,
+            name: min.preferredName || `${min.firstName} ${min.lastName}`.trim(),
+            fullName: `${min.firstName} ${min.lastName}`.trim(),
+          }
+        : null;
+
+      const assignments = s.assignments.map((a) => ({
+        ...a,
+        fullName: a.member ? `${a.member.firstName} ${a.member.lastName}`.trim() : 'Usher',
+        memberCode: a.member?.memberCode || '',
+        phoneNumber: a.member?.phoneNumber || '',
+        profilePhotoUrl: (a.member as any)?.profilePhotoUrl || null,
+      }));
+
+      return {
+        ...s,
+        serviceTitle: s.serviceName,
+        supervisingMinister,
+        assignments,
+      };
+    });
+
     return {
       hasTimetable: true,
       isDesignatedReviewer,
@@ -376,7 +402,7 @@ export class TimetableService {
       designatedReviewers,
       reviewers: formattedReviewers,
       officialReviewersStatus: officialStatus,
-      sessions: version.sessions,
+      sessions: formattedSessions,
       reviews: formattedReviews,
     };
   }

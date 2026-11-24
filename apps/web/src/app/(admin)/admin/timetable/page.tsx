@@ -158,6 +158,28 @@ interface EligibilityData {
   }>;
 }
 
+function formatSessionDate(dateStr?: string | Date): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatSessionTime(start?: string | Date, end?: string | Date): string {
+  const formatTime = (t?: string | Date) => {
+    if (!t) return '';
+    const s = String(t);
+    if (!s.includes('T')) return s;
+    const d = new Date(t);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+  const startFmt = formatTime(start);
+  const endFmt = formatTime(end);
+  if (startFmt && endFmt) return `${startFmt} – ${endFmt}`;
+  return startFmt || endFmt || '';
+}
+
 export default function AdminTimetablePage() {
   const { user, can } = useAuth();
   const [activeTab, setActiveTab] = useState<'current' | 'eligibility' | 'reviewers' | 'history'>('current');
@@ -904,7 +926,7 @@ export default function AdminTimetablePage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <h4 className="text-base font-extrabold text-slate-900 dark:text-white">
-                                  {session.serviceTitle}
+                                  {session.serviceTitle || (session as any).serviceName || (session as any).specialEventTitle || 'Church Service'}
                                 </h4>
                                 {!isComplete && (
                                   <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-black uppercase">
@@ -914,10 +936,10 @@ export default function AdminTimetablePage() {
                               </div>
                               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2">
                                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                  {session.serviceDate}
+                                  {formatSessionDate(session.serviceDate)}
                                 </span>
                                 <span>•</span>
-                                <span>{session.startTime} – {session.endTime} WAT</span>
+                                <span>{formatSessionTime(session.startTime, session.endTime)} WAT</span>
                                 <span>•</span>
                                 <span>{session.locationName || 'Main Sanctuary'}</span>
                               </p>
@@ -943,7 +965,7 @@ export default function AdminTimetablePage() {
                                   Supervising Minister
                                 </span>
                                 <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                                  {session.supervisingMinister ? session.supervisingMinister.name : 'Not yet assigned'}
+                                  {session.supervisingMinister ? (session.supervisingMinister.name || `${(session.supervisingMinister as any).firstName || ''} ${(session.supervisingMinister as any).lastName || ''}`.trim()) : 'Not yet assigned'}
                                 </p>
                               </div>
                             </div>
@@ -965,25 +987,30 @@ export default function AdminTimetablePage() {
 
                           {/* Ushers Grid */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                            {session.assignments?.map((a) => (
+                            {session.assignments?.map((a) => {
+                              const usherName = a.fullName || ((a as any).member ? `${(a as any).member.firstName || ''} ${(a as any).member.lastName || ''}`.trim() : 'Usher');
+                              const usherCode = a.memberCode || (a as any).member?.memberCode || '';
+                              const usherPhoto = a.profilePhotoUrl || (a as any).member?.profilePhotoUrl || null;
+
+                              return (
                               <div
                                 key={a.id || a.memberId}
                                 className="p-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 flex items-center justify-between gap-2.5"
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
                                   <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 flex items-center justify-center text-xs font-bold">
-                                    {a.profilePhotoUrl ? (
-                                      <img src={a.profilePhotoUrl} alt={a.fullName} className="w-full h-full object-cover" />
+                                    {usherPhoto ? (
+                                      <img src={usherPhoto} alt={usherName} className="w-full h-full object-cover" />
                                     ) : (
-                                      <span>{a.fullName?.charAt(0) || 'U'}</span>
+                                      <span>{usherName?.charAt(0) || 'U'}</span>
                                     )}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                                      {a.fullName}
+                                      {usherName}
                                     </p>
                                     <p className="text-[10px] text-slate-400 truncate">
-                                      {a.memberCode} {a.position ? `• ${a.position}` : ''}
+                                      {usherCode} {a.position ? `• ${a.position}` : ''}
                                     </p>
                                   </div>
                                 </div>
@@ -995,7 +1022,7 @@ export default function AdminTimetablePage() {
                                       onClick={() => {
                                         setPositionModalAssignment({
                                           id: a.id,
-                                          name: a.fullName,
+                                          name: usherName,
                                           position: a.position || '',
                                           role: a.role || 'USHER',
                                         });
@@ -1023,7 +1050,7 @@ export default function AdminTimetablePage() {
                                   </div>
                                 )}
                               </div>
-                            ))}
+                            ); })}
                           </div>
                         </div>
                       );
